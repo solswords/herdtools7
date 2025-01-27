@@ -33,6 +33,7 @@ type args = {
   allow_double_underscore : bool;
   allow_unknown : bool;
   print_ast : bool;
+  print_lisp : bool;
   print_serialized : bool;
   print_typed : bool;
   show_rules : bool;
@@ -53,6 +54,7 @@ let parse_args () =
   let print_ast = ref false in
   let print_serialized = ref false in
   let print_typed = ref false in
+  let print_lisp = ref false in
   let opn = ref "" in
   let strictness : strictness ref = ref TypeCheck in
   let set_strictness s () = strictness := s in
@@ -84,6 +86,9 @@ let parse_args () =
       ( "--print-typed",
         Arg.Set print_typed,
         " Print the parsed AST after typing and before executing it." );
+      ( "--print-lisp",
+        Arg.Set print_lisp,
+        " Print the parsed and typechecked AST in the Lisp object format.");
       ( "--format-csv",
         Arg.Unit (fun () -> output_format := Error.CSV),
         " Output the errors in a CSV format." );
@@ -150,6 +155,7 @@ let parse_args () =
       print_ast = !print_ast;
       print_serialized = !print_serialized;
       print_typed = !print_typed;
+      print_lisp = !print_lisp;
       strictness = !strictness;
       show_rules = !show_rules;
       output_format = !output_format;
@@ -249,7 +255,7 @@ let () =
     let module C = struct
       let output_format = args.output_format
       let check = args.strictness
-      let print_typed = args.print_typed
+      let print_typed = args.print_typed || args.print_lisp
       let use_field_getter_extension = args.use_field_getter_extension
     end in
     let module T = Annotate (C) in
@@ -259,6 +265,12 @@ let () =
   let () =
     if args.print_typed then
       Format.printf "@[<v 2>Typed AST:@ %a@]@." PP.pp_t typed_ast
+  in
+
+  let () =
+    if args.print_lisp then
+      let lisp_ast = Lispobj.of_ast typed_ast in
+      Lispobj.print_obj Format.std_formatter lisp_ast
   in
 
   let exit_code, used_rules =
