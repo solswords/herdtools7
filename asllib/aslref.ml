@@ -270,7 +270,8 @@ let () =
   let () =
     if args.print_lisp then
       let lisp_ast = Lispobj.of_ast typed_ast in
-      Lispobj.print_obj Format.std_formatter lisp_ast
+      let lisp_static_env = Lispobj.of_static_env_global static_env in
+      Lispobj.print_obj Format.std_formatter (Lispobj.Cons(lisp_static_env, lisp_ast))
   in
 
   let exit_code, used_rules =
