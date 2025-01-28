@@ -1,3 +1,25 @@
+(******************************************************************************)
+(*                                ASLRef                                      *)
+(******************************************************************************)
+(*
+  * SPDX-FileCopyrightText: Copyright 2022-2023 Arm Limited and/or its affiliates <open-source-office@arm.com>
+  * SPDX-License-Identifier: BSD-3-Clause
+ *)
+(******************************************************************************)
+(* Disclaimer:                                                                *)
+(* This material covers both ASLv0 (viz, the existing ASL pseudocode language *)
+(* which appears in the Arm Architecture Reference Manual) and ASLv1, a new,  *)
+(* experimental, and as yet unreleased version of ASL.                        *)
+(* This material is work in progress, more precisely at pre-Alpha quality as  *)
+(* per Arm’s quality standards.                                               *)
+(* In particular, this means that it would be premature to base any           *)
+(* production tool development on this material.                              *)
+(* However, any feedback, question, query and feature request would be most   *)
+(* welcome; those can be sent to Arm’s Architecture Formal Team Lead          *)
+(* Jade Alglave <jade.alglave@arm.com>, or by raising issues or PRs to the    *)
+(* herdtools7 github repository.                                              *)
+(******************************************************************************)
+
 
 open Format
 
@@ -31,7 +53,7 @@ module MakePrinter (Conf:PrinterConf) = struct
     if x = String.uppercase_ascii x then
       if downcase then String.lowercase_ascii x else x
     else "|" ^ x ^ "|"
-    
+  
   
   let rec pp_obj f x =
     match x with
@@ -110,18 +132,18 @@ let rec make_sexpr n =
 
 
 (* let obj =
-     let obj = make_sexpr 100 in
-     print_obj Format.std_formatter obj; obj
+   let obj = make_sexpr 100 in
+   print_obj Format.std_formatter obj; obj
    
    let obj =
-     let obj = make_sexpr 20 in
-     let _ = print_obj Format.std_formatter obj in obj *)
+   let obj = make_sexpr 20 in
+   let _ = print_obj Format.std_formatter obj in obj *)
 
 
 open AST
 (* -------------------------------------------------------------------------
 
-                                    Utils
+   Utils
 
    ------------------------------------------------------------------------- *)
 
@@ -160,6 +182,7 @@ let sym_alist pkg x =
   List.map (fun (k, v) -> Cons(Symbol(pkg, k), v)) x |> of_list
 
 let kwd_alist x = sym_alist "KEYWORD" x
+let aslsym_alist x = sym_alist "ASL" x
 
 let of_q x = Num(x, Q.zero)
 let of_int x = of_q(Q.of_int x)
@@ -177,16 +200,16 @@ let of_version v =
 
 let of_position x =
   let open Lexing in
-  kwd_alist([("POS_FNAME", String(x.pos_fname));
-             ("POS_LNUM", of_int x.pos_lnum);
-             ("POS_BOL", of_int x.pos_bol);
-             ("POS_CNUM", of_int x.pos_cnum)])
+  aslsym_alist([("POS_FNAME", String(x.pos_fname));
+                ("POS_LNUM", of_int x.pos_lnum);
+                ("POS_BOL", of_int x.pos_bol);
+                ("POS_CNUM", of_int x.pos_cnum)])
 
 let of_annotated of_a x = of_a x.desc
-  (* kwd_alist([("DESC", of_a x.desc);
-                ("POS_START", of_position x.pos_start);
-                ("POS_END", of_position x.pos_end);
-                ("VERSION", of_version x.version)]) *)
+(* aslsym_alist([("DESC", of_a x.desc);
+   ("POS_START", of_position x.pos_start);
+   ("POS_END", of_position x.pos_end);
+   ("VERSION", of_version x.version)]) *)
 
 
 let of_identifier x = String(x)
@@ -195,7 +218,7 @@ let of_uid x = of_int x
 
 (* -------------------------------------------------------------------------
 
-                                   Operations
+   Operations
 
    ------------------------------------------------------------------------- *)
 
@@ -234,7 +257,7 @@ let of_binop x =
 
 (* -------------------------------------------------------------------------
 
-                                Parsed values
+   Parsed values
 
    ------------------------------------------------------------------------- *)
 
@@ -250,7 +273,7 @@ let of_literal x =
 
 (* -------------------------------------------------------------------------
 
-                                Expressions
+   Expressions
 
    ------------------------------------------------------------------------- *)
 
@@ -265,9 +288,9 @@ let of_subprogram_type x =
        | ST_EmptySetter -> "ST_EMPTYSETTER")
 
 let of_bitvector_mask x =
-  kwd_alist([("LENGTH", of_int (Bitvector.mask_length x));
-             ("SET", of_bigint(Bitvector.to_z_unsigned(Bitvector.mask_set x)));
-             ("UNSET", of_bigint(Bitvector.to_z_unsigned(Bitvector.mask_unset x)))])
+  aslsym_alist([("LENGTH", of_int (Bitvector.mask_length x));
+                ("SET", of_bigint(Bitvector.to_z_unsigned(Bitvector.mask_set x)));
+                ("UNSET", of_bigint(Bitvector.to_z_unsigned(Bitvector.mask_unset x)))])
 
 
 
@@ -320,14 +343,14 @@ and of_slice x =
      | Slice_Star (x, y) -> [key "SLICE_STAR"; of_expr x; of_expr y])
 
 and of_call (x : call) =
-  kwd_alist([("NAME", of_identifier x.name);
-             ("PARAMS", of_list_map of_expr x.params);
-             ("ARGS", of_list_map of_expr x.args);
-             ("CALL_TYPE", of_subprogram_type x.call_type)])
+  aslsym_alist([("NAME", of_identifier x.name);
+                ("PARAMS", of_list_map of_expr x.params);
+                ("ARGS", of_list_map of_expr x.args);
+                ("CALL_TYPE", of_subprogram_type x.call_type)])
 
 (* -------------------------------------------------------------------------
 
-                                  Types
+   Types
 
    ------------------------------------------------------------------------- *)
 
@@ -345,7 +368,7 @@ and of_type_desc x =
      | T_Record f -> [key "T_RECORD"; of_list_map of_field f]
      | T_Exception f -> [key "T_EXCEPTION"; of_list_map of_field f]
      | T_Named i -> [key "T_NAMED"; of_identifier i])
-     
+
 and of_ty x = of_annotated of_type_desc x
 
 and of_int_constraint x =
@@ -361,7 +384,7 @@ and of_constraint_kind (x : constraint_kind) =
      | WellConstrained lst -> [key "WELLCONSTRAINED"; of_list_map of_int_constraint lst]
      | PendingConstrained -> [key "PENDINGCONSTRAINED"]
      | Parameterized (u, i) -> [key "PARAMETRIZED"; of_uid u; of_identifier i])
-                             
+
 and of_bitfield x =
   tagged_list_of_list
     (match x with
@@ -382,7 +405,7 @@ and of_typed_identifier (id, t) = Cons(of_identifier id, of_ty t)
 
 (* -------------------------------------------------------------------------
 
-                        l-expressions and statements
+   l-expressions and statements
 
    ------------------------------------------------------------------------- *)
 
@@ -442,9 +465,9 @@ let rec of_stmt_desc x =
 
 and of_stmt x = of_annotated of_stmt_desc x
 and of_case_alt_desc x =
-  kwd_alist([("PATTERN", of_pattern x.pattern);
-             ("WHERE", of_option of_expr x.where);
-             ("STMT", of_stmt x.stmt)])
+  aslsym_alist([("PATTERN", of_pattern x.pattern);
+                ("WHERE", of_option of_expr x.where);
+                ("STMT", of_stmt x.stmt)])
 and of_case_alt x = of_annotated of_case_alt_desc x
 
 and of_catcher (i, t, s) = of_list [of_option of_identifier i; of_ty t; of_stmt s]
@@ -453,7 +476,7 @@ and of_catcher (i, t, s) = of_list [of_option of_identifier i; of_ty t; of_stmt 
 
 (* -------------------------------------------------------------------------
 
-                        Functions and declarations
+   Functions and declarations
 
    ------------------------------------------------------------------------- *)
 
@@ -464,14 +487,14 @@ let of_subprogram_body x =
      | SB_Primitive b -> [key "SB_PRIMITIVE"; of_bool b])
 
 let of_func (x : func) =
-  kwd_alist([("NAME", of_identifier x.name);
-             ("PARAMETERS", of_list_map (fun (i, t) -> Cons(of_identifier i, of_option of_ty t)) x.parameters);
-             ("ARGS", of_list_map of_typed_identifier x.args);
-             ("BODY", of_subprogram_body x.body);
-             ("RETURN_TYPE", of_option of_ty x.return_type);
-             ("SUBPROGRAM_TYPE", of_subprogram_type x.subprogram_type);
-             ("RECURSE_LIMIT", of_option of_expr x.recurse_limit);
-             ("BUILTIN", of_bool x.builtin)])
+  aslsym_alist([("NAME", of_identifier x.name);
+                ("PARAMETERS", of_list_map (fun (i, t) -> Cons(of_identifier i, of_option of_ty t)) x.parameters);
+                ("ARGS", of_list_map of_typed_identifier x.args);
+                ("BODY", of_subprogram_body x.body);
+                ("RETURN_TYPE", of_option of_ty x.return_type);
+                ("SUBPROGRAM_TYPE", of_subprogram_type x.subprogram_type);
+                ("RECURSE_LIMIT", of_option of_expr x.recurse_limit);
+                ("BUILTIN", of_bool x.builtin)])
 
 let of_global_decl_keyword x =
   key(match x with
@@ -481,10 +504,10 @@ let of_global_decl_keyword x =
       | GDK_Var -> "GDK_VAR")
 
 let of_global_decl x =
-  kwd_alist ([("KEYWORD", of_global_decl_keyword x.keyword);
-              ("NAME", of_identifier x.name);
-              ("TY", of_option of_ty x.ty);
-              ("INITIAL_VALUE", of_option of_expr x.initial_value)])
+  aslsym_alist ([("KEYWORD", of_global_decl_keyword x.keyword);
+                 ("NAME", of_identifier x.name);
+                 ("TY", of_option of_ty x.ty);
+                 ("INITIAL_VALUE", of_option of_expr x.initial_value)])
 
 
 let of_decl_desc x =
@@ -500,7 +523,7 @@ let of_decl x = of_annotated of_decl_desc x
 
 let of_ast (x : AST.t) = of_list_map of_decl x
 
-     
+
 
 
 let of_imap of_a x =
@@ -516,9 +539,9 @@ let of_timeframe  (x : SideEffect.TimeFrame.t) =
       | Execution -> "EXECUTION")
 
 let of_read (x : SideEffect.read) =
-  kwd_alist [("NAME", of_identifier x.name);
-             ("TIME_FRAME", of_timeframe x.time_frame);
-             ("IMMUTABLE", of_bool x.immutable)]
+  aslsym_alist [("NAME", of_identifier x.name);
+                ("TIME_FRAME", of_timeframe x.time_frame);
+                ("IMMUTABLE", of_bool x.immutable)]
 
 
 let of_side_effect (x : SideEffect.t) =
@@ -533,7 +556,7 @@ let of_side_effect (x : SideEffect.t) =
      | PerformsAssertions -> [key "PERFORMSASSERTIONS"]
      | NonDeterministic -> [key "NONDETERMINISTIC"])
 
-     
+
 let of_ses (x : SideEffect.SES.t) = of_list_map of_side_effect (SideEffect.SES.to_side_effect_list x)
 
 
@@ -541,20 +564,20 @@ let of_storage of_v (x : 'v Storage.t) =
   of_seq_map (fun (k, v) -> Cons(String(k), of_v v)) (Storage.to_seq x)
 
 let of_static_env_global (x : StaticEnv.global) =
-  kwd_alist [("DECLARED_TYPES", of_imap (fun (ty, tf) -> Cons(of_ty ty, of_timeframe tf)) x.declared_types);
-             ("CONSTANT_VALUES", of_storage of_literal x.constant_values);
-             ("STORAGE_TYPES", of_imap (fun (ty, kw) -> Cons(of_ty ty, of_global_decl_keyword kw)) x.storage_types);
-             ("SUBTYPES", of_imap of_identifier x.subtypes);
-             ("SUBPROGRAMS", of_imap (fun (func, ses) -> Cons(of_func func, of_ses ses)) x.subprograms);
-             ("OVERLOADED_SUBPROGRAMS", of_imap of_iset x.overloaded_subprograms);
-             ("EXPR_EQUIV", of_imap of_expr x.expr_equiv)]
+  aslsym_alist [("DECLARED_TYPES", of_imap (fun (ty, tf) -> Cons(of_ty ty, of_timeframe tf)) x.declared_types);
+                ("CONSTANT_VALUES", of_storage of_literal x.constant_values);
+                ("STORAGE_TYPES", of_imap (fun (ty, kw) -> Cons(of_ty ty, of_global_decl_keyword kw)) x.storage_types);
+                ("SUBTYPES", of_imap of_identifier x.subtypes);
+                ("SUBPROGRAMS", of_imap (fun (func, ses) -> Cons(of_func func, of_ses ses)) x.subprograms);
+                ("OVERLOADED_SUBPROGRAMS", of_imap of_iset x.overloaded_subprograms);
+                ("EXPR_EQUIV", of_imap of_expr x.expr_equiv)]
 
 let of_static_env_local (x : StaticEnv.local) =
-  kwd_alist [("CONSTANT_VALUES", of_storage of_literal x.constant_values);
-             ("STORAGE_TYPES", of_imap (fun (ty, kw) -> Cons(of_ty ty, of_local_decl_keyword kw)) x.storage_types);
-             ("EXPR_EQUIV", of_imap of_expr x.expr_equiv);
-             ("RETURN_TYPE", of_option of_ty x.return_type)]
+  aslsym_alist [("CONSTANT_VALUES", of_storage of_literal x.constant_values);
+                ("STORAGE_TYPES", of_imap (fun (ty, kw) -> Cons(of_ty ty, of_local_decl_keyword kw)) x.storage_types);
+                ("EXPR_EQUIV", of_imap of_expr x.expr_equiv);
+                ("RETURN_TYPE", of_option of_ty x.return_type)]
 
 let of_static_env (x : StaticEnv.env) =
-  kwd_alist [("GLOBAL", of_static_env_global x.global);
-             ("LOCAL", of_static_env_local x.local)]
+  aslsym_alist [("GLOBAL", of_static_env_global x.global);
+                ("LOCAL", of_static_env_local x.local)]
