@@ -83,7 +83,7 @@
 
 
 (defenum subprogram_type-p
-  (:st_procedure :st_function :st_getter :st_emptygetter :st_emptysetter))
+  (:st_procedure :st_function :st_getter :st_emptygetter :st_setter :st_emptysetter))
 
 (defprod bitvector_mask
   ((length natp)
