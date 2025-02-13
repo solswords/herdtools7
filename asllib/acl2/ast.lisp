@@ -2,7 +2,7 @@
 ;;                                ASLRef                                      ;;
 ;;****************************************************************************;;
 ;;
-;; SPDX-FileCopyrightText: Copyright 2022-2023 Arm Limited and/or its affiliates <open-source-office@arm.com>
+;; SPDX-FileCopyrightText: Copyright 2025 Arm Limited and/or its affiliates <open-source-office@arm.com>
 ;; SPDX-License-Identifier: BSD-3-Clause
 ;; 
 ;;****************************************************************************;;
@@ -33,7 +33,7 @@
 (defmacro def-type-alias (new-type existing-type)
   `(defprod ,new-type
      ((val ,existing-type))
-     :layout :tree))
+     :layout :fulltree))
 
   ;; `(table fty::fixtypes ',new-type
   ;;         (cdr (assoc ',existing-type (table-alist 'fty::fixtypes world)))))
@@ -43,8 +43,6 @@
 
 (def-type-alias uid acl2::int)
 
-(defmacro def-annotated (new-type existing-type)
-  `(def-type-alias ,new-type ,existing-type))
 
 (defenum unop-p (:bnot :neg :not))
 
@@ -134,7 +132,10 @@
     :base-case-override :e_literal
     :measure (acl2::two-nats-measure (acl2-count x) 10))
 
-  (defprod expr ((val expr_desc)) :layout :tree
+  (defprod expr ((desc expr_desc)
+                 ;; (ty maybe-ty)
+                 )
+    :layout :fulltree ;; :alist
     :measure (acl2::two-nats-measure (acl2-count x) 20))
 
   (deflist exprlist :elt-type expr :true-listp t
@@ -153,7 +154,7 @@
     (:pattern_tuple ((patterns patternlist)))
     :measure (acl2::two-nats-measure (acl2-count x) 10))
 
-  (defprod pattern ((val pattern_desc)) :layout :tree
+  (defprod pattern ((val pattern_desc)) :layout :fulltree
     :measure (acl2::two-nats-measure (acl2-count x) 20))
 
   (deflist patternlist :elt-type pattern :true-listp t
@@ -197,8 +198,8 @@
     (:t_named ((name identifier)))
     :measure (acl2::two-nats-measure (acl2-count x) 10))
 
-  (defprod ty ((val type_desc)) :layout :tree
-    :measure (acl2::two-nats-measure (acl2-count x) 20))
+  (defprod ty ((val type_desc)) :layout :fulltree
+    :measure (acl2::two-nats-measure (acl2-count x) 11))
 
   (deflist tylist :elt-type ty :true-listp t
     :measure (acl2::two-nats-measure (acl2-count x) 10))
@@ -217,7 +218,7 @@
     (:unconstrained ())
     (:wellconstrained ((constraints int_constraintlist)))
     (:pendingconstrained ())
-    (:parameterized ((id uid)
+    (:parametrized ((id uid)
                      (name identifier)))
     :measure (acl2::two-nats-measure (acl2-count x) 10))
 
@@ -246,12 +247,266 @@
     ((name identifier)
      (type ty))
     :measure (acl2::two-nats-measure (acl2-count x) 30)
-    :layout :tree)
+    :layout :fulltree)
 
   (deflist fieldlist :elt-type field :true-listp t
     :measure (acl2::two-nats-measure (acl2-count x) 10)
 
-    :measure-debug t))
+    :measure-debug t)
+
+  (defoption maybe-ty ty
+    :measure (acl2::two-nats-measure (acl2-count x) 12)))
+
+(defprod typed_identifier
+  ((name identifier)
+   (type ty))
+  :measure (acl2::two-nats-measure (acl2-count x) 30)
+  :layout :fulltree)
+
+(deflist typed_identifierlist :elt-type typed_identifier :true-listp t
+  :measure (acl2::two-nats-measure (acl2-count x) 10)
+
+  :measure-debug t)
+
+
+(defprod intpair
+  ((first integerp)
+   (second integerp))
+  :layout :fulltree)
+
+(deflist intpairlist :elt-type intpair :true-listp t)
+
+
+(deftypes lexpr
+  (deftagsum lexpr_desc
+    (:le_discard ())
+    (:le_var ((name identifier)))
+    (:le_slice ((base lexpr)
+                (slices slicelist)))
+    (:le_setarray ((base lexpr)
+                   (index expr)))
+    (:le_setenumarray ((base lexpr)
+                       (index expr)))
+    (:le_setfield ((base lexpr)
+                   (field identifier)))
+    (:le_setfields ((base lexpr)
+                    (fields identifierlist)
+                    (pairs intpairlist)))
+    (:le_destructuring ((elts lexprlist)))
+    :measure (acl2::two-nats-measure (acl2-count x) 10))
+
+
+  (defprod lexpr ((val lexpr_desc)) :layout :fulltree
+    :measure (acl2::two-nats-measure (acl2-count x) 11))
+  
+  (deflist lexprlist :elt-type lexpr :true-listp t
+    :measure (acl2::two-nats-measure (acl2-count x) 12)))
+
+(defenum local_decl_keyword-p (:ldk_var :ldk_constant :ldk_let))
+
+(deftagsum local_decl_item
+  (:ldi_var ((name identifier)))
+  (:ldi_tuple ((names identifierlist))))
+
+
+(defenum for_direction-p (:up :down))
+(defoption maybe-expr expr)
+
+(defprod expr*maybe-ty
+  ((expr expr)
+   (ty maybe-ty))
+  :layout :list
+  :measure (acl2::two-nats-measure (acl2-count x) 10))
+
+(defoption maybe-[expr*maybe-ty] expr*maybe-ty)
+
+(defoption maybe-identifier identifier)
+
+(deftypes stmt
+  (deftagsum stmt_desc
+    (:s_pass ())
+    (:s_seq ((first stmt)
+             (second stmt)))
+    (:s_decl ((key local_decl_keyword-p)
+              (item local_decl_item)
+              (ty maybe-ty)
+              (expr maybe-expr)))
+    (:s_assign ((lexpr lexpr)
+                (expr expr)))
+    (:s_call ((call call)))
+    (:s_return ((expr maybe-expr)))
+    (:s_cond ((test expr)
+              (then stmt)
+              (else stmt)))
+    (:s_assert ((expr expr)))
+    (:s_for ((index_name identifier)
+             (start_e expr)
+             (dir for_direction-p)
+             (end_e expr)
+             (body stmt)
+             (limit maybe-expr)))
+    (:s_while ((test expr)
+               (limit maybe-expr)
+               (body stmt)))
+    (:s_repeat ((body stmt)
+                (test expr)
+                (limit maybe-expr)))
+    (:s_throw ((val maybe-[expr*maybe-ty])))
+    (:s_try ((body stmt)
+             (catchers catcherlist)
+             (otherwise maybe-stmt)))
+    (:s_print ((args exprlist)
+               (newline booleanp)
+               (debug booleanp)))
+    (:s_unreachable ())
+    (:s_pragma ((name identifier)
+                (exprs exprlist)))
+    :base-case-override :s_pass
+    :measure (acl2::two-nats-measure (acl2-count x) 10))
+
+  (defprod stmt ((val stmt_desc)) :layout :fulltree
+    :measure (acl2::two-nats-measure (acl2-count x) 11))
+
+  (defoption maybe-stmt stmt
+    :measure (acl2::two-nats-measure (acl2-count x) 12))
+
+  (defprod catcher ((name maybe-identifier)
+                    (ty ty)
+                    (stmt stmt))
+    :layout :list
+    :measure (acl2::two-nats-measure (acl2-count x) 12))
+
+  (deflist catcherlist :elt-type catcher :true-listp t
+    :measure (acl2::two-nats-measure (acl2-count x) 13)))
 
 
 
+(deftagsum subprogram_body
+  (:sb_asl ((stmt stmt)))
+  (:sb_primitive ((side-effecting booleanp))))
+
+
+;; (deflist [expr*maybe-ty]list :elt-type expr*maybe-ty :true-listp t)
+
+
+(defprod maybe-typed_identifier
+  ((name identifier)
+   (type maybe-ty))
+  :layout :fulltree)
+
+(deflist maybe-typed_identifierlist :elt-type maybe-typed_identifier :true-listp t)
+
+
+(defprod func
+  ((name identifier)
+   (parameters maybe-typed_identifierlist)
+   (args typed_identifierlist)
+   (body subprogram_body)
+   (return_type maybe-ty)
+   (subprogram_type subprogram_type-p)
+   (recurse_limit maybe-expr)
+   (builtin booleanp))
+  :layout :alist)
+
+(defenum global_decl_keyword-p (:gdk_constant :gdk_config :gdk_let :gdk_var))
+
+(defprod global_decl
+  ((keyword global_decl_keyword-p)
+   (name identifier)
+   (ty maybe-ty)
+   (initial_value maybe-expr))
+  :layout :alist)
+
+(defprod supertype ((name identifier)
+                    (fields fieldlist))
+  :layout :fulltree)
+
+(defoption maybe-supertype supertype)
+
+
+(deftagsum decl_desc
+  (:d_func ((func func)))
+  (:d_globalstorage ((decl global_decl)))
+  (:d_typedecl ((name identifier)
+                (ty ty)
+                (supertype maybe-supertype)))
+  (:d_pragma ((name identifier)
+              (exprs exprlist))))
+
+(defprod decl ((val decl_desc)) :layout :fulltree)
+
+(deflist ast :elt-type decl :true-listp t)
+
+
+
+(defenum timeframe-p (:constant :config :execution))
+
+(defprod read ((name identifier)
+               (time_frame timeframe-p)
+               (immutable booleanp))
+  :layout :alist)
+
+(deftagsum side_effect
+  (:readslocal ((read read)))
+  (:writeslocal ((name identifier)))
+  (:readsglobal ((read read)))
+  (:writesglobal ((name identifier)))
+  (:throwsexception ((name identifier)))
+  (:callsrecursive ((name identifier)))
+  (:performsassertions ())
+  (:nondeterministic ()))
+
+(deflist ses :elt-type side_effect :true-listp t)
+
+(fty::defalist literal-storage :key-type string :val-type literal :true-listp t)
+
+(defprod ty-timeframe ((ty ty) (tf timeframe-p)) :layout :fulltree)
+(defprod ty-global_decl_keyword ((ty ty) (kw global_decl_keyword-p)) :layout :fulltree)
+(defprod ty-local_decl_keyword ((ty ty) (kw local_decl_keyword-p)) :layout :fulltree)
+(defprod func-ses ((fn func) (ses ses)) :layout :fulltree)
+
+(fty::defmap ty-timeframe-imap :key-type identifier :val-type ty-timeframe :true-listp t)
+(fty::defmap ty-global_decl_keyword-imap :key-type identifier :val-type ty-global_decl_keyword :true-listp t)
+(fty::defmap ty-local_decl_keyword-imap :key-type identifier :val-type ty-local_decl_keyword :true-listp t)
+(fty::defmap func-ses-imap :key-type identifier :val-type func-ses :true-listp t)
+
+(fty::defmap identifier-imap :key-type identifier :val-type identifier :true-listp t)
+
+(fty::defmap identifierlist-imap :key-type identifier :val-type identifierlist :true-listp t)
+(fty::defmap expr-imap :key-type identifier :val-type expr :true-listp t)
+
+(defprod static_env_global
+  ((declared_types ty-timeframe-imap)
+   (constant_values literal-storage)
+   (storage_types ty-global_decl_keyword-imap)
+   (subtypes identifier-imap)
+   (subprograms func-ses-imap)
+   (overloaded_subprograms identifierlist-imap)
+   (expr_equiv expr-imap))
+  :layout :alist)
+
+(defprod static_env_local
+  ((constant_values literal-storage)
+   (storage_types ty-local_decl_keyword-imap)
+   (expr_equiv expr-imap)
+   (return_type maybe-ty))
+  :layout :alist)
+
+(defprod static_env
+  ((global static_env_global)
+   (local static_env_local))
+  :layout :alist)
+
+
+#|
+(include-book
+ "std/util/defconsts" :dir :System)
+
+(acl2::defconsts (& *test* state)
+  (acl2::read-file "~/work/asltest/test5.lsp" state))
+
+(and (static_env_global-p (caar *test*))
+     (ast-p (cdar *test*))
+     (endp (cdr *test*)))
+
+|#
