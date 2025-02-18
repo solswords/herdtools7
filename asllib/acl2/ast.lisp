@@ -29,6 +29,8 @@
 
 ;; how should we deal with type aliases?  E.g., an identifier is a string, an uid is an int.
 
+(local (table fty::deftagsum-defaults :short-names t))
+
 
 (defmacro def-type-alias (new-type existing-type)
   `(defprod ,new-type
@@ -199,7 +201,7 @@
     :measure (acl2::two-nats-measure (acl2-count x) 10))
 
   (defprod ty ((val type_desc)) :layout :fulltree
-    :measure (acl2::two-nats-measure (acl2-count x) 11))
+    :measure (acl2::two-nats-measure (acl2-count x) 20))
 
   (deflist tylist :elt-type ty :true-listp t
     :measure (acl2::two-nats-measure (acl2-count x) 10))
@@ -255,7 +257,7 @@
     :measure-debug t)
 
   (defoption maybe-ty ty
-    :measure (acl2::two-nats-measure (acl2-count x) 12)))
+    :measure (acl2::two-nats-measure (acl2-count x) 30)))
 
 (defprod typed_identifier
   ((name identifier)
