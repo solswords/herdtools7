@@ -23,6 +23,7 @@
 (in-package "ASL")
 
 (include-book "ast")
+(include-book "ihs/basic-definitions" :dir :system)
 (local (table fty::deftagsum-defaults :short-names t))
 
 (deftypes val
@@ -105,9 +106,9 @@
 (deftagsum eval_result
   (:ev_normal (res))
   (:ev_throwing ((throwdata maybe-throwdata)
-              (env env)))
+                 (env env)))
   (:ev_error    ((desc stringp)
-              (data))))
+                 (data))))
 
 
 (defmacro def-eval_result (pred res-pred)
@@ -288,6 +289,28 @@
       (t (ev_error "undefined binop" (list op v1 v2))))))
 
 
+
+(define eval_unop ((op unop-p)
+                   (v val-p))
+  :returns (res val_result-p)
+  (b* ((op (unop-fix op)))
+    (case op
+      (:bnot ;;!
+       (val-case v
+         :v_bool (ev_normal (v_bool (not v.val)))
+         :otherwise (ev_error "bad unop" (list op v))))
+      (:neg
+       (val-case v
+         :v_int (ev_normal (v_int (- v.val)))
+         :v_real (ev_normal (v_real (- v.val)))
+         :otherwise (ev_error "bad unop" (list op v))))
+      (:not
+       (val-case v
+         :v_bitvector (ev_normal (v_bitvector v.len (acl2::lognotu v.len v.val)))
+         :otherwise (ev_error "bad unop" (list op v))))
+      (t (ev_error "undefined uop" (list op v)))))
+  )
+
 (defines eval_expr
   (define eval_expr ((env env-p)
                      (e expr-p)
@@ -307,6 +330,8 @@
                     (((expr_result v1) (eval_expr env desc.expr clk)))
                     (eval_pattern v1.env v1.val desc.pattern clk))
         :e_unop ;; anna
+        (ev_error "Unsupported expression" desc)
+        :e_binuop ;;
         (ev_error "Unsupported expression" desc)
         :e_call ;; sol
         (ev_error "Unsupported expression" desc)
