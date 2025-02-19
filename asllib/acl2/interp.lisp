@@ -311,6 +311,9 @@
       (t (ev_error "undefined uop" (list op v)))))
   )
 
+
+(i-am-here)
+;;(local (in-theory (enable expr-count expr_desc-count)))
 (defines eval_expr
   (define eval_expr ((env env-p)
                      (e expr-p)
@@ -328,17 +331,26 @@
                    :lk_notfound (ev_error "Variable not found" desc))) ;; SemanticsRule.EVar
         :e_pattern (let**
                     (((expr_result v1) (eval_expr env desc.expr clk)))
-                    (eval_pattern v1.env v1.val desc.pattern clk))
+                    (eval_pattern v1.env v1.val desc.pattern clk))     
         :e_unop ;; anna
-        (ev_error "Unsupported expression" desc)
-        :e_binuop ;;
+        (let**
+         (((expr_result v) (eval_expr env desc.arg clk))
+          (val (eval_unop desc.op v.val)))   ;;SemanticsRule.Unop
+         (ev_normal (expr_result val v.env)))
+        ;;(ev_error "Unsupported expression" desc)
+        :e_binop ;;
         (ev_error "Unsupported expression" desc)
         :e_call ;; sol
         (ev_error "Unsupported expression" desc)
         :e_slice ;; anna
         (ev_error "Unsupported expression" desc)
         :e_cond  ;; anna
-        (ev_error "Unsupported expression" desc)
+        (let**
+         (((expr_result test) (eval_expr env desc.test clk))
+          (choice (val-case test.val
+                    :v_bool (ev_normal (if test.val.val desc.then desc.else))
+                    :otherwise (ev_error "bad test in e_cond" test.val))))
+         (eval_expr test.env choice clk))
         :e_getarray ;; sol
         (ev_error "Unsupported expression" desc)
         :e_getenumarray ;; sol
