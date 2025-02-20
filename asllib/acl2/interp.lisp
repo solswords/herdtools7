@@ -23,6 +23,7 @@
 (in-package "ASL")
 
 (include-book "ast")
+(include-book "ihs/basic-definitions" :dir :system)
 (local (table fty::deftagsum-defaults :short-names t))
 
 (deftypes val
@@ -110,9 +111,9 @@
 (deftagsum eval_result
   (:ev_normal (res))
   (:ev_throwing ((throwdata maybe-throwdata)
-              (env env)))
+                 (env env)))
   (:ev_error    ((desc stringp)
-              (data))))
+                 (data))))
 
 
 (defmacro def-eval_result (pred res-pred)
@@ -234,9 +235,6 @@
               :returning (ev_normal cflow)
               :continuing (b* ((,(car acl2::args) cflow.env))
                             ,acl2::rest-expr))))
-
-
-
 
 (deftagsum env_result
   (:lk_local ((val val)))
@@ -828,6 +826,40 @@
   :hints(("Goal" :in-theory (enable call-count)))
   :rule-classes :linear)
 
+
+(define eval_unop ((op unop-p)
+                   (v val-p))
+  :returns (res val_result-p)
+  (b* ((op (unop-fix op)))
+    (case op
+      (:bnot ;;!
+       (val-case v
+         :v_bool (ev_normal (v_bool (not v.val)))
+         :otherwise (ev_error "bad unop" (list op v))))
+      (:neg
+       (val-case v
+         :v_int (ev_normal (v_int (- v.val)))
+         :v_real (ev_normal (v_real (- v.val)))
+         :otherwise (ev_error "bad unop" (list op v))))
+      (:not
+       (val-case v
+         :v_bitvector (ev_normal (v_bitvector v.len (acl2::lognotu v.len v.val)))
+         :otherwise (ev_error "bad unop" (list op v))))
+      (t (ev_error "undefined uop" (list op v)))))
+  )
+
+
+;; (i-am-here)
+
+(local
+ (defthm nth-of-vallist
+   (implies (and
+             (vallist-p l)
+             (<= 0 idx)
+             (< idx (len l)))
+            (val-p (nth idx l)))))
+
+
 (with-output
   :evisc (:gag-mode (evisc-tuple 3 4 nil nil))
   (defines eval_expr
@@ -850,6 +882,11 @@
                       (((expr_result v1) (eval_expr env desc.expr)))
                       (eval_pattern v1.env v1.val desc.pattern))
           :e_unop ;; anna
+          (let**
+           (((expr_result v) (eval_expr env desc.arg))
+            (val (eval_unop desc.op v.val))) ;;SemanticsRule.Unop
+           (ev_normal (expr_result val v.env)))
+          :e_binop ;;
           (ev_error "Unsupported expression" desc)
           :e_call ;; sol
           (b* (((call c) desc.call)
@@ -862,8 +899,13 @@
             (ev_normal (expr_result v e.env)))
           :e_slice ;; anna
           (ev_error "Unsupported expression" desc)
-          :e_cond ;; anna
-          (ev_error "Unsupported expression" desc)
+          :e_cond  ;; anna
+          (let**
+           (((expr_result test) (eval_expr env desc.test))
+            (choice (val-case test.val
+                      :v_bool (ev_normal (if test.val.val desc.then desc.else))
+                      :otherwise (ev_error "bad test in e_cond" test.val))))
+           (eval_expr test.env choice))
           :e_getarray ;; sol
           (ev_error "Unsupported expression" desc)
           :e_getenumarray ;; sol
@@ -873,11 +915,19 @@
           :e_getfields ;; sol
           (ev_error "Unsupported expression" desc)
           :e_getitem ;; anna
-          (ev_error "Unsupported expression" desc)
+          (let**
+           (((expr_result varr) (eval_expr env desc.base)))
+           (val-case varr.val
+             :v_array (if (or (< desc.index 0) (<= (len varr.val.arr) desc.index))
+                          (ev_error "index out of bounds" desc)
+                        (ev_normal (expr_result (nth desc.index varr.val.arr) varr.env)))
+             :otherwise (ev_error "evaluation of the base did not return v_array as expected" desc)))
           :e_record ;; sol
           (ev_error "Unsupported expression" desc)
           :e_tuple ;; anna
-          (ev_error "Unsupported expression" desc)
+          (let**
+           (((exprlist_result vals) (eval_expr_list env desc.exprs)))
+           (ev_normal (expr_result (v_array vals.val) vals.env)))
           :e_array ;; sol
           (ev_error "Unsupported expression" desc)
           :e_enumarray ;; anna
@@ -1039,4 +1089,4 @@
                                eval_subprogram
                                eval_stmt)))
     
-    (verify-guards eval_expr-fn)))
+    (verify-guards eval_expr-fn :guard-debug t)))
