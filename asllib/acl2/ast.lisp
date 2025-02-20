@@ -148,7 +148,7 @@
     (:pattern_any ((patterns patternlist)))
     (:pattern_geq ((expr expr)))
     (:pattern_leq ((expr expr)))
-    (:patern_mask ((mask bitvector_mask)))
+    (:pattern_mask ((mask bitvector_mask)))
     (:pattern_not ((pattern pattern)))
     (:pattern_range ((lower expr)
                      (upper expr)))
