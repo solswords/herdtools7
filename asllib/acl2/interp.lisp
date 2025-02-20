@@ -34,10 +34,16 @@
     (:v_string ((val stringp)))
     (:v_bitvector ((len natp) (val natp)))
     (:v_label ((val stringp)))
-    (:v_record ((rec record-val)))
+    (:v_record ((rec val-imap)))
     (:v_array  ((arr vallist))))
   (fty::deflist vallist :elt-type val :true-listp t)
-  (fty::defmap record-val :key-type symbolp :val-type val :true-listp t))
+  (fty::defmap val-imap :key-type identifier :val-type val :true-listp t)
+  ///
+  (defthm val-imap-p-of-pairlis$
+    (implies (and (identifierlist-p keys)
+                  (vallist-p vals)
+                  (equal (len keys) (len vals)))
+             (val-imap-p (pairlis$ keys vals)))))
 
 
 (define v_of_literal ((x literal-p))
@@ -50,15 +56,13 @@
     :l_string (v_string x.val)
     :l_label (v_label x.val)))
 
-
-(fty::defmap val-storage :key-type identifier :val-type val :true-listp t)
 (fty::defmap int-imap :key-type identifier :val-type integerp :true-listp t)
 
 
 
 (defprod global-env
   ((static static_env_global)
-   (storage val-storage)
+   (storage val-imap)
    (stack_size int-imap))
   :layout :list)
 
@@ -74,7 +78,7 @@
 
 
 (defprod local-env
-  ((storage val-storage)
+  ((storage val-imap)
    (scope unit)
    (unroll integer-list)
    (declared identifierlist))
@@ -860,7 +864,42 @@
             (val-p (nth idx l)))))
 
 
+(define fieldlist->exprs ((x fieldlist-p))
+  :returns (exprs exprlist-p)
+  (if (atom x)
+      nil
+    (cons (field->expr (car x))
+          (fieldlist->exprs (cdr x))))
+  ///
+  (defret len-of-<fn>
+    (equal (len exprs) (len x)))
+
+  (defret exprlist-count-of-<fn>
+    (<= (exprlist-count (fieldlist->exprs x))
+        (fieldlist-count x))
+    :hints(("Goal" :in-theory (enable fieldlist-count exprlist-count)))
+    :rule-classes :linear))
+
+(define fieldlist->names ((x fieldlist-p))
+  :returns (names identifierlist-p)
+  (if (atom x)
+      nil
+    (cons (field->name (car x))
+          (fieldlist->names (cdr x))))
+  ///
+  (defret len-of-<fn>
+    (equal (len names) (len x))))
+
+
+(local (include-book "std/lists/repeat" :dir :system))
+
+(local (defthm vallist-p-of-repeat
+         (implies (val-p v)
+                  (vallist-p (acl2::repeat len v)))
+         :hints(("Goal" :in-theory (enable acl2::repeat)))))
+
 (with-output
+  ;; makes it so it won't take forever to print the induction scheme
   :evisc (:gag-mode (evisc-tuple 3 4 nil nil))
   (defines eval_expr
     (define eval_expr ((env env-p)
@@ -907,9 +946,31 @@
                       :otherwise (ev_error "bad test in e_cond" test.val))))
            (eval_expr test.env choice))
           :e_getarray ;; sol
-          (ev_error "Unsupported expression" desc)
+          (b* (((ev (expr_result arr)) (eval_expr env desc.base))
+               ((ev (expr_result idx)) (eval_expr arr.env desc.index))
+               ((ev idxv) (val-case idx.val
+                            :v_int (ev_normal idx.val.val)
+                            :otherwise (ev_error "getarray non-integer index" desc)))
+               ((ev arrv) (val-case arr.val
+                            :v_array (ev_normal arr.val.arr)
+                            :otherwise (ev_error "getarray non-array value" desc))))
+            (if (and (<= 0 idxv)
+                     (< idxv (len arrv)))
+                (ev_normal (expr_result (nth idxv arrv) idx.env))
+              (ev_error "getarray index out of range" desc)))
           :e_getenumarray ;; sol
-          (ev_error "Unsupported expression" desc)
+          (b* (((ev (expr_result arr)) (eval_expr env desc.base))
+               ((ev (expr_result idx)) (eval_expr arr.env desc.index))
+               ((ev idxv) (val-case idx.val
+                            :v_label (ev_normal idx.val.val)
+                            :otherwise (ev_error "getenumarray non-label index" desc)))
+               ((ev arrv) (val-case arr.val
+                            :v_record (ev_normal arr.val.rec)
+                            :otherwise (ev_error "getenumarray non-record value" desc)))
+               (look (assoc-equal idxv arrv)))
+            (if look
+                (ev_normal (expr_result (cdr look) idx.env))
+              (ev_error "getenumarray index not found" desc)))
           :e_getfield ;; anna
           (ev_error "Unsupported expression" desc)
           :e_getfields ;; sol
@@ -923,13 +984,23 @@
                         (ev_normal (expr_result (nth desc.index varr.val.arr) varr.env)))
              :otherwise (ev_error "evaluation of the base did not return v_array as expected" desc)))
           :e_record ;; sol
-          (ev_error "Unsupported expression" desc)
+          (b* ((exprs (fieldlist->exprs desc.fields))
+               (names (fieldlist->names desc.fields))
+               ((ev (exprlist_result e)) (eval_expr_list env exprs)))
+            (ev_normal (expr_result (v_record (pairlis$ names e.val)) e.env)))
           :e_tuple ;; anna
           (let**
            (((exprlist_result vals) (eval_expr_list env desc.exprs)))
            (ev_normal (expr_result (v_array vals.val) vals.env)))
           :e_array ;; sol
-          (ev_error "Unsupported expression" desc)
+          (b* (((ev (expr_result v)) (eval_expr env desc.value))
+               ((ev (expr_result len)) (eval_expr v.env desc.length))
+               ((ev lenv) (val-case len.val
+                            :v_int (if (<= 0 len.val.val)
+                                       (ev_normal len.val.val)
+                                     (ev_error "array negative length" desc))
+                            :otherwise (ev_error "array non-integer length" desc))))
+            (ev_normal (expr_result (v_array (make-list lenv :initial-element v.val)) len.env)))
           :e_enumarray ;; anna
           (ev_error "Unsupported expression" desc)
           :e_arbitrary ;; sol
@@ -1088,5 +1159,14 @@
                                eval_call
                                eval_subprogram
                                eval_stmt)))
+    
+    (std::defret-mutual len-of-eval_expr_list
+      (defret len-of-eval_expr_list
+        (implies (eval_result-case eval :ev_normal)
+                 (equal (len (exprlist_result->val (ev_normal->res eval)))
+                        (len e)))
+        :hints ('(:expand ((eval_expr_list env e))))
+        :fn eval_expr_list)
+      :skip-others t)
     
     (verify-guards eval_expr-fn :guard-debug t)))

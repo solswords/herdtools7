@@ -247,7 +247,7 @@
 
   (defprod field
     ((name identifier)
-     (type ty))
+     (expr expr))
     :measure (acl2::two-nats-measure (acl2-count x) 30)
     :layout :fulltree)
 
