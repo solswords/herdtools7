@@ -35,8 +35,8 @@
     (:v_bitvector ((len natp) (val natp)))
     (:v_label ((val stringp)))
     (:v_record ((rec record-val)))
-    (:v_array  ((arr array-val))))
-  (fty::deflist array-val :elt-type val :true-listp t)
+    (:v_array  ((arr vallist))))
+  (fty::deflist vallist :elt-type val :true-listp t)
   (fty::defmap record-val :key-type symbolp :val-type val :true-listp t))
 
 
@@ -54,7 +54,7 @@
 (fty::defmap val-storage :key-type identifier :val-type val :true-listp t)
 (fty::defmap int-imap :key-type identifier :val-type integerp :true-listp t)
 
-(fty::deflist vallist :elt-type val :true-listp t)
+
 
 (defprod global-env
   ((static static_env_global)
@@ -200,8 +200,7 @@
          :ev_normal (b* ((,binder evresult.res))
                       (let** ,rest-bindings . ,args))
          :otherwise evresult))))
-
-
+           
 (deftagsum env_result
   (:lk_local ((val val)))
   (:lk_global ((val val)))
@@ -312,8 +311,16 @@
   )
 
 
-(i-am-here)
-;;(local (in-theory (enable expr-count expr_desc-count)))
+;; (i-am-here)
+
+(local
+ (defthm nth-of-vallist
+   (implies (and
+             (vallist-p l)
+             (<= 0 idx)
+             (< idx (len l)))
+            (val-p (nth idx l)))))
+
 (defines eval_expr
   (define eval_expr ((env env-p)
                      (e expr-p)
@@ -360,11 +367,19 @@
         :e_getfields ;; sol
         (ev_error "Unsupported expression" desc)
         :e_getitem ;; anna
-        (ev_error "Unsupported expression" desc)
+        (let**
+         (((expr_result varr) (eval_expr env desc.base clk)))
+         (val-case varr.val
+           :v_array (if (or (< desc.index 0) (<= (len varr.val.arr) desc.index))
+                        (ev_error "index out of bounds" desc)
+                      (ev_normal (expr_result (nth desc.index varr.val.arr) varr.env)))
+           :otherwise (ev_error "evaluation of the base did not return v_array as expected" desc)))  
         :e_record ;; sol
         (ev_error "Unsupported expression" desc)
         :e_tuple ;; anna
-        (ev_error "Unsupported expression" desc)
+        (let**
+          (((exprlist_result vals) (eval_expr_list env desc.exprs clk)))
+          (ev_normal (expr_result (v_array vals.val) vals.env)))
         :e_array ;; sol
         (ev_error "Unsupported expression" desc)
         :e_enumarray ;; anna
@@ -426,4 +441,4 @@
   ;;   (let** (((exprlist_result vargs) (eval_expr_list
 
   ///
-  (verify-guards eval_expr))
+  (verify-guards eval_expr :guard-debug t))
