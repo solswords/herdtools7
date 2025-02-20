@@ -34,8 +34,8 @@
     (:v_bitvector ((len natp) (val natp)))
     (:v_label ((val stringp)))
     (:v_record ((rec record-val)))
-    (:v_array  ((arr array-val))))
-  (fty::deflist array-val :elt-type val :true-listp t)
+    (:v_array  ((arr vallist))))
+  (fty::deflist vallist :elt-type val :true-listp t)
   (fty::defmap record-val :key-type symbolp :val-type val :true-listp t))
 
 
@@ -53,7 +53,7 @@
 (fty::defmap val-storage :key-type identifier :val-type val :true-listp t)
 (fty::defmap int-imap :key-type identifier :val-type integerp :true-listp t)
 
-(fty::deflist vallist :elt-type val :true-listp t)
+
 
 (defprod global-env
   ((static static_env_global)
@@ -78,6 +78,11 @@
    (unroll integer-list)
    (declared identifierlist))
   :layout :list)
+
+(define empty-local-env ()
+  :returns (empty local-env-p)
+  (make-local-env))
+
 
 (defprod env
   ((global global-env)
@@ -151,7 +156,8 @@
 
 (def-eval_result stmt_eval_result-p control_flow_state-p)
 
-(defprod func_result ((vals val_read_from-list)
+(defprod func_result ((vals vallist ;; val_read_from-list
+                            )
                       (env global-env)))
 
 (def-eval_result func_eval_result-p func_result-p)
@@ -199,6 +205,37 @@
          :ev_normal (b* ((,binder evresult.res))
                       (let** ,rest-bindings . ,args))
          :otherwise evresult))))
+
+(defmacro let*^ (&rest args) (cons 'let** args))
+
+(acl2::def-b*-binder ev
+  :body
+  `(b* ((evresult ,(car acl2::forms)))
+     (eval_result-case evresult
+       :ev_normal (b* ((,(car acl2::args) evresult.res))
+                    ,acl2::rest-expr)
+       :otherwise evresult)))
+
+
+(defmacro let*> (bindings &rest args)
+  (b* (((when (atom bindings)) `(let* () . ,args))
+       ((cons (list binder val) rest-bindings) bindings))
+    `(let** ((cflow ,val))
+            (control_flow_state-case cflow
+              :returning (ev_normal cflow)
+              :continuing (b* ((,binder cflow.env))
+                            (let*> ,rest-bindings . ,args))))))
+
+
+(acl2::def-b*-binder evs
+  :body
+  `(b* (((ev cflow) ,(car acl2::forms)))
+     (control_flow_state-case cflow
+              :returning (ev_normal cflow)
+              :continuing (b* ((,(car acl2::args) cflow.env))
+                            ,acl2::rest-expr))))
+
+
 
 
 (deftagsum env_result
@@ -288,105 +325,718 @@
       (t (ev_error "undefined binop" (list op v1 v2))))))
 
 
-(defines eval_expr
-  (define eval_expr ((env env-p)
-                     (e expr-p)
-                     (clk natp))
-    :verify-guards nil
-    :returns (eval expr_eval_result-p)
-    :measure (acl2::two-nats-measure clk (expr-count e))
-    (b* ((desc (expr->desc e)))
-      (expr_desc-case desc
-        :e_literal (ev_normal (expr_result (v_of_literal desc.val) env)) ;; SemanticsRule.ELit
-        :e_var (b* ((look (env-find desc.name env)))
-                 (env_result-case look
-                   :lk_local (ev_normal (expr_result look.val env))
-                   :lk_global (ev_normal (expr_result look.val env))
-                   :lk_notfound (ev_error "Variable not found" desc))) ;; SemanticsRule.EVar
-        :e_pattern (let**
-                    (((expr_result v1) (eval_expr env desc.expr clk)))
-                    (eval_pattern v1.env v1.val desc.pattern clk))
-        :e_unop ;; anna
-        (ev_error "Unsupported expression" desc)
-        :e_call ;; sol
-        (ev_error "Unsupported expression" desc)
-        :e_slice ;; anna
-        (ev_error "Unsupported expression" desc)
-        :e_cond  ;; anna
-        (ev_error "Unsupported expression" desc)
-        :e_getarray ;; sol
-        (ev_error "Unsupported expression" desc)
-        :e_getenumarray ;; sol
-        (ev_error "Unsupported expression" desc)
-        :e_getfield ;; anna
-        (ev_error "Unsupported expression" desc)
-        :e_getfields ;; sol
-        (ev_error "Unsupported expression" desc)
-        :e_getitem ;; anna
-        (ev_error "Unsupported expression" desc)
-        :e_record ;; sol
-        (ev_error "Unsupported expression" desc)
-        :e_tuple ;; anna
-        (ev_error "Unsupported expression" desc)
-        :e_array ;; sol
-        (ev_error "Unsupported expression" desc)
-        :e_enumarray ;; anna
-        (ev_error "Unsupported expression" desc)
-        :e_arbitrary ;; sol
-        (ev_error "Unsupported expression" desc)
-        :otherwise (ev_error "Unsupported expression" desc))))
+(defines lexpr-count*
+  (define lexpr_desc-count* ((x lexpr_desc-p))
+    :measure (lexpr_desc-count x)
+    :returns (count posp :rule-classes :type-prescription)
+    (lexpr_desc-case x
+      :le_slice (+ 1
+                   (lexpr-count* x.base)
+                   (slicelist-count x.slices))
+      :le_setarray (+ 1 (lexpr-count* x.base)
+                      (expr-count x.index))
+      :le_setenumarray (+ 1 (lexpr-count* x.base)
+                          (expr-count x.index))
+      :le_setfield (+ 1 (lexpr-count* x.base))
+      :le_setfields (+ 1 (lexpr-count* x.base))
+      :le_destructuring (+ 1 (lexprlist-count* x.elts))
+      :otherwise 1))
 
-  (define eval_pattern ((env env-p)
-                        (val val-p)
-                        (p pattern-p)
-                        (clk natp))
-    :measure (acl2::two-nats-measure clk (pattern-count p))
-    ;; :returns (val val-p)
-    ;; Note: we may want to have this return just a value since it's not
-    ;; supposed to produce any side effects?
-    :returns (eval expr_eval_result-p)
-    (b* ((desc (pattern->val p)))
-      (pattern_desc-case desc
-        :pattern_all (ev_normal (expr_result (v_bool t) env)) ;; SemanticsRule.PAll
-        :pattern_any (eval_pattern-any env val desc.patterns clk)
-        :otherwise (ev_error "Unsupported pattern" desc))))
+  (define lexpr-count* ((x lexpr-p))
+    :measure (lexpr-count x)
+    :returns (count posp :rule-classes :type-prescription)
+    (+ 1 (lexpr_desc-count* (lexpr->val x))))
 
-  (define eval_pattern-any ((env env-p)
-                            (val val-p)
-                            (p patternlist-p)
-                            (clk natp))
-    :measure (acl2::two-nats-measure clk (patternlist-count p))
-
-    :returns (eval expr_eval_result-p)
-    (if (atom p)
-        (ev_normal (expr_result (v_bool nil) env))
-      (let**
-       (((expr_result v1) (eval_pattern env val (car p) clk)))
-       (val-case v1.val
-         :v_bool (if v1.val.val
-                     (ev_normal v1)
-                   (eval_pattern-any v1.env val (cdr p) clk))
-         :otherwise (ev_error "Bad result type from eval_pattern" v1)))))
-
-
-  (define eval_expr_list ((env env-p)
-                          (e exprlist-p)
-                          (clk natp))
-    :returns (eval exprlist_eval_result-p)
-    :measure (acl2::two-nats-measure clk (exprlist-count e))
-    (if (atom e)
-        (ev_normal (exprlist_result nil env))
-      (let** (((expr_result first) (eval_expr env (car e) clk)))
-             (let* ((env first.env))
-               (let** (((exprlist_result rest) (eval_expr_list env (cdr e) clk)))
-                      (ev_normal (exprlist_result (cons first.val rest.val) rest.env)))))))
-  
-  ;; (define eval_call ((name identifier-p)
-  ;;                    (env env-p)
-  ;;                    (params exprlist-p)
-  ;;                    (args exprlist-p)
-  ;;                    (clk natp))
-  ;;   (let** (((exprlist_result vargs) (eval_expr_list
-
+  (define lexprlist-count* ((x lexprlist-p))
+    :measure (lexprlist-count x)
+    :returns (count posp :rule-classes :type-prescription)
+    (if (atom x)
+        1
+      (+ 1 (lexpr-count* (car x))
+         (lexprlist-count* (cdr x)))))
   ///
-  (verify-guards eval_expr))
+  (defthm lexpr_desc-count*-le_slice
+    (implies (lexpr_desc-case x :le_slice)
+             (b* (((le_slice x)))
+               (< (+ (lexpr-count* x.base)
+                     (slicelist-count x.slices))
+                  (lexpr_desc-count* x))))
+    :hints (("goal" :expand ((lexpr_desc-count* x))))
+    :rule-classes :linear)
+
+  (defthm lexpr_desc-count*-le_setarray
+    (implies (lexpr_desc-case x :le_setarray)
+             (b* (((le_setarray x)))
+               (< (+ (lexpr-count* x.base)
+                     (expr-count x.index))
+                  (lexpr_desc-count* x))))
+    :hints (("goal" :expand ((lexpr_desc-count* x))))
+    :rule-classes :linear)
+
+  (defthm lexpr_desc-count*-le_setenumarray
+    (implies (lexpr_desc-case x :le_setenumarray)
+             (b* (((le_setenumarray x)))
+               (< (+ (lexpr-count* x.base)
+                     (expr-count x.index))
+                  (lexpr_desc-count* x))))
+    :hints (("goal" :expand ((lexpr_desc-count* x))))
+    :rule-classes :linear)
+
+  (defthm lexpr_desc-count*-le_setfield
+    (implies (lexpr_desc-case x :le_setfield)
+             (b* (((le_setfield x)))
+               (< (lexpr-count* x.base)
+                  (lexpr_desc-count* x))))
+    :hints (("goal" :expand ((lexpr_desc-count* x))))
+    :rule-classes :linear)
+
+  (defthm lexpr_desc-count*-le_setfields
+    (implies (lexpr_desc-case x :le_setfields)
+             (b* (((le_setfields x)))
+               (< (lexpr-count* x.base)
+                  (lexpr_desc-count* x))))
+    :hints (("goal" :expand ((lexpr_desc-count* x))))
+    :rule-classes :linear)
+
+  (defthm lexpr_desc-count*-le_destructuring
+    (implies (lexpr_desc-case x :le_destructuring)
+             (b* (((le_destructuring x)))
+               (< (lexprlist-count* x.elts)
+                  (lexpr_desc-count* x))))
+    :hints (("goal" :expand ((lexpr_desc-count* x))))
+    :rule-classes :linear)
+
+  (defthm lexpr-count*-lexpr->val
+    (< (lexpr_desc-count* (lexpr->val x))
+       (lexpr-count* x))
+    :hints (("goal" :expand ((lexpr-count* x))))
+    :rule-classes :linear)
+
+  (defthm lexprlist-count*-strong
+    (implies (consp x)
+             (< (+ (lexpr-count* (car x))
+                   (lexprlist-count* (cdr x)))
+                (lexprlist-count* x)))
+    :hints (("goal" :expand ((lexprlist-count* x))))
+    :rule-classes :linear))
+
+
+
+(define maybe-expr-count ((x maybe-expr-p))
+  :returns (count posp :rule-classes :type-prescription)
+  (if x (+ 1 (expr-count x)) 1)
+  ///
+  (defthm maybe-expr-count-linear
+    (implies x
+             (< (expr-count x) (maybe-expr-count x)))
+    :rule-classes ((:linear :trigger-terms ((maybe-expr-count x))))))
+
+(define expr*maybe-ty-count ((x expr*maybe-ty-p))
+  :returns (count posp :rule-classes :type-prescription)
+  (b* (((expr*maybe-ty x)))
+    (+ 1 (expr-count x.expr) (maybe-ty-count x.ty)))
+  ///
+  (defthm expr*maybe-ty-count-linear
+    (b* (((expr*maybe-ty x)))
+      (< (+ (expr-count x.expr) (maybe-ty-count x.ty))
+         (expr*maybe-ty-count x)))
+    :rule-classes :linear))
+
+(define maybe-[expr*maybe-ty]-count ((x maybe-[expr*maybe-ty]-p))
+  :returns (count posp :rule-classes :type-prescription)
+  (if x (+ 1 (expr*maybe-ty-count x)) 1)
+  ///
+  (defthm maybe-[expr*maybe-ty]-count-linear
+    (implies x
+             (< (expr*maybe-ty-count x) (maybe-[expr*maybe-ty]-count x)))
+    :rule-classes ((:linear :trigger-terms ((maybe-[expr*maybe-ty]-count x))))))
+
+
+(defines stmt-count*
+  :hints (("goal" :expand ((maybe-stmt-count x)
+                           (maybe-stmt-some->val x))))
+  (define stmt_desc-count* ((x stmt_desc-p))
+    :measure (stmt_desc-count x)
+    :returns (count posp :rule-classes :type-prescription)
+    (stmt_desc-case x
+      :s_seq (+ 1 (stmt-count* x.first)
+                (stmt-count* x.second))
+      :s_decl (+ 1
+                 (maybe-ty-count x.ty)
+                 (maybe-expr-count x.expr))
+      :s_assign (+ 1 (lexpr-count* x.lexpr)
+                   (expr-count x.expr))
+      :s_call (+ 1 (call-count x.call))
+      :s_return (+ 1 (maybe-expr-count x.expr))
+      :s_cond (+ 1 (expr-count x.test)
+                 (stmt-count* x.then)
+                 (stmt-count* x.else))
+      :s_assert (+ 1 (expr-count x.expr))
+      :s_for (+ 1 (expr-count x.start_e)
+                (expr-count x.end_e)
+                (stmt-count* x.body)
+                (maybe-expr-count x.limit))
+      :s_while (+ 1 (expr-count x.test)
+                  (maybe-expr-count x.limit)
+                  (stmt-count* x.body))
+      :s_repeat (+ 1 (stmt-count* x.body)
+                   (expr-count x.test)
+                   (maybe-expr-count x.limit))
+      :s_throw (+ 1 (maybe-[expr*maybe-ty]-count x.val))
+      :s_try (+ 1 (stmt-count* x.body)
+                (catcherlist-count* x.catchers)
+                (maybe-stmt-count* x.otherwise))
+      :s_print (+ 1 (exprlist-count x.args))
+      :s_pragma (+ 1 (exprlist-count x.exprs))
+      :otherwise 1))
+
+  (define stmt-count* ((x stmt-p))
+    :measure (stmt-count x)
+    :returns (count posp :rule-classes :type-prescription)
+    (+ 1 (stmt_desc-count* (stmt->val x))))
+
+  (define maybe-stmt-count* ((x maybe-stmt-p))
+    :measure (maybe-stmt-count x)
+    :returns (count posp :rule-classes :type-prescription)
+    (if x (+ 1 (stmt-count* x)) 1))
+
+  (define catcher-count* ((x catcher-p))
+    :measure (catcher-count x)
+    :returns (count posp :rule-classes :type-prescription)
+    (b* (((catcher x)))
+      (+ 1 (ty-count x.ty) (stmt-count* x.stmt))))
+
+  (define catcherlist-count* ((x catcherlist-p))
+    :measure (catcherlist-count x)
+    :returns (count posp :rule-classes :type-prescription)
+    (if (atom x)
+        1
+      (+ 1 (catcher-count* (car x))
+         (catcherlist-count* (cdr x)))))
+  ///
+  (local (set-default-hints
+          '('(:expand ((stmt_desc-count* x)
+                       (stmt-count* x)
+                       (maybe-stmt-count* x)
+                       (catcher-count* x)
+                       (catcherlist-count* x))))))
+
+  (local (in-theory (disable stmt_desc-count*
+                             stmt-count*
+                             maybe-stmt-count*
+                             catcherlist-count*
+                             catcher-count*)))
+  
+  (defthm stmt_desc-count*-s_seq
+    (implies (stmt_desc-case x :s_seq)
+             (b* (((s_seq x)))
+               (< (+ (stmt-count* x.first)
+                     (stmt-count* x.second))
+                  (stmt_desc-count* x))))
+    :rule-classes :linear)
+
+  (defthm stmt_desc-count*-s_decl
+    (implies (stmt_desc-case x :s_decl)
+             (b* (((s_decl x)))
+               (< (+ (maybe-ty-count x.ty)
+                 (maybe-expr-count x.expr))
+                  (stmt_desc-count* x))))
+    :rule-classes :linear)
+
+  (defthm stmt_desc-count*-s_assign
+    (implies (stmt_desc-case x :s_assign)
+             (b* (((s_assign x)))
+               (< (+ (lexpr-count* x.lexpr)
+                     (expr-count x.expr))
+                  (stmt_desc-count* x))))
+    :rule-classes :linear)
+
+  (defthm stmt_desc-count*-s_call
+    (implies (stmt_desc-case x :s_call)
+             (b* (((s_call x)))
+               (< (call-count x.call)
+                  (stmt_desc-count* x))))
+    :rule-classes :linear)
+
+  (defthm stmt_desc-count*-s_return
+    (implies (stmt_desc-case x :s_return)
+             (b* (((s_return x)))
+               (< (maybe-expr-count x.expr)
+                  (stmt_desc-count* x))))
+    :rule-classes :linear)
+
+  (defthm stmt_desc-count*-s_cond
+    (implies (stmt_desc-case x :s_cond)
+             (b* (((s_cond x)))
+               (< (+ (expr-count x.test)
+                     (stmt-count* x.then)
+                     (stmt-count* x.else))
+                  (stmt_desc-count* x))))
+    :rule-classes :linear)
+
+  (defthm stmt_desc-count*-s_assert
+    (implies (stmt_desc-case x :s_assert)
+             (b* (((s_assert x)))
+               (< (expr-count x.expr)
+                  (stmt_desc-count* x))))
+    :rule-classes :linear)
+
+  (defthm stmt_desc-count*-s_for
+    (implies (stmt_desc-case x :s_for)
+             (b* (((s_for x)))
+               (< (+ (expr-count x.start_e)
+                     (expr-count x.end_e)
+                     (stmt-count* x.body)
+                     (maybe-expr-count x.limit))
+                  (stmt_desc-count* x))))
+    :rule-classes :linear)
+
+  (defthm stmt_desc-count*-s_while
+    (implies (stmt_desc-case x :s_while)
+             (b* (((s_while x)))
+               (< (+ (expr-count x.test)
+                     (maybe-expr-count x.limit)
+                     (stmt-count* x.body))
+                  (stmt_desc-count* x))))
+    :rule-classes :linear)
+
+  (defthm stmt_desc-count*-s_repeat
+    (implies (stmt_desc-case x :s_repeat)
+             (b* (((s_repeat x)))
+               (< (+ (stmt-count* x.body)
+                     (expr-count x.test)
+                     (maybe-expr-count x.limit))
+                  (stmt_desc-count* x))))
+    :rule-classes :linear)
+
+  (defthm stmt_desc-count*-s_throw
+    (implies (stmt_desc-case x :s_throw)
+             (b* (((s_throw x)))
+               (< (maybe-[expr*maybe-ty]-count x.val)
+                  (stmt_desc-count* x))))
+    :rule-classes :linear)
+  
+  (defthm stmt_desc-count*-s_try
+    (implies (stmt_desc-case x :s_try)
+             (b* (((s_try x)))
+               (< (+ (stmt-count* x.body)
+                     (catcherlist-count* x.catchers)
+                     (maybe-stmt-count* x.otherwise))
+                  (stmt_desc-count* x))))
+    :rule-classes :linear)
+
+  (defthm stmt_desc-count*-s_print
+    (implies (stmt_desc-case x :s_print)
+             (b* (((s_print x)))
+               (< (exprlist-count x.args)
+                  (stmt_desc-count* x))))
+    :rule-classes :linear)
+
+  (defthm stmt_desc-count*-s_pragma
+    (implies (stmt_desc-case x :s_pragma)
+             (b* (((s_pragma x)))
+               (< (exprlist-count x.exprs)
+                  (stmt_desc-count* x))))
+    :rule-classes :linear)
+
+  (defthm stmt-count*-linear
+    (< (stmt_desc-count* (stmt->val x)) (stmt-count* x))
+    :rule-classes :linear)
+
+  (defthm maybe-stmt-count*-linear
+    (implies x
+             (< (stmt-count* x) (maybe-stmt-count* x)))
+    :rule-classes ((:linear :trigger-terms ((maybe-stmt-count* x)))))
+
+  (defthm catcher-count*-linear
+    (b* (((catcher x)))
+      (< (+ (ty-count x.ty) (stmt-count* x.stmt)) (catcher-count* x)))
+    :rule-classes :linear)
+
+  (defthm catcherlist-count*-linear
+    (implies (consp x)
+             (< (+ (catcher-count* (car x))
+                   (catcherlist-count* (cdr x)))
+                (catcherlist-count* x)))
+    :rule-classes :linear))
+
+
+
+(defconst *recursion-limit-upper-bound* (expt 2 40))
+
+
+(define env-clk-sum-stack-size ((subs func-ses-imap-p)
+                                (stk int-imap-p))
+  :returns (clk natp :rule-classes :type-prescription)
+  (b* (((when (atom subs)) 0)
+       ((unless (mbt (and (consp (car subs))
+                          (identifier-p (caar subs)))))
+        (env-clk-sum-stack-size (cdr subs) stk))
+       (fn (caar subs))
+       (look (assoc-equal fn stk))
+       (val (nfix (- *recursion-limit-upper-bound* (if look (cdr look) 0)))))
+    (+ val (env-clk-sum-stack-size (cdr subs) stk))))
+
+(define env-clk ((env env-p))
+  :returns (clk natp :rule-classes :type-prescription)
+  (b* (((env env))
+       ((global-env g) env.global)
+       ((static_env_global s) g.static))
+    (env-clk-sum-stack-size s.subprograms g.stack_size)))
+
+
+(def-eval_result env_eval_result-p env-p)
+
+(define env-push-stack ((name identifier-p)
+                        (env env-p))
+  :returns (new-env env_eval_result-p)
+  (b* (((env env))
+       ((global-env g) env.global)
+       ((static_env_global s) g.static)
+       (name (identifier-fix name))
+       (look (assoc-equal name s.subprograms))
+       ((unless look)
+        (ev_error "Unrecognized subprogram" name))
+       (look (assoc-equal name g.stack_size))
+       (val (lifix (if look (cdr look) 0)))
+       ((when (<= *recursion-limit-upper-bound* val))
+        (ev_error "Recursion limit overflowed" name))
+       (new-g (change-global-env g :stack_size (cons (cons name (+ 1 val)) g.stack_size))))
+    (ev_normal (make-env :global new-g :local (empty-local-env))))
+
+  ;; ///
+  ;; (local (defthm integerp-+-1
+  ;;          (implies (integerp x)
+  ;;                   (integerp (+ 1 x)))))
+
+  ;; (local (defthm integerp-minus
+  ;;          (implies (and (integerp x) (integerp y))
+  ;;                   (integerp (+ x (- y))))))
+
+  ;; (local (defthm env-clk-sum-stack-size-decr-1
+  ;;          (implies (and (int-imap-p stack_size)
+  ;;                        (hons-assoc-equal name stack_size))
+  ;;                   (and (implies (and (hons-assoc-equal name subprograms)
+  ;;                                      (identifier-p name)
+  ;;                                      (< (cdr (hons-assoc-equal name stack_size))
+  ;;                                         *recursion-limit-upper-bound*))
+  ;;                                 (< (env-clk-sum-stack-size subprograms (cons (cons name (+ 1 (cdr (hons-assoc-equal name stack_size))))
+  ;;                                                                              stack_size))
+  ;;                                    (env-clk-sum-stack-size subprograms stack_size)))
+  ;;                        (<= (env-clk-sum-stack-size subprograms (cons (cons name (+ 1 (cdr (hons-assoc-equal name stack_size))))
+  ;;                                                                      stack_size))
+  ;;                            (env-clk-sum-stack-size subprograms stack_size))))
+  ;;          :hints(("Goal" :in-theory (enable env-clk-sum-stack-size)))
+  ;;          :rule-classes :linear))
+
+  ;; (local (defthm env-clk-sum-stack-size-decr-2
+  ;;          (implies (not (hons-assoc-equal name stack_size))
+  ;;                   (and (implies (and (hons-assoc-equal name subprograms)
+  ;;                                      (identifier-p name))
+  ;;                                 (< (env-clk-sum-stack-size subprograms (cons (cons name 1) stack_size))
+  ;;                                    (env-clk-sum-stack-size subprograms stack_size)))
+  ;;                        (<= (env-clk-sum-stack-size subprograms (cons (cons name 1) stack_size))
+  ;;                            (env-clk-sum-stack-size subprograms stack_size))))
+  ;;          :hints(("Goal" :in-theory (enable env-clk-sum-stack-size)))
+  ;;          :rule-classes :linear))
+
+  ;; (defret env-push-stack-env-clk-decr
+  ;;   (implies (eval_result-case new-env :ev_normal)
+  ;;            (< (env-clk (ev_normal->res new-env)) (env-clk env)))
+  ;;   :hints(("Goal" :in-theory (enable env-clk))))
+  )
+
+(define env-pop-stack ((name identifier-p)
+                       (prev-env env-p)
+                       (call-env global-env-p))
+  :returns (new-env env-p)
+  ;; Takes the local component of the prev-env
+  ;; and combines it with the global component of the call-env, but decrements name's stack size.
+  (b* (((env call) call-env)
+       ((global-env g) call-env)
+       (look (assoc-equal name g.stack_size))
+       (val (lifix (if look (cdr look) 0)))
+       (new-g (change-global-env g :stack_size (cons (cons name (- val 1)) g.stack_size))))
+    (change-env prev-env :global new-g)))
+
+  
+
+
+(defmacro nats-measure (&rest args)
+  `(acl2::nat-list-measure (list . ,args)))
+
+
+(define read_value_from ((vs val_read_from-list-p))
+  :returns (vals vallist-p)
+  (if (atom vs)
+      nil
+    (cons (val_read_from->val (car vs))
+          (read_value_from (cdr vs)))))
+
+
+
+(define typed_identifierlist->names ((x typed_identifierlist-p))
+  :returns (names identifierlist-p)
+  (if (atom x)
+      nil
+    (cons (typed_identifier->name (car x))
+          (typed_identifierlist->names (cdr x))))
+  ///
+  (defret len-of-<fn>
+    (equal (len names) (len x))))
+
+(define maybe-typed_identifierlist->names ((x maybe-typed_identifierlist-p))
+  :returns (names identifierlist-p)
+  (if (atom x)
+      nil
+    (cons (maybe-typed_identifier->name (car x))
+          (maybe-typed_identifierlist->names (cdr x))))
+  ///
+  (defret len-of-<fn>
+    (equal (len names) (len x))))
+
+
+(define declare_local_identifiers ((env env-p)
+                                   (names identifierlist-p)
+                                   (vals vallist-p))
+  :guard (eql (len names) (len vals))
+  :returns (new-env env-p)
+  :prepwork ((local (include-book "std/lists/take" :dir :system)))
+  (b* (((env env))
+       ((local-env l) env.local)
+       (new-storage (append (pairlis$ (identifierlist-fix names)
+                                      (mbe :logic (vallist-fix (take (len names) vals))
+                                           :exec vals))
+                            l.storage)))
+    (change-env env :local (change-local-env l :storage new-storage))))
+
+
+
+(define check_recurse_limit ((env env-p)
+                             (name identifier-p)
+                             (recurse-limit maybe-expr-p))
+  :returns (eval eval_result-p)
+  (declare (ignorable env name recurse-limit))
+  (ev_normal nil))
+
+
+(defthm call-count-linear
+  (b* (((call x)))
+    (< (+ (exprlist-count x.params)
+          (exprlist-count x.args))
+       (call-count x)))
+  :hints(("Goal" :in-theory (enable call-count)))
+  :rule-classes :linear)
+
+(with-output
+  :evisc (:gag-mode (evisc-tuple 3 4 nil nil))
+  (defines eval_expr
+    (define eval_expr ((env env-p)
+                       (e expr-p)
+                       &key
+                       ((clk natp) 'clk))
+      :verify-guards nil
+      :returns (eval expr_eval_result-p)
+      :measure (nats-measure clk 0 (expr-count e))
+      (b* ((desc (expr->desc e)))
+        (expr_desc-case desc
+          :e_literal (ev_normal (expr_result (v_of_literal desc.val) env)) ;; SemanticsRule.ELit
+          :e_var (b* ((look (env-find desc.name env)))
+                   (env_result-case look
+                     :lk_local (ev_normal (expr_result look.val env))
+                     :lk_global (ev_normal (expr_result look.val env))
+                     :lk_notfound (ev_error "Variable not found" desc))) ;; SemanticsRule.EVar
+          :e_pattern (let**
+                      (((expr_result v1) (eval_expr env desc.expr)))
+                      (eval_pattern v1.env v1.val desc.pattern))
+          :e_unop ;; anna
+          (ev_error "Unsupported expression" desc)
+          :e_call ;; sol
+          (b* (((call c) desc.call)
+               ((ev (exprlist_result e))
+                (eval_call c.name env c.params c.args))
+               (v (if (and (consp e.val)
+                           (atom (cdr e.val)))
+                      (car e.val)
+                    (v_array e.val))))
+            (ev_normal (expr_result v e.env)))
+          :e_slice ;; anna
+          (ev_error "Unsupported expression" desc)
+          :e_cond ;; anna
+          (ev_error "Unsupported expression" desc)
+          :e_getarray ;; sol
+          (ev_error "Unsupported expression" desc)
+          :e_getenumarray ;; sol
+          (ev_error "Unsupported expression" desc)
+          :e_getfield ;; anna
+          (ev_error "Unsupported expression" desc)
+          :e_getfields ;; sol
+          (ev_error "Unsupported expression" desc)
+          :e_getitem ;; anna
+          (ev_error "Unsupported expression" desc)
+          :e_record ;; sol
+          (ev_error "Unsupported expression" desc)
+          :e_tuple ;; anna
+          (ev_error "Unsupported expression" desc)
+          :e_array ;; sol
+          (ev_error "Unsupported expression" desc)
+          :e_enumarray ;; anna
+          (ev_error "Unsupported expression" desc)
+          :e_arbitrary ;; sol
+          (ev_error "Unsupported expression" desc)
+          :otherwise (ev_error "Unsupported expression" desc))))
+
+    (define eval_pattern ((env env-p)
+                          (val val-p)
+                          (p pattern-p)
+                          &key
+                          ((clk natp) 'clk))
+      :measure (nats-measure clk 0 (pattern-count p))
+      ;; :returns (val val-p)
+      ;; Note: we may want to have this return just a value since it's not
+      ;; supposed to produce any side effects?
+      :returns (eval expr_eval_result-p)
+      (b* ((desc (pattern->val p)))
+        (pattern_desc-case desc
+          :pattern_all (ev_normal (expr_result (v_bool t) env)) ;; SemanticsRule.PAll
+          :pattern_any (eval_pattern-any env val desc.patterns)
+          :otherwise (ev_error "Unsupported pattern" desc))))
+
+    (define eval_pattern-any ((env env-p)
+                              (val val-p)
+                              (p patternlist-p)
+                              &key
+                              ((clk natp) 'clk))
+      :measure (nats-measure clk 0 (patternlist-count p))
+
+      :returns (eval expr_eval_result-p)
+      (if (atom p)
+          (ev_normal (expr_result (v_bool nil) env))
+        (let**
+         (((expr_result v1) (eval_pattern env val (car p))))
+         (val-case v1.val
+           :v_bool (if v1.val.val
+                       (ev_normal v1)
+                     (eval_pattern-any v1.env val (cdr p)))
+           :otherwise (ev_error "Bad result type from eval_pattern" v1)))))
+
+
+    (define eval_expr_list ((env env-p)
+                            (e exprlist-p)
+                            &key
+                            ((clk natp) 'clk))
+      :returns (eval exprlist_eval_result-p)
+      :measure (nats-measure clk 0 (exprlist-count e))
+      (b* (((when (atom e))
+            (ev_normal (exprlist_result nil env)))
+           ((ev (expr_result first)) (eval_expr env (car e)))
+           (env first.env)
+           ((ev (exprlist_result rest)) (eval_expr_list env (cdr e))))
+        (ev_normal (exprlist_result (cons first.val rest.val) rest.env))))
+  
+    (define eval_call ((name identifier-p)
+                       (env env-p)
+                       (params exprlist-p)
+                       (args exprlist-p)
+                       &key
+                       ((clk natp) 'clk))
+      :measure (nats-measure clk 0 (+ (exprlist-count params)
+                                      (exprlist-count args)))
+      :returns (eval exprlist_eval_result-p)
+      (b* (((ev (exprlist_result vargs)) (eval_expr_list env args))
+           ((ev (exprlist_result vparams)) (eval_expr_list vargs.env params))
+           (env vparams.env)
+           ;; note: we check our fixed recursion limit here because this is where
+           ;; the measure will decrease provided that they haven't been exceeded
+           ((ev sub-env) (env-push-stack name env))
+           ((when (zp clk))
+            (ev_error "Recursion limit ran out" name))
+           ((ev (func_result subprog-eval)) (eval_subprogram sub-env name vparams.val vargs.val :clk (1- clk)))
+           ;; (vals (read_value_from subprog-eval.val))
+           (env (env-pop-stack name env subprog-eval.env)))
+        (ev_normal (exprlist_result subprog-eval.vals env))))
+
+    (define eval_subprogram ((env env-p)
+                             (name identifier-p)
+                             (vparams vallist-p)
+                             (vargs vallist-p)
+                             &key
+                             ((clk natp) 'clk))
+      :measure (nats-measure clk 1 0)
+      :returns (eval func_eval_result-p)
+      (b* ((look (assoc-equal (identifier-fix name)
+                              (static_env_global->subprograms
+                               (global-env->static
+                                (env->global env)))))
+           ((unless look)
+            (ev_error "Subprogam not found" name))
+           ((func f) (func-ses->fn (cdr look)))
+           ((unless (subprogram_body-case f.body :sb_asl))
+            (ev_error "Primitive subfunctions not supported" name))
+
+           ((unless (and (eql (len vparams) (len f.parameters))
+                         (eql (len vargs) (len f.args))))
+            (ev_error "Bad arity" (list name (len vparams) (len vargs))))
+         
+           ;; probably redundant but in the document
+           (env1 (change-env env :local (empty-local-env)))
+           ((ev ?ign) (check_recurse_limit env1 name f.recurse_limit))
+
+           (arg-names (typed_identifierlist->names f.args))
+           (param-names (maybe-typed_identifierlist->names f.parameters))
+           (env2 (declare_local_identifiers env1 arg-names vargs))
+           (env3 (declare_local_identifiers env2 param-names vparams))
+
+           ((ev bodyres) (eval_stmt env3 (sb_asl->stmt f.body))))
+        (control_flow_state-case bodyres
+          :returning (ev_normal (func_result bodyres.vals bodyres.env))
+          :continuing (ev_normal (func_result nil (env->global bodyres.env))))))
+
+
+    (define eval_stmt ((env env-p)
+                       (s stmt-p)
+                       &key
+                       ((clk natp) 'clk))
+      :measure (nats-measure clk 0 (stmt-count* s))
+      :returns (eval stmt_eval_result-p)
+      (b* ((s (stmt->val s)))
+        (stmt_desc-case s
+          :s_pass (ev_normal (continuing env))
+          :s_seq (b* (((evs env) (eval_stmt env s.first)))
+                   (eval_stmt env s.second))
+          :s_decl (ev_error "unsupported statement" s)
+          :s_assign (ev_error "unsupported statement" s)
+          :s_call (ev_error "unsupported statement" s)
+          :s_return (ev_error "unsupported statement" s)
+          :s_cond (b* (((ev (expr_result test)) (eval_expr env s.test))
+                       ((ev testval) (val-case test.val
+                                       :v_bool (ev_normal test.val.val)
+                                       :otherwise (ev_error "Non-boolean test result" s.test)))
+                       (next (if testval s.then s.else)))
+                    (eval_stmt test.env next))
+          :s_assert (b* (((ev (expr_result assert)) (eval_expr env s.expr)))
+                      (val-case assert.val
+                        :v_bool (if assert.val.val
+                                    (ev_normal (continuing assert.env))
+                                  (ev_error "Assertion failed" s.expr))
+                        :otherwise (ev_error "Non-boolean assertion result" s.expr)))
+          :s_for (ev_error "unsupported statement" s)
+          :s_while (ev_error "unsupported statement" s)
+          :s_repeat (ev_error "unsupported statement" s)
+          :s_throw (ev_error "unsupported statement" s)
+          :s_try (ev_error "unsupported statement" s)
+          :s_print (ev_error "unsupported statement" s)
+          :s_unreachable (ev_error "unreachable" s)
+          :s_pragma (ev_error "unsupported statement" s))))
+         
+
+    ///
+    (local (in-theory (disable eval_expr
+                               eval_pattern
+                               eval_pattern-any
+                               eval_expr_list
+                               eval_call
+                               eval_subprogram
+                               eval_stmt)))
+    
+    (verify-guards eval_expr-fn)))

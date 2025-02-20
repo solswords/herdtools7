@@ -295,6 +295,7 @@
                     (fields identifierlist)
                     (pairs intpairlist)))
     (:le_destructuring ((elts lexprlist)))
+    :base-case-override :le_discard
     :measure (acl2::two-nats-measure (acl2-count x) 10))
 
 
