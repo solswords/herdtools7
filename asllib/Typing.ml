@@ -567,10 +567,10 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
     | _ -> conflict ~loc [ T_Exception [] ] t_struct
   (* End *)
 
-  (* Begin CheckStaticallyEvaluable *)
-  let check_statically_evaluable expr_for_error ses () =
-    if SES.is_statically_evaluable ses then
-      () |: TypingRule.CheckStaticallyEvaluable
+  (* Begin CheckSymbolicallyEvaluable *)
+  let check_symbolically_evaluable expr_for_error ses () =
+    if SES.is_symbolically_evaluable ses then
+      () |: TypingRule.CheckSymbolicallyEvaluable
     else
       fatal_from ~loc:expr_for_error
         (Error.ImpureExpression (expr_for_error, ses))
@@ -618,7 +618,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
   let check_bits_equal_width ~loc env t1 t2 () =
     try check_bits_equal_width' env t1 t2 ()
     with TypingAssumptionFailed ->
-      fatal_from ~loc (Error.UnreconciliableTypes (t1, t2))
+      fatal_from ~loc (Error.UnreconcilableTypes (t1, t2))
   (* End *)
 
   let binop_is_ordered = function
@@ -760,8 +760,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
 
   (* Begin CheckPositionsInWidth *)
   let check_diet_in_width ~loc slices width diet () =
-    let min_pos = Diet.Int.min_elt diet |> Diet.Int.Interval.x
-    and max_pos = Diet.Int.max_elt diet |> Diet.Int.Interval.y in
+    let min_pos = Diet.Int.min_elt diet and max_pos = Diet.Int.max_elt diet in
     if 0 <= min_pos && max_pos < width then
       () |: TypingRule.CheckPositionsInWidth
     else fatal_from ~loc (BadSlices (Error.Static, slices, width))
@@ -775,26 +774,29 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
   (* End *)
 
   (** A module for checking that all bitfields of a given bitvector type
-      that share the same name and exist in the same scope (defined below)
-      also define the same slice of the bitvector type.
+      that share the same name and exist in the same scope (terms defined
+      below) also define the same slice of the bitvector type.
   *)
   module CheckCommonBitfieldsAlign : sig
     val check :
       loc:'a annotated -> StaticEnv.env -> bitfield list -> int -> unit
   end = struct
-    type interval = int * int
-    (** [(i, j)] is the set of integers from [i] to [j], inclusive. *)
+    type range = int * int
+    (** [(j, i)] is the list of integers from [j] down to [i], inclusive,
+        matching the slice notation [j:i].
+        Invariant: [j >= i].
+    *)
 
     type absolute_bitfield = {
       name : identifier;
       abs_scope : identifier list;
-      abs_slices : interval list;
+      abs_slices : range list;
     }
     (** An absolute bitfield [abs_f] corresponds to a bitfield [f].
         It consists of the following fields:
         - [name] the name of the bitfield as declared;
         - [abs_scope] is the list of names of ancestor bitfields, starting from the top; and
-        - [abs_slices] is a list of intervals that represent the sequence of indices,
+        - [abs_slices] is a list of ranges that represent the sequence of indices,
           corresponding to the slices defined for [f],
           relative to the bitvector type that declares [f].
 
@@ -813,6 +815,10 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
         ]
     *)
 
+    let safe_range (hi, lo) =
+      let () = assert (hi >= lo) in
+      (hi, lo)
+
     let pp_abs_name fmt abs_name =
       let abs_name_minus_top =
         match abs_name with
@@ -826,25 +832,140 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
         (fun fmt id -> Format.fprintf fmt "%s" id)
         fmt abs_name_minus_top
 
-    let pp_abs_slice fmt (from_idx, to_idx) =
-      Format.fprintf fmt "%i:%i" to_idx from_idx
+    let pp_abs_slice fmt (hi, lo) =
+      if hi == lo then Format.fprintf fmt "%i" hi
+      else Format.fprintf fmt "%i:%i" hi lo
 
-    let pp_abs_slices intervals =
+    let pp_abs_slices ranges =
       Format.pp_print_list
         ~pp_sep:(fun fmt () -> Format.fprintf fmt ", ")
-        pp_abs_slice intervals
+        pp_abs_slice ranges
 
     let pp_absolute_bitfield fmt { name; abs_scope; abs_slices } =
       Format.fprintf fmt "[%a] %a" pp_abs_slices abs_slices pp_abs_name
         (List.append abs_scope [ name ])
 
-    let interval_equal (interval1 : interval) (interval2 : interval) =
-      let lo1, hi1 = interval1 in
-      let lo2, hi2 = interval2 in
+    let range_equal (range1 : range) (range2 : range) =
+      let hi1, lo1 = range1 in
+      let hi2, lo2 = range2 in
       lo1 == lo2 && hi1 == hi2
 
-    let intervals_equal intervals1 intervals2 =
-      list_equal interval_equal intervals1 intervals2
+    let do_ranges_intersect (hi1, lo1) (hi2, lo2) =
+      (lo1 >= lo2 && lo1 <= hi2) || (hi1 <= hi2 && hi1 >= lo2)
+
+    (** Returns the range resulting from intersecting [range1] and [range2],
+        assuming they intersect.
+      *)
+    let intersect_ranges ((hi1, lo1) as range1) ((hi2, lo2) as range2) =
+      let () = assert (do_ranges_intersect range1 range2) in
+      safe_range (min hi1 hi2, max lo1 lo2)
+
+    let shift_range (hi, lo) amount = (hi + amount, lo + amount)
+    let ranges_equal ranges1 ranges2 = list_equal range_equal ranges1 ranges2
+
+    (** Returns the range [(i+w-1, i)], corresponding to
+        [slice = Slice_Length (i, , w)].
+    *)
+    let slice_to_range env slice : range =
+      match slice with
+      | Slice_Length (i, w) ->
+          let z_i = StaticInterpreter.static_eval_to_int env i in
+          let z_w = StaticInterpreter.static_eval_to_int env w in
+          safe_range (z_i + z_w - 1, z_i)
+      | _ ->
+          (* should have been de-sugared into Slice_Length *)
+          assert false
+
+    let merge_ranges_if_adjacent (hi1, lo1) (hi2, lo2) =
+      if lo1 == hi2 + 1 then Some (safe_range (hi1, lo2)) else None
+
+    (** Merges all adjacent ranges.
+
+        Example 1: {[(10, 4); (3, 2); (1, 0)]} is coalesced into {[(10,0)]}.
+        Example 2: for {[(1, 0); (3, 2)]} there is no coalescing
+        and the result is the input - {[(1, 0); (3, 2)]}.
+    *)
+    let coalesce_ranges ranges =
+      list_coalesce_right merge_ranges_if_adjacent ranges
+
+    (** Viewing [ranges] as one long list of integers --- the flat list,
+       the result associates each range of [ranges] with a range
+       corresponding to its respective indices in the flat list.
+
+       Example 1: if {ranges=[(6, 3); (2, 1)]}, the result is
+          {[(5, 2); (1, 0)]}
+    *)
+    let ranges_to_relative_ranges ranges =
+      let relative_ranges, _ =
+        List.fold_right
+          (fun cur_range (res_ranges, last_idx) ->
+            let cur_hi, cur_lo = cur_range in
+            let cur_range_len = cur_hi - cur_lo + 1 in
+            let relative_range = shift_range (cur_range_len - 1, 0) last_idx in
+            (relative_range :: res_ranges, last_idx + cur_range_len))
+          ranges ([], 0)
+      in
+      relative_ranges
+
+    (** [absolute_indices] represents a list of indices into the containing
+        vector, given by ranges. We can think of the "flat list" as the
+        concatenation of the individual lists for each range.
+        For example the flat list for [(20, 16); (13, 12); (9, 6)]
+        is [20, 19, 18, 17, 16, 13, 12, 9, 8, 7, 6].
+        [slice] is a list of ranges where each range consists of indices into
+        the flat list.
+        The result is a list of sub-ranges formed by selecting from each
+        range in [absolute_indices] the integers indicated by [slice], and
+        filtering out empty ranges.
+
+        To compute the result, we use the notion of relative ranges,
+        which associate to each range in [absolute_indices] the range of its
+        indices in the flat list. For example, the relative ranges for
+        [(20, 16); (13, 12); (9, 6)] are [(10, 6); (5, 4); (3, 0)].
+
+        Example 1: if {absolute_indices = [(20, 16); (13, 12); (9, 6)]}
+          and {slice = (4, 2)} then the result is {[(12, 12); (9, 8)]}.
+          To see this, consider the flat list for [absolute_indices], which is
+          [20, 19, 18, 17, 16, 13, 12, 9, 8, 7, 6].
+          The integers of the flat list at positions [4, 3, 2] correspond
+          to [12, 9, 8]. The integer [12] comes from the range {(13, 12)}
+          and the integers [9, 8] come from the range {(9, 8)}.
+          Therefore, the result is {[(12, 12); (9, 8)]}.
+
+        Example 2: if {absolute_indices = [(21,18); (9,4)]} and {slice=(7,6)}
+          the flat list is [21, 20, 19, 18, 9, 8, 7, 6, 5, 4]
+          the relative ranges are {[(9,6); (5,0)]}
+          and the result is {[(19, 18)]}.
+    *)
+    let select_indices_by_slice absolute_indices slice =
+      let relative_ranges = ranges_to_relative_ranges absolute_indices in
+      List.fold_right2
+        (fun cur_range cur_relative acc_ranges ->
+          if do_ranges_intersect slice cur_relative then
+            let common_range = intersect_ranges slice cur_relative in
+            let _, cur_relative_lo = cur_relative in
+            let _, cur_lo = cur_range in
+            let sliced_range =
+              shift_range common_range (-cur_relative_lo + cur_lo)
+            in
+            sliced_range :: acc_ranges
+          else (* filter out empty output range *)
+            acc_ranges)
+        absolute_indices relative_ranges []
+
+    (** Viewing [absolute_indices] as one long list of integers ---
+      the flat list, the result is the list of integers selected from the flat
+      list via the indices represented by the ranges in [slices].
+      The result list is represented by the smallest list of ranges.
+
+      Example 1: if {absolute_indices = [(12,9); (7,2)]} and
+        {slices = [(5, 2)]}, the flat list is [12, 10, 9, 7, 6, 5, 4, 3, 2]
+        the selected elements of ranges are then [7, 6, 5, 4],
+        which can be represented by the single range {(7, 4)}.
+      *)
+    let select_indices_by_slices ~absolute_indices ~slices =
+      list_concat_map (select_indices_by_slice absolute_indices) slices
+      |> coalesce_ranges
 
     (** [either_prefix list1 list2] is true if either [list1] is a prefix of [list2] or
         [list2] is a prefix of [list1].
@@ -857,7 +978,8 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
     let exist_in_same_scope abs_f1 abs_f2 =
       either_prefix abs_f1.abs_scope abs_f2.abs_scope
 
-    (** {iter_ordered_pairs f [e_1;...;e_k]} applies [f e_i e_j] for every [1 <= i < j <= k].
+    (** {iter_ordered_pairs f [e_1;...;e_k]} applies [f e_i e_j]
+        to every [1 <= i < j <= k].
     *)
     let rec iter_ordered_pairs f l =
       match l with
@@ -866,128 +988,60 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
           let () = List.iter (fun e_t -> f h e_t) t in
           iter_ordered_pairs f t
 
-    (** Returns the sequence of indices given by [slice]
-        as an interval.
-    *)
-    let slice_to_indices env slice : interval =
-      match slice with
-      | Slice_Length (i, w) ->
-          let z_i = StaticInterpreter.static_eval_to_int env i in
-          let z_w = StaticInterpreter.static_eval_to_int env w in
-          (z_i, z_i + z_w - 1)
-      | _ ->
-          (* should have been de-sugated into Slice_Length *)
-          assert false
-
-    (** Merge all adjacent intervals that can be represented by a single interval.
-    *)
-    let coalesce_intervals intervals =
-      List.fold_left
-        (fun acc_intervals slice ->
-          match acc_intervals with
-          | [] -> [ slice ]
-          | _ ->
-              let split_prefix_last list =
-                match List.rev list with
-                | [] -> assert false
-                | h :: t -> (List.rev t, h)
-              in
-              let prefix, (last_lo, last_hi) =
-                split_prefix_last acc_intervals
-              in
-              let lo, hi = slice in
-              if lo == last_hi + 1 then List.append prefix [ (last_lo, hi) ]
-              else List.append acc_intervals [ slice ])
-        [] intervals
-
-    (** Assuming that [(int_lo, int_hi)] can be sliced with [(slice_lo, slice_hi)]
-            into a non-empty interval, return the sliced interval as [intersected]
-            and any indices of [(slice_lo, slice_hi)] that reach beyond
-            [(int_lo, int_hi)] in [remainder_opt], if ther are any.
-    *)
-    let slice_interval_by_slice (int_lo, int_hi) (slice_lo, slice_hi) :
-        interval * interval option =
-      let shifted_lo, shifted_hi = (slice_lo + int_lo, slice_hi + int_lo) in
-      let intersected = (shifted_lo, min shifted_hi int_hi) in
-      let remainder_lo = int_hi - int_lo + 1 in
-      let remainder_opt =
-        if int_hi < shifted_hi then Some (remainder_lo, slice_hi) else None
-      in
-      (intersected, remainder_opt)
-
-    (** Returns the slice of the sequence of indices represented by [intervals],
-        defined by the relative positions given by [slice].
-    *)
-    let rec slice_indices_by_slice acc intervals ((slice_lo, slice_hi) as slice)
-        =
-      (* slice_indices_by_slice [(9,12); (2,7)] (2,5) = [(11,12); (2,3)] *)
-      match intervals with
-      | [] -> []
-      | ((head_lo, head_hi) as head) :: intervals_tail -> (
-          let head_last_idx = head_hi - head_lo in
-          let head_len = head_last_idx + 1 in
-          if slice_lo > head_last_idx then
-            slice_indices_by_slice acc intervals_tail
-              (slice_lo - head_len, slice_hi - head_len)
-          else
-            let intersected, remainder_opt =
-              slice_interval_by_slice head slice
-            in
-            let next_acc = intersected :: acc in
-            match remainder_opt with
-            | None -> List.rev next_acc
-            | Some slice' -> slice_indices_by_slice next_acc intervals slice')
-
-    (** Returns the slice of the sequence of indices given by [indices],
-        defined by the relative positions given by [slices].
-    *)
-    let slice_indices indices slices =
-      list_concat_map (slice_indices_by_slice [] indices) slices
-      |> coalesce_intervals
-
     (** Returns the list of absolute bitfields for the bitfield [bf]
+        and all bitfields transitively nested unde it,
         given that [absolute_parent] is the absolute bitfield
         for the bitfield where [bf] is declared.
     *)
     let rec bitfield_to_absolute env bf absolute_parent =
-      let { name; abs_scope; abs_slices } = absolute_parent in
+      let { name; abs_scope = parent_scope; abs_slices = parent_abs_slices } =
+        absolute_parent
+      in
       let bf_name = bitfield_get_name bf in
-      let bf_scope = List.append abs_scope [ name ] in
-      let slices_as_indices =
-        List.map (slice_to_indices env) (bitfield_get_slices bf)
+      let bf_abs_scope = List.append parent_scope [ name ] in
+      let bf_slices_as_ranges =
+        List.map (slice_to_range env) (bitfield_get_slices bf)
       in
-      let bf_indices = slice_indices abs_slices slices_as_indices in
+      let bf_abs_slices =
+        select_indices_by_slices ~absolute_indices:parent_abs_slices
+          ~slices:bf_slices_as_ranges
+      in
       let bf_absolute =
-        { name = bf_name; abs_scope = bf_scope; abs_slices = bf_indices }
+        { name = bf_name; abs_scope = bf_abs_scope; abs_slices = bf_abs_slices }
       in
-      let nested = bitfield_get_nested bf in
-      bf_absolute :: bitfields_to_absolute env nested bf_absolute
+      let bf_nested = bitfield_get_nested bf in
+      bf_absolute :: bitfields_to_absolute env bf_nested bf_absolute
 
-    (** Returns the list of absolute bitfields for the bitfields [bitfields]
+    (** Returns the list of absolute bitfields corresponding to [bitfields],
         given that [absolute_parent] is the absolute bitfield
         where [bitfields] are declared.
+        The order of the absolute fields is unimportant.
     *)
     and bitfields_to_absolute env bitfields absolute_parent =
       list_concat_map
         (fun bf -> bitfield_to_absolute env bf absolute_parent)
         bitfields
 
-    (** Tests whether absolute fields [f1] and [f2] are aligned.
+    (** Tests whether absolute bitfields [f1] and [f2] are aligned.
         If the two fields don't share a name or don't exist in the same
         scope, the result is true.
     *)
-    let absolute_fields_align f1 f2 =
+    let absolute_bitfields_align f1 f2 =
       if String.equal f1.name f2.name && exist_in_same_scope f1 f2 then
         let { abs_slices = indices1 } = f1 in
         let { abs_slices = indices2 } = f2 in
-        intervals_equal indices1 indices2
+        ranges_equal indices1 indices2
       else true
 
     (* Begin TypingRule.CheckCommonBitfieldsAlign *)
     let check ~loc env bitfields width =
       (* define a fake absolute field representing the entire bitvector. *)
       let top_absolute =
-        { name = ""; abs_scope = []; abs_slices = [ (0, width - 1) ] }
+        {
+          name = "";
+          abs_scope = [];
+          abs_slices = [ safe_range (width - 1, 0) ];
+        }
       in
       let absolute_bitfields =
         bitfields_to_absolute env bitfields top_absolute
@@ -1001,12 +1055,6 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
       in
       iter_ordered_pairs
         (fun f1 f2 ->
-          let { name = name1; abs_scope = scope1; abs_slices = indices1 } =
-            f1
-          in
-          let { name = name2; abs_scope = scope2; abs_slices = indices2 } =
-            f2
-          in
           let () =
             if false then
               Format.eprintf
@@ -1014,16 +1062,20 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
                  slices: %b@."
                 pp_absolute_bitfield f1 pp_absolute_bitfield f2
                 (exist_in_same_scope f1 f2)
-                (String.equal name1 name2)
-                (intervals_equal indices1 indices2)
+                (String.equal f1.name f2.name)
+                (ranges_equal f1.abs_slices f2.abs_slices)
           in
-          if not (absolute_fields_align f1 f2) then
-            let abs_name1 = scope1 @ [ name1 ] in
-            let abs_name2 = scope2 @ [ name2 ] in
+          if not (absolute_bitfields_align f1 f2) then
+            let abs_name1 = f1.abs_scope @ [ f1.name ] in
+            let abs_name2 = f2.abs_scope @ [ f2.name ] in
             let abs_name1_str = Format.asprintf "%a" pp_abs_name abs_name1 in
             let abs_name2_str = Format.asprintf "%a" pp_abs_name abs_name2 in
-            let indices1_str = Format.asprintf "[%a]" pp_abs_slices indices1 in
-            let indices2_str = Format.asprintf "[%a]" pp_abs_slices indices2 in
+            let indices1_str =
+              Format.asprintf "[%a]" pp_abs_slices f1.abs_slices
+            in
+            let indices2_str =
+              Format.asprintf "[%a]" pp_abs_slices f2.abs_slices
+            in
             fatal_from ~loc
               (Error.BitfieldsDontAlign
                  {
@@ -1034,6 +1086,57 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
                  }))
         absolute_bitfields
     (* End *)
+
+    (* Unit tests *)
+    let test_do_ranges_intersect () =
+      assert (do_ranges_intersect (4, 2) (3, 0));
+      assert (do_ranges_intersect (4, 2) (5, 4));
+      assert (do_ranges_intersect (4, 2) (10, 6) == false)
+
+    let test_coalesce_ranges () =
+      assert (
+        ranges_equal (coalesce_ranges [ (10, 4); (3, 2); (1, 0) ]) [ (10, 0) ]);
+      assert (
+        ranges_equal (coalesce_ranges [ (1, 0); (3, 2) ]) [ (1, 0); (3, 2) ]);
+      assert (
+        ranges_equal
+          (coalesce_ranges [ (21, 11); (10, 5); (3, 2); (1, 0) ])
+          [ (21, 5); (3, 0) ]);
+      assert (
+        ranges_equal
+          (coalesce_ranges [ (21, 11); (10, 5); (3, 2) ])
+          [ (21, 5); (3, 2) ])
+
+    let test_ranges_to_relative_ranges () =
+      let ranges = [ (6, 3); (2, 1) ] in
+      let relative_ranges = ranges_to_relative_ranges ranges in
+      let () = assert (ranges_equal relative_ranges [ (5, 2); (1, 0) ]) in
+      (* Shifting the ranges shouldn't affect the result *)
+      let ranges = [ shift_range (6, 3) 500; shift_range (2, 1) 1000 ] in
+      let relative_ranges = ranges_to_relative_ranges ranges in
+      assert (ranges_equal relative_ranges [ (5, 2); (1, 0) ])
+
+    let test_select_by_slice () =
+      (* Example 1 *)
+      let ranges = [ (20, 16); (13, 12); (9, 6) ] in
+      (* 20, 19, 18, 17, 16, 13, 12, 9, 8, 7, 6 *)
+      let slice = (4, 2) in
+      let selected = select_indices_by_slice ranges slice in
+      let () = assert (ranges_equal selected [ (12, 12); (9, 8) ]) in
+      (* Example 2 *)
+      let ranges = [ (21, 18); (9, 4) ] in
+      let slice = (7, 6) in
+      let selected = select_indices_by_slice ranges slice in
+      assert (ranges_equal selected [ (19, 18) ])
+
+    let check_common_bitfields_align_unit_tests _ =
+      Format.printf "Running unit tests for CheckCommonBitfieldsAlign@.";
+      test_do_ranges_intersect ();
+      test_coalesce_ranges ();
+      test_ranges_to_relative_ranges ();
+      test_select_by_slice ()
+
+    let () = if false then check_common_bitfields_align_unit_tests ()
   end
 
   (** Check for a standard library declaration name{n}(bits(n), ...) or
@@ -1171,7 +1274,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
     (* Begin TBits *)
     | T_Bits (e_width, bitfields) ->
         let t_width, e_width', ses_width = annotate_expr env e_width in
-        let+ () = check_statically_evaluable e_width ses_width in
+        let+ () = check_symbolically_evaluable e_width ses_width in
         let+ () = check_constrained_integer ~loc:e_width env t_width in
         let bitfields', ses_bitfields =
           if bitfields = [] then (bitfields, SES.empty)
@@ -1207,7 +1310,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
               match get_variable_enum' env e with
               | Some (s, labels) -> (ArrayLength_Enum (s, labels), SES.empty)
               | None ->
-                  let e', ses = annotate_static_integer ~loc env e in
+                  let e', ses = annotate_symbolic_integer ~loc env e in
                   (ArrayLength_Expr e', ses))
           | ArrayLength_Enum (_, _) ->
               assert (* Enumerated indices only exist in the typed AST. *)
@@ -1261,23 +1364,23 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
           |: TypingRule.TNonDecl
   (* End *)
 
-  (* Begin AnnotateStaticallyEvaluableExpr *)
-  and annotate_statically_evaluable_expr env e =
+  (* Begin AnnotateSymbolicallyEvaluableExpr *)
+  and annotate_symbolically_evaluable_expr env e =
     let t, e', ses = annotate_expr env e in
-    let+ () = check_statically_evaluable e ses in
+    let+ () = check_symbolically_evaluable e ses in
     (t, e', ses)
   (* End *)
 
-  (* Begin AnnotateStaticInteger *)
-  and annotate_static_integer ~(loc : 'a annotated) env e =
-    let t, e', ses = annotate_statically_evaluable_expr env e in
+  (* Begin AnnotateSymbolicInteger *)
+  and annotate_symbolic_integer ~(loc : 'a annotated) env e =
+    let t, e', ses = annotate_symbolically_evaluable_expr env e in
     let+ () = check_structure_integer ~loc env t in
     (StaticModel.try_normalize env e', ses)
   (* End *)
 
-  (* Begin StaticConstrainedInteger *)
-  and annotate_static_constrained_integer ~(loc : 'a annotated) env e =
-    let t, e', ses = annotate_statically_evaluable_expr env e in
+  (* Begin SymbolicConstrainedInteger *)
+  and annotate_symbolic_constrained_integer ~(loc : 'a annotated) env e =
+    let t, e', ses = annotate_symbolically_evaluable_expr env e in
     let+ () = check_constrained_integer ~loc env t in
     (StaticModel.try_normalize env e', ses)
   (* End *)
@@ -1285,11 +1388,11 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
   (* Begin AnnotateConstraint *)
   and annotate_constraint ~loc env = function
     | Constraint_Exact e ->
-        let e', ses = annotate_static_constrained_integer ~loc env e in
+        let e', ses = annotate_symbolic_constrained_integer ~loc env e in
         (Constraint_Exact e', ses)
     | Constraint_Range (e1, e2) ->
-        let e1', ses1 = annotate_static_constrained_integer ~loc env e1
-        and e2', ses2 = annotate_static_constrained_integer ~loc env e2 in
+        let e1', ses1 = annotate_symbolic_constrained_integer ~loc env e1
+        and e2', ses2 = annotate_symbolic_constrained_integer ~loc env e2 in
         let ses = SES.union ses1 ses2 in
         (Constraint_Range (e1', e2'), ses)
   (* End *)
@@ -1314,7 +1417,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
       | Slice_Length (offset, length) ->
           let t_offset, offset', ses_offset = annotate_expr env offset
           and length', ses_length =
-            annotate_static_constrained_integer ~loc env length
+            annotate_symbolic_constrained_integer ~loc env length
           in
           let+ () = check_structure_integer ~loc:offset env t_offset in
           let ses = SES.union ses_length ses_offset in
@@ -1362,7 +1465,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
     (* Begin PSingle *)
     | Pattern_Single e ->
         let t_e, e', ses = annotate_expr env e in
-        let+ () = check_statically_evaluable e ses in
+        let+ () = check_symbolically_evaluable e ses in
         let+ () =
          fun () ->
           let t_struct = Types.make_anonymous env t
@@ -1383,7 +1486,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
     (* Begin PGeq *)
     | Pattern_Geq e ->
         let t_e, e', ses = annotate_expr env e in
-        let+ () = check_statically_evaluable e ses in
+        let+ () = check_symbolically_evaluable e ses in
         let+ () =
          fun () ->
           let t_struct = Types.get_structure env t
@@ -1397,7 +1500,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
     (* Begin PLeq *)
     | Pattern_Leq e ->
         let t_e, e', ses = annotate_expr env e in
-        let+ () = check_statically_evaluable e ses in
+        let+ () = check_symbolically_evaluable e ses in
         let+ () =
          fun () ->
           let t_anon = Types.make_anonymous env t
@@ -1410,8 +1513,8 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
     (* End *)
     (* Begin PRange *)
     | Pattern_Range (e1, e2) ->
-        let t_e1, e1', ses1 = annotate_statically_evaluable_expr env e1
-        and t_e2, e2', ses2 = annotate_statically_evaluable_expr env e2 in
+        let t_e1, e1', ses1 = annotate_symbolically_evaluable_expr env e1
+        and t_e2, e2', ses2 = annotate_symbolically_evaluable_expr env e2 in
         let ses =
           (* They can't be conflicting because they are statically evaluable *)
           SES.union ses1 ses2
@@ -1520,7 +1623,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
       (* CheckParamsTypeSat( *)
       List.iter2
         (fun (name, ty_declared_opt) (ty_actual, e_actual, ses_actual) ->
-          let+ () = check_statically_evaluable e_actual ses_actual in
+          let+ () = check_symbolically_evaluable e_actual ses_actual in
           (* That's enough of a check on Side Effects for parameters:
              - parameters can't conflict with anything once they are statically
                evaluable;
@@ -1656,7 +1759,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
               (fun (p_name, _ty) -> String.equal callee_x p_name)
               callee.parameters
           then
-            let+ () = check_statically_evaluable caller_e caller_ses in
+            let+ () = check_symbolically_evaluable caller_e caller_ses in
             let+ () = check_constrained_integer ~loc env caller_ty in
             (callee_x, caller_e) :: eqs
           else eqs)
@@ -1713,7 +1816,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
                 | Some e -> e
               in
               let caller_param_t, _, _ =
-                annotate_statically_evaluable_expr env caller_param_e
+                annotate_symbolically_evaluable_expr env caller_param_e
               in
               let () =
                 if false then
@@ -1864,7 +1967,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
           best_effort t_true (fun _ ->
               match Types.lowest_common_ancestor env t_true t_false with
               | None ->
-                  fatal_from ~loc (Error.UnreconciliableTypes (t_true, t_false))
+                  fatal_from ~loc (Error.UnreconcilableTypes (t_true, t_false))
               | Some t -> t)
         in
         let ses = SES.union3 ses_cond ses_true ses_false in
@@ -2236,7 +2339,8 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
     | T_Bool -> L_Bool false |> lit
     | T_Bits (e, _) ->
         let length = reduce_to_z e |> Z.to_int in
-        L_BitVector (Bitvector.zeros length) |> lit
+        if length < 0 then fatal_from ~loc @@ Error.BaseValueEmptyType t
+        else L_BitVector (Bitvector.zeros length) |> lit
     | T_Enum [] -> assert false
     | T_Enum (name :: _) -> lookup_constants env name |> lit
     | T_Int UnConstrained -> L_Int Z.zero |> lit
@@ -2549,7 +2653,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
   (* Begin ShouldRememberImmutableExpression *)
   let should_remember_immutable_expression ses =
     let ses_non_assert = SES.remove_assertions ses in
-    SES.is_statically_evaluable ses_non_assert
+    SES.is_symbolically_evaluable ses_non_assert
     |: TypingRule.ShouldRememberImmutableExpression
   (* End *)
 
@@ -2963,7 +3067,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
         (None, SES.empty)
     | Some limit ->
         let new_limit, ses =
-          annotate_static_constrained_integer ~loc env limit
+          annotate_symbolic_constrained_integer ~loc env limit
         in
         (Some new_limit, ses) |: TypingRule.AnnotateLimitExpr
   (* End *)

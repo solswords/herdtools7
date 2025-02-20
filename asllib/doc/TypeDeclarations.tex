@@ -16,7 +16,7 @@ Type declarations have no associated semantics.
 \Nsubtypeopt           \derives \ & \option{\Nsubtype} &\\
 \Nsubtype \derives \ & \Tsubtypes \parsesep \Tidentifier \parsesep \Twith \parsesep \Nfields &\\
             |\              & \Tsubtypes \parsesep \Tidentifier &\\
-\Nfields \derives \ & \Tlbrace \parsesep \TClist{\Ntypedidentifier} \parsesep \Trbrace &\\
+\Nfields \derives \ & \Tlbrace \parsesep \TClistZero{\Ntypedidentifier} \parsesep \Trbrace &\\
 \Nfieldsopt \derives \ & \Nfields \;|\; \emptysentence &\\
 \Ntypedidentifier \derives \ & \Tidentifier \parsesep \Nasty &\\
 \Nasty \derives \ & \Tcolon \parsesep \Nty &
@@ -30,13 +30,7 @@ Type declarations have no associated semantics.
 \Field \derives\ & (\identifier, \ty) &
 \end{flalign*}
 
-\subsubsection{ASTRule.GlobalDecl}
-The relation
-\[
-  \builddecl : \overname{\parsenode{\Ndecl}}{\vparsednode} \;\aslrel\; \overname{\decl}{\vastnode}
-\]
-transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
-
+\ASTRuleDef{TypeDecl}
 \begin{mathpar}
 \inferrule[type\_decl]{}
 {
@@ -65,7 +59,7 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 }
 \end{mathpar}
 
-\subsubsection{ASTRule.Subtype \label{sec:ASTRule.Subtype}}
+\ASTRuleDef{Subtype}
 \hypertarget{build-subtype}{}
 The function
 \[
@@ -97,7 +91,7 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 }
 \end{mathpar}
 
-\subsubsection{ASTRule.Subtypeopt \label{sec:ASTRule.Subtypeopt}}
+\ASTRuleDef{Subtypeopt}
 \hypertarget{build-subtypeopt}{}
 The function
 \[
@@ -114,7 +108,7 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 }
 \end{mathpar}
 
-\subsubsection{ASTRule.Fields \label{sec:ASTRule.Fields}}
+\ASTRuleDef{Fields}
 \hypertarget{build-fields}{}
 The function
 \[
@@ -126,12 +120,12 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 \inferrule{
   \buildtclist[\buildtypedidentifier](\vfields) \astarrow \vfieldasts
 }{
-  \buildfields(\Nfields(\Tlbrace, \namednode{\vfields}{\TClist{\Ntypedidentifier}}, \Trbrace)) \astarrow
+  \buildfields(\Nfields(\Tlbrace, \namednode{\vfields}{\TClistZero{\Ntypedidentifier}}, \Trbrace)) \astarrow
   \overname{\vfieldasts}{\vastnode}
 }
 \end{mathpar}
 
-\subsubsection{ASTRule.FieldsOpt \label{sec:ASTRule.FieldsOpt}}
+\ASTRuleDef{FieldsOpt}
 \hypertarget{build-fieldsopt}{}
 The function
 \[
@@ -159,17 +153,17 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 
 We also define the following helper rules:
 \begin{itemize}
-  \item TypingRule.AnnotateTypeOpt (see \secref{TypingRule.AnnotateTypeOpt})
-  \item TypingRule.AnnotateExprOpt (see \secref{TypingRule.AnnotateExprOpt})
-  \item TypingRule.AnnotateInitType (see \secref{TypingRule.AnnotateInitType})
-  \item TypingRule.AddGlobalStorage (see \secref{TypingRule.AddGlobalStorage})
-  \item TypingRule.DeclareType (see \secref{TypingRule.DeclareType})
-  \item TypingRule.AnnotateExtraFields (see \secref{TypingRule.AnnotateExtraFields})
-  \item TypingRule.AnnotateEnumLabels (see \secref{TypingRule.AnnotateEnumLabels})
-  \item TypingRule.DeclareConst (see \secref{TypingRule.DeclareConst})
+  \item\TypingRuleRef{AnnotateTypeOpt}
+  \item\TypingRuleRef{AnnotateExprOpt}
+  \item\TypingRuleRef{AnnotateInitType}
+  \item\TypingRuleRef{AddGlobalStorage}
+  \item\TypingRuleRef{DeclareType}
+  \item\TypingRuleRef{AnnotateExtraFields}
+  \item\TypingRuleRef{AnnotateEnumLabels}
+  \item\TypingRuleRef{DeclareConst}
 \end{itemize}
 
-\subsubsection{TypingRule.DeclareType \label{sec:TypingRule.DeclareType}}
+\TypingRuleDef{DeclareType}
 \hypertarget{def-declaretype}{}
 The function
 \[
@@ -185,7 +179,7 @@ over another type $\vs$
 in the global static environment $\genv$, resulting in the modified global static environment $\newgenv$.
 \ProseOtherwiseTypeError
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item checking that $\name$ is not already declared in the global environment of $\genv$ yields $\True$\ProseOrTypeError;
@@ -213,7 +207,7 @@ All of the following apply:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[enum]{
   \checkvarnotingenv{\genv, \name} \typearrow \True \OrTypeError\\\\
@@ -247,7 +241,7 @@ All of the following apply:
 \CodeSubsection{\DeclareTypeBegin}{\DeclareTypeEnd}{../Typing.ml}
 \lrmcomment{This is related to \identr{DHRC}, \identd{YZBQ}, \identr{DWSP}, \identi{MZXL}, \identr{MDZD}, \identr{CHKR}.}
 
-\subsubsection{TypingRule.AnnotateExtraFields \label{sec:TypingRule.AnnotateExtraFields}}
+\TypingRuleDef{AnnotateExtraFields}
 \hypertarget{def-annotateextrafields}{}
 The function
 \[
@@ -266,7 +260,7 @@ annotates the type $\tty$ with the \optional\ extra fields $\vs$ in $\tenv$, yie
 the modified environment $\newtenv$ and type $\newty$.
 \ProseOtherwiseTypeError
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{none}):
@@ -311,7 +305,7 @@ One of the following applies:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[none]{}{
   \annotateextrafields(\tenv, \name, \tty, \overname{\None}{\vs}) \typearrow (\overname{\tenv}{\newtenv}, \overname{\tty}{\newty})
@@ -360,7 +354,7 @@ One of the following applies:
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.AnnotateTypeOpt \label{sec:TypingRule.AnnotateTypeOpt}}
+\TypingRuleDef{AnnotateTypeOpt}
 \hypertarget{def-annotatetypeopt}{}
 The function
 \[
@@ -371,7 +365,7 @@ The function
 annotates the type $\vt$ inside an \optional\ $\tyopt$, if there is one, and leaves it as is if $\tyopt$ is $\None$.
 \ProseOtherwiseTypeError
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{none}):
@@ -388,7 +382,7 @@ One of the following applies:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[none]{}{
   \annotatetypeopt(\tenv, \overname{\None}{\tyopt}) \typearrow \overname{\tyopt}{\tyoptp}
@@ -401,7 +395,7 @@ One of the following applies:
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.AnnotateExprOpt \label{sec:TypingRule.AnnotateExprOpt}}
+\TypingRuleDef{AnnotateExprOpt}
 \hypertarget{def-annotateexpropt}{}
 The function
 \[
@@ -413,7 +407,7 @@ annotates the \optional\ expression $\expropt$ in $\tenv$ and returns a pair of 
 for the type and annotated expression in $\vres$.
 \ProseOtherwiseTypeError
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{none}):
@@ -430,7 +424,7 @@ One of the following applies:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[none]{}{
   \annotateexpropt(\tenv, \overname{\None}{\expropt}) \typearrow (\None, \None)
@@ -443,7 +437,7 @@ One of the following applies:
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.AnnotateInitType \label{sec:TypingRule.AnnotateInitType}}
+\TypingRuleDef{AnnotateInitType}
 \hypertarget{def-annotateinittype}{}
 The function
 \[
@@ -462,7 +456,7 @@ and chooses the type that should be associated with the declaration --- $\declar
 The ASL parser ensures that at least one of $\initialvaluetype$ and \\
 $\typeannotation$ should not be $\None$.
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{both}):
@@ -505,7 +499,7 @@ One of the following applies:
 \end{mathpar}
 
 \hypertarget{def-declaredtype}{}
-\subsubsection{TypingRule.DeclaredType \label{sec:TypingRule.DeclaredType}}
+\TypingRuleDef{DeclaredType}
 The function
 \[
   \declaredtype(\overname{\staticenvs}{\tenv} \aslsep \overname{\identifier}{\id}) \aslto \overname{\ty}{\vt} \cup \TTypeError
@@ -513,7 +507,7 @@ The function
 retrieves the type associated with the identifier $\id$ in the static environment $\tenv$.
 If the identifier is not associated with a declared type, a type error is returned.
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{exists}):
@@ -528,7 +522,7 @@ One of the following applies:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[exists]{
   G^\tenv.\declaredtypes(\id) = (\vt, \Ignore)
@@ -537,7 +531,7 @@ One of the following applies:
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.AnnotateEnumLabels \label{sec:TypingRule.AnnotateEnumLabels}}
+\TypingRuleDef{AnnotateEnumLabels}
 \hypertarget{def-annotateenumlabels}{}
 The function
 \[
@@ -552,7 +546,7 @@ updates the static environment $\tenv$ with the identifiers $\ids$ listed by an 
 yielding the modified environment $\newtenv$.
 \ProseOtherwiseTypeError
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ids$ is the (non-empty) list of labels $\id_{1..k}$;
@@ -563,7 +557,7 @@ All of the following apply:
   \item $\newtenv$ is $\tenv_k$.
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \ids \eqname \id_{1..k}\\
@@ -579,7 +573,7 @@ All of the following apply:
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.DeclareConst \label{sec:TypingRule.DeclareConst}}
+\TypingRuleDef{DeclareConst}
 \hypertarget{def-declareconst}{}
 The function
 \[
@@ -594,7 +588,7 @@ adds a constant given by the identifier $\name$, type $\tty$, and literal $\vv$ 
 global static environment $\genv$, yielding the modified environment $\newgenv$.
 \ProseOtherwiseTypeError
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item adding the global storage given by the identifier $\name$, global declaration keyword $\GDKConstant$,
@@ -602,7 +596,7 @@ All of the following apply:
   \item applying $\addglobalconstant$ to $\name$ and $\vv$ in $\genvone$ yields $\newgenv$.
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \addglobalstorage(\genv, \name, \GDKConstant, \tty) \typearrow \genvone\\

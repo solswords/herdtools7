@@ -251,6 +251,11 @@ Parameterized integers:
   ASL Error: Cannot parse.
   [1]
 
+  $ aslref same-precedence2.asl
+  File same-precedence2.asl, line 6, characters 10 to 17:
+  ASL Error: Cannot parse.
+  [1]
+
   $ aslref rdiv_checks.asl
   File rdiv_checks.asl, line 3, characters 12 to 25:
   ASL Typing error: Illegal application of operator / on types real and string.
@@ -355,7 +360,6 @@ Required tests:
   $ aslref records-2.asl
   $ aslref records.asl
   $ aslref static.asl
-  $ aslref stdlib.asl
   $ aslref subtypes-example.asl
   $ aslref subtypes-with.asl
   $ aslref tuples.asl
@@ -371,7 +375,7 @@ Required tests:
 Base values
   $ aslref base_values.asl
   File base_values.asl, line 5, characters 2 to 28:
-  ASL Typing error: base value of type integer {N..M, 42} cannot be statically
+  ASL Typing error: base value of type integer {42, N..M} cannot be statically
     determined since it consists of N.
   [1]
 

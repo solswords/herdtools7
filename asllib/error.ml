@@ -55,7 +55,7 @@ type error_desc =
   | BadTypesForBinop of binop * ty * ty
   | CircularDeclarations of string
   | ImpureExpression of expr * SideEffect.SES.t
-  | UnreconciliableTypes of ty * ty
+  | UnreconcilableTypes of ty * ty
   | AssignToImmutable of string
   | AlreadyDeclaredIdentifier of string
   | BadReturnStmt of ty option
@@ -96,6 +96,7 @@ type error_desc =
   | MultipleWrites of identifier
   | UnexpectedInitialisationThrow of
       ty * identifier (* Exception type and global storage element name. *)
+  | NegativeArrayLength of expr * int
 
 type error = error_desc annotated
 
@@ -120,6 +121,12 @@ type warning_desc =
   | NoRecursionLimit of identifier list
   | NoLoopLimit
   | IntervalTooBigToBeExploded of Z.t * Z.t
+  | ConstraintSetPairToBigToBeExploded of {
+      op : binop;
+      left : int_constraint list;
+      right : int_constraint list;
+      log_max : int;  (** Maximum size breached by this constraint set pair. *)
+    }
   | RemovingValuesFromConstraints of {
       op : binop;
       prev : int_constraint list;
@@ -159,7 +166,7 @@ let error_label = function
   | BadTypesForBinop _ -> "BadTypesForBinop"
   | CircularDeclarations _ -> "CircularDeclarations"
   | ImpureExpression _ -> "ImpureExpression"
-  | UnreconciliableTypes _ -> "UnreconciliableTypes"
+  | UnreconcilableTypes _ -> "UnreconcilableTypes"
   | AssignToImmutable _ -> "AssignToImmutable"
   | AlreadyDeclaredIdentifier _ -> "AlreadyDeclaredIdentifier"
   | BadReturnStmt _ -> "BadReturnStmt"
@@ -192,10 +199,12 @@ let error_label = function
   | ConstantTimeBroken _ -> "ConstantTimeBroken"
   | MultipleWrites _ -> "MultipleWrites"
   | UnexpectedInitialisationThrow _ -> "UnexpectedInitialisationThrow"
+  | NegativeArrayLength _ -> "NegativeArrayLength"
 
 let warning_label = function
   | NoLoopLimit -> "NoLoopLimit"
   | IntervalTooBigToBeExploded _ -> "IntervalTooBigToBeExploded"
+  | ConstraintSetPairToBigToBeExploded _ -> "ConstraintSetPairToBigToBeExploded"
   | RemovingValuesFromConstraints _ -> "RemovingValuesFromConstraints"
   | NoRecursionLimit _ -> "NoRecursionLimit"
   | PragmaUse _ -> "PragmaUse"
@@ -337,7 +346,7 @@ module PPrint = struct
           "ASL Typing error:@ a pure expression was expected,@ found %a,@ \
            which@ produces@ the@ following@ side-effects:@ %a."
           pp_expr e SideEffect.SES.pp_print ses
-    | UnreconciliableTypes (t1, t2) ->
+    | UnreconcilableTypes (t1, t2) ->
         fprintf f
           "ASL Typing error:@ cannot@ find@ a@ common@ ancestor@ to@ those@ \
            two@ types@ %a@ and@ %a."
@@ -468,6 +477,11 @@ module PPrint = struct
            the@ evaluation@ of@ the@ initialisation@ of@ the global@ storage@ \
            element@ %S."
           pp_ty exception_ty global_storage_element_name
+    | NegativeArrayLength (e_length, length) ->
+        fprintf f
+          "ASL Execution error:@ array@ length@ expression@ %a@ has@ negative@ \
+           length@a: %i."
+          pp_expr e_length length
     | MultipleWrites id ->
         fprintf f "ASL Typing error:@ multiple@ writes@ to@ %S." id);
     pp_close_box f ()
@@ -484,6 +498,13 @@ module PPrint = struct
     | NoLoopLimit ->
         fprintf f "@[%a@]" pp_print_text
           "ASL Warning: Loop does not have a limit."
+    | ConstraintSetPairToBigToBeExploded { op; left; right; log_max } ->
+        fprintf f "@[%a@ %s@ %a%d@ with@ constraints@ %a@ and@ %a.@ %a@]"
+          pp_print_text "Exploding sets for the binary operation"
+          (binop_to_string op) pp_print_text
+          "could result in a constraint set bigger than 2^" log_max
+          PP.pp_int_constraints left PP.pp_int_constraints right pp_print_text
+          "Continuing with the non-expanded constraints."
     | IntervalTooBigToBeExploded (za, zb) ->
         fprintf f
           "@[Interval too large: @[<h>[ %a .. %a ]@].@ Keeping it as an \

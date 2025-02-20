@@ -346,6 +346,15 @@ val list_fold_left_map :
 (** [fold_left_map] is a combination of [fold_left] and [map] that threads an
     accumulator through calls to [f]. Taken from stdlib 4.11. *)
 
+val list_coalesce_right : ('a -> 'a -> 'a option) -> 'a list -> 'a list
+(** [list_coalesce_right f l] applies the coalescing function [f] to
+  adjacent elements of [l], using it to folding [l] in a right-to-left order.
+
+  @param [f] is a function that, given two elements, either coalesces them into
+  a single element or returns [None], signalling that the elements cannot be
+  coalesced.
+*)
+
 val uniq : 'a list -> 'a list
 (** [uniq l] returns the unique elements of [l], in the order they appear *)
 
@@ -361,6 +370,18 @@ val list_split3 : ('a * 'b * 'c) list -> 'a list * 'b list * 'c list
 
 val list_map_split : ('a -> 'b * 'c) -> 'a list -> 'b list * 'c list
 (** Composition of [List.map] and [List.split]. *)
+
+val list_iterated_op : empty:'a -> ('a -> 'a -> 'a) -> 'a list -> 'a
+(** [list_iterated_op ~empty op li] computes the iterated binary operation [op]
+    on the elements of [li], with the assumption that [op] is associative.
+
+    If the list [li], this function returns [empty].
+
+    This considers that applying [op] to 2 elements is longer than iterating on
+    the list, in particular that the complexity of [op a b] depends on the size
+    of [a] and [b], and the size of [op a b] increases with the size of [a] and
+    the size of [b].
+*)
 
 val transitive_closure : ISet.t IMap.t -> ISet.t IMap.t
 (** Returns the transitive closure of the graph. *)

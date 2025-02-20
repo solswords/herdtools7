@@ -51,17 +51,26 @@ module type INTERVAL_SET = sig
   val mem : elt -> t -> bool
   val fold : (interval -> 'a -> 'a) -> t -> 'a -> 'a
   val fold_individual : (elt -> 'a -> 'a) -> t -> 'a -> 'a
+  val filter_map_individual : (elt -> elt option) -> t -> t
   val iter : (interval -> unit) -> t -> unit
   val add : interval -> t -> t
   val remove : interval -> t -> t
-  val min_elt : t -> interval
-  val max_elt : t -> interval
+  val min_elt : t -> elt
+  val max_elt : t -> elt
+  val min_interval : t -> interval
+  val max_interval : t -> interval
   val choose : t -> interval
   val take : t -> elt -> (t * t) option
   val union : t -> t -> t
+  val unions : t list -> t
   val diff : t -> t -> t
   val inter : t -> t -> t
+  val subset : t -> t -> bool
+  val cross_filter_map_individual : (elt -> elt -> elt option) -> t -> t -> t
   val find_next_gap : elt -> t -> elt
+  val elements : t -> interval list
+  val elements_individual : t -> elt list
+  val of_list : elt list -> t
   val check_invariants : t -> (unit, string) result
   val height : t -> int
 end
@@ -246,16 +255,18 @@ module Make (Elt : ELT) = struct
         (* or search left or search right *)
         if elt < n.x then mem elt n.l else mem elt n.r
 
-  let rec min_elt = function
+  let rec min_interval = function
     | Empty -> raise Not_found
     | Node { x; y; l = Empty; _ } -> (x, y)
-    | Node { l; _ } -> min_elt l
+    | Node { l; _ } -> min_interval l
 
-  let rec max_elt = function
+  let rec max_interval = function
     | Empty -> raise Not_found
     | Node { x; y; r = Empty; _ } -> (x, y)
-    | Node { r; _ } -> max_elt r
+    | Node { r; _ } -> max_interval r
 
+  let min_elt t = min_interval t |> Interval.x
+  let max_elt t = max_interval t |> Interval.y
   let choose = function Empty -> raise Not_found | Node { x; y; _ } -> (x, y)
 
   (* fold over the maximal contiguous intervals *)
@@ -276,6 +287,9 @@ module Make (Elt : ELT) = struct
       loop acc from
     in
     fold range t acc
+
+  let elements t = fold List.cons t []
+  let elements_individual t = fold_individual List.cons t []
 
   (* iterate over maximal contiguous intervals *)
   let iter f t =
@@ -349,6 +363,18 @@ module Make (Elt : ELT) = struct
     let a' = cardinal a and b' = cardinal b in
     if a' > b' then fold add b a else fold add a b
 
+  (* Added by Hadrien Renaud *)
+  let rec pairwise_unions acc = function
+    | [] -> acc
+    | x :: [] -> x :: acc
+    | x :: y :: li -> pairwise_unions (union x y :: acc) li
+
+  let rec unions = function
+    | [] -> empty
+    | x :: [] -> x
+    | li -> pairwise_unions [] li |> unions
+  (* End added by Hadrien Renaud *)
+
   let merge l r =
     match (l, r) with
     | l, Empty -> l
@@ -393,6 +419,7 @@ module Make (Elt : ELT) = struct
 
   let diff a b = fold remove b a
   let inter a b = diff a (diff a b)
+  let subset a b = is_empty (diff a b)
 
   let rec find_next_gap from = function
     | Empty -> from
@@ -421,6 +448,33 @@ module Make (Elt : ELT) = struct
     in
     loop empty t n
 
+  let of_sorted_list =
+    let rec loop acc x y = function
+      | [] -> add (Interval.make x y) acc
+      | z :: t ->
+          let y' = Elt.succ y in
+          if eq y' z then loop acc x y' t
+          else loop (add (Interval.make x y) acc) z z t
+    in
+    function [] -> empty | x :: t -> loop empty x x t
+
+  let of_list li = List.sort_uniq Elt.compare li |> of_sorted_list
+
+  let filter_map_individual f t =
+    fold_individual
+      (fun x acc -> match f x with Some z -> z :: acc | None -> acc)
+      t []
+    |> of_list
+
+  let cross_filter_map_individual f t1 t2 =
+    fold_individual
+      (fun x ->
+        fold_individual
+          (fun y acc -> match f x y with Some z -> z :: acc | None -> acc)
+          t2)
+      t1 []
+    |> of_list
+
   let check_invariants = Invariant.check
   let singleton x = add (Interval.make x x) empty
 
@@ -434,7 +488,7 @@ module Make (Elt : ELT) = struct
     function
     | Empty -> fprintf fmt "∅"
     | t ->
-        let m = min_elt t in
+        let m = min_interval t in
         let t = remove m t in
         pp_open_hovbox fmt 0;
         pp_interval fmt m;

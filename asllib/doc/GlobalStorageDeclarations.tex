@@ -19,7 +19,7 @@ The semantics of a single global storage declarations is defined in \SemanticsRu
 	|\ & \Tvar \parsesep \Nignoredoridentifier \parsesep \option{\Tcolon \parsesep \Nty} \parsesep \Teq \parsesep &\\
         & \wrappedline\ \Nexpr \parsesep \Tsemicolon &\\
         |\ & \Tvar \parsesep \Nignoredoridentifier \parsesep \Tcolon \parsesep \Nty \parsesep \Tsemicolon&\\
-        |\ & \Tpragma \parsesep \Tidentifier \parsesep \Clist{\Nexpr} \parsesep \Tsemicolon&
+        |\ & \Tpragma \parsesep \Tidentifier \parsesep \ClistZero{\Nexpr} \parsesep \Tsemicolon&
 \end{flalign*}
 
 \begin{flalign*}
@@ -45,25 +45,19 @@ The semantics of a single global storage declarations is defined in \SemanticsRu
  \globaldeclkeyword \derives\ & \GDKConstant \;|\; \GDKConfig \;|\; \GDKLet \;|\; \GDKVar &
 \end{flalign*}
 
-\subsubsection{ASTRule.GlobalDecl}
-The relation
-\[
-  \builddecl : \overname{\parsenode{\Ndecl}}{\vparsednode} \;\aslrel\; \overname{\decl}{\vastnode}
-\]
-transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
-
+\ASTRuleDef{GlobalStorageDecl}
 \begin{mathpar}
 \inferrule[global\_storage]{
   \buildglobaldeclkeyword(\keyword) \astarrow \astof{\keyword}\\
   \buildoption[\buildasty](\tty) \astarrow \ttyp\\
   \buildexpr(\vinitialvalue) \typearrow \astof{\vinitialvalue}
-}
-{
+}{
   {
       \builddecl\left(\overname{\Ndecl\left(
       \begin{array}{r}
-      \namednode{\vkeyword}{\Nglobaldeclkeyword}, \namednode{\name}{\Nignoredoridentifier},  \\
-  \wrappedline\ \namednode{\tty}{\option{\Nasty}}, \Teq, \namednode{\vinitialvalue}{\Nexpr}, \Tsemicolon
+      \namednode{\vkeyword}{\Nglobaldeclkeyword}, \\
+      \wrappedline\ \namednode{\name}{\Nignoredoridentifier}, \\
+      \wrappedline\ \namednode{\tty}{\option{\Nasty}}, \Teq, \namednode{\vinitialvalue}{\Nexpr}, \Tsemicolon
       \end{array}
   \right)}{\vparsednode}\right)
   } \astarrow \\
@@ -86,8 +80,7 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 \inferrule[global\_storage\_var]{
   \buildoption[\buildasty](\tty) \astarrow \ttyp\\
   \buildexpr(\vinitialvalue) \typearrow \astof{\vinitialvalue}
-}
-{
+}{
   {
       \builddecl\left(\overname{\Ndecl\left(
       \begin{array}{r}
@@ -114,8 +107,7 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 \begin{mathpar}
 \inferrule[global\_uninit\_var]{
   \buildignoredoridentifier(\cname) \astarrow \name
-}
-{
+}{
   {
     \begin{array}{r}
       \builddecl(\overname{\Ndecl(\Tvar, \namednode{\cname}{\Nignoredoridentifier}, \Nasty, \Tsemicolon)}{\vparsednode}) \astarrow
@@ -125,7 +117,7 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 }
 \end{mathpar}
 
-\subsubsection{ASTRule.GlobalDeclKeyword \label{sec:ASTRule.GlobalDeclKeyword}}
+\ASTRuleDef{GlobalDeclKeyword}
 \hypertarget{build-globaldeclkeyword}{}
 The function
 \[
@@ -152,7 +144,7 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 }
 \end{mathpar}
 
-\subsubsection{ASTRule.IgnoredOrIdentifier\label{sec:ASTRule.IgnoredOrIdentifier}}
+\ASTRuleDef{IgnoredOrIdentifier}
 \hypertarget{build-ignoredoridentifier}{}
 The relation
 \[
@@ -182,13 +174,13 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 We also define the following helper rules:
 \begin{itemize}
-  \item TypingRule.DeclareGlobalStorage (see \secref{TypingRule.DeclareGlobalStorage})
-  \item TypingRule.AnnotateTyOptInitialValue (see \secref{TypingRule.AnnotateTyOptInitialValue})
-  \item TypingRule.AnnotateInitType (see \secref{TypingRule.AnnotateInitType})
-  \item TypingRule.AddGlobalStorage (see \secref{TypingRule.AddGlobalStorage})
+  \item \TypingRuleRef{DeclareGlobalStorage}
+  \item \TypingRuleRef{AnnotateTyOptInitialValue}
+  \item \TypingRuleRef{AnnotateInitType}
+  \item \TypingRuleRef{AddGlobalStorage}
 \end{itemize}
 
-\subsubsection{TypingRule.DeclareGlobalStorage\label{sec:TypingRule.DeclareGlobalStorage}}
+\TypingRuleDef{DeclareGlobalStorage}
 \hypertarget{def-declareglobalstorage}{}
 The function
 \[
@@ -202,7 +194,7 @@ annotates the global storage declaration $\gsd$ in the global static environment
 yielding a modified global static environment $\newgenv$ and annotated global storage declaration $\newgsd$.
 \ProseOtherwiseTypeError
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\gsd$ is a global storage declaration with keyword $\keyword$, initial value \\ $\initialvalue$,
@@ -222,7 +214,7 @@ All of the following apply:
         ($\GDinitialvalue$) set to $\initialvaluep$;
   \item define $\newgenv$ as the global component of $\tenvtwo$.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \gsd \eqname \{
@@ -272,7 +264,7 @@ All of the following apply:
 \CodeSubsection{\DeclareGlobalStorageBegin}{\DeclareGlobalStorageEnd}{../Typing.ml}
 \lrmcomment{This relates to \identr{YSPM} and \identr{FWQM}.}
 
-\subsubsection{TypingRule.AnnotateTyOptInitialValue\label{sec:TypingRule.AnnotateTyOptInitialValue}}
+\TypingRuleDef{AnnotateTyOptInitialValue}
 \hypertarget{def-annotatetyoptinitialvalue}{}
 The helper function
 \[
@@ -295,7 +287,7 @@ of an expression, a type, and a \sideeffectsetterm,
 the annotation of the type in $\tyoptp$ (in case there is a type), and the type
 that should be associated with the storage element $\declaredt$.
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{some\_some}):
@@ -339,7 +331,7 @@ One of the following applies:
 \end{itemize}
 The case where both $\tyopt$ and $\initialvalue$ are $\None$ is considered a syntax error.
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[some\_some]{
   \annotatetype{\tenv, \vt} \typearrow (\vtp, \vsest) \OrTypeError\\\\
@@ -390,7 +382,7 @@ The case where both $\tyopt$ and $\initialvalue$ are $\None$ is considered a syn
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.UpdateGlobalStorage\label{sec:TypingRule.UpdateGlobalStorage}}
+\TypingRuleDef{UpdateGlobalStorage}
 \hypertarget{def-updateglobalstorage}{}
 The helper function
 \[
@@ -414,7 +406,7 @@ The result is the updated static environment $\newtenv$.
 This helper function is applied following $\addglobalstorage(\tenv, \name, \gdk, \vt)$ where $\vt$
 is the type associated with $\name$.
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{constant}):
@@ -456,7 +448,7 @@ One of the following applies:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[constant]{
   \typedinitialvalue \eqname (\Ignore, \initialvaluep, \vsesinitialvalue)\\
@@ -544,7 +536,7 @@ One of the following applies:
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.TryAddGlobalConstant\label{sec:TryAddGlobalConstant.AddGlobalStorage}}
+\TypingRuleDef{TryAddGlobalConstant}
 \hypertarget{def-tryaddglobalconstant}{}
 The helper function
 \[
@@ -558,7 +550,7 @@ The helper function
 attempts to update $\tenv$ by binding $\name$ to a literal value when $\ve$ can be statically
 evaluated to one. The resulting static environment is $\newtenv$.
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{okay}):
@@ -574,7 +566,7 @@ One of the following applies:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[okay]{
   \staticeval(\tenv, \ve) \typearrow \vv\\
@@ -592,7 +584,7 @@ One of the following applies:
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.AddGlobalStorage\label{sec:TypingRule.AddGlobalStorage}}
+\TypingRuleDef{AddGlobalStorage}
 \hypertarget{def-addglobalstorage}{}
 The function
 \[
@@ -611,14 +603,14 @@ except that the identifier $\name$, which is assumed to name a global storage el
 is bound to the global storage keyword $\keyword$ and type $\declaredt$.
 \ProseOtherwiseTypeError
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item checking that $\name$ is not declared in the global environment of $\tenv$ yields $\True$\ProseOrTypeError;
   \item $\newgenv$ is the global static environment of $\tenv$ with its $\globalstoragetypes$ component updated by binding $\name$ to
         $(\declaredt, \keyword)$.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \checkvarnotingenv{\genv, \name} \typearrow \True \OrTypeError\\\\
@@ -635,11 +627,11 @@ All of the following apply:
 
 We now define the following relations:
 \begin{itemize}
-  \item SemanticsRule.EvalGlobals (\secref{SemanticsRule.EvalGlobals})
-  \item SemanticsRule.DeclareGlobal (\secref{SemanticsRule.DeclareGlobal})
+  \item \SemanticsRuleRef{EvalGlobals}
+  \item \SemanticsRuleRef{DeclareGlobal}
 \end{itemize}
 
-\subsubsection{SemanticsRule.EvalGlobals\label{sec:SemanticsRule.EvalGlobals}}
+\SemanticsRuleDef{EvalGlobals}
 The relation
 \hypertarget{def-evalglobals}{}
 \[
@@ -648,7 +640,7 @@ The relation
 \]
 updates the input environment and execution graph by initializing the global storage declarations.
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{empty}):
@@ -672,7 +664,7 @@ One of the following applies:
 \end{itemize}
 \subsubsection{Example}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[empty]{}{
   \evalglobals(\overname{\emptylist}{\vdecls}, \envm) \evalarrow \envm
@@ -692,8 +684,8 @@ One of the following applies:
 \end{mathpar}
 \CodeSubsection{\EvalGlobalsBegin}{\EvalGlobalsEnd}{../Interpreter.ml}
 
-\subsubsection{SemanticsRule.DeclareGlobal\label{sec:SemanticsRule.DeclareGlobal}}
-\subsubsection{Prose}
+\SemanticsRuleDef{DeclareGlobal}
+\ProseParagraph
 The relation
 \hypertarget{def-declareglobal}{}
 \[
@@ -701,7 +693,7 @@ The relation
 \]
 updates the environment $\env$ by mapping $\name$ to $\vv$ in the $\storage$ map of the global dynamic environment $G^\denv$.
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \env \eqname (\tenv, (G^\denv, L^\denv))\\

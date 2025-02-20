@@ -14,9 +14,10 @@ which includes the space character (decimal encoding 32),
 as well as
 carriage return (decimal encoding 13) and line feed (decimal encoding 10).
 \hypertarget{def-eof}{}
-The end of file character is denote by $\eof$.
+The end of file character is denoted by $\eof$.
 The content text does not contain an end-of-file character.
 
+\RequirementDef{TabCharacter}
 In particular, it is an error to use a tab character in ASL specification text (decimal encoding 9).
 
 \section{Lexical Regular Expressions}
@@ -70,7 +71,22 @@ The notation $\Lang(e)$ stands for \emph{formal language} of a regular expressio
 That is, the set of strings that match that regular expression.
 
 \section{Whitespace}
+\RequirementDef{Whitespace}
 Comments, newlines and space characters are treated as whitespace.
+%
+For example,
+\begin{lstlisting}
+var x    = 5; var y
+= x // comment
+
+;
+\end{lstlisting}
+is equivalent to
+\begin{lstlisting}
+var x = 5;
+var y = x;
+\end{lstlisting}
+in terms of the resulting AST.
 
 \section{Comments}
 ASL supports comments in the style of C++:
@@ -79,7 +95,10 @@ ASL supports comments in the style of C++:
 is a comment (\ascii{10} is the line feed character \verb|\n|).
 \item Multi-line comments: the text between \texttt{/*} and \texttt{*/} is a comment.
 \end{itemize}
-Comments do not nest and the two styles of comments do not interact with each other.
+Comments do not nest and the two styles of comments do not interact with each other,
+as exemplified in \listingref{LexicalComments}.
+
+\ASLListing{Examples of comments}{LexicalComments}{\syntaxtests/Lexical.Comments.asl}
 
 \hypertarget{def-relinecomment}{}
 \begin{center}
@@ -187,14 +206,9 @@ $\REstringlit$ &$\triangleq$& \anycharacter{\texttt{"}} ( ($\REstrchar$ \texttt{
 \end{tabular}
 \end{center}
 
-\section{Identifiers}
+\section{Identifiers} \label{sec:LexicalIdentifiers}
 Identifiers start with a letter or underscore and continue with zero or more letters, underscores or digits.
-Identifiers are case sensitive. To improve readability, it is recommended to avoid the use of identifiers that differ
-only by the case of some characters.
-
-By convention, identifiers that begin with double-underscore are reserved for use in the implementation and should
-not be used in specifications.
-
+Identifiers are case sensitive.
 \hypertarget{def-reletter}{}
 \hypertarget{def-reidentifier}{}
 \begin{center}
@@ -204,22 +218,69 @@ $\REidentifier$ &$\triangleq$& \texttt{($\REletter$ $|$ $\underbracket{\texttt{ 
 \end{tabular}
 \end{center}
 
-% An enumeration literal is also classed as a literal constant, but is syntactically an identifier.
+An enumeration literal is classed as a literal value
+(see \chapref{Literals}), but is syntactically an identifier.
 
-Tuple element selectors are classed as identifiers. That is, in cases like \texttt{(1, 2).item0},
-the selector \texttt{item0} is classed as an identifier.
+Tuple element selectors are classed as identifiers.
+%
+For example, \texttt{item0} is classed as an identifier
+in the expression \verb|(1, 2).item0|.
 \lrmcomment{This is related to \identiTSXL}
 
-\section{Lexical Analysis}
+\RequirementDef{ReservedIdentifiers}
+Identifiers that begin with double-underscore are reserved for use in the implementation and should
+not be used in specifications (see \LexicalRuleRef{ReservedIdentifiers}).
+%
+For example, the statement \verb|var __internal_var = TRUE;|
+should yield a lexical error by the lexical analysis.
+
+\RequirementDef{IdentifiersKeywords}
+Keywords cannot be used as identifiers.
+%
+For example,
+\begin{lstlisting}
+var case = 5;
+\end{lstlisting}
+should yield a lexical error by the lexical analysis.
+
+\ConventionDef{IdentifiersDifferingByCase}
+To improve readability, it is recommended to avoid the use of identifiers that differ
+only by the case of some characters.
+%
+For example, a specification containing the following declarations
+may confuse readers and the variable names are better renamed:
+\begin{lstlisting}
+func baz()
+begin
+  var color = foo();
+  var Color = bar();
+  // ...
+  var c = color; // should this be Color?
+end;
+\end{lstlisting}
+
+\ConventionDef{IdentifierSingleUnderscore}
+Any identifier with a single underscore followed by an alphanumeric character
+is treated as a normal identifier. We recommend that these are only
+for use by platform-specific code, which should not clash with the rest of a
+portable ASL specification.
+%
+For example,
+\begin{lstlisting}
+constant _my_platform_num_regs = 200;
+\end{lstlisting}
+can be useful for declaring a constant specific to the platform \verb|my_platform|.
+
+\section{Lexical Analysis} \label{sec:LexicalAnalysis}
 Lexical analysis, which is also referred to as \emph{scanning}, is defined via the function
 \hypertarget{def-aslscan}{}
 \[
-\aslscan : \LexSpec \times \REasciichar^* \aslto (\Token^* \cup \{\LexicalError\})
+\aslscan : \LexSpec \times \REasciichar^* \aslto (\Token^* \cup \{\LexicalErrorConfig\})
 \]
 \hypertarget{def-lexicalerrorresult}{}
 which takes a \emph{lexical specification} (explained soon), an ASL specification string
 (where characters are simply numbers representing ASCII characters)
-and returns a sequence of tokens (tokens are defined below) or a \emph{lexical error} $\LexicalError$.
+and returns a sequence of tokens (tokens are defined below) or a \emph{lexical error} $\LexicalErrorConfig$.
 
 Tokens have one of two forms:
 \begin{description}
@@ -300,7 +361,7 @@ The function $\aslscan$ is constructively defined via the following inference ru
 \inferrule[no\_match]{
   \maxmatches(R, s) = \emptylist
 }{
-  \aslscan(R, s) \scanarrow \LexicalError
+  \aslscan(R, s) \scanarrow \LexicalErrorConfig
 }
 \end{mathpar}
 
@@ -308,7 +369,7 @@ The function $\aslscan$ is constructively defined via the following inference ru
 \inferrule[token]{
   \maxmatches(R, s) = [(e_1,a_1),\ldots,(e_n,a_n)]\\
   \remaxmatch(s, e_1) = (s_1, s_2)\\
-  a_1(s_1, s_2) \scanarrow \ts \terminateas \LexicalError
+  a_1(s_1, s_2) \scanarrow \ts \terminateas \LexicalErrorConfig
 }{
   \aslscan(R, s) \scanarrow \ts
 }
@@ -366,7 +427,7 @@ The lexeme action
 \actiontoken(f) \triangleq \lambda (s_1,s_2). \\
 \wrappedline\
 \begin{cases}
-  \LexicalError & \text{if }f(s_1) = \Terror \text{ or}\\
+  \LexicalErrorConfig & \text{if }f(s_1) = \Terror \text{ or}\\
    & \aslscan(\spectoken, s_2) = \Terror\\
   [f(s_1)] \concat \aslscan(\spectoken, s_2) & \text{else}
 \end{cases}
@@ -401,8 +462,8 @@ by decimal representation.
 \item The function $\hextolit(s)$ returns $\Tintlit(n)$ where $n$ is the integer represented by $s$
 by hexadecimal representation.
 \hypertarget{def-realtolit}{}
-\item The function $\realtolit(s)$ returns $\Treallit(q)$ where $q$ is the real value represented by $s$
-by floating point representation.
+\item The function $\realtolit(s)$ returns $\Treallit(q)$ where $q$ is the rational number for
+$s$, which is given via a floating point representation.
 \hypertarget{def-strtolit}{}
 \item The function $\strtolit(s)$ returns $\Tstringlit(s')$ where $s'$ is the string value represented by $s$.
 \hypertarget{def-bitstolit}{}
@@ -418,18 +479,36 @@ given by $s$.
 \item The function $\tokenid(s)$ returns $\Tlexeme(s)$.
 \hypertarget{def-lexicalerror}{}
 \item The function $\lexicalerror$ returns $\Terror$.
-\hypertarget{def-toidentifier}{}
-\item The function $\toidentifier(s)$ returns $\Tidentifier(s)$.
 \hypertarget{def-eoftoken}{}
 \item The lexeme action
 \[
 \eoftoken(s_1, s_2) \triangleq \begin{cases}
   \emptylist & s_2 = \emptylist\\
-  \LexicalError & \text{else}
+  \LexicalErrorConfig & \text{else}
 \end{cases}
 \]
 checks whether $\eof$ is not followed by more characters and returns a lexical error otherwise.
 \end{itemize}
+
+\LexicalRuleDef{ReservedIdentifiers}
+\hypertarget{def-toidentifier}{}
+The function $\toidentifier(s)$ checks whether $s$ is a legal identifier
+and if so returns $\Tidentifier(s)$. Otherwise, the result is a lexical error.
+
+\ProseParagraph
+Given a string $s$, $\toidentifier(s)$ checks whether $s$ starts with a double
+underscore. If so, the result is a lexical error. Otherwise the result is
+$\Tidentifier(s)$.
+
+\FormallyParagraph
+\[
+  \toidentifier(s) = \begin{cases}
+    \LexicalError & \text{if }s = \underbracket{\texttt{ \_ } }\ \underbracket{\texttt{ \_ } } s'\\
+    \Tidentifier(s) & \text{else}
+  \end{cases}
+\]
+
+\subsection{Regular Tokens Tables}
 
 \hypertarget{def-spectoken}{}
 The lexical specification  $\spectoken$ is given by the following four tables.
@@ -545,7 +624,7 @@ $\eof$            & $\eoftoken$ \\
 To scan string literals, we define the following specialized scanning function.
 The function
 \[
-\scanstring : \overname{\REasciichar^*}{\buff} \times \overname{\REasciichar^*}{s} \aslto (\Token^* \cup \{\LexicalError\})
+\scanstring : \overname{\REasciichar^*}{\buff} \times \overname{\REasciichar^*}{s} \aslto (\Token^* \cup \{\LexicalErrorConfig\})
 \]
 scans string with the $\specstring$ specification while building the final string literal in $\buff$.
 It is defined via the following rules:
@@ -553,7 +632,7 @@ It is defined via the following rules:
 \inferrule[no\_match]{
   \maxmatches(\specstring, s) = \emptylist
 }{
-  \scanstring(\buff, s) \scanarrow \LexicalError
+  \scanstring(\buff, s) \scanarrow \LexicalErrorConfig
 }
 \end{mathpar}
 
@@ -562,7 +641,7 @@ It is defined via the following rules:
   \maxmatches(R, s) = [(e_1,a_1),\ldots,(e_n,a_n)]\\
   \remaxmatch(s, e_1) = (s_1, s_2)\\
   a_1(s_1, s_2) = \Tstringchar(t)\\
-  \scanstring(\buff \concat t, s_2) \scanarrow \tstwo \terminateas \LexicalError
+  \scanstring(\buff \concat t, s_2) \scanarrow \tstwo \terminateas \LexicalErrorConfig
 }{
   \scanstring(\buff, s) \scanarrow \tstwo
 }
@@ -573,7 +652,7 @@ It is defined via the following rules:
   \maxmatches(R, s) = [(e_1,a_1),\ldots,(e_n,a_n)]\\
   \remaxmatch(s, e_1) = (s_1, s_2)\\
   a_1(s_1, s_2) = \Tstringend\\
-  \aslscan(\spectoken, s_2) \scanarrow \tstwo \terminateas \LexicalError
+  \aslscan(\spectoken, s_2) \scanarrow \tstwo \terminateas \LexicalErrorConfig
 }{
   \scanstring(\buff, s) \scanarrow [\Tstringlit(\buff)] \concat \tstwo
 }

@@ -223,7 +223,8 @@ The \emph{length} of a list is the number of elements in that list:
 $\listlen{\emptylist} \triangleq 0$ and $\listlen{v_1,\ldots,v_k}=k$.
 \end{definition}
 
-We use the notation $a..b$, where $a,b\in\Z$ and $a\leq b$, as a shorthand for the interval $[a\ldots b]$.
+We use the notation $a..b$, where $a,b\in\Z$ and as a shorthand for the interval $[a\ldots b]$
+(counting up when $a \leq b$ and counting down when $a \geq b$).
 We write $x_{a..b}$ as a shorthand for the sequence $x_a \ldots x_b$.
 %
 We write $i=1..k: V(i)$, where $V(i)$ is a mathematical expression parameterized by $i$,
@@ -361,6 +362,15 @@ It relies on the helper function $\uniquep$:
 \]
 \end{definition}
 
+\subsection{Strings}
+\hypertarget{def-stringconcat}{}
+The function $\stringconcat : \Strings \times \Strings \rightarrow \Strings$
+concatenates two strings.
+
+\hypertarget{def-stringofnat}{}
+The function $\stringofnat : \N \rightarrow \Strings$ converts a natural number
+to the corresponding string.
+
 \subsection{OCaml-style Notations}
 We use the following notations, which are in the style of the OCaml programming language,
 to facilitate correspondence with our
@@ -371,22 +381,25 @@ We also write $L(T_{1..k})$, where $T_{1..k}$ denotes mathematical types of valu
 $\{ L(v_{1..k}) \;|\; v_1\in T_1,\ldots,v_k\in T_k \}$.
 
 \hypertarget{def-optional}{}
-\begin{definition}[Optional]
+\begin{definition}[Optional Data Type]
 \hypertarget{def-none}{}
-The notation $\langle \cdot \rangle$ stands for either an empty set or a singleton set,
+\hypertarget{def-some}
+The notation $\Some{\cdot}$ stands for either an empty set or a singleton set,
 where $\None\triangleq\langle\rangle$ denotes an empty set
-and $\langle v \rangle$ denotes a set containing the single element $v$.
+and $\Some{v}$ denotes a set containing the single element $v$.
 %
-The notation $\langle T \rangle$, where $T$ denotes a mathematical type, stands for
-$\{ \langle\rangle \} \cup \{\langle v \rangle \;|\; v \in T\}$.
-
-We refer to $\langle T\rangle$ as an \emph{optional}.
+The notation $\Some{T}$, where $T$ denotes a mathematical type, stands for
+$\{ \None \} \cup \{\Some{v} \;|\; v \in T\}$.
+%
+We refer to $\Some{T}$ as the \emph{optional data type for the parameter
+type $T$}, or shortly as an \emph{\optional}.
 \end{definition}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Inference Rules}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-An \emph{inference rule} (rule, for short) is an implication between a set of logical assertions,
+\hypertarget{def-inferencerule}{}
+An \emph{\inferencerule} (rule, for short) is an implication between a set of logical assertions,
 called the \emph{premises} of the rule,
 and a \emph{conclusion} assertion.
 The conclusion holds when the \underline{conjunction} of its premises holds.
@@ -396,7 +409,7 @@ We use the following rule notation, where $P_{1..k}$ are the rule premises and $
   \inferrule{P_1 \and \ldots \and P_k}{C}
 \end{mathpar}
 
-For example, the rule TypingRule.ELit has one premise:
+For example, the rule \TypingRuleRef{ELit} has one premise:
 \begin{mathpar}
 \inferrule{
   \annotateliteral{\vv} \typearrow \vt
@@ -405,7 +418,7 @@ For example, the rule TypingRule.ELit has one premise:
 }
 \end{mathpar}
 
-and the rule \TypingRuleRef{Binop} (somewhat simplified here) has three premises:
+and the rule \TypingRuleRef{EBinop} (somewhat simplified here) has three premises:
 \begin{mathpar}
 \inferrule{
   \annotateexpr{\tenv, \veone} \typearrow (\vtone, \veone') \\\\
@@ -419,7 +432,7 @@ and the rule \TypingRuleRef{Binop} (somewhat simplified here) has three premises
 The free variables appearing in the premises and conclusion are interpreted \underline{universally}.
 That is, the rules apply to any values (of the appropriate types) assigned to their free variables.
 %
-For example, the rule \TypingRuleRef{Binop} applies to any choice of values for the free variables
+For example, the rule \TypingRuleRef{EBinop} applies to any choice of values for the free variables
 $\tenv$ (a static environment),
 $\veone$, $\vetwo$, $\veone'$, $\vetwo'$ (expressions),
 $\vt$, $\vtone$, and $\vttwo$ (types).
@@ -429,7 +442,7 @@ Assertions can be \emph{grounded} by substituting their free variables with valu
 A \emph{ground rule} is a rule with all its assertions (premises and conclusion) grounded.
 \end{definition}
 For example,
-the following is a grounding of \TypingRuleRef{Binop}
+the following is a grounding of \TypingRuleRef{EBinop}
 \begin{mathpar}
 \inferrule{
   \annotateexpr{\emptytenv, \ELiteral(\lint(2))} \typearrow (\TInt, \ELiteral(\lint(2))) \\\\
@@ -467,7 +480,7 @@ An example of an axiom in the ASL type system is \TypingRuleRef{SPass}:
 \inferrule{}{\annotatestmt(\tenv, \SPass) \typearrow (\SPass,\tenv)}
 \end{mathpar}
 \hypertarget{SemanticsRule.PAll-example}{}
-An example of an axiom in the ASL semantics is SemanticsRule.PAll:
+An example of an axiom in the ASL semantics is \SemanticsRuleRef{PAll}:
 \begin{mathpar}
 \inferrule{}{
   \evalpattern{\env, \Ignore, \PatternAll} \evalarrow \Normal(\nvbool(\True), \emptygraph)
@@ -553,22 +566,25 @@ Each \underline{occurrence} of $\Ignore$ represents a variable whose name is
 different from any other free variable in the rule.
 \end{definition}
 
-For example, the rule SemanticsRule.PAll, shown \hyperlink{SemanticsRule.PAll-example}{above},
+For example, the rule \SemanticsRuleRef{PAll}, shown \hyperlink{SemanticsRule.PAll-example}{above},
 uses an ignore variable to stand for the value being matched by a \texttt{-} pattern.
 Since the rule does not need to refer to the value, we do not name it and use an ignore variable
 instead.
 
 \subsection{Flavors of Equality In Rules \label{sec:FlavoursOfEqualityInRules}}
-We now explain equality notations in rules, two of which are used in SemanticsRule.Lit,
+We now explain equality notations in rules, two of which are used in \SemanticsRuleRef{ECond},
 shown here:
 \begin{mathpar}
-  \inferrule{
-    \env \eqname (\Ignore, \denv)\\
-    \vx \in \dom(L^\denv)\\
-    \vv \eqdef L^\denv(\vx) \\
-    \vg \eqdef \ReadEffect(\vx)
-  }
-  {\evalexpr{\env, \EVar(\vx)} \evalarrow \Normal((\vv, \vg), \env)}
+\inferrule{
+  \evalexpr{\env, \econd} \evalarrow \Normal(\mcond, \envone) \OrAbnormal\\\\
+  \mcond \eqname (\nvbool(\vb), \vgone)\\
+  \vep \eqdef \choice{\vb}{\veone}{\vetwo}\\\\
+  \evalexpr{\envone, \vep} \evalarrow \Normal((\vv, \vgtwo), \newenv)  \OrAbnormal\\\\
+  \vg \eqdef \ordered{\vgone}{\aslctrl}{\vgtwo}
+}{
+  \evalexpr{\env, \overname{\ECond(\econd, \veone, \vetwo)}{\ve}} \evalarrow
+  \Normal((\vv, \vg), \newenv)
+}
 \end{mathpar}
 
 \begin{description}
@@ -581,7 +597,7 @@ shown here:
   is the list of premises
   \[
     \begin{array}{l}
-    a[0] > b[0]\\
+    a[1] > b[1]\\
     \ldots\\
     a[k] > b[k] \enspace.
     \end{array}
@@ -598,10 +614,10 @@ shown here:
   Intuitively, $v$ is re-interpreted as $\textit{f}(u_{1..k})$.
   For example, suppose we know that $v$ is a pair of values.
   Then, $v \eqname (a, b)$ allows us to alias $a$ and $b$.
-  In SemanticsRule.Lit, we know that the environment $\env$ is a pair where the first
-  component is a static environment and the second component is a dynamic environment.
-  Therefore, writing $\env \eqname (\Ignore, \denv)$ allows us to name the dynamic environment component and
-  then refer to it, while \hyperlink{def-ignore}{ignoring} the static environment component.
+  In \SemanticsRuleRef{ECond}, we know from the definition of $\evalexpr$ that
+  $\mcond$ is a pair datatype.
+  Therefore, writing $\mcond \eqname (\nvbool(\vb), \vgone)$ allows us to name each component of this pair
+  and then refer to it, while \hyperlink{def-ignore}{ignoring} the static environment component.
   Similarly, if $v$ is a non-empty list, then $v \eqname [h] + t$ deconstructs the list into the
   head of the list $h$ and its tail $t$.
   Given that a variable $v$ represents a list, we write $v \eqname v_{1..k}$ to list its elements and allow
@@ -609,37 +625,41 @@ shown here:
 
   \hypertarget{def-eqdef}{}
   \item[Definition / ``Define as'':] the notation $\vx \eqdef \ve$ denotes that $\vx$ is a new name serving as an alias for the expression $\ve$.
-  For example, in the rule SemanticsRule.Lit, we use $\vg$ to name $\ReadEffect(\vx)$.
+  For example, in the rule \SemanticsRuleRef{ECond}, we use $\vg$ to name the mathematical expression
+  $\ordered{\vgone}{\aslctrl}{\vgtwo}$.
   Aliases allow us to break down complex expressions, but rules can always be rewritten without them,
   by inlining their right-hand sides:
-  \begin{mathpar}
-    \inferrule{
-      \env \eqname (\Ignore, \denv)\\
-      \vx \in \dom(L^\denv)
-    }
-    {\evalexpr{\env, \EVar(\vx)} \evalarrow \Normal((L^\denv(\vx), \ReadEffect(\vx)), \env)}
-  \end{mathpar}
+\begin{mathpar}
+\inferrule{
+  \evalexpr{\env, \econd} \evalarrow \Normal(\mcond, \envone) \OrAbnormal\\\\
+  \mcond \eqname (\nvbool(\vb), \vgone)\\
+  \evalexpr{\envone, \choice{\vb}{\veone}{\vetwo}} \evalarrow \Normal((\vv, \vgtwo), \newenv) \OrAbnormal
+}{
+  \evalexpr{\env, \overname{\ECond(\econd, \veone, \vetwo)}{\ve}} \evalarrow
+  \Normal((\vv, \ordered{\vgone}{\aslctrl}{\vgtwo}), \newenv)
+}
+\end{mathpar}
 \end{description}
 
 \subsection{AST-related Notations}
 
-When deconstructing AST record nodes such as $\{f_1:t_2,\ldots,f_k:t_k\}$,
+When deconstructing AST record nodes such as $\{f_1:t_1,\ldots,f_k:t_k\}$,
 we sometimes only care about a subset of the fields $\{f_{i_1},\ldots,f_{i_m}\} \subset \{f_{1..k}\}$.
-In such cases, we write $\{f_{i_1}:t_{i_m},\ldots,f_{i_m}:t_{i_m},\ldots\}$,
+In such cases, we write $\{f_{i_1}:t_{i_1},\ldots,f_{i_m}:t_{i_m},\ldots\}$,
 where $\ldots$ stands for fields that are irrelevant for the rule.
 
-For example\footnote{This example is from SemanticsRule.FCall.}, the \func\ non-terminal is of a record type and has the following fields:
+For example\footnote{This example is from \SemanticsRuleRef{FCall}.}, the \func\ non-terminal is of a record type and has the following fields:
 $\textsf{name}$, $\textsf{parameters}$, $\textsf{args}$, $\textsf{body}$, $\textsf{return\_type}$, and $\textsf{subprogram\_type}$.
 The notation $\{ \textsf{body}:\SBASL(\texttt{body}),\ \textsf{args}:\texttt{arg\_decls}, \ldots \}$
 allows us to deconstruct a given \func\ node by matching only the \textsf{body} and \textsf{args} fields.
 
 Recall that a subset of AST nodes are either labels or labelled tuples.
 \hypertarget{def-astlabel}{}
-The partial function $\astlabel$ returns the label $\vl\in\astlabels$ an AST node, when it exists.
+The partial function $\astlabel$ returns the label $\vl\in\astlabels$ of an AST node, when it exists.
 For example, $\astlabel(\TBool) = \TBool$ and $\astlabel(\TNamed(\texttt{x})) = \TNamed$.
 
 \subsection{How to Parse Rules Efficiently}
-Consider the following examples, which is a simplified version of SemanticsRule.Binop
+Consider the following examples, which is a simplified version of \SemanticsRuleRef{Binop}
 \begin{mathpar}
   \inferrule{\op \not\in \{\BAND, \BOR, \IMPL\}\\\\
     \evalexpr{ \env, \veone} \evalarrow \Normal(\vmone, \envone) \\\\
@@ -680,7 +700,7 @@ intermediate values have to be assigned first.
 For example, $\evalexpr{ \env, \veone} \evalarrow \Normal(\vmone, \envone)$
 assigned values to $\envone$, which is then used by the transition \\
 $\evalexpr{ \envone, \vetwo } \evalarrow \Normal(\vmtwo, \newenv)$.
-Similarly, $\vg$ is requires first assigning values to $\vgone$ and $\vgtwo$,
+Similarly, $\vg$ requires first assigning values to $\vgone$ and $\vgtwo$,
 which are components of the previously assigned variables $\vmone$ and $\vmtwo$.
 
 \subsection{Short-Circuit Rule Macros}
@@ -779,7 +799,7 @@ In English prose, we use
 \ProseTerminateAs{x, y, \ldots} to mean
 ``if the outcome is one of $x, y, \ldots$ then the result short-circuits the rule.
 
-As an example, consider the rule SemanticsRule.Binop.
+As an example, consider the rule \SemanticsRuleRef{Binop}.
 This time, not simplified:
 \begin{mathpar}
   \inferrule{\op \not\in \{\BAND, \BOR, \IMPL\}\\\\
@@ -797,7 +817,7 @@ This time, not simplified:
 \end{mathpar}
 
 In this rule, $\ThrowingConfig$ and $\DynErrorConfig$ are just shorthand notations for
-actual configurations, which are properly defined in the semantics reference.
+actual configurations, which are properly defined in \chapref{Semantics}.
 Intuitively, the alternative configurations $\ThrowingConfig$ and $\DynErrorConfig$
 represent situations where a transition may result in a raised exception and a dynamic error,
 respectively.
@@ -886,15 +906,46 @@ We define the following rules to allow us to treat assertions as transition asse
 \end{mathpar}
 This is useful in that it allows us to use assertions in rule macros.
 
-% \begin{mathpar}
-%   \inferrule{
-%     \exprequalnorm(\tenv, \veone, \vetwo) \typearrow \False \terminateas \True\\\\
-%     \exprequalcase(\tenv, \veone, \vetwo) \typearrow \vb
-%   }
-%   {
-%     \exprequal(\tenv, \veone, \vetwo) \typearrow \vb
-%   }
-% \end{mathpar}
+\subsection{Assertions Over Optional Data Types}
+\hypertarget{def-mapopt}{}
+Optional data types are prevalent in the AST.
+To facilitate transition assertions over optional data types,
+we introduce the parametric function,
+which accepts a one-argument relation (or function) $f : A \aslrel B$
+and applies it to an optional value $A?$:
+\[
+\mapopt{\cdot} : \overname{A?}{\vvopt} \aslrel \overname{B?}{\vvoptnew}
+\]
+
+\ProseParagraph
+\OneApplies
+\begin{itemize}
+  \item \AllApplyCase{Some}
+  \begin{itemize}
+    \item $\vvopt$ consists of the value $v$;
+    \item applying $f$ to $v$ yields $v'$;
+    \item \Proseeqdef{$\vvoptnew$}{the singleton set consisting of $v'$}.
+  \end{itemize}
+
+  \item \AllApplyCase{None}
+  \begin{itemize}
+    \item $\vvopt$ is $\None$;
+    \item \Proseeqdef{$\vvoptnew$}{$\None$}.
+  \end{itemize}
+\end{itemize}
+
+\FormallyParagraph
+\begin{mathpar}
+\inferrule[Some]{
+  f(v) \longrightarrow v'
+}{
+  \mapopt{f}(\overname{\Some{v}}{\vvopt}) \longrightarrow{r} \Some{v'}
+}
+\and
+\inferrule[None]{}{
+  \mapopt{f}(\overname{\None}{\vvopt}) \longrightarrow \None
+}
+\end{mathpar}
 
 \subsection{Rule Naming}
 To name a rule, we place it in a section with its name.
@@ -905,30 +956,27 @@ or simply \emph{cases}. We annotate case rules by names
 appearing above and to the left of the rule. The name of these case rules
 is the name of the group, given by its section, followed by the name of the case.
 
-For example, the ASL Semantics Reference defines the rule SemanticsRule.BaseValue using 11
-cases of which two are the following:
+For example, the rule \TypingRuleRef{BaseValue} is defined via multiple
+cases. Two of these cases are the following ones:
 \begin{mathpar}
-  \inferrule[bool]{
-    \tstruct(\vt) \typearrow \TBool
-  }
-  {
-    \texttt{base\_value}(\textsf{env}, \vt) \evalarrow (\texttt{Bool}(\True), \emptyset_\textsf{g})
-  }
-  \and
-  \inferrule[real]{
-    \tstruct(\vt) \typearrow \TReal
-  }
-  {
-    \texttt{base\_value}(\textsf{env}, \vt) \evalarrow (\texttt{Real}(0), \emptyset_\textsf{g})
-  }
+\inferrule[t\_bool]{}{
+    \basevalue(\tenv, \overname{\TBool}{\vt}) \typearrow \overname{\ELiteral(\lbool(\False))}{\veinit}
+}
 \end{mathpar}
-The full name of the first case is then SemanticsRule.BaseValue.BOOL
-and the full name of the second case is SemanticsRule.BaseValue.REAL.
+
+\begin{mathpar}
+\inferrule[t\_real]{}{
+    \basevalue(\tenv, \overname{\TReal}{\vt}) \typearrow \overname{\ELiteral(\lreal(0))}{\veinit}
+}
+\end{mathpar}
+
+The full name of the first case is then \TypingRuleRef{BaseValue}.BOOL
+and the full name of the second case is \TypingRuleRef{BaseValue}.REAL.
 
 When explaining rules in English prose, we include the name of the case rules
 in parenthesis to make it easier to relate the prose to the corresponding mathematical
-definitions (see, for example, the Prose paragraph of SemanticsRule.BaseValue
-or that of TypingRule.ApplyUnopType).
+definitions (see, for example, the Prose paragraph of \TypingRuleRef{BaseValue}
+or that of \TypingRuleRef{ApplyUnopType}).
 
 \subsection{Generic Notations}
 \hypertarget{def-wrapline}{}

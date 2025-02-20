@@ -4,8 +4,8 @@
 \section{Syntax}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{flalign*}
-\Nexpr \derives\  & \Tidentifier \parsesep \Plist{\Nexpr} &\\
-\Nstmt \derives \ & \Tidentifier \parsesep \Plist{\Nexpr} \parsesep \Tsemicolon &
+\Nexpr \derives\  & \Tidentifier \parsesep \PlistZero{\Nexpr} &\\
+\Nstmt \derives \ & \Tidentifier \parsesep \PlistZero{\Nexpr} \parsesep \Tsemicolon &
 \end{flalign*}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -40,27 +40,27 @@ annotates the call $\vcall$ to a subprogram with call type $\calltype$, resultin
 \end{itemize}
 \ProseOtherwiseTypeError
 
-The function is defined by the rule TypingRule.AnnotateCall (see \secref{TypingRule.AnnotateCall}).
+The function is defined by the rule \TypingRuleRef{AnnotateCall}.
 
 We also define helper functions via respective rules:
 \begin{itemize}
-  \item TypingRule.AnnotateCallActualsTyped (see \secref{TypingRule.AnnotateCallActualsTyped})
-  \item TypingRule.InsertStdlibParam (see \secref{TypingRule.InsertStdlibParam})
-  \item TypingRule.CheckParamsTypeSat (see \secref{TypingRule.CheckParamsTypeSat})
-  \item TypingRule.RenameTyEqs (see \secref{TypingRule.RenameTyEqs})
-  \item TypingRule.SubstExprNormalize (see \secref{TypingRule.SubstExprNormalize})
-  \item TypingRule.SubstExpr (see \secref{TypingRule.SubstExpr})
-  \item TypingRule.SubstConstraint (see \secref{TypingRule.SubstConstraint})
-  \item TypingRule.CheckArgsTypeSat (see \secref{TypingRule.CheckArgsTypeSat})
-  \item TypingRule.AnnotateRetTy (\secref{TypingRule.AnnotateRetTy})
-  \item TypingRule.SubprogramForName (see \secref{TypingRule.SubprogramForName})
-  \item TypingRule.FilterCallCandidates (see \secref{TypingRule.FilterCallCandidates})
-  \item TypingRule.HasArgClash (see \secref{TypingRule.HasArgClash})
-  \item TypingRule.ExpressionList (see \secref{TypingRule.ExpressionList})
+  \item \TypingRuleRef{AnnotateCallActualsTyped}
+  \item \TypingRuleRef{InsertStdlibParam}
+  \item \TypingRuleRef{CheckParamsTypeSat}
+  \item \TypingRuleRef{RenameTyEqs}
+  \item \TypingRuleRef{SubstExprNormalize}
+  \item \TypingRuleRef{SubstExpr}
+  \item \TypingRuleRef{SubstConstraint}
+  \item \TypingRuleRef{CheckArgsTypeSat}
+  \item \TypingRuleRef{AnnotateRetTy}
+  \item \TypingRuleRef{SubprogramForName}
+  \item \TypingRuleRef{FilterCallCandidates}
+  \item \TypingRuleRef{HasArgClash}
+  \item \TypingRuleRef{ExpressionList}
 \end{itemize}
 
-\subsubsection{TypingRule.AnnotateCall\label{sec:TypingRule.AnnotateCall}}
-\subsubsection{Prose}
+\TypingRuleDef{AnnotateCall}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item applying $\annotateexprlist$ to annotate the expression list $\vcall.\callargs$ in $\tenv$ yields \\
@@ -71,7 +71,7 @@ All of the following apply:
         $\vcall.\callcalltype$ in $\tenv$ yields $(\vcallp, \retty, \vses)$\ProseOrTypeError.
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \annotateexprlist(\tenv, \vcall.\callargs) \typearrow \args \OrTypeError\\\\
@@ -95,7 +95,7 @@ All of the following apply:
   \identi{CMLP}, \identr{BQJG}, \identr{RTCF}.
 }
 
-\subsubsection{TypingRule.AnnotateCallActualsTyped \label{sec:TypingRule.AnnotateCallActualsTyped}}
+\TypingRuleDef{AnnotateCallActualsTyped}
 \hypertarget{def-annotatecallactualstyped}{}
 The function
 \[
@@ -116,7 +116,7 @@ is similar to $\annotatecall$, except that it accepts annotated version of param
 \ProseOtherwiseTypeError
 
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item applying $\unziplistthree$ to $\typedargs$ yields the corresponding list of types $\argtypes$,
@@ -126,10 +126,10 @@ All of the following apply:
         yields \\ $(\namep, \funcsig, \vsescall)$\ProseOrTypeError;
   \item define $\vses$ as the union of $\vsesargs$ and $\vsescall$;
   \item either the $\subprogramtype$ of $\funcsig$ equals $\calltype$,
-        or the $\subprogramtype$ of $\funcsig$ is $\STGetter$ and $\calltype$ is $\STFunction$\ProseTerminateAs{\MismatchedReturnValue};
+        or the $\subprogramtype$ of $\funcsig$ is $\STGetter$ and $\calltype$ is $\STFunction$\ProseTerminateAs{\BadCall};
   \item applying $\insertstdlibparam$ to $\funcsig$, $\params$, and $\argtypes$ yields new parameters $\paramsone$;
-  \item checking that the lengths of $\funcsig.\funcparameters$ and $\paramsone$ are the same yields $\True$\ProseTerminateAs{\CallBadParameterArity};
-  \item checking that the lengths of $\funcsig.\funcargs$ and $\args$ are the same yields $\True$\ProseTerminateAs{\CallBadArity};
+  \item checking that the lengths of $\funcsig.\funcparameters$ and $\paramsone$ are the same yields $\True$\ProseTerminateAs{\BadCall};
+  \item checking that the lengths of $\funcsig.\funcargs$ and $\args$ are the same yields $\True$\ProseTerminateAs{\BadCall};
   \item applying $\checkparamstypesat$ to $\paramsone$
         to check that the actual parameters have correct types with respect to $\funcsig.\funcparameters$
         in $\tenv$ yields $\True$\ProseOrTypeError;
@@ -143,7 +143,7 @@ All of the following apply:
   \item define $\vcall$ as the call with name $\namep$, parameters taken from $\paramsone$, arguments $\vargs$,
         and call type $\funcsig.\funcsubprogramtype$.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \unziplistthree(\typedargs) = (\argtypes, \args, \vsessargs)\\
@@ -160,12 +160,12 @@ All of the following apply:
     \right)
   }\\\\
   \vses \eqdef \vsesargs \cup \vsescall\\
-  \checktrans{\vb}{\MismatchedReturnValue} \checktransarrow \True \OrTypeError \\
+  \checktrans{\vb}{\BadCall} \checktransarrow \True \OrTypeError \\
   \insertstdlibparam(\funcsig, \params, \argtypes) \typearrow \paramsone\\\\
   \equallength(\funcsig.\funcparameters, \paramsone) \typearrow \paramaritymatch \\\\
-  \checktrans{\paramaritymatch}{\CallBadParameterArity} \checktransarrow \True \OrTypeError\\\\
+  \checktrans{\paramaritymatch}{\BadCall} \checktransarrow \True \OrTypeError\\\\
   \equallength(\funcsig.\funcargs, \args) \typearrow \aritymatch\\
-  \checktrans{\aritymatch}{\CallBadArity} \checktransarrow \True \OrTypeError\\\\
+  \checktrans{\aritymatch}{\BadCall} \checktransarrow \True \OrTypeError\\\\
   \checkparamstypesat(\tenv, \funcsig.\funcparameters, \paramsone) \typearrow \True \OrTypeError\\\\
   \eqs \eqdef [(\vx_i, \Ignore) \in \funcsig.\funcargs_i ,\; (\Ignore, \vv_i, \Ignore) \in \paramsone: (\vx_i, \vv_i) ] \\
   \checkargstypesat(\tenv, \funcsig.\funcargs, \argtypes, \eqs) \typearrow \True \OrTypeError\\\\
@@ -189,7 +189,7 @@ All of the following apply:
 \end{mathpar}
 \CodeSubsection{\AnnotateCallActualsTypedBegin}{\AnnotateCallActualsTypedEnd}{../Typing.ml}
 
-\subsubsection{TypingRule.InsertStdlibParam \label{sec:TypingRule.InsertStdlibParam}}
+\TypingRuleDef{InsertStdlibParam}
 \hypertarget{def-insertstdlibparam}{}
 The function
 \[
@@ -209,7 +209,7 @@ Note that this function relies on all standard library functions with input para
 \end{lstlisting}
 
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following applies:
 \begin{itemize}
   \item $\funcsig.\funcparameters$ is either
@@ -223,7 +223,7 @@ All of the following applies:
         appended to $\params$\ProseTerminateAs{\params}.
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \funcsig.\funcparameters \eqname [(\vx, \Ignore)] \;\lor\;
@@ -238,7 +238,7 @@ All of the following applies:
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.CheckParamsTypeSat \label{sec:TypingRule.CheckParamsTypeSat}}
+\TypingRuleDef{CheckParamsTypeSat}
 \hypertarget{def-checkparamstypesat}{}
 The function
 \[
@@ -255,7 +255,7 @@ checks that annotated parameters $\params$ are correct with respect to the decla
 \ProseOtherwiseTypeError\
 It assumes that $\funcsigparams$ and $\params$ have the same length.
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{empty}):
@@ -270,7 +270,7 @@ One of the following applies:
           \tail\ $\funcsigparamsone$, and
           $\params$ is a non-empty list with \head\ \\
           $(\tyactual, \eactual, \vsesactual)$ and \tail\ $\paramsone$;
-    \item \Prosecheckstaticallyevaluable{$\vsesactual$};
+    \item \Prosechecksymbolicallyevaluable{$\vsesactual$};
     \item checking that $\tyactual$ represents a \constrainedinteger{} yields $\True$\ProseOrTypeError;
     \item One of the following applies:
     \begin{itemize}
@@ -293,7 +293,7 @@ One of the following applies:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[empty]{
 }{
@@ -303,7 +303,7 @@ One of the following applies:
 \inferrule[parameterized]{
   \funcsigparams \eqname [(\vx, \tydeclopt)] \concat \funcsigparamsone\\
   \params \eqname [(\tyactual, \eactual, \vsesactual)] \concat \paramsone\\
-  \checkstaticallyevaluable(\vsesactual) \typearrow \True\OrTypeError\\\\
+  \checksymbolicallyevaluable(\vsesactual) \typearrow \True\OrTypeError\\\\
   \checkconstrainedinteger(\tenv, \tyactual) \typearrow \True\OrTypeError\\\\
   \commonprefixline\\\\
   \tydeclopt = \langle\TInt(\parameterized(\vx))\rangle\\\\
@@ -315,7 +315,7 @@ One of the following applies:
 \inferrule[other]{
   \funcsigparams \eqname [(\vx, \tydeclopt)] \concat \funcsigparamsone\\
   \params \eqname [(\tyactual, \eactual, \vsesactual)] \concat \paramsone\\
-  \checkstaticallyevaluable(\vsesactual) \typearrow \True\OrTypeError\\\\
+  \checksymbolicallyevaluable(\vsesactual) \typearrow \True\OrTypeError\\\\
   \checkconstrainedinteger(\tenv, \tyactual) \typearrow \True\OrTypeError\\\\
   \commonprefixline\\\\
   \tydeclopt \eqname \langle\tydecl\rangle\\
@@ -327,7 +327,7 @@ One of the following applies:
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.RenameTyEqs \label{sec:TypingRule.RenameTyEqs}}
+\TypingRuleDef{RenameTyEqs}
 \hypertarget{def-renametyeqs}{}
 The function
 \[
@@ -343,14 +343,14 @@ by substituting parameter names with their corresponding expressions in
 $\eqs$, yielding the type $\newty$.
 \ProseOtherwiseTypeError
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{t\_bits}):
   \begin{itemize}
     \item $\tty$ is a bitvector type with width expression $\ve$ and fields $\fields$, that is, $\TBits(\ve, \fields)$;
     \item applying $\substexprnormalize$ to $\eqs$ and $\ve$ in $\tenv$ yields the expression $\newe$;
-    \item define $\newty$ as a bitvector type with with expression $\newe$ and fields $\fields$.
+    \item define $\newty$ as a bitvector type with expression $\newe$ and fields $\fields$.
   \end{itemize}
 
   \item All of the following apply (\textsc{t\_int\_wellconstrained}):
@@ -389,7 +389,7 @@ One of the following applies:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[t\_bits]{
   \substexprnormalize(\tenv, \eqs, \ve) \typearrow \newe
@@ -428,7 +428,7 @@ One of the following applies:
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.SubstExprNormalize \label{sec:TypingRule.SubstExprNormalize}}
+\TypingRuleDef{SubstExprNormalize}
 \hypertarget{def-substexprnormalize}{}
 The function
 \[
@@ -443,7 +443,7 @@ by substituting parameter names with their corresponding expressions in
 $\eqs$, and then attempting to symbolically simplify the result, yielding the expression $\newe$.
 \ProseOtherwiseTypeError
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item transforming $\ve$ in the static environment $\tenv$, by substituting the parameter expressions
@@ -451,7 +451,7 @@ All of the following apply:
   \item symbolically simplifying $\veone$ in $\tenv$ yields $\newe$.
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \substexpr(\tenv, \ve) \typearrow \veone\\
@@ -461,7 +461,7 @@ All of the following apply:
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.SubstExpr \label{sec:TypingRule.SubstExpr}}
+\TypingRuleDef{SubstExpr}
 \hypertarget{def-substexpr}{}
 The function
 \[
@@ -476,7 +476,7 @@ by substituting parameter names with their corresponding expressions in
 $\substs$, yielding the expression $\newe$.
 \ProseOtherwiseTypeError
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{e\_var\_in\_substs}):
@@ -645,7 +645,7 @@ One of the following applies:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[e\_var\_in\_substs]{
   \assocopt(\vs, \substs) \typearrow \langle\newe\rangle
@@ -823,7 +823,7 @@ One of the following applies:
 
 \CodeSubsection{\SubstExprBegin}{\SubstExprEnd}{../ASTUtils.ml}
 
-\subsubsection{TypingRule.SubstConstraint \label{sec:TypingRule.SubstConstraint}}
+\TypingRuleDef{SubstConstraint}
 \hypertarget{def-substconstraint}{}
 The function
 \[
@@ -839,7 +839,7 @@ $\eqs$, and then attempting to symbolically simplify the result,
 yielding the integer constraint $\newc$.
 \ProseOtherwiseTypeError
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{exact}):
@@ -860,7 +860,7 @@ One of the following applies:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[exact]{
   \substexprnormalize(\tenv, \eqs, \ve) \typearrow \newe
@@ -876,7 +876,7 @@ One of the following applies:
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.CheckArgsTypeSat \label{sec:TypingRule.CheckArgsTypeSat}}
+\TypingRuleDef{CheckArgsTypeSat}
 \hypertarget{def-checkargstypesat}{}
 The function
 \[
@@ -894,7 +894,7 @@ checks that the types $\argtypes$ \typesatisfy\ the types of the corresponding
 formal arguments $\funcsigargs$ with the parameters substituted with their corresponding
 arguments as per $\eqs$ and results in a type error otherwise.
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{empty}):
@@ -918,8 +918,8 @@ One of the following applies:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
-We note that it is guaranteed by TypingRule.AnnotateCallArgTyped
+\FormallyParagraph
+We note that \TypingRuleRef{AnnotateCallActualsTyped} guarantees
 that $\funcsigargs$ and $\argtypes$ have the same length.
 
 \begin{mathpar}
@@ -939,7 +939,7 @@ that $\funcsigargs$ and $\argtypes$ have the same length.
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.AnnotateRetTy \label{sec:TypingRule.AnnotateRetTy}}
+\TypingRuleDef{AnnotateRetTy}
 \hypertarget{def-annotateretty}{}
 The function
 \[
@@ -959,7 +959,7 @@ $\calltype$ with respect to the parameter expressions $\eqs$,
 yielding the \optional\ annotated type $\rettyopt$.
 \ProseOtherwiseTypeError
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{function\_or\_getter}):
@@ -985,7 +985,7 @@ One of the following applies:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[function\_or\_getter]{
   \calltype \in \{\STFunction, \STGetter\}\\
@@ -1016,11 +1016,11 @@ One of the following applies:
   }
 }{
   \annotateretty(\tenv, \calltype, \funcsigrettyopt, \eqs) \typearrow
-  \TypeErrorVal{\MismatchedReturnValue}
+  \TypeErrorVal{\BadCall}
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.SubprogramForName\label{sec:TypingRule.SubprogramForName}}
+\TypingRuleDef{SubprogramForName}
 \hypertarget{def-subprogramforname}{}
 The function
 \[
@@ -1059,7 +1059,7 @@ If the second case holds, the function returns a tuple which comprises:
 \end{itemize}
 \ProseOtherwiseTypeError
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{undefined}):
@@ -1073,7 +1073,7 @@ One of the following applies:
   \begin{itemize}
     \item $\tenv$ binds $\name$ via $\overloadedsubprograms$ map to $\renamingset$ and $\vses$;
     \item filtering the subprograms in $\renamingset$ with the caller argument types $\callerargtypes$
-          in $\tenv$ (see \secref{TypingRule.FilterCallCandidates}) yields an empty set\ProseOrTypeError;
+          in $\tenv$ (see \TypingRuleRef{FilterCallCandidates}) yields an empty set\ProseOrTypeError;
     \item the result is a type error indicating that the call given by $\name$ and \\ $\callerargtypes$
           does not match any defined subprogram.
   \end{itemize}
@@ -1082,7 +1082,7 @@ One of the following applies:
   \begin{itemize}
     \item $\tenv$ binds $\name$ via $\overloadedsubprograms$ map to $\renamingset$ and $\vses$;
     \item filtering the subprograms in $\renamingset$ with the caller argument types $\callerargtypes$
-          in $\tenv$ (see \secref{TypingRule.FilterCallCandidates}) yields $\matchingrenamings$\ProseOrTypeError;
+          in $\tenv$ (see \TypingRuleRef{FilterCallCandidates}) yields $\matchingrenamings$\ProseOrTypeError;
     \item $\matchingrenamings$ contains at least two elements;
     \item the result is a type error indicating that the call given by $\name$ and \\
           $\callerargtypes$ matches more than one defined subprogram.
@@ -1092,12 +1092,12 @@ One of the following applies:
   \begin{itemize}
     \item $\tenv$ binds $\name$ via $\overloadedsubprograms$ map to $\renamingset$ and $\vses$;
     \item filtering the subprograms in $\renamingset$ with the caller argument types $\callerargtypes$
-          in $\tenv$ (see \secref{TypingRule.FilterCallCandidates}) yields $\matchingrenamings$\ProseOrTypeError;
+          in $\tenv$ (see \TypingRuleRef{FilterCallCandidates}) yields $\matchingrenamings$\ProseOrTypeError;
     \item $\matchingrenamings$ contains a single element --- $(\namep, \callee)$\ProseOrTypeError;
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[undefined]{
   G^\tenv.\overloadedsubprograms(\name) = \bot
@@ -1115,7 +1115,7 @@ One of the following applies:
     \end{array}
   }
 }{
-  \subprogramforname(\tenv, \name, \callerargtypes) \typearrow \TypeErrorVal{\NoCallCandidates}
+  \subprogramforname(\tenv, \name, \callerargtypes) \typearrow \TypeErrorVal{\BadCall}
 }
 \end{mathpar}
 
@@ -1129,7 +1129,7 @@ One of the following applies:
   }\\\\
   \cardinality{\matchingrenamings} \geq 2
 }{
-  \subprogramforname(\tenv, \name, \callerargtypes) \typearrow \TypeErrorVal{\TooManyCandidates}
+  \subprogramforname(\tenv, \name, \callerargtypes) \typearrow \TypeErrorVal{\BadCall}
 }
 \end{mathpar}
 
@@ -1152,7 +1152,7 @@ One of the following applies:
 \end{mathpar}
 \CodeSubsection{\SubprogramForNameBegin}{\SubprogramForNameEnd}{../Typing.ml}
 
-\subsubsection{TypingRule.FilterCallCandidates \label{sec:TypingRule.FilterCallCandidates}}
+\TypingRuleDef{FilterCallCandidates}
 \hypertarget{def-filtercandidates}{}
 The helper function
 \[
@@ -1171,7 +1171,7 @@ subprograms whose arguments clash in $\candidates$.
 
 The names $\candidates$ are assumed to exist in $G^\tenv.\subprograms$.
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{no\_candidates}):
@@ -1192,7 +1192,7 @@ One of the following applies:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[no\_candidates]
 {}{
@@ -1210,7 +1210,7 @@ One of the following applies:
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.HasArgClash \label{sec:TypingRule.HasArgClash}}
+\TypingRuleDef{HasArgClash}
 \hypertarget{def-hasargclash}{}
 The function
 \[
@@ -1225,7 +1225,7 @@ checks whether a list of types $\formaltys$ clashes with the list of types appea
 in the list of arguments $\vargs$ in $\tenv$, yielding the result in $\vb$.
 \ProseOtherwiseTypeError
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item equating the list lengths of $\formaltys$ and $\vargs$ either yields $\True$
@@ -1238,7 +1238,7 @@ All of the following apply:
 
 \CodeSubsection{\HasArgClashBegin}{\HasArgClashEnd}{../Typing.ml}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \equallength(\formaltypes, \vargs) \typearrow \True \terminateas \False\\
@@ -1249,7 +1249,7 @@ All of the following apply:
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.ExpressionList\label{sec:TypingRule.ExpressionList}}
+\TypingRuleDef{ExpressionList}
 \hypertarget{def-annotateexprs}{}
 The helper function
 \[
@@ -1261,7 +1261,7 @@ annotates a list of expressions $\exprs$ from left to right, yielding a list of 
 each consisting of a type, an annotated expression, and a \sideeffectsetterm.
 \ProseOtherwiseTypeError
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{empty}):
@@ -1281,7 +1281,7 @@ One of the following applies:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[empty]{}
 {
@@ -1348,30 +1348,30 @@ identifiers are used in generating execution graph constraints for the
 returned values.
 
 The main subprogram call relation is given by
-SemanticsRule.Call (see \secref{SemanticsRule.Call}).
+SemanticsRule.Call (see \SemanticsRuleRef{Call}).
 %
 The different types of subprogram calls are evaluated via one of the following rules:
 \begin{itemize}
-\item SemanticsRule.FPrimitive (see \secref{SemanticsRule.FPrimitive})
-\item SemanticsRule.FCall (see \secref{SemanticsRule.FCall})
+\item \SemanticsRuleRef{FPrimitive}
+\item \SemanticsRuleRef{FCall}
 \end{itemize}
 
 We also define the following helper rules:
 \begin{itemize}
-  \item SemanticsRule.ReadValueFrom (see \secref{SemanticsRule.ReadValueFrom})
-  \item SemanticsRule.WriteRetVals (see \secref{SemanticsRule.WriteRetVals})
-  \item SemanticsRule.AssignArgs (see \secref{SemanticsRule.AssignArgs})
-  \item SemanticsRule.MatchFuncRes (see \secref{SemanticsRule.MatchFuncRes})
+  \item \SemanticsRuleRef{ReadValueFrom}
+  \item \SemanticsRuleRef{WriteRetVals}
+  \item \SemanticsRuleRef{AssignArgs}
+  \item \SemanticsRuleRef{MatchFuncRes}
 \end{itemize}
 
-\subsubsection{SemanticsRule.Call\label{sec:SemanticsRule.Call}}
-\subsubsection{Prose}
+\SemanticsRuleDef{Call}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
-  \item evaluating each expression in $\args$ separately in $\env$ as per \secref{SemanticsRule.EExprListM}
-  is \\ $\Normal(\vvargs, \envone)$\ProseOrAbnormal;
-  \item evaluating each expression in $\params$ separately in $\env$ as per \secref{SemanticsRule.EExprListM}
-  is \\ $\Normal(\vvparams, \envtwo)$\ProseOrAbnormal;
+  \item evaluating each expression in $\args$ separately in $\env$ as per \\
+        \SemanticsRuleRef{EExprListM} is $\Normal(\vvargs, \envone)$\ProseOrAbnormal;
+  \item evaluating each expression in $\params$ separately in $\env$ as per\\
+        \SemanticsRuleRef{EExprListM} is $\Normal(\vvparams, \envtwo)$\ProseOrAbnormal;
   \item $\envtwo$ consists of the static environment $\tenv$ and the dynamic environment $\denvtwo$;
   \item applying $\incrstacksize$ to $G^\denvtwo$ and $\name$ yields $\genv$;
   \item the environment $\envtwo'$ is defined as the environment
@@ -1407,7 +1407,7 @@ All of the following apply:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[normal]{
   \evalexprlistm(\env, \args) \evalarrow \Normal(\vvargs, \envone)\OrAbnormal\\
@@ -1443,8 +1443,8 @@ All of the following apply:
 \end{mathpar}
 \CodeSubsection{\EvalCallBegin}{\EvalCallEnd}{../Interpreter.ml}
 
-\subsubsection{SemanticsRule.FPrimitive \label{sec:SemanticsRule.FPrimitive}}
-\subsubsection{Prose}
+\SemanticsRuleDef{FPrimitive}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\env$ consists of the static environment $\tenv$ and the dynamic environment with $\genv$ as its
@@ -1453,7 +1453,7 @@ All of the following apply:
         with the body field \SBPrimitive;
   \item evaluating the primitive subprogram $\name$ with the actual arguments $\args$
         is $\Normal(\vms, \vgone)$\ProseOrError;
-  \item writing the returned values $\vms$ as per \secref{SemanticsRule.WriteRetVals} gives $\vvsm$;
+  \item writing the returned values $\vms$ as per \SemanticsRuleRef{WriteRetVals} gives $\vvsm$;
   \item $\vvsm$ is a pair consisting of the list of values $\vvs$ and execution graph $\vgtwo$;
   \item $\newg$ is the ordered composition of $\vgone$ and $\vgtwo$ with the $\asldata$ label;
   \item $\newenv$ is the environment with $\tenv$ as its static environment component
@@ -1461,7 +1461,7 @@ All of the following apply:
   \item the result of the entire evaluation is $\Normal((\vvs, \newg), \newenv)$.
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 The following rule utilizes the transition relation
 \hypertarget{def-evalprimitive}{}
 \[
@@ -1487,13 +1487,13 @@ That is, it is not a part of $\evalarrow$ but rather a separate transition relat
 \end{mathpar}
 \CodeSubsection{\EvalFPrimitiveBegin}{\EvalFPrimitiveEnd}{../Interpreter.ml}
 
-\subsubsection{SemanticsRule.FCall \label{sec:SemanticsRule.FCall}}
+\SemanticsRuleDef{FCall}
 \subsubsection{Example}
 In \listingref{semantics-fcall},
 the function \texttt{main} calls the function \texttt{foo} and the procedure \texttt{bar}.
 \ASLListing{Evaluating function calls}{semantics-fcall}{\semanticstests/SemanticsRule.FCall.asl}
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\env$ consists of the static environment $\tenv$ and the dynamic environment with the global
@@ -1514,15 +1514,15 @@ All of the following apply:
         as per \SemanticsRuleRef{AssignArgs} gives $(\envthree, \vgthree)$ and ensures that each
         formal parameter in $\paramdecls$ is
         locally bound to the corresponding actual value in $\params$;
-  \item evaluating the body of the subprogram $\vbody$ as a statement in in $\envthree$
+  \item evaluating the body of the subprogram $\vbody$ as a statement in $\envthree$
         is $\vres$\ProseOrAbnormal;
-  \item matching the result $\vres$ to obtain a normal configuration as per \secref{SemanticsRule.MatchFuncRes}
-        gives $C$;
+  \item matching the result $\vres$ to obtain a normal configuration as per \\
+        \SemanticsRuleRef{MatchFuncRes} gives $C$;
   \item $\newg$ is the ordered composition of $\vgone$ with the $\asldata$ and $\vgtwo$ and $\vgthree$ with the $\aslpo$ edge;
   \item the result is $C$ with its graph substituted for $\newg$.
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \env \eqname (\tenv, \denv)\\
@@ -1557,7 +1557,7 @@ All of the following apply:
 It is not an error for execution of a procedure or setter to end without a
 return statement.
 
-\subsubsection{SemanticsRule.CheckRecurseLimit\label{sec:SemanticsRule.CheckRecurseLimit}}
+\SemanticsRuleDef{CheckRecurseLimit}
 \hypertarget{def-checkrecurselimit}{}
 The helper relation
 \[
@@ -1568,7 +1568,7 @@ checks whether the value in the optional expression $\velimitopt$ has reached th
 in $\env$, yielding the execution graph resulting from evaluating the optional expression in $\vg$.
 Otherwise, the result is a dynamic error indicating that the recursion limit has been reached.
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{none}):
@@ -1595,7 +1595,7 @@ One of the following applies:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[none]{
   \evallimit(\env, \velimitopt) \evalarrow (\None, \vg) \OrDynError
@@ -1622,11 +1622,11 @@ One of the following applies:
   \getstacksize(\denv, \name) \evalarrow \vstacksize\\
   \vlimit \geq \vstacksize
 }{
-  \checkrecurselimit(\env, \name, \velimitopt) \evalarrow \DynamicErrorVal{RecursionLimitReached}
+  \checkrecurselimit(\env, \name, \velimitopt) \evalarrow \DynamicErrorVal{\LimitExceeded}
 }
 \end{mathpar}
 
-\subsubsection{SemanticsRule.ReadValueFrom \label{sec:SemanticsRule.ReadValueFrom}}
+\SemanticsRuleDef{ReadValueFrom}
 \hypertarget{def-readvaluefrom}{}
 The helper relation
 \[
@@ -1635,7 +1635,7 @@ The helper relation
 generates an execution graph for reading the given value to a variable given
 by the identifier, and pairs it with the given value.
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item reading the value $\vv$ into the variable named $\id$ gives $\newg$;
@@ -1644,7 +1644,7 @@ All of the following apply:
 
 \CodeSubsection{\EvalReadValueFromBegin}{\EvalReadValueFromEnd}{../Interpreter.ml}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \readidentifier(\vv, \id) \evalarrow \newg
@@ -1653,7 +1653,7 @@ All of the following apply:
 }
 \end{mathpar}
 
-\subsubsection{SemanticsRule.WriteRetVals \label{sec:SemanticsRule.WriteRetVals}}
+\SemanticsRuleDef{WriteRetVals}
 \hypertarget{def-writeretvals}{}
 The relation
 \[
@@ -1663,7 +1663,7 @@ The relation
 generates Write Effects for the values
 returned by the evaluation of a primitive subprogram:
 
-\subsubsection{Prose}
+\ProseParagraph
   one of the following applies:
   \begin{itemize}
   \item All of the following apply (\textsc{empty}):
@@ -1691,7 +1691,7 @@ returned by the evaluation of a primitive subprogram:
 %
 %   \CodeSubsection{\EvalWriteRetValsBegin}{\EvalWriteRetValsEnd}{../Interpreter.ml}
 
-\subsubsection{Formally}
+\FormallyParagraph
   \begin{mathpar}
     \inferrule[empty]{}
     {
@@ -1712,7 +1712,7 @@ returned by the evaluation of a primitive subprogram:
     }
   \end{mathpar}
 
-\subsubsection{SemanticsRule.AssignArgs \label{sec:SemanticsRule.AssignArgs}}
+\SemanticsRuleDef{AssignArgs}
 The helper relation
 \hypertarget{def-assignargs}{}
 \[
@@ -1726,7 +1726,7 @@ updates the pair consisting of the environments $\env$ and \executiongraph\ $\vg
 by assigning the values given by $\actuals$ to the identifiers given by $\vids$,
 yielding the updated pair $(\newenv, \newg)$.
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{empty}):
@@ -1740,7 +1740,7 @@ One of the following applies:
   \begin{itemize}
     \item $\vids$ has $\vx$ as its head and $\vidsone$ as its tail,
           and $\actuals$ has $\vm$ as its head and $\actualsone$ as its tail;
-    \item declaring the local identifier $\vx$ with $\vm$ in $\env$ as per \secref{SemanticsRule.DeclareLocalIdentifierMM}
+    \item declaring the local identifier $\vx$ with $\vm$ in $\env$ as per \SemanticsRuleRef{DeclareLocalIdentifierMM}
     gives \\ $(\envone, \vgtwo)$.
     \item assigning the remaining lists $\vidsone$ and $\actualsone$ with the environment $\envone$ and the ordered
           composition of $\vgone$ and $\vgtwo$ with the $\aslpo$ edge yields\\
@@ -1749,7 +1749,7 @@ One of the following applies:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[empty]{}
 {
@@ -1766,7 +1766,7 @@ One of the following applies:
 }
 \end{mathpar}
 
-\subsubsection{SemanticsRule.MatchFuncRes \label{sec:SemanticsRule.MatchFuncRes}}
+\SemanticsRuleDef{MatchFuncRes}
 The helper relation
 \hypertarget{def-matchfuncres}{}
 \[
@@ -1776,7 +1776,7 @@ The helper relation
 converts continuing configurations and returning configurations
 into corresponding normal configurations that can be returned by a subprogram evaluation.
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{continuing}):
@@ -1796,7 +1796,7 @@ One of the following applies:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
   \inferrule[continuing]{}
   {

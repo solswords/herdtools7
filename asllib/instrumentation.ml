@@ -475,12 +475,14 @@ module TypingRule = struct
     | BitfieldSliceToPositions
     | CheckPositionsInWidth
     | ShouldReduceToCall
-    | IsStaticallyEvaluable
-    | CheckStaticallyEvaluable
+    | IsSymbolicallyEvaluable
+    | CheckSymbolicallyEvaluable
     | ShouldRememberImmutableExpression
     | AddImmutableExpression
     | SymIntSetSubset
-    | SyDomIsSubset
+    | SymDomIsSubset
+    | ApproxConstraint
+    | ApproxConstraints
     | LEBitSlice
     | AddLocalImmutableExpr
     | AddGlobalImmutableExpr
@@ -663,12 +665,14 @@ module TypingRule = struct
     | BitfieldSliceToPositions -> "BitfieldSliceToPositions"
     | CheckPositionsInWidth -> "CheckPositionsInWidth"
     | ShouldReduceToCall -> "ShouldReduceToCall"
-    | IsStaticallyEvaluable -> "IsStaticallyEvaluable"
-    | CheckStaticallyEvaluable -> "CheckStaticallyEvaluable"
+    | IsSymbolicallyEvaluable -> "IsSymbolicallyEvaluable"
+    | CheckSymbolicallyEvaluable -> "CheckSymbolicallyEvaluable"
     | ShouldRememberImmutableExpression -> "ShouldRememberImmutableExpression"
     | AddImmutableExpression -> "AddImmutableExpression"
     | SymIntSetSubset -> "SymIntSetSubset"
-    | SyDomIsSubset -> "SyDomIsSubset"
+    | SymDomIsSubset -> "SymDomIsSubset"
+    | ApproxConstraint -> "ApproxConstraint"
+    | ApproxConstraints -> "ApproxConstraints"
     | LEBitSlice -> "LEBitSlice"
     | AddLocalImmutableExpr -> "AddLocalImmutableExpr"
     | AddGlobalImmutableExpr -> "AddLocalImmutableExpr"
@@ -835,12 +839,14 @@ module TypingRule = struct
       BitfieldSliceToPositions;
       CheckPositionsInWidth;
       ShouldReduceToCall;
-      IsStaticallyEvaluable;
-      CheckStaticallyEvaluable;
+      IsSymbolicallyEvaluable;
+      CheckSymbolicallyEvaluable;
       ShouldRememberImmutableExpression;
       AddImmutableExpression;
       SymIntSetSubset;
-      SyDomIsSubset;
+      SymDomIsSubset;
+      ApproxConstraint;
+      ApproxConstraints;
       LEBitSlice;
       AddLocalImmutableExpr;
       AddGlobalImmutableExpr;

@@ -63,7 +63,7 @@ That is, evaluating the expressions results in the same set of configurations,
 up to the order of values, and ignoring dynamic errors that are not due to assertions.
 \end{definition}
 
-Along the way, we also define the concept of \emph{pure expressions} and \staticallyevaluable\ expressions.
+Along the way, we also define the concept of \emph{pure expressions} and \symbolicallyevaluable\ expressions.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Time Frames\label{sec:TimeFrames}}
@@ -71,7 +71,7 @@ Along the way, we also define the concept of \emph{pure expressions} and \static
 \hypertarget{def-timeframe}{}
 We divide side effects by \emph{\timeframesterm}, which indicate the phase where a side effect occurs:
 \begin{description}
-    \item[Constant] Contains effects that take place during static evaluation (see \chapref{staticevaluation}). That is, during type-checking.
+    \item[Constant] Contains effects that take place during static evaluation (see \chapref{StaticEvaluation}). That is, during typechecking.
     \item[Configuration] Contains effects that take place while rewriting the initializing value of a \texttt{config} storage element.
     \item[Execution] Contains effects that take place during semantic evaluation.
 \end{description}
@@ -100,7 +100,7 @@ as follows:
     \timeframemax(T) \triangleq t \text{ such that } t\in T \land \forall t'\in T.\ t' \timeframeleq t \enspace.
 \]
 
-\subsubsection{TypingRule.TimeFrameLDK\label{sec:TypingRule.TimeFrameLDK}}
+\TypingRuleDef{TimeFrameLDK}
 \hypertarget{def-timeframeofldk}{}
 The function
 \[
@@ -108,7 +108,7 @@ The function
 \]
 constructs a \timeframeterm\ $\vt$ from a local declaration keyword $\ldk$.
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{}{
     {
@@ -122,7 +122,7 @@ constructs a \timeframeterm\ $\vt$ from a local declaration keyword $\ldk$.
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.TimeFrameGDK\label{sec:TypingRule.TimeFrameGDK}}
+\TypingRuleDef{TimeFrameGDK}
 \hypertarget{def-timeframeofgdk}{}
 The function
 \[
@@ -130,7 +130,7 @@ The function
 \]
 constructs a \timeframeterm\ $\vt$ from a global declaration keyword $\gdk$.
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{}{
     {
@@ -203,7 +203,7 @@ which are configurations used to describe side effects, as explained below:
 
 We now define a few helper functions over \timeframesterm.
 
-\subsubsection{TypingRule.TimeFrame\label{sec:TypingRule.TimeFrame}}
+\TypingRuleDef{TimeFrame}
 \hypertarget{def-sideeffecttimeframe}{}
 The function
 \[
@@ -211,7 +211,7 @@ The function
 \]
 retrieves the \timeframeterm\ $\vt$ from a \sideeffectdescriptorterm\ $\vs$.
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{}{
     \timeframe(\overname{\ReadLocal(\Ignore, \vt, \Ignore)}{\vs}) \typearrow \vt
@@ -246,7 +246,7 @@ retrieves the \timeframeterm\ $\vt$ from a \sideeffectdescriptorterm\ $\vs$.
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.SideEffectIsPure\label{sec:TypingRule.SideEffectIsPure}}
+\TypingRuleDef{SideEffectIsPure}
 \hypertarget{def-sideeffectispure}{}
 \[
     \sideeffectispure(\overname{\TSideEffect}{\vs}) \aslto \overname{\Bool}{\vb}
@@ -256,11 +256,11 @@ yielding the result in $\vb$.
 Intuitively, a \emph{pure} \sideeffectdescriptorterm\ helps to establish that
 an expression evaluates without modifying values of storage elements.
 
-\subsubsection{Prose}
+\ProseParagraph
 Define $\vb$ as $\True$ if and only if $\vt$ is either a \ReadLocalTerm, a \ReadGlobalTerm,
 a \NonDeterministicTerm, or a \PerformsAssertionsTerm.
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
     \vb \eqdef \configdomain{\vs} \in \{\ReadLocal, \ReadGlobal, \NonDeterministic, \PerformsAssertions\}
@@ -269,32 +269,32 @@ a \NonDeterministicTerm, or a \PerformsAssertionsTerm.
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.SideEffectIsStaticallyEvaluable\label{sec:TypingRule.SideEffectIsStaticallyEvaluable}}
-\hypertarget{def-sideeffectisstaticallyevaluable}{}
+\TypingRuleDef{SideEffectIsSymbolicallyEvaluable}
+\hypertarget{def-sideeffectissymbolicallyevaluable}{}
 \[
-    \sideeffectisstaticallyevaluable(\overname{\TSideEffect}{\vs}) \aslto \overname{\Bool}{\vb}
+    \sideeffectissymbolicallyevaluable(\overname{\TSideEffect}{\vs}) \aslto \overname{\Bool}{\vb}
 \]
-defines whether a \sideeffectdescriptorsterm\ $\vs$ is considered \emph{\staticallyevaluable},
+defines whether a \sideeffectdescriptorsterm\ $\vs$ is considered \emph{\symbolicallyevaluable},
 yielding the result in $\vb$.
-Intuitively, a \emph{statically evaluable} \sideeffectdescriptorterm\ helps establish that
+Intuitively, a \emph{symbolically evaluable} \sideeffectdescriptorterm\ helps establish that
 an expression evaluates without failing assertions, without modifying any storage element,
 and always yielding the same result, that is, deterministically.
 
-\subsubsection{Prose}
+\ProseParagraph
 Define $\vb$ as $\True$ if and only if $\vs$ is either
 a \ReadLocalTerm\ associated with an immutable storage element, or
 a \ReadGlobalTerm\ associated with an immutable storage element.
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
     \vb \eqdef \vs = \ReadLocal(\Ignore, \Ignore, \True) \lor \vs = \ReadGlobal(\Ignore, \Ignore, \True)
 }{
-    \sideeffectisstaticallyevaluable(\vs) \typearrow \vb
+    \sideeffectissymbolicallyevaluable(\vs) \typearrow \vb
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.SideEffectConflict\label{sec:TypingRule.SideEffectConflict}}
+\TypingRuleDef{SideEffectConflict}
 % Transliteration note: this function is not reflected in the implementation as it checks conflicts directly on sets of side effects.
 \hypertarget{def-sideeffectconflict}{}
 \hypertarget{def-sideeffectconflictterm}{}
@@ -305,7 +305,7 @@ The function
 defines whether there exists a \emph{\sideeffectconflictterm} between the \sideeffectdescriptorterm\ $\vsone$
 and the \sideeffectdescriptorterm\ $\vstwo$, yielding the result in $\vb$.
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
     \item All of the following apply (\textsc{globalread}):
@@ -373,7 +373,7 @@ One of the following applies:
     \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[globalread]{
     \vb \eqdef \vstwo = \WriteGlobal(\id, \Ignore, \Ignore) \lor \configdomain{\vstwo} = \RecursiveCall
@@ -447,7 +447,7 @@ One of the following applies:
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.LDKIsImmutable\label{sec:TypingRule.LDKIsImmutable}}
+\TypingRuleDef{LDKIsImmutable}
 \hypertarget{def-ldkisimmutable}{}
 The function
 \[
@@ -456,18 +456,18 @@ The function
 tests whether the local declaration keyword $\ldk$ relates to an immutable storage element,
 yielding the result in $\vb$.
 
-\subsubsection{Prose}
+\ProseParagraph
 Define $\vb$ as $\True$ if and only if $\ldk$ corresponds to either the keyword \texttt{constant} or
 the keyword \texttt{let}.
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{}{
   \ldkisimmutable(\ldk) \typearrow \overname{\ldk \in \{\LDKConstant, \LDKLet\}}{}
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.GDKIsImmutable\label{sec:TypingRule.GDKIsImmutable}}
+\TypingRuleDef{GDKIsImmutable}
 \hypertarget{def-gdkisimmutable}{}
 The function
 \[
@@ -476,11 +476,11 @@ The function
 tests whether the global declaration keyword $\gdk$ relates to an immutable storage element,
 yielding the result in $\vb$.
 
-\subsubsection{Prose}
+\ProseParagraph
 Define $\vb$ as $\True$ if and only if $\gdk$ corresponds to either the keyword \texttt{constant},
 the keyword \texttt{config}, or the keyword \texttt{let}.
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{}{
   \gdkisimmutable(\gdk) \typearrow \overname{\gdk \in \{\GDKConstant, \GDKConfig, \GDKLet\}}{}
@@ -491,7 +491,7 @@ the keyword \texttt{config}, or the keyword \texttt{let}.
 \section{Side Effect Sets\label{sec:SideEffectSets}}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\subsubsection{TypingRule.AreNonConflicting\label{sec:TypingRule.AreNonConflicting}}
+\TypingRuleDef{AreNonConflicting}
 \hypertarget{def-arenonconflicting}{}
 The function
 \[
@@ -502,12 +502,12 @@ tests whether there are no \sideeffectconflictterm\ between the set of
 \sideeffectdescriptorsterm\ $\vsesone$ and the set of \sideeffectdescriptorsterm\ $\vsestwo$,
 yielding the result in $\vb$.
 
-\subsubsection{Prose}
+\ProseParagraph
 Define $\vb$ as $\True$ if for every \sideeffectdescriptorterm\ $\vsone$ in $\vsesone$ and
 every \sideeffectdescriptorterm\ $\vstwo$ in $\vsestwo$,
 testing $\sideeffectconflict$ for $\vsone$ and $\vstwo$ yields $\False$.
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
     \vbp \eqdef \bigvee_{\vsone \in \vsesone, \vstwo \in \vsestwo} \sideeffectconflict(\vsone, \vstwo)
@@ -516,7 +516,7 @@ testing $\sideeffectconflict$ for $\vsone$ and $\vstwo$ yields $\False$.
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.NonConflictingUnion\label{sec:TypingRule.NonConflictingUnion}}
+\TypingRuleDef{NonConflictingUnion}
 \hypertarget{def-nonconflictingunion}{}
 The function
 \[
@@ -526,24 +526,24 @@ The function
 yields the union of the two sets of \sideeffectdescriptorsterm\ $\vsesone$ and $\vsestwo$ in $\vses$
 if they are \hyperlink{def-sideeffectconflictterm}{non-conflicting}. \ProseOtherwiseTypeError
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
     \item checking whether $\arenonconflicting$ yields $\True$ for $\vsesone$ and $\vsestwo$ yields\\
-         $\True$\ProseTerminateAs{\ConflictingSideEffects};
+         $\True$\ProseTerminateAs{\SideEffectViolation};
     \item define $\vses$ as the union of $\vsesone$ and $\vsestwo$.
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
-    \checktrans{\arenonconflicting(\vsesone, \vsestwo)}{\ConflictingSideEffects} \typearrow \True \OrTypeError
+    \checktrans{\arenonconflicting(\vsesone, \vsestwo)}{\SideEffectViolation} \typearrow \True \OrTypeError
 }{
     \nonconflictingunion(\vsesone, \vsestwo) \typearrow \overname{\vsesone \cup \vsestwo}{\vses}
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.MaxTimeFrame\label{sec:TypingRule.MaxTimeFrame}}
+\TypingRuleDef{MaxTimeFrame}
 \hypertarget{def-maxtimeframe}{}
 The function
 \[
@@ -553,7 +553,7 @@ defines the maximal \timeframeterm\ for a \sideeffectsetterm\ $\vses$, which is 
 in $\vf$.
 (If $\vses$ is empty, the result is \timeframeconstant.)
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
     \item All of the following apply (\textsc{execution}):
@@ -576,7 +576,7 @@ One of the following applies:
     \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[execution]{
     {
@@ -606,59 +606,59 @@ One of the following applies:
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.SESIsStaticallyEvaluable\label{sec:TypingRule.SESIsStaticallyEvaluable}}
-\hypertarget{def-isstaticallyevaluable}{}
-\hypertarget{def-staticallyevaluable}{}
+\TypingRuleDef{SESIsSymbolicallyEvaluable}
+\hypertarget{def-issymbolicallyevaluable}{}
+\hypertarget{def-symbolicallyevaluable}{}
 The function
 \[
-  \isstaticallyevaluable(\overname{\TSideEffectSet}{\vses}) \aslto \overname{\Bool}{\bv}
+  \issymbolicallyevaluable(\overname{\TSideEffectSet}{\vses}) \aslto \overname{\Bool}{\bv}
 \]
-tests whether a set of \sideeffectdescriptorsterm\ $\vses$ are all \staticallyevaluable,
+tests whether a set of \sideeffectdescriptorsterm\ $\vses$ are all \symbolicallyevaluable,
 yielding the result in $\vb$.
 
-\subsubsection{Prose}
+\ProseParagraph
 Define $\vb$ as $\True$ if and only if every \sideeffectdescriptorterm\ $\vs$ in $\vses$
-is \staticallyevaluable.
+is \symbolicallyevaluable.
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
-  \vb \eqdef \bigwedge_{\vs\in\vses} \sideeffectisstaticallyevaluable(\vs)
+  \vb \eqdef \bigwedge_{\vs\in\vses} \sideeffectissymbolicallyevaluable(\vs)
 }{
-  \isstaticallyevaluable(\vses) \typearrow \vb
+  \issymbolicallyevaluable(\vses) \typearrow \vb
 }
 \end{mathpar}
 
-\hypertarget{def-checkstaticallyevaluable}{}
-\subsubsection{TypingRule.CheckStaticallyEvaluable\label{sec:TypingRule.CheckStaticallyEvaluable}}
+\hypertarget{def-checksymbolicallyevaluable}{}
+\TypingRuleDef{CheckSymbolicallyEvaluable}
 The function
 \[
-  \checkstaticallyevaluable(\overname{\TSideEffectSet}{\vses}) \aslto
+  \checksymbolicallyevaluable(\overname{\TSideEffectSet}{\vses}) \aslto
   \{\True\} \cup \TTypeError
 \]
-returns $\True$ if the set of \sideeffectdescriptorsterm\ $\vses$ is \staticallyevaluable.
+returns $\True$ if the set of \sideeffectdescriptorsterm\ $\vses$ is \symbolicallyevaluable.
 \ProseOtherwiseTypeError
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following applies:
 \begin{itemize}
-  \item applying $\isstaticallyevaluable$ to $\ve$ in $\tenv$ yields $\vb$;
+  \item applying $\issymbolicallyevaluable$ to $\ve$ in $\tenv$ yields $\vb$;
   \item the result is $\True$ if $\vb$ is $\True$, otherwise it is a type error indicating that the expression
-  is not statically evaluable.
+  is not \symbolicallyevaluable.
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
-  \isstaticallyevaluable(\vses) \typearrow \vb\\
-  \checktrans{\vb}{NotStaticallyEvaluable} \checktransarrow \True \OrTypeError
+  \issymbolicallyevaluable(\vses) \typearrow \vb\\
+  \checktrans{\vb}{NotSymbolicallyEvaluable} \checktransarrow \True \OrTypeError
 }{
-  \checkstaticallyevaluable(\vses) \typearrow \True
+  \checksymbolicallyevaluable(\vses) \typearrow \True
 }
 \end{mathpar}
-\CodeSubsection{\CheckStaticallyEvaluableBegin}{\CheckStaticallyEvaluableEnd}{../Typing.ml}
+\CodeSubsection{\CheckSymbolicallyEvaluableBegin}{\CheckSymbolicallyEvaluableEnd}{../Typing.ml}
 
-\subsubsection{TypingRule.SESIsPure\label{sec:TypingRule.SESIsPure}}
+\TypingRuleDef{SESIsPure}
 \hypertarget{def-sesispure}{}
 The function
 \[
@@ -666,11 +666,11 @@ The function
 \]
 tests whether all side effects in the set $\vses$ are pure, yielding the result in $\vb$.
 
-\subsubsection{Prose}
+\ProseParagraph
 Define $\vb$ as $\True$ if and only if $\sideeffectispure$ holds for
 every \sideeffectdescriptorterm\ $\vs$ in $\vses$.
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
     \bigwedge_{\vs\in\vses} \sideeffectispure(\vs)
@@ -679,7 +679,7 @@ every \sideeffectdescriptorterm\ $\vs$ in $\vses$.
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.SESIsDeterministic\label{sec:TypingRule.SESIsDeterministic}}
+\TypingRuleDef{SESIsDeterministic}
 \hypertarget{def-sesisdeterministic}{}
 The function
 \[
@@ -688,17 +688,17 @@ The function
 tests whether the \NonDeterministic\ \sideeffectdescriptorterm\ is not included in $\vses$,
 yielding the result in $\vb$.
 
-\subsubsection{Prose}
+\ProseParagraph
 Define $\vb$ as $\True$ if and only if \NonDeterministic\ is not included in $\vses$.
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{}{
   \sesisdeterministic(\vses) \typearrow \overname{\NonDeterministic \not\in \vses}{\vb}
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.SESIsBefore\label{sec:TypingRule.SESIsBefore}}
+\TypingRuleDef{SESIsBefore}
 \hypertarget{def-sesisbefore}{}
 The function
 \[
@@ -708,11 +708,11 @@ tests whether the \timeframesterm\ of \sideeffectdescriptorsterm\ in $\vses$ are
 $\vt$, yielding the result in $\vb$.
 % Transliteration note: this abstracts both leq_config_time and leq_constant_time
 
-\subsubsection{Prose}
+\ProseParagraph
 Define $\vb$ as $\True$ if and only if the maximal \timeframeterm\ of all \sideeffectdescriptorsterm\ in $\vses$
 is less than or equal to $\vt$ with respect to $\timeframeleq$.
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{}{
     \sesisbefore(\vses, \vt) \typearrow \overname{\maxtimeframe(\vses) \timeframeleq \vt}{\vb}

@@ -102,6 +102,7 @@ We now define the syntax, abstract syntax, typing, and semantics of the followin
 Finally, we define side-effect-free expressions (see \secref{SideEffectFreeExpressions})
 and define how to evaluate a list of expressions (see \secref{ExprList}).
 
+\hypertarget{def-literalexpressionterm}{}
 \section{Literal Expressions\label{sec:LiteralExpressions}}
 A literal expression represents a literal as an expression.
 
@@ -115,7 +116,7 @@ A literal expression represents a literal as an expression.
 \expr \derives\ & \ELiteral(\literal) &
 \end{flalign*}
 
-\subsubsection{ASTRule.ELit\label{sec:ASTRule.ELit}}
+\ASTRuleDef{ELit}
 \begin{mathpar}
 \inferrule{}{
   \buildexpr(\overname{\Nexpr(\punnode{\Nvalue})}{\vparsednode}) \astarrow
@@ -124,8 +125,8 @@ A literal expression represents a literal as an expression.
 \end{mathpar}
 
 \subsection{Typing}
-\subsubsection{TypingRule.ELit\label{sec:TypingRule.ELit}}
-\subsubsection{Prose}
+\TypingRuleDef{ELit}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
 \item $\ve$ is the literal expression $\vv$;
@@ -134,7 +135,7 @@ All of the following apply:
 \item define $\vses$ as the empty set.
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \annotateliteral{\tenv, \vv} \typearrow \vt
@@ -149,8 +150,8 @@ All of the following apply:
 In \listingref{literalssemantics}, each of the expressions \texttt{3} evaluates to the \nativevalue\ $\nvint(3)$.
 \ASLListing{Semantics of literals}{literalssemantics}{\semanticstests/SemanticsRule.Lit.asl}
 
-\subsubsection{SemanticsRule.ELit \label{sec:SemanticsRule.ELit}}
-\subsubsection{Prose}
+\SemanticsRuleDef{ELit}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
 \item $\ve$ is the literal expression for $\vl$, that is, $\ELiteral(\vl)$
@@ -158,7 +159,7 @@ All of the following apply:
 \item $\vg$ is the empty graph, as literals do not yield any Read and Write Effects;
 \item $\newenv$ is $\env$.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{}{
   \evalexpr{\env, \overname{\ELiteral(\vl)}{\ve}} \evalarrow \Normal((\overname{\nvliteral{\vl}}{\vv},\overname{\emptygraph}{\vg}), \overname{\env}{\newenv})
@@ -166,9 +167,9 @@ All of the following apply:
 \end{mathpar}
 \CodeSubsection{\EvalELitBegin}{\EvalELitEnd}{../Interpreter.ml}
 
+\hypertarget{def-variableexpressionterm}{}
 \section{Variable Expressions\label{sec:VariablExpressions}}
-A variable expression represents consists of an identifier.
-The identifier stands for either a storage element or the name of a getter with no arguments.
+A variable expression consists of an identifier for a storage element.
 
 \subsection{Syntax}
 \begin{flalign*}
@@ -180,7 +181,7 @@ The identifier stands for either a storage element or the name of a getter with 
 \expr \derives\ & \EVar(\overtext{\identifier}{variable name}) &
 \end{flalign*}
 
-\subsubsection{ASTRule.EVAR}
+\ASTRuleDef{EVAR}
 \begin{mathpar}
   \inferrule{}{
   \buildexpr(\overname{\Nexpr(\Tidentifier(\id))}{\vparsednode}) \astarrow
@@ -189,8 +190,8 @@ The identifier stands for either a storage element or the name of a getter with 
 \end{mathpar}
 
 \subsection{Typing}
-\subsubsection{TypingRule.EVar \label{sec:TypingRule.EVar}}
-\subsubsection{Prose}
+\TypingRuleDef{EVar}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ is a variable expression for $\vx$, that is, $\EVar(\vx)$;
@@ -246,7 +247,7 @@ All of the following apply:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[local\_constant]{
   L^\tenv.\localstoragetypes(\vx) = (\vt, \LDKConstant)\\
@@ -302,8 +303,8 @@ function calls) to global constant variables.
 \CodeSubsection{\EUndefIdentBegin}{\EUndefIdentEnd}{../Typing.ml}
 
 \subsection{Semantics}
-\subsubsection{SemanticsRule.EVar\label{sec:SemanticsRule.EVar}}
-\subsubsection{Prose}
+\SemanticsRuleDef{EVar}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes a variable expression, that is, $\EVar(\vx)$;
@@ -326,7 +327,7 @@ All of the following apply:
   \item $\vg$ is the graph containing a single Read Effect for $\vx$.
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[local]{
   \env \eqname (\Ignore, \denv)\\
@@ -375,9 +376,9 @@ uses the rule \SemanticsRuleRef{EVar}.GLOBAL.
 \expr \derives\ & \EBinop(\binop, \expr, \expr) &
 \end{flalign*}
 
-\subsubsection{ASTRule.Binop}
+\ASTRuleDef{EBinop}
 The following rule constructs a binary expression AST
-when a property on \emph{associative operators} holds (see \ASTRuleRef{CheckNotSamePrec}).
+and checks that a requirement on \emph{associative operators} holds (see \ASTRuleRef{CheckNotSamePrec}).
 
 \begin{mathpar}
   \inferrule{
@@ -395,7 +396,7 @@ when a property on \emph{associative operators} holds (see \ASTRuleRef{CheckNotS
 }
 \end{mathpar}
 
-\subsubsection{ASTRule.CheckNotSamePrec\label{sec:ASTRule.CheckNotSamePrec}}
+\ASTRuleDef{CheckNotSamePrec}
 The set of \emph{associative binary operators} consists of the following:
 $\BOR$,
 $\BAND$,
@@ -422,26 +423,25 @@ We define the helper function
 \[
   \binopprec(\overname{\binop}{\op}) \aslto \N
 \]
-which assigns a precedence level to an associative binary operator $\op$,
-as defined below:
+which assigns a precedence level to each binary operator $\op$, as defined below:
 \begin{mathpar}
 \inferrule{}{
   {
   \binopprec(\op) \astarrow
   \begin{cases}
-    5 & \text{if }\op = \POW\\
-    4 & \text{if }\op \in \{\MUL, \DIV, \DIVRM, \RDIV, \MOD, \SHL, \SHR\}\\
-    3 & \text{if }\op \in \{\PLUS, \MINUS, \OR, \XOR, \AND\}\\
-    2 & \text{if }\op \in \{\EQOP, \NEQ\}\\
+    0 & \text{if }\op \in \{\GT, \GEQ, \LT, \LEQ\}\\
     1 & \text{if }\op \in \{\BOR, \BAND, \IMPL, \BEQ \}\\
-    0 & \text{else}
+    2 & \text{if }\op \in \{\EQOP, \NEQ\}\\
+    3 & \text{if }\op \in \{\PLUS, \MINUS, \OR, \XOR, \AND\}\\
+    4 & \text{if }\op \in \{\MUL, \DIV, \DIVRM, \RDIV, \MOD, \SHL, \SHR\}\\
+    5 & \text{if }\op = \POW\\
   \end{cases}
   }
 }
 \end{mathpar}
 
 \hypertarget{build-checknotsameprec}{}
-The helper function
+The function
 \[
 \checknotsameprec(\overname{\binop}{\op} \aslsep \overname{\expr}{\ve})
 \aslto \{\True\} \cup \overname{\TBuildError}{\BuildErrorConfig}
@@ -455,7 +455,7 @@ is used, whereas \texttt{a + b - c} is considered illegal, since $\PLUS$ and $\M
 same precedence ($3$). To fix this, we can surround one of the subexpressions with parenthesis,
 for example: \texttt{(a + b) - c}.
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{not\_binop}):
@@ -472,7 +472,7 @@ One of the following applies:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[not\_binop]{
   \astlabel(\ve) \neq \EBinop
@@ -490,14 +490,14 @@ One of the following applies:
 \end{mathpar}
 
 \subsection{Typing}
-\subsubsection{TypingRule.Binop\label{sec:TypingRule.Binop}}
+\TypingRuleDef{EBinop}
 \subsubsection{Example}
 In \listingref{typing-binoperror},
 the expression \texttt{3 DIV 0} results in a type error.
 \ASLListing{Evaluating a binary expression resulting in a type error}{typing-binoperror}
 {\semanticstests/SemanticsRule.EBinopDIVBackendDefinedError.asl}
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes a binary operation $\op$ over two expressions $\veone$ and $\vetwo$, that is, \\ $\EBinop(\op, \veone, \vetwo)$;
@@ -520,7 +520,7 @@ All of the following apply:
     \end{itemize}
   \end{itemize}
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[ordered]{
   \annotateexpr{\tenv, \veone} \typearrow (\vtone, \veonep, \vsesone) \OrTypeError\\\\
@@ -549,22 +549,22 @@ All of the following apply:
 \CodeSubsection{\BinopBegin}{\BinopEnd}{../Typing.ml}
 
 \subsection{Semantics}
-\subsubsection{SemanticsRule.BinopAnd \label{sec:SemanticsRule.BinopAnd}}
+\SemanticsRuleDef{BinopAnd}
 \subsubsection{Example}
 In \listingref{andsemantics},
 the expression \texttt{FALSE \&\& fail()} evaluates to the value \texttt{FALSE}. Notice that the function \texttt{fail} is never called.
 \ASLListing{Semantics of conjunction}{andsemantics}{\semanticstests/SemanticsRule.EBinopAndFalse.asl}
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
 \item $\ve$ denotes a conjunction over two expressions,
       $\EBinop(\BAND, \veone, \vetwo)$;
 \item $C$ is the result of the evaluation of the expression
-      \texttt{if e1 then e2 else false} (see \secref{SemanticsRule.ECond}).
+      \texttt{if e1 then e2 else false} (see \SemanticsRuleRef{ECond}).
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \falsep \eqdef \ELiteral(\lbool(\False))\\
@@ -611,13 +611,13 @@ However, note that relying on this short-circuit evaluation can be confusing
 for readers of ASL specifications and as a consequence it is recommended that
 an if-statement is used to achieve the same effect.
 
-\subsubsection{SemanticsRule.BinopOr \label{sec:SemanticsRule.BinopOr}}
-\subsubsection{Prose}
+\SemanticsRuleDef{BinopOr}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
 \item $\ve$ denotes a disjunction of two expressions, $\EBinop(\BOR, \veone, \vetwo)$;
 \item $C$ is the result of the evaluation of
-      \texttt{if e1 then true else e2} (see \secref{SemanticsRule.ECond}).
+      \texttt{if e1 then true else e2} (see \SemanticsRuleRef{ECond}).
 \end{itemize}
 
 \subsubsection{Example}
@@ -671,8 +671,8 @@ However, note that relying on this short-circuit evaluation can be confusing
 for readers of ASL specifications and as a consequence it is recommended that
 an if-statement is used to achieve the same effect.
 
-\subsubsection{SemanticsRule.BinopImpl \label{sec:SemanticsRule.BinopImpl}}
-\subsubsection{Prose}
+\SemanticsRuleDef{BinopImpl}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes an implication over two expressions, $\EBinop(\IMPL, \veone, \vetwo)$;
@@ -717,16 +717,17 @@ However, note that relying on this short-circuit evaluation can be confusing
 for readers of ASL specifications and as a consequence it is recommended that
 an if-statement is used to achieve the same effect.
 
-\subsubsection{SemanticsRule.Binop \label{sec:SemanticsRule.Binop}}
-\subsubsection{Prose}
+\hypertarget{def-binopexpressionterm}{}
+\SemanticsRuleDef{Binop}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes a Binary Operator $\op$ over two expressions, $\EBinop(\op, \veone, \vetwo)$;
   \item the operator $\op$ is not one of $\BAND$, $\BOR$, or $\IMPL$.
         These operators are handled by rules
-        SemanticsRule.BinopAnd (\secref{SemanticsRule.BinopAnd}),
-        SemanticsRule.BinopOr \\ (\secref{SemanticsRule.BinopOr}), and
-        SemanticsRule.BinopImpl (\secref{SemanticsRule.BinopImpl});
+        \SemanticsRuleRef{BinopAnd},
+        \SemanticsRuleRef{BinopOr}, and
+        \SemanticsRuleRef{BinopImpl};
   \item the evaluation of the expression $\veone$ in $\env$ is the configuration \\
         $\Normal(\vmone, \envone)$\ProseOrAbnormal;
   \item the evaluation of the expression $\vetwo$ in $\envone$ is the configuration \\
@@ -742,7 +743,7 @@ In \listingref{semantics-binopassert},
 the expression \texttt{3 + 2} evaluates to the value \texttt{5}.
 \ASLListing{Evaluating a binary expression}{semantics-binopassert}{\semanticstests/SemanticsRule.EBinopPlusAssert.asl}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{\op \not\in \{\BAND, \BOR, \IMPL\}\\
   \evalexpr{ \env, \veone} \evalarrow \Normal(\vmone, \envone) \OrAbnormal \\\\
@@ -769,10 +770,10 @@ as well as \texttt{==}).
 The semantics takes a semantic transition over the left subexpression before
 the right subexpression.
 
-This is an arbitrary choice as the type-checker must ensure that either order
+This is an arbitrary choice as the typechecker must ensure that either order
 of evaluation of the operands yields the same result.
 
-In other words, it it is an error for an expression’s meaning to rely on
+In other words, it is an error for an expression’s meaning to rely on
 evaluation order except that conditional expressions, and uses of the boolean
 operators \texttt{\&\&}, \texttt{||}, \texttt{-->}, are guaranteed to evaluate
 from left to right.
@@ -803,6 +804,7 @@ subexpressions conflict with each other by:
 These conditions are sufficient but not necessary to ensure that evaluation
 order does not affect the result of an expression, including any side-effects.
 
+\hypertarget{def-unopexpressionterm}{}
 \section{Unary Expressions\label{sec:UnaryExpressions}}
 \subsection{Syntax}
 \begin{flalign*}
@@ -814,7 +816,7 @@ order does not affect the result of an expression, including any side-effects.
 \expr \derives\ & \EUnop(\unop, \expr) &
 \end{flalign*}
 
-\subsubsection{ASTRule.Unop}
+\ASTRuleDef{EUnop}
 \begin{mathpar}
   \inferrule{
     \buildexpr(\vexpr) \astarrow \astversion{\vexpr} \OrBuildError
@@ -825,16 +827,16 @@ order does not affect the result of an expression, including any side-effects.
 \end{mathpar}
 
 \subsection{Typing}
-\subsubsection{TypingRule.Unop\label{sec:TypingRule.Unop}}
-\subsubsection{Prose}
+\TypingRuleDef{Unop}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes a unary operation $\op$ over an expression $\vep$, that is $\EUnop(\op, \vep)$;
   \item annotating $\vep$ in $\tenv$ yields $(\vtpp, \vepp, \vses)$\ProseOrTypeError;
-  \item checking compatibility of $\op$ with $\vtpp$ as per \secref{TypingRule.ApplyUnopType} yields $\vt$\ProseOrTypeError;
+  \item checking compatibility of $\op$ with $\vtpp$ as per \TypingRuleRef{ApplyUnopType} yields $\vt$\ProseOrTypeError;
   \item define $\newe$ as $\op$ over $\vepp$, that is, $\EUnop(\op, \vepp)$.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \annotateexpr{\tenv, \vep} \typearrow (\vtpp, \vepp, \vses) \OrTypeError\\\\
@@ -851,16 +853,16 @@ In \listingref{semantics-unopassert},
 the expression \texttt{NOT '1010'} evaluates to the value \texttt{'0101'}.
 \ASLListing{Evaluating a unary expression}{semantics-unopassert}{\semanticstests/SemanticsRule.EUnopAssert.asl}
 
-\subsubsection{SemanticsRule.Unop\label{sec:SemanticsRule.Unop}}
+\SemanticsRuleDef{Unop}
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
 \item $\ve$ denotes a unary operator $\op$ over an expression, $\EUnop(\op, \veone)$;
 \item the evaluation of the expression $\veone$ in $\env$ yields \\ $\Normal((\vvone, \vg), \newenv)$\ProseOrAbnormal;
 \item applying the unary operator $\op$ to $\vvone$ is $\vv$.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \evalexpr{ \env, \veone} \evalarrow \Normal((\vvone,\vg), \newenv) \OrAbnormal\\\\
@@ -873,6 +875,7 @@ All of the following apply:
 \end{mathpar}
 \CodeSubsection{\EvalUnopBegin}{\EvalUnopEnd}{../Interpreter.ml}
 
+\hypertarget{def-conditionexpressionterm}{}
 \section{Conditional Expressions\label{sec:ConditionalExpressions}}
 \subsection{Syntax}
 \begin{flalign*}
@@ -886,7 +889,7 @@ All of the following apply:
 \expr \derives\ & \ECond(\overtext{\expr}{condition}, \overtext{\expr}{then}, \overtext{\expr}{else})
 \end{flalign*}
 
-\subsubsection{ASTRule.ECond}
+\ASTRuleDef{ECond}
 \begin{mathpar}
   \inferrule{
     \buildexpr(\vcondexpr) \astarrow \astversion{\vcondexpr} \OrBuildError\\\\
@@ -907,7 +910,7 @@ All of the following apply:
 }
 \end{mathpar}
 
-\subsubsection{ASTRule.EElse \label{sec:ASTRule.EElse}}
+\ASTRuleDef{EElse}
 \hypertarget{build-eelse}{}
 The function
 \[
@@ -942,8 +945,8 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 \end{mathpar}
 
 \subsection{Typing}
-\subsubsection{TypingRule.ECond \label{sec:TypingRule.ECond}}
-\subsubsection{Prose}
+\TypingRuleDef{ECond}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes a conditional expression with condition $\econd$ with two options $\etrue$ and $\efalse$;
@@ -954,7 +957,7 @@ All of the following apply:
   \item $\newe$ is the condition $\econdp$ with two options $\etruep$ and $\efalsep$, that is, $\ECond(\econdp, \etruep, \efalsep)$;
   \item define $\vses$ as the union of $\vsescond$, $\vsestrue$, and $\vsesfalse$.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \annotateexpr{\tenv, \econd} \typearrow (\tcond, \econd', \vsescond) \OrTypeError\\\\
@@ -990,11 +993,11 @@ evaluate either \texttt{3} or \texttt{Return42()}, depending on the
 \ASLListing{Evaluating a conditional expression with non-determinic choice}{semantics-econdarbitrary}
 {\semanticstests/SemanticsRule.ECondARBITRARY3or42.asl}
 
-\subsubsection{SemanticsRule.ECond \label{sec:SemanticsRule.ECond}}
+\SemanticsRuleDef{ECond}
 % Transliteration note: the code uses an optimized semantics for the case where
 % true and false sub-expressions do not contain function calls. Since this is an
 % optimization, we do not document it.
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes a conditional expression $\econd$ with two options $\veone$ and $\vetwo$,
@@ -1006,19 +1009,18 @@ All of the following apply:
   \item the evaluation of $\vep$ in $\envone$ yields $\Normal((\vvtwo, \vgtwo), \newenv)$\ProseOrAbnormal;
   \item $\vg$ is the parallel composition of $\vgone$ and $\vgtwo$.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
-  \inferrule{
-    \evalexpr{\env, \econd} \evalarrow \Normal(\mcond, \envone) \OrAbnormal\\\\
-    \mcond \eqname (\nvbool(\vb), \vgone)\\
-    \vep \eqdef \choice{\vb}{\veone}{\vetwo}\\\\
-    \evalexpr{\envone, \vep} \evalarrow \Normal((\vv, \vgtwo), \newenv)  \OrAbnormal\\\\
-    \vg \eqdef \ordered{\vgone}{\aslctrl}{\vgtwo}
-  }
-  {
-    \evalexpr{\env, \overname{\ECond(\econd, \veone, \vetwo)}{\ve}} \evalarrow
-    \Normal((\vv, \vg), \newenv)
-  }
+\inferrule{
+  \evalexpr{\env, \econd} \evalarrow \Normal(\mcond, \envone) \OrAbnormal\\\\
+  \mcond \eqname (\nvbool(\vb), \vgone)\\
+  \vep \eqdef \choice{\vb}{\veone}{\vetwo}\\\\
+  \evalexpr{\envone, \vep} \evalarrow \Normal((\vv, \vgtwo), \newenv)  \OrAbnormal\\\\
+  \vg \eqdef \ordered{\vgone}{\aslctrl}{\vgtwo}
+}{
+  \evalexpr{\env, \overname{\ECond(\econd, \veone, \vetwo)}{\ve}} \evalarrow
+  \Normal((\vv, \vg), \newenv)
+}
 \end{mathpar}
 \CodeSubsection{\EvalECondBegin}{\EvalECondEnd}{../Interpreter.ml}
 
@@ -1033,6 +1035,7 @@ the conditional expression evaluates to the corresponding \texttt{elsif}
 expression. If no \texttt{elsif} expression evaluates to $\True$ the
 conditional expression evaluates to the \texttt{else} expression.
 
+\hypertarget{def-callexpressionterm}{}
 \section{Call Expressions\label{sec:CallExpressions}}
 \subsection{Syntax}
 \begin{flalign*}
@@ -1041,9 +1044,9 @@ conditional expression evaluates to the \texttt{else} expression.
 
 \begin{flalign*}
 \Ncall \derives \
-     & \Tidentifier \parsesep \Plist{\Nexpr} &\\
-  |\ & \Tidentifier \parsesep \Tlbrace \parsesep \NClist{\Nexpr} \parsesep \Trbrace &\\
-  |\ & \Tidentifier \parsesep \Tlbrace \parsesep \NClist{\Nexpr} \parsesep \Trbrace \parsesep \Plist{\Nexpr} &
+     & \Tidentifier \parsesep \PlistZero{\Nexpr} &\\
+  |\ & \Tidentifier \parsesep \Tlbrace \parsesep \ClistOne{\Nexpr} \parsesep \Trbrace &\\
+  |\ & \Tidentifier \parsesep \Tlbrace \parsesep \ClistOne{\Nexpr} \parsesep \Trbrace \parsesep \PlistZero{\Nexpr} &
 \end{flalign*}
 
 \subsection{Abstract Syntax}
@@ -1065,13 +1068,13 @@ conditional expression evaluates to the \texttt{else} expression.
 } &
 \end{flalign*}
 
-\subsubsection{ASTRule.Call}
+\ASTRuleDef{Call}
 \hypertarget{build-call}{}
 \begin{mathpar}
 \inferrule{
   \buildplist[\buildexpr](\vargs) \astarrow \vargasts
 }{
-  \buildcall(\overname{\Ncall(\Tidentifier(\id), \namednode{\vargs}{\Plist{\Nexpr}})}{\vparsednode}) \astarrow \\
+  \buildcall(\overname{\Ncall(\Tidentifier(\id), \namednode{\vargs}{\PlistZero{\Nexpr}})}{\vparsednode}) \astarrow \\
   { \overname{\left\{
       \begin{array}{rcl}
         \callname &:& \id,\\
@@ -1085,7 +1088,7 @@ conditional expression evaluates to the \texttt{else} expression.
 \inferrule{
   \buildlist[\buildexpr](\vparams) \astarrow \astversion{\vparams} \\
 }{
-  \buildcall(\overname{\Ncall(\Tidentifier(\id), \Tlbrace, \namednode{\vparams}{\NClist{\Nexpr}}, \Trbrace)}{\vparsednode}) \astarrow \\
+  \buildcall(\overname{\Ncall(\Tidentifier(\id), \Tlbrace, \namednode{\vparams}{\ClistOne{\Nexpr}}, \Trbrace)}{\vparsednode}) \astarrow \\
   { \overname{\left\{
       \begin{array}{rcl}
               \callname &:& \id,\\
@@ -1100,7 +1103,7 @@ conditional expression evaluates to the \texttt{else} expression.
   \buildplist[\buildexpr](\vargs) \astarrow \vargasts \\
   \buildlist[\buildexpr](\vparams) \astarrow \astversion{\vparams} \\
 }{
-  \buildcall(\overname{\Ncall(\Tidentifier(\id), \Tlbrace, \namednode{\vparams}{\NClist{\Nexpr}}, \Trbrace, \namednode{\vargs}{\Plist{\Nexpr}})}{\vparsednode}) \astarrow \\
+  \buildcall(\overname{\Ncall(\Tidentifier(\id), \Tlbrace, \namednode{\vparams}{\ClistOne{\Nexpr}}, \Trbrace, \namednode{\vargs}{\PlistZero{\Nexpr}})}{\vparsednode}) \astarrow \\
   { \overname{\left\{
       \begin{array}{rcl}
               \callname &:& \id,\\
@@ -1112,7 +1115,7 @@ conditional expression evaluates to the \texttt{else} expression.
 }
 \end{mathpar}
 
-\subsubsection{ASTRule.SetCallType}
+\ASTRuleDef{SetCallType}
 \hypertarget{def-setcalltype}{}
 Above, $\STFunction$ is inserted as a default call type for any parsed $\call$.
 The helper function
@@ -1128,7 +1131,7 @@ changes the call type of $\vcall$ to $\texttt{call\_type}$.
 }
 \end{mathpar}
 
-\subsubsection{ASTRule.ECall}
+\ASTRuleDef{ECall}
 \begin{mathpar}
 \inferrule{}{
   \buildexpr(\overname{\Nexpr(\punnode{\Ncall})}{\vparsednode}) \astarrow
@@ -1137,8 +1140,8 @@ changes the call type of $\vcall$ to $\texttt{call\_type}$.
 \end{mathpar}
 
 \subsection{Typing}
-\subsubsection{TypingRule.ECall\label{sec:TypingRule.ECall}}
-\subsubsection{Prose}
+\TypingRuleDef{ECall}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes a call to a subprogram, that is, $\ECall(\vcall)$;
@@ -1147,7 +1150,7 @@ All of the following apply:
         and yields $(\vcallp, \langle \vt \rangle, \vses)$\ProseOrTypeError.
   \item $\newe$ is the call using $\vcallp$, that is, $\ECall(\vcallp)$.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \annotatecall(\vcall) \typearrow (\vcallp, \langle \vt \rangle, \vses) \OrTypeError
@@ -1165,7 +1168,7 @@ the expression \texttt{Return42()} evaluates to the value \texttt{42} because th
 subprogram \texttt{Return42()} is implemented to return the value \texttt{42}.
 \ASLListing{Evaluating a call expression}{semantics-ecall}{\semanticstests/SemanticsRule.ECall.asl}
 
-\subsubsection{SemanticsRule.ECall \label{sec:SemanticsRule.ECall}}
+\SemanticsRuleDef{ECall}
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes a subprogram call, $\ECall(\vcall)$;
@@ -1189,7 +1192,7 @@ All of the following apply:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[single\_returned\_value]{
   \evalcall{\env, \vcall.\name, \vcall.\params, \vcall.\args} \evalarrow \Normal(\vms, \newenv) \OrAbnormal\\
@@ -1211,6 +1214,7 @@ All of the following apply:
 \end{mathpar}
 \CodeSubsection{\EvalECallBegin}{\EvalECallEnd}{../Interpreter.ml}
 
+\hypertarget{def-sliceexpressionterm}{}
 \section{Slicing Expressions\label{sec:SlicingExpressions}}
 This section details the high-level form of the syntax and abstract syntax of slicing expressions,
 and defines the semantics of bitvector slices.
@@ -1226,7 +1230,7 @@ The details of the various types of bitvector slices is deferred to \chapref{Bit
 \expr \derives\ & \ESlice(\expr, \slice^{*}) &
 \end{flalign*}
 
-\subsubsection{ASTRule.ESlice}
+\ASTRuleDef{ESlice}
 \begin{mathpar}
 \inferrule{
   \buildexpr(\vexpr) \astarrow \astversion{\vexpr} \OrBuildError\\\\
@@ -1238,8 +1242,8 @@ The details of the various types of bitvector slices is deferred to \chapref{Bit
 \end{mathpar}
 
 \subsection{Typing}
-\subsubsection{TypingRule.ESlice\label{sec:TypingRule.ESlice}}
-\subsubsection{Prose}
+\TypingRuleDef{ESlice}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes the slicing of expression $\vep$ by the slices $\slices$, that is, \\
@@ -1247,7 +1251,7 @@ All of the following apply:
   \item annotating the expression $\vep$ in $\tenv$ yields $(\tep,\vepp, \vsesone)$\ProseOrTypeError;
   \item obtaining the \structure\ of $\tep$ in $\tenv$ yields $\structtep$\ProseOrTypeError;
   \item $\structtep$ is either a bitvector or an integer;
-  \item checking that $\slices$ is not empty yields $\True$\ProseTerminateAs{\EmptySlice};
+  \item checking that $\slices$ is not empty yields $\True$\ProseTerminateAs{\BadSlices};
   \item annotating $\slices$ in $\tenv$ yields $(\slicesp, \vsestwo)$\ProseOrTypeError;
   \item obtaining the width of $\slices$ in $\tenv$ via $\sliceswidth$ yields $\vw$\ProseOrTypeError;
   \item $\vt$ is the bitvector type of width $\vw$, that is, $\TBits(\vw, \emptylist)$;
@@ -1256,13 +1260,13 @@ All of the following apply:
   \item define $\vses$ as the union of $\vsesone$ and $\vsestwo$.
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \annotateexpr{\tenv, \vep} \typearrow (\tep, \vepp, \vsesone) \OrTypeError\\\\
   \tstruct(\tenv, \tep) \typearrow \structtep \OrTypeError\\\\
   \astlabel(\structtep) \in \{\TInt, \TBits\}\\
-  \checktrans{\slices \neq \emptylist}{\EmptySlice} \typearrow \True \OrTypeError\\\\
+  \checktrans{\slices \neq \emptylist}{\BadSlices} \typearrow \True \OrTypeError\\\\
   \annotateslices(\tenv, \slices) \typearrow (\slicesp, \vsestwo) \OrTypeError\\\\
   \sliceswidth(\tenv, \slices) \typearrow \vw \OrTypeError\\\\
   \vses \eqdef \vsesone \cup \vsestwo
@@ -1278,8 +1282,8 @@ widths references a \texttt{let} identifier with a non-compile-time-constant
 initializer expression.
 \lrmcomment{This is related to \identi{MJWM}.}
 
-\subsubsection{TypingRule.ESliceError\label{sec:TypingRule.ESliceError}}
-\subsubsection{Prose}
+\TypingRuleDef{ESliceError}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes the slicing of expression $\vep$ by the slices $\slices$;
@@ -1288,26 +1292,26 @@ All of the following apply:
   \item $\vtp$ is neither an integer type or a bitvector type;
   \item the result is an error indicating that the type of $\vep$ is inappropriate for slicing.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \annotateexpr{\tenv, \vep} \typearrow (\tep, \vepp) \OrTypeError\\\\
   \tstruct(\tenv, \tep) \typearrow \vtp\\
   \astlabel(\vtp) \not\in \{\TInt, \TBits\}
 }{
-  \annotateexpr{\tenv, \overname{\ESlice(\vep, \slices)}{\ve}} \typearrow \TypeErrorVal{IllegalSliceType}
+  \annotateexpr{\tenv, \overname{\ESlice(\vep, \slices)}{\ve}} \typearrow \TypeErrorVal{\BadSlices}
 }
 \end{mathpar}
 \CodeSubsection{\ESliceError}{\ESliceErrorEnd}{../Typing.ml}
 
 \subsection{Semantics}
-\subsubsection{SemanticsRule.ESlice\label{sec:SemanticsRule.ESlice}}
+\SemanticsRuleDef{ESlice}
 \subsubsection{Example}
 In \listingref{semantics-eslice},
 the expression \texttt{'11110000'[6:3]} evaluates to the value \texttt{'1110'}.
 \ASLListing{Evaluating a slice expression}{semantics-eslice}{\semanticstests/SemanticsRule.ESlice.asl}
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
 \item $\ve$ denotes a slicing expression, $\ESlice(\ebv, \slices)$;
@@ -1316,11 +1320,11 @@ All of the following apply:
 \item $\mpositions$ consists of $\positions$ --- all the indices that need to be added to the
 resulting bitvector --- and the execution graph $\vgone$;
 \item reading from $\vbv$ as a bitvector at the indices indicated by $\positions$
-      (see \secref{SemanticsRule.ReadFromBitvector}) results in the bitvector $\vv$,
+      (see \SemanticsRuleRef{ReadFromBitvector}) results in the bitvector $\vv$,
       which concatenates all of the values from the indicates indices\ProseOrError;
 \item $\vg$ is the parallel composition of $\vgone$ and $\vgtwo$.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \evalexpr{\env, \ebv} \evalarrow \Normal(\mbv, \envone)  \OrAbnormal\\\\
@@ -1335,6 +1339,8 @@ resulting bitvector --- and the execution graph $\vgone$;
 \end{mathpar}
 \CodeSubsection{\EvalESliceBegin}{\EvalESliceEnd}{../Interpreter.ml}
 
+\hypertarget{def-getarrayexpressionterm}{}
+\hypertarget{def-getenumarrayexpression}{}
 \section{Array Access Expressions\label{sec:ArrayAccessExpressions}}
 This section details the syntax, abstract syntax, semantics, and typing of array read expressions.
 In the untyped AST, a read from either an integer-indexed array or an enumeration-indexed arrays is represented
@@ -1354,7 +1360,7 @@ The semantics utilizes a rule matching the corresponding type of array ---
 \expr \derives\ & \EGetArray(\expr, \expr) &
 \end{flalign*}
 
-\subsubsection{ASTRule.EGetArray}
+\ASTRuleDef{EGetArray}
 \begin{mathpar}
 \inferrule{
   \buildexpr(\veone) \astarrow \astversion{\veone} \OrBuildError\\\\
@@ -1365,7 +1371,7 @@ The semantics utilizes a rule matching the corresponding type of array ---
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.EGetArray\label{sec:TypingRule.EGetArray}}
+\TypingRuleDef{EGetArray}
 \hypertarget{def-arrayaccess}{}
 \begin{definition}[Array Access]
 We refer to a right-hand-side expression of the form \texttt{b[[i]]},
@@ -1374,7 +1380,7 @@ We refer to $b$ and $i$ as the \emph{base}
 and the $\emph{index}$ subexpressions, respectively.
 \end{definition}
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes the \arrayaccess{} expression with base $\ebase$ and index $\eindex$;
@@ -1387,7 +1393,7 @@ All of the following apply:
         $(\ebasep, \vsesbase, \eindex)$ yields
         $(\vt, \newe, \vses)$.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \annotateexpr{\tenv, \ebase} \typearrow (\tbase, \ebasep, \vsesbase) \OrTypeError\\\\
@@ -1405,7 +1411,7 @@ All of the following apply:
 \end{mathpar}
 \CodeSubsection{\EGetArrayBegin}{\EGetArrayEnd}{../Typing.ml}
 
-\subsubsection{TypingRule.AnnotateGetArray\label{sec:TypingRule.AnnotateGetArray}}
+\TypingRuleDef{AnnotateGetArray}
 \hypertarget{def-annotategetarray}{}
 The helper function
 \[
@@ -1427,7 +1433,7 @@ $\eindex$ is the index expression.
 The function returns the type of the annotated expression in $\vt$,
 the annotated expression $\newe$, and the inferred \sideeffectdescriptorterm\ $\vses$.
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item \Proseannotateexpr{$\tenv$}{$\eindex$}{(\tindexp, \eindexp, \vsesindex)}\ProseOrTypeError;
@@ -1442,7 +1448,7 @@ All of the following apply:
   }
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \annotateexpr{\tenv, \eindex} \typearrow (\tindexp, \eindexp, \vsesindex) \OrTypeError\\\\
@@ -1466,7 +1472,7 @@ All of the following apply:
 \end{mathpar}
 \CodeSubsection{\AnnotateGetArrayBegin}{\AnnotateGetArrayEnd}{../Typing.ml}
 
-\subsubsection{SemanticsRule.EGetArray\label{sec:SemanticsRule.EGetArray}}
+\SemanticsRuleDef{EGetArray}
 \subsubsection{Example}
 In \listingref{semantics-egetarray},
 the expression \verb|my_array[[2]]| appearing in the assertion evaluates to the value \texttt{42} since the element
@@ -1480,7 +1486,7 @@ since we are trying to access index \texttt{3} of an array
 which has indexes \texttt{0}, \texttt{1} and \texttt{2} only.
 \ASLListing{Evaluating an illegal array access}{semantics-egetarrayerror}{\semanticstests/SemanticsRule.EGetArrayTooSmall.asl}
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes an array access expression, $\EGetArray(\earray, \eindex)$;
@@ -1493,7 +1499,7 @@ All of the following apply:
   \item $\vg$ is the parallel composition of $\vgone$ and $\vgtwo$.
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \evalexpr{\env, \earray} \evalarrow \Normal(\marray, \envone)  \OrAbnormal\\
@@ -1509,7 +1515,7 @@ All of the following apply:
 \end{mathpar}
 \CodeSubsection{\EvalEGetArrayBegin}{\EvalEGetArrayEnd}{../Interpreter.ml}
 
-\subsubsection{SemanticsRule.EGetEnumArray\label{sec:SemanticsRule.EGetEnumArray}}
+\SemanticsRuleDef{EGetEnumArray}
 \subsubsection{Example}
 In \listingref{semantics-egetenumarray},
 the enumeration-typed array \texttt{Arr} is accessed for reading and writing
@@ -1517,7 +1523,7 @@ with indices taken from the enumeration type \texttt{Enum}.
 \ASLListing{Evaluating an access to an enumeration-indexed array}{semantics-egetenumarray}
 {\semanticstests/SemanticsRule.EGetEnumArray.asl}
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes an array access expression, $\EGetArray(\earray, \eindex)$;
@@ -1530,7 +1536,7 @@ All of the following apply:
   \item $\vg$ is the parallel composition of $\vgone$ and $\vgtwo$.
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \evalexpr{\env, \earray} \evalarrow \Normal(\marray, \envone)  \OrAbnormal\\
@@ -1546,6 +1552,7 @@ All of the following apply:
 \end{mathpar}
 \CodeSubsection{\EvalEGetEnumArrayBegin}{\EvalEGetEnumArrayEnd}{../Interpreter.ml}
 
+\hypertarget{def-getfieldexpressionterm}{}
 \section{Field Reading Expressions\label{sec:FieldReadingExpressions}}
 \subsection{Syntax}
 \begin{flalign*}
@@ -1557,7 +1564,7 @@ All of the following apply:
 \expr \derives\ & \EGetField(\overtext{\expr}{record}, \overtext{\identifier}{field name}) &
 \end{flalign*}
 
-\subsubsection{ASTRule.EGetField}
+\ASTRuleDef{EGetField}
 \begin{mathpar}
   \inferrule{
     \buildexpr(\ve) \astarrow \astversion{\ve} \OrBuildError
@@ -1568,8 +1575,8 @@ All of the following apply:
 \end{mathpar}
 
 \subsection{Typing}
-\subsubsection{TypingRule.EGetRecordField\label{sec:TypingRule.EGetRecordField}}
-\subsubsection{Prose}
+\TypingRuleDef{EGetRecordField}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes the access of field $\fieldname$ in the value represented by the expression $\veone$, that is, $\EGetField(\veone, \fieldname)$;
@@ -1580,7 +1587,7 @@ All of the following apply:
   \item define $\newe$ as the access of field $\fieldname$ on the record or exception object $\vetwo$, that is, $\EGetField(\vetwo, \fieldname)$;
   \item define $\vses$ as $\vsesone$.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \annotateexpr{\tenv, \veone} \typearrow (\vteone, \vetwo, \vsesone) \OrTypeError\\\\
@@ -1599,8 +1606,8 @@ All of the following apply:
 \end{mathpar}
 \CodeSubsection{\EGetRecordFieldBegin}{\EGetRecordFieldEnd}{../Typing.ml}
 
-\subsubsection{TypingRule.EGetBadRecordField \label{sec:TypingRule.EGetBadRecordField}}
-\subsubsection{Prose}
+\TypingRuleDef{EGetBadRecordField}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes the access of field $\fieldname$ in the value represented by the expression $\veone$, that is, $\EGetField(\veone, \fieldname)$;
@@ -1610,7 +1617,7 @@ All of the following apply:
   \item the field $\fieldname$ is not associated with any type in $\fields$
   \item the result is a type error indicating the missing field.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \annotateexpr{\tenv, \veone} \typearrow (\vteone, \vetwo) \OrTypeError\\\\
@@ -1619,13 +1626,13 @@ All of the following apply:
   L \in \{\TRecord, \TException\}\\
   \assocopt(\fields, \fieldname) \typearrow \None
 }{
-  \annotateexpr{\tenv, \EGetField(\veone, \fieldname)} \typearrow \TypeErrorVal{FieldDoesNotExist}
+  \annotateexpr{\tenv, \EGetField(\veone, \fieldname)} \typearrow \TypeErrorVal{\BadField}
 }
 \end{mathpar}
 \CodeSubsection{\EGetBadRecordFieldBegin}{\EGetBadRecordFieldEnd}{../Typing.ml}
 
-\subsubsection{TypingRule.EGetBadBitField\label{sec:TypingRule.EGetBadBitField}}
-\subsubsection{Prose}
+\TypingRuleDef{EGetBadBitField}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes the access of field $\fieldname$ in the value represented by the expression $\veone$, that is, $\EGetField(\veone, \fieldname)$;
@@ -1642,13 +1649,13 @@ All of the following apply:
   \vtetwo \eqname \TBits(\Ignore, \bitfields)\\
   \findbitfieldopt(\bitfields, \fieldname) \typearrow \None
 }{
-  \annotateexpr{\tenv, \overname{\EGetField(\veone, \fieldname)}{\ve}} \typearrow \TypeErrorVal{FieldDoesNotExist}
+  \annotateexpr{\tenv, \overname{\EGetField(\veone, \fieldname)}{\ve}} \typearrow \TypeErrorVal{\BadField}
 }
 \end{mathpar}
 \CodeSubsection{\EGetBadBitFieldBegin}{\EGetBadBitFieldEnd}{../Typing.ml}
 
-\subsubsection{TypingRule.EGetBitField\label{sec:TypingRule.EGetBitField}}
-\subsubsection{Prose}
+\TypingRuleDef{EGetBitField}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes the access of field $\fieldname$ in the value represented by the expression $\veone$, that is, $\EGetField(\veone, \fieldname)$;
@@ -1659,7 +1666,7 @@ All of the following apply:
   \item $\vethree$ denotes the slicing of the expression \vetwo\ by the slices $\slices$, that is, \\ $\ESlice(\vetwo, \slices)$;
   \item annotating $\vethree$ in $\tenv$ yields $(\vt, \newe, \vses)$\ProseOrTypeError.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \annotateexpr{\tenv, \veone} \typearrow (\vteone, \vetwo, \vsesone) \OrTypeError\\\\
@@ -1674,8 +1681,8 @@ All of the following apply:
 \end{mathpar}
 \CodeSubsection{\EGetBitFieldBegin}{\EGetBitFieldEnd}{../Typing.ml}
 
-\subsubsection{TypingRule.EGetBitFieldNested\label{sec:TypingRule.EGetBitFieldNested}}
-\subsubsection{Prose}
+\TypingRuleDef{EGetBitFieldNested}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes the access of field $\fieldname$ in the value represented by the expression $\veone$, that is, $\EGetField(\veone, \fieldname)$;
@@ -1690,7 +1697,7 @@ All of the following apply:
   \item define $\vt$ as a bitvector type with length expression $\width$ and bitfields $\bitfieldsp$;
   \item define $\vses$ as $\vsesnew$.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \annotateexpr{\tenv, \veone} \typearrow (\vteone, \vetwo, \vsesone) \OrTypeError\\\\
@@ -1711,8 +1718,8 @@ All of the following apply:
 \end{mathpar}
 \CodeSubsection{\EGetBitFieldNestedBegin}{\EGetBitFieldNestedEnd}{../Typing.ml}
 
-\subsubsection{TypingRule.EGetBitFieldTyped\label{sec:TypingRule.EGetBitFieldTyped}}
-\subsubsection{Prose}
+\TypingRuleDef{EGetBitFieldTyped}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes the access of field $\fieldname$ in the value represented by the expression $\veone$, that is, $\EGetField(\veone, \fieldname)$;
@@ -1726,7 +1733,7 @@ All of the following apply:
   \item determining whether $\vtefour$ \typesatisfies\ $\vt$ yields $\True$\ProseOrTypeError;
   \item define $\vses$ as $\vsesnew$.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \annotateexpr{\tenv, \veone} \typearrow (\vteone, \vetwo, \vsesone) \OrTypeError\\\\
@@ -1742,8 +1749,8 @@ All of the following apply:
 \end{mathpar}
 \CodeSubsection{\EGetBitFieldTypedBegin}{\EGetBitFieldTypedEnd}{../Typing.ml}
 
-\subsubsection{TypingRule.EGetTupleItem\label{sec:TypingRule.EGetTupleItem}}
-\subsubsection{Prose}
+\TypingRuleDef{EGetTupleItem}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes the access of field $\fieldname$ in the value represented by the expression $\veone$, that is, $\EGetField(\veone, \fieldname)$;
@@ -1757,7 +1764,7 @@ All of the following apply:
   \item $\newe$ is the expression for obtaining the item at index $\vindex$ from the expression $\vetwo$, that is, $\EGetItem(\vetwo, \vindex)$;
   \item define $\vses$ as $\vsesone$.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \annotateexpr{\tenv, \veone} \typearrow (\vteone, \vetwo, \vsesone) \OrTypeError\\\\
@@ -1766,7 +1773,7 @@ All of the following apply:
   \fieldname \eqname \texttt{"item"}\num\\
   \num \in \Lang(\REintlit)\\
   \decimaltolit(\num) = \Tintlit(\vindex)\\
-  \checktrans{0 \leq \vindex \leq \listlen{\tys}}{IndexOutOfRange} \checktransarrow \True \OrTypeError\\\\
+  \checktrans{0 \leq \vindex \leq \listlen{\tys}}{\BadTupleIndex} \checktransarrow \True \OrTypeError\\\\
   \vt \eqdef \tys[\vindex]\\
   \newe \eqdef \EGetItem(\vetwo, \vindex)
 }{
@@ -1775,8 +1782,8 @@ All of the following apply:
 \end{mathpar}
 \CodeSubsection{\EGetTupleItemBegin}{\EGetTupleItemEnd}{../Typing.ml}
 
-\subsubsection{TypingRule.EGetBadField\label{sec:TypingRule.EGetBadField}}
-\subsubsection{Prose}
+\TypingRuleDef{EGetBadField}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes the access of field $\fieldname$ in the value represented by the expression $\veone$, that is, $\EGetField(\veone, \fieldname)$;
@@ -1785,33 +1792,33 @@ All of the following apply:
   \item $\vtetwo$ is neither one of the following types: record, exception, bitvector, or tuple;
   \item the result is an error indicating that the type of $\veone$ is inappropriate for accessing the field $\fieldname$.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \annotateexpr{\tenv, \veone} \typearrow (\vteone, \vetwo, \vsesone) \OrTypeError\\\\
   \makeanonymous(\tenv, \vteone) \typearrow \vtetwo \OrTypeError\\\\
   \astlabel(\vtetwo) \not\in \{\TRecord, \TException, \TBits, \TTuple\}
 }{
-  \annotateexpr{\tenv, \overname{\EGetField(\veone, \fieldname)}{\ve}} \typearrow \TypeErrorVal{ConflictingTypes}
+  \annotateexpr{\tenv, \overname{\EGetField(\veone, \fieldname)}{\ve}} \typearrow \TypeErrorVal{\UnexpectedType}
 }
 \end{mathpar}
 \CodeSubsection{\EGetBadFieldBegin}{\EGetBadFieldEnd}{../Typing.ml}
 
 \subsection{Semantics}
-\subsubsection{SemanticsRule.EGetField\label{sec:SemanticsRule.EGetField}}
+\SemanticsRuleDef{EGetField}
 \subsubsection{Example}
 In \listingref{semantics-egetfield},
 the expression \verb|my_record.a| evaluates to the value \texttt{3}.
 \ASLListing{Evaluating a field access expression}{semantics-egetfield}{\semanticstests/SemanticsRule.ERecord.asl}
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
 \item $\ve$ denotes a field access expression, $\EGetField(\erecord, \fieldname)$;
 \item the evaluation of $\erecord$ in $\env$ is $\Normal((\vrecord, \vg), \newenv)$\ProseOrAbnormal;
 \item $\vv$ is the value mapped by $\fieldname$ in the native record $\vrecord$.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \evalexpr{\env, \erecord} \evalarrow \Normal((\vrecord, \vg), \newenv)  \OrAbnormal\\
@@ -1822,8 +1829,8 @@ All of the following apply:
 \end{mathpar}
 \CodeSubsection{\EvalEGetFieldBegin}{\EvalEGetFieldEnd}{../Interpreter.ml}
 
-\subsubsection{SemanticsRule.EGetItem\label{sec:SemanticsRule.EGetItem}}
-\subsubsection{Prose}
+\SemanticsRuleDef{EGetItem}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ is an expression for accessing the component given by the index $\vindex$ of the tuple
@@ -1832,7 +1839,7 @@ All of the following apply:
   \item accessing the native tuple value $\vvtuple$ at index $\vindex$ via $\getindex$, yields
         the native value $\vv$.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \evalexpr{\env, \etuple} \evalarrow \Normal((\vvtuple, \vg), \newenv) \OrAbnormal\\\\
@@ -1843,10 +1850,11 @@ All of the following apply:
 \end{mathpar}
 \CodeSubsection{\EvalEGetTupleItemBegin}{\EvalEGetTupleItemEnd}{../Interpreter.ml}
 
+\hypertarget{def-getfieldsexpressionterm}{}
 \section{Multi-field Reading Expressions\label{sec:MultiFieldReadingExpressions}}
 \subsection{Syntax}
 \begin{flalign*}
-\Nexpr \derives\  & \Nexpr \parsesep \Tdot \parsesep \Tlbracket \parsesep \NClist{\Tidentifier} \parsesep \Trbracket &
+\Nexpr \derives\  & \Nexpr \parsesep \Tdot \parsesep \Tlbracket \parsesep \ClistOne{\Tidentifier} \parsesep \Trbracket &
 \end{flalign*}
 
 \subsection{Abstract Syntax}
@@ -1854,7 +1862,7 @@ All of the following apply:
 \expr \derives\ & \EGetFields(\overtext{\expr}{record}, \overtext{\identifier^{*}}{field names}) &
 \end{flalign*}
 
-\subsubsection{ASTRule.EGetFields}
+\ASTRuleDef{EGetFields}
 \begin{mathpar}
   \inferrule{
     \buildclist[\buildidentity](\vids) \astarrow \vidasts\\
@@ -1862,7 +1870,7 @@ All of the following apply:
   }{
     {
       \begin{array}{r}
-  \buildexpr(\overname{\Nexpr(\ve : \Nexpr, \Tdot, \Tlbracket, \namednode{\vids}{\NClist{\Tidentifier}}, \Trbracket)}{\vparsednode}) \astarrow\\
+  \buildexpr(\overname{\Nexpr(\ve : \Nexpr, \Tdot, \Tlbracket, \namednode{\vids}{\ClistOne{\Tidentifier}}, \Trbracket)}{\vparsednode}) \astarrow\\
   \overname{\EGetFields(\astversion{\ve}, \vidasts)}{\vastnode}
       \end{array}
     }
@@ -1870,8 +1878,8 @@ All of the following apply:
 \end{mathpar}
 
 \subsection{Typing}
-\subsubsection{TypingRule.EGetFields}
-\subsubsection{Prose}
+\TypingRuleDef{EGetFields}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ is a multi-field access expression for the base expression $\ebase$ and list of fields $\vfields$,
@@ -1910,7 +1918,7 @@ All of the following apply:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[bits]{
   \annotateexpr{\tenv, \ebase} \typearrow (\tbaseannot, \ebaseannot, \vsesbase) \OrTypeError\\\\
@@ -1945,12 +1953,12 @@ All of the following apply:
   \makeanonymous(\tenv, \tbaseannot) \typearrow \tbaseannotanon \OrTypeError\\\\
   \astlabel(\tbaseannotanon) \not\in \{\TBits, \TRecord\}
 }{
-  \annotateexpr{\tenv, \overname{\EGetFields(\veone, \vfields)}{\ve}} \typearrow \TypeErrorVal{UnexpectedType}
+  \annotateexpr{\tenv, \overname{\EGetFields(\veone, \vfields)}{\ve}} \typearrow \TypeErrorVal{\UnexpectedType}
 }
 \end{mathpar}
 \CodeSubsection{\EGetFieldsBegin}{\EGetFieldsEnd}{../Typing.ml}
 
-\subsubsection{TypingRule.FindBitFieldsSlices}
+\TypingRuleDef{FindBitFieldsSlices}
 \hypertarget{def-findbitfieldsslices}{}
 % Transliteration note: The implementation returns an optional, but all of its uses raise a type error if the result is None.
 The helper function
@@ -1962,7 +1970,7 @@ returns the slices associated with the bitfield named $\name$ in the list of bit
 in $\vslices$.
 \ProseOtherwiseTypeError
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{found}):
@@ -1986,7 +1994,7 @@ One of the following applies:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[found]{
   \bitfieldgetname(\vfield) \typearrow \name\\
@@ -2008,11 +2016,11 @@ One of the following applies:
 
 \begin{mathpar}
 \inferrule[empty]{}{
-  \findbitfieldsslices(\name, \overname{\emptylist}{\vbitfields}) \typearrow \TypeErrorVal{BitfieldNotFound}
+  \findbitfieldsslices(\name, \overname{\emptylist}{\vbitfields}) \typearrow \TypeErrorVal{\BadField}
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.GetBitfieldWidth}
+\TypingRuleDef{GetBitfieldWidth}
 \hypertarget{def-getbitfieldwidth}{}
 The helper function
 \[
@@ -2026,7 +2034,7 @@ returns the expression $\ewidth$ that describes the width of the bitfield named 
 in the list of fields $\tfields$.
 \ProseOtherwiseTypeError
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{okay}):
@@ -2042,7 +2050,7 @@ One of the following applies:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[okay]{
   \assocopt(\name, \tfields) \typearrow \langle\vt\rangle\\
@@ -2056,11 +2064,11 @@ One of the following applies:
 \inferrule[error]{
   \assocopt(\name, \tfields) \typearrow \None
 }{
-  \getbitfieldwidth(\tenv, \name, \tfields) \typearrow \TypeErrorVal{BitFieldNotFound}
+  \getbitfieldwidth(\tenv, \name, \tfields) \typearrow \TypeErrorVal{\BadField}
 }
 \end{mathpar}
 
-\subsubsection{TypingRule.WidthPlus}
+\TypingRuleDef{WidthPlus}
 \hypertarget{def-widthplus}{}
 % NOTE: the implementation handles just two expressions, here we fold over a list.
 The helper function
@@ -2072,7 +2080,7 @@ generates the expression $\ewidth$, which represents the summation of all expres
 normalized in the static environment $\tenv$.
 \ProseOrTypeError
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{empty}):
@@ -2089,7 +2097,7 @@ One of the following applies:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[empty]{}{
   \widthplus(\tenv, \overname{\emptylist}{\exprs}) \typearrow \overname{\ELInt{0}}{\ewidth}
@@ -2106,8 +2114,8 @@ One of the following applies:
 \end{mathpar}
 
 \subsection{Semantics}
-\subsubsection{SemanticsRule.EGetfields{\label{sec:SemanticsRule.EGetfields}}}
-\subsubsection{Prose}
+\SemanticsRuleDef{EGetfields}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ is the multi-field access expression for the expression $\erecord$ and list of field names
@@ -2118,7 +2126,7 @@ All of the following apply:
   \item define $\vv$ as the concatenation of $\vv_\fieldname$, for each $\fieldname$ in $\vfieldnames$.
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \evalexpr{\env, \erecord} \evalarrow ((\vrecord, \vg), \newenv) \OrAbnormal\\\\
@@ -2131,6 +2139,7 @@ All of the following apply:
 \end{mathpar}
 \CodeSubsection{\EvalEGetFieldsBegin}{\EvalEGetFieldsEnd}{../interpreter.ml}
 
+\hypertarget{def-atceexpressionterm}{}
 \section{Asserting Type Conversion Expressions\label{sec:AssertingTypeConversionExpressions}}
 \lrmcomment{This is related to \identi{TCST}:}
 The rule about domains in the definitions of subtype-satisfaction and
@@ -2140,8 +2149,8 @@ be used to overcome this.
 
 \lrmcomment{This is related to \identi{CGRH}:}
 An ATC allows code to explicitly mark places where uses of constrained types
-would otherwise be a static type-checking error. The intent is to reduce the
-incidence of unintended errors by making such uses fail type-checking unless
+would otherwise be a static typechecking error. The intent is to reduce the
+incidence of unintended errors by making such uses fail typechecking unless
 the asserting type conversion is provided.
 
 \lrmcomment{This is related to \identr{WZVX}:}
@@ -2161,7 +2170,7 @@ is a dynamic error.
 \expr \derives\ & \overtext{\EATC}{Type assertion}(\expr, \overtext{\ty}{asserted type}) &
 \end{flalign*}
 
-\subsubsection{ASTRule.ATC}
+\ASTRuleDef{ATC}
 \begin{mathpar}
 \inferrule[type]{
   \buildexpr(\ve) \astarrow \astversion{\ve} \OrBuildError\\\\
@@ -2187,8 +2196,8 @@ is a dynamic error.
 \end{mathpar}
 
 \subsection{Typing}
-\subsubsection{TypingRule.ATC\label{sec:TypingRule.ATC}}
-\subsubsection{Prose}
+\TypingRuleDef{ATC}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes an asserting type conversion with expression $\vep$ and type $\tty$, that is $\EATC(\vep, \tty)$;
@@ -2206,7 +2215,7 @@ All of the following apply:
   \item $\vses$ is $\vsese$ if $\vallwayssucceeds$ is $\True$ and $\vses$ otherwise;
   \item $\vt$ is $\ttyp$.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[type\_equal]{
   \annotateexpr{\tenv, \vep} \typearrow (\vt, \vepp, \vsese) \OrTypeError\\\\
@@ -2228,7 +2237,7 @@ All of the following apply:
   \identi{TCST}, \identi{CGRH}, \identi{YJBB}.
 }
 
-\subsubsection{TypingRule.CheckATC \label{sec:TypingRule.CheckATC}}
+\TypingRuleDef{CheckATC}
 \hypertarget{def-checkatc}{}
 The helper function
 \[
@@ -2239,7 +2248,7 @@ checks whether the types $\vtone$ and $\vttwo$, which are assumed to not be name
 are compatible for a typing assertion in the static environment $\tenv$, yielding $\True$.
 \ProseOtherwiseTypeError
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{equal}):
@@ -2268,7 +2277,7 @@ One of the following applies:
     \item determining whether $\vtone$ is \typeequivalent\ to $\vttwo$ in $\tenv$ yields $\False$;
     \item $\vtone$ is a tuple type with list of tuples $\vlone$, that is, $\TTuple(\vlone)$;
     \item $\vtone$ is a tuple type with list of tuples $\vltwo$, that is, $\TTuple(\vltwo)$;
-    \item checking whether $\vlone$ and $\vltwo$ have the same length yields $\True$\ProseTerminateAs{\TypeErrorVal{\TypeAsssertionFails}};
+    \item checking whether $\vlone$ and $\vltwo$ have the same length yields $\True$\ProseTerminateAs{\TypeAssertionFailure};
     \item applying $\checkatc$ to $\vlone[\vi]$ and $\vltwo[\vi]$ in $\tenv$ for every $\vi\in\listrange(\vlone)$ yields $\True$\ProseOrTypeError;
     \item the result is $\True$;
   \end{itemize}
@@ -2278,10 +2287,10 @@ One of the following applies:
     \item determining whether $\vtone$ is \typeequivalent\ to $\vttwo$ in $\tenv$ yields $\False$;
     \item the AST labels of $\vtone$ and $\vttwo$ are the same;
     \item the AST label of $\vtone$ is neither $\TInt$, nor $\TBits$, nor $\TTuple$;
-    \item the result is a type error indicating that the type assertion will always fail ($\TypeAsssertionFails$).
+    \item the result is a type error indicating that the type assertion will always fail ($\TypeAssertionFailure$).
   \end{itemize}
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[equal]{
   \typeequal(\tenv, \vtone, \vttwo) \typearrow \True \OrTypeError
@@ -2295,7 +2304,7 @@ One of the following applies:
   \typeequal(\tenv, \vtone, \vttwo) \typearrow \False\\\\
   \astlabel(\vtone) \neq \astlabel(\vttwo)
 }{
-  \checkatc(\tenv, \vtone, \vttwo) \typearrow \TypeErrorVal{\TypeAsssertionFails}
+  \checkatc(\tenv, \vtone, \vttwo) \typearrow \TypeErrorVal{\TypeAssertionFailure}
 }
 \end{mathpar}
 
@@ -2314,7 +2323,7 @@ One of the following applies:
   \typeequal(\tenv, \vtone, \vttwo) \typearrow \False\\\\
   \vtone = \TTuple(\vlone)\\
   \vttwo = \TTuple(\vltwo)\\
-  \checktrans{|\vlone|=|\vltwo|}{\TypeAsssertionFails} \typearrow \True\OrTypeError\\\\
+  \checktrans{|\vlone|=|\vltwo|}{\TypeAssertionFailure} \typearrow \True\OrTypeError\\\\
   \vi\in\listrange(\vlone): \checkatc(\vlone[\vi], \vltwo[\vi]) \typearrow \True\OrTypeError
 }{
   \checkatc(\tenv, \vtone, \vttwo) \typearrow \True
@@ -2327,12 +2336,12 @@ One of the following applies:
   \astlabel(\vtone) = \astlabel(\vttwo)\\
   \astlabel(\vtone) \not\in \{\TInt, \TBits, \TTuple\}
 }{
-  \checkatc(\tenv, \vtone, \vttwo) \typearrow \TypeErrorVal{\TypeAsssertionFails}
+  \checkatc(\tenv, \vtone, \vttwo) \typearrow \TypeErrorVal{\TypeAssertionFailure}
 }
 \end{mathpar}
 
 \subsection{Semantics}
-\subsubsection{SemanticsRule.ATC\label{sec:SemanticsRule.ATC}}
+\SemanticsRuleDef{ATC}
 \subsubsection{Example}
 In \listingref{semantics-atcvalue}, both type assertions ---
 \verb|3 as integer| and \verb|3 as integer{3..5}| --- succeed.
@@ -2351,7 +2360,7 @@ evaluated:
 \listingref{semantics-variousatcs} shows various type errors and dynamic errors:
 \ASLListing{Various type errors and dynamic errors}{semantics-variousatcs}{\semanticstests/SemanticsRule.ATCVariousErrors.asl}
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
 \item $\ve$ denotes an asserted type conversion expression, $\EATC(\veone, \vt)$;
@@ -2366,13 +2375,13 @@ All of the following apply:
             \end{itemize}
       \item all of the following apply (\textsc{error}):
             \begin{itemize}
-            \item $\vb$ is the native Boolean for \True;
+            \item $\vb$ is the native Boolean for \False;
             \item the result is a dynamic error indicating that the type assertion failed
                   (\DynamicTypeAssertionFailure).
             \end{itemize}
       \end{itemize}
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[okay]{
   \evalexpr{\env, \veone} \evalarrow \Normal((\vv, \vgone), \newenv) \OrAbnormal\\\\
@@ -2393,8 +2402,8 @@ All of the following apply:
 \end{mathpar}
 \CodeSubsection{\EvalATCBegin}{\EvalATCEnd}{../Interpreter.ml}
 
-\subsubsection{SemanticsRule.IsValOfType}
-\subsubsection{Prose}
+\SemanticsRuleDef{IsValOfType}
+\ProseParagraph
 \hypertarget{def-isvaloftype}{}
 The relation
 \[
@@ -2405,7 +2414,7 @@ tests whether the value $\vv$ can be stored in a variable of type $\vt$ in the e
 resulting in a Boolean value $\vb$ and execution graph $\vg$ or a dynamic error.
 
 This relation is used in the context of a asserted type conversion,
-which means the type-checker rule \TypingRuleRef{ATC} was already applied,
+which means the typechecker rule \TypingRuleRef{ATC} was already applied,
 thus filtering cases where the type inferred for the converted expression
 does not type-satisfy $\vt$. The semantics takes this into account and
 only returns \False\ in cases where dynamic information is required.
@@ -2460,7 +2469,7 @@ One of the following applies:
     of the constraints.
   \end{itemize}
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[type\_equal]{
   \astlabel(\vt) \not\in \{\TInt, \TBits\}
@@ -2519,7 +2528,7 @@ cannot appear as a type, since ASL syntax does not allow the following:
 \item Declaring an parameterized integer in a compound type.
 \end{itemize}
 
-\subsubsection{SemanticsRule.IsConstraintSat}
+\SemanticsRuleDef{IsConstraintSat}
 \hypertarget{def-isconstraintsat}{}
 The helper relation
 \[
@@ -2531,7 +2540,7 @@ tests whether the integer value $n$ \emph{satisfies the constraint} $\vc$
 and returns a Boolean answer $\vb$ and the execution graph $\vg$ resulting from evaluating
 the expressions appearing in $\vc$.
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{Constraint\_Exact\_Sat}):
@@ -2554,7 +2563,7 @@ One of the following applies:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 The use of $\evalexprsef$ is justified by checks in $\annotatetype$, verifying
 that expressions appearing in types are all side-effect-free.
 
@@ -2577,6 +2586,7 @@ that expressions appearing in types are all side-effect-free.
 }
 \end{mathpar}
 
+\hypertarget{def-patternexpressionterm}{}
 \section{Pattern Matching Expressions\label{sec:PatternMatchingExpressions}}
 The binary operator $\Tin$ tests whether a value (referred to as the discriminant) matches any item from a $\Npatternset$.
 Patterns can also be used to test whether an expression matches a bitmask (via $\Teq$) or does not match a bitmask (via $\Tneq$).
@@ -2596,7 +2606,7 @@ Lists of patterns are also used in case statements.
 \expr \derives\ & \EPattern(\expr, \pattern) &
 \end{flalign*}
 
-\subsubsection{ASTRule.EPattern}
+\ASTRuleDef{EPattern}
 \begin{mathpar}
 \inferrule{
   \buildexpr(\ve) \astarrow \astversion{\ve} \OrBuildError\\\\
@@ -2630,8 +2640,8 @@ Lists of patterns are also used in case statements.
 \end{mathpar}
 
 \subsection{Typing}
-\subsubsection{TypingRule.EPattern\label{sec:TypingRule.EPattern}}
-\subsubsection{Prose}
+\TypingRuleDef{EPattern}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes a pattern expression to test whether $\veone$ matches the pattern $\vpat$, that is, \\ $\EPattern(\veone, \vpat)$;
@@ -2643,7 +2653,7 @@ All of the following apply:
   \item define $\vses$ as the union of $\vsese$ and $\vsespat$ (there is no need to check for conflicts,
         since the $\veone$ is evaluated before $\vpat$, see \SemanticsRuleRef{EPattern}).
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \annotateexpr{\tenv, \veone} \typearrow (\vtetwo, \vetwo, \vsese) \OrTypeError\\\\
@@ -2656,14 +2666,14 @@ All of the following apply:
 \CodeSubsection{\EPatternBegin}{\EPatternEnd}{../Typing.ml}
 
 \subsection{Semantics}
-\subsubsection{SemanticsRule.EPattern \label{sec:SemanticsRule.EPattern}}
+\SemanticsRuleDef{EPattern}
 \subsubsection{Example}
 In \listingref{semantics-epattern},
 the expression \texttt{42 IN \{0..3, 42\}} evaluates to $\nvbool(\True)$
 whereas the expression \texttt{42 IN \{0..3, -4\}} evaluates to $\nvbool(\False)$.
 \ASLListing{Evaluating a pattern expression}{semantics-epattern}{\semanticstests/SemanticsRule.EPattern.asl}
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes a pattern expression, $\EPattern(\ve, \vp)$;
@@ -2674,7 +2684,7 @@ All of the following apply:
   whether the is indeed a match;
   \item $\vg$ is the ordered composition of $\vgone$ and $\vgtwo$ with the $\asldata$ edge.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \evalexpr{\env, \ve} \evalarrow \Normal((\vvone, \vgone), \newenv) \OrAbnormal\\
@@ -2686,6 +2696,7 @@ All of the following apply:
 \end{mathpar}
 \CodeSubsection{\EvalEPatternBegin}{\EvalEPatternEnd}{../Interpreter.ml}
 
+\hypertarget{def-arbitraryexpressionterm}{}
 \section{Arbitrary Value Expressions\label{sec:ArbitraryValueExpressions}}
 An expression of the form \texttt{ARBITRARY: ty} evaluates to an arbitrary value in the
 domain of \texttt{ty}.
@@ -2710,7 +2721,7 @@ Note that there are two important consequences of producing an arbitrary value w
 \expr \derives\ & \EArbitrary(\ty) &
 \end{flalign*}
 
-\subsubsection{ASTRule.EArbitrary}
+\ASTRuleDef{EArbitrary}
 \begin{mathpar}
 \inferrule{
   \buildty(\vt) \astarrow \astversion{\vt} \OrBuildError
@@ -2721,8 +2732,8 @@ Note that there are two important consequences of producing an arbitrary value w
 \end{mathpar}
 
 \subsection{Typing}
-\subsubsection{TypingRule.EArbitrary \label{sec:TypingRule.EArbitrary}}
-\subsubsection{Prose}
+\TypingRuleDef{EArbitrary}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes an expression \ARBITRARY\ of type $\tty$, that is, $\EArbitrary(\tty)$;
@@ -2732,7 +2743,7 @@ All of the following apply:
   \item define $\newe$ as an expression \ARBITRARY\ of type $\ttytwo$, that is, $\EArbitrary(\ttytwo)$;
   \item define $\vses$ as the union of $\vsesty$ and the singleton set for the \NonDeterministicTerm.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \annotatetype{\tenv, \tty} \typearrow (\ttyone, \vsesty) \OrTypeError\\\\
@@ -2745,7 +2756,7 @@ All of the following apply:
 \CodeSubsection{\EArbitraryBegin}{\EArbitraryEnd}{../Typing.ml}
 
 \subsection{Semantics}
-\subsubsection{SemanticsRule.EArbitrary\label{sec:SemanticsRule.EArbitrary}}
+\SemanticsRuleDef{EArbitrary}
 \subsubsection{Example}
 In \listingref{semantics-earbitraryunconstrained},
 the expression \verb|ARBITRARY : integer| evaluates to an arbitrary integer value.
@@ -2766,7 +2777,7 @@ and how to obtain an arbitrary enumeration-indexed array, \texttt{enum\_array}.
 \ASLListing{Evaluating an \texttt{ARBITRARY} expression for array types}{semantics-earbitraryarray}
 {\semanticstests/SemanticsRule.EArbitraryArray.asl}
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes the \texttt{ARBITRARY} expression annotated with type $\vt$;
@@ -2789,7 +2800,7 @@ All of the following apply:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[okay]{
   \dynamicdomain(\env, \vt) \neq \emptyset\\
@@ -2812,11 +2823,12 @@ All of the following apply:
 Notice that this rule introduces non-determinism.
 \lrmcomment{This is related to \identr{WLCH}:}
 
+\hypertarget{def-recordexpressionterm}{}
 \section{Structured Type Construction Expressions\label{sec:StructuredTypeConstructionExpressions}}
 \subsection{Syntax}
 \begin{flalign*}
 \Nexpr \derives\  & \Tidentifier \parsesep \Tlbrace \parsesep \Trbrace &\\
-	       |\ & \Tidentifier \parsesep \Tlbrace \parsesep \NClist{\Nfieldassign} \parsesep \Trbrace &\\
+	       |\ & \Tidentifier \parsesep \Tlbrace \parsesep \ClistOne{\Nfieldassign} \parsesep \Trbrace &\\
 \Nfieldassign \derives \ & \Tidentifier \parsesep \Teq \parsesep \Nexpr &
 \end{flalign*}
 
@@ -2825,7 +2837,7 @@ Notice that this rule introduces non-determinism.
 \expr \derives\ & \ERecord(\overtext{\ty}{record type}, \overtext{(\identifier, \expr)^{*}}{field initializers}) &
 \end{flalign*}
 
-\subsubsection{ASTRule.ERecord}
+\ASTRuleDef{ERecord}
 \begin{mathpar}
   \inferrule[empty]{}{
     {
@@ -2850,7 +2862,7 @@ Notice that this rule introduces non-determinism.
   \buildexpr\left(\overname{\Nexpr\left(
     \begin{array}{l}
     \Tidentifier(\vt), \Tlbrace, \\
-    \wrappedline\ \namednode{\vfieldassigns}{\NClist{\Nfieldassign}}, \\
+    \wrappedline\ \namednode{\vfieldassigns}{\ClistOne{\Nfieldassign}}, \\
     \wrappedline\ \Trbrace
     \end{array}
     \right)}{\vparsednode}\right) \\
@@ -2860,7 +2872,7 @@ Notice that this rule introduces non-determinism.
 }
 \end{mathpar}
 
-\subsubsection{ASTRule.FieldAssign\label{sec:ASTRule.FieldAssign}}
+\ASTRuleDef{FieldAssign}
 \hypertarget{build-fieldassign}{}
 The function
 \[
@@ -2876,8 +2888,8 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 \end{mathpar}
 
 \subsection{Typing}
-\subsubsection{TypingRule.ERecord\label{sec:TypingRule.ERecord}}
-\subsubsection{Prose}
+\TypingRuleDef{ERecord}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes the record construction expression (which is also used for creating exceptions) of type $\tty$ with fields $\fields$,
@@ -2900,16 +2912,16 @@ All of the following apply:
   \item define $\vsess$ as the list of \sideeffectdescriptorsetsterm\ given by $\vxs_\name$ for each $\field$ element $(\name,\Ignore)$ of $\vfields$;
   \item \Prosenonconflictingunion{$\vsess$}{$\vses$}.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \checktrans{\astlabel(\tty) = \TNamed}{NamedTypeExpected} \checktransarrow \True \OrTypeError\\\\
   \makeanonymous(\tenv, \tty) \typearrow \ttyanon \OrTypeError\\\\
-  \checktrans{\astlabel(\ttyanon) \in \{\TRecord, \TException\}}{\ExpectedStructuredType} \typearrow \True\OrTypeError\\\\
+  \checktrans{\astlabel(\ttyanon) \in \{\TRecord, \TException\}}{\UnexpectedType} \typearrow \True\OrTypeError\\\\
   \ttyanon \eqname L(\fieldtypes)\\
   \initializedfields \eqdef \{\name \;|\; (\name, \Ignore)\in\vfields\}\\
   \names \eqdef \fieldnames(\fieldtypes)\\
-  \checktrans{\{\names\} = \{\initializedfields\}}{\MissingFieldInitializer} \typearrow \True \OrTypeError\\\\
+  \checktrans{\{\names\} = \{\initializedfields\}}{\BadField} \typearrow \True \OrTypeError\\\\
   \checknoduplicates(\initializedfields) \typearrow \True \OrTypeError\\\\
   {
     \begin{array}{r}
@@ -2929,7 +2941,7 @@ All of the following apply:
 \lrmcomment{This is related to \identr{WBCQ}.}
 
 \hypertarget{def-annotatefieldinit}{}
-\subsubsection{TypingRule.AnnotateFieldInit}
+\TypingRuleDef{AnnotateFieldInit}
 The function
 \[
 \begin{array}{r}
@@ -2945,7 +2957,7 @@ annotates a field initializers $(\name, \vep)$ in a record expression
 with list of fields \\ $\fieldtypes$ and returns the annotated initializing expression $\vepp$
 and its \sideeffectdescriptorterm\ $\vses$. \ProseOtherwiseTypeError
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item annotating the expression $\vep$ in $\tenv$ yields $(\vtp, \vepp, \vses)$\ProseOrTypeError;
@@ -2954,11 +2966,11 @@ All of the following apply:
   \item determining whether $\vtp$ \typesatisfies\ $\tspecp$ in $\tenv$ yields $\True$\ProseOrTypeError;
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \annotateexpr{\tenv, \vep} \typearrow (\vtp, \vepp, \vses) \OrTypeError\\\\
-  \checktrans{\fieldtype(\fieldtypes, \name) \neq \bot}{MissingFieldInitializer} \typearrow \True \OrTypeError\\\\
+  \checktrans{\fieldtype(\fieldtypes, \name) \neq \bot}{\BadField} \typearrow \True \OrTypeError\\\\
   \fieldtype(\fieldtypes, \name) = \tspecp\\
   \checktypesat(\tenv, \vtp, \tspecp) \typearrow \True \OrTypeError
 }{
@@ -2967,14 +2979,14 @@ All of the following apply:
 \end{mathpar}
 
 \subsection{Semantics}
-\subsubsection{SemanticsRule.ERecord \label{sec:SemanticsRule.ERecord}}
+\SemanticsRuleDef{ERecord}
 \subsubsection{Example}
 In \listingref{semantics-erecord},
 the expression \verb|MyRecordType{a=3, b=42}| evaluates to the native record value \\
 $\nvrecord{\va\mapsto\nvint(3), \vb\mapsto\nvint(42)}$.
 \ASLListing{Evaluating a record construction expression}{semantics-erecord}{\semanticstests/SemanticsRule.ERecord.asl}
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
 \item $\ve$ denotes a record creation expression, $\ERecord(\names, \efields)$;
@@ -2985,7 +2997,7 @@ All of the following apply:
 \item $\vvfields$ is a list of \nativevalues\ $\vv_{1..k}$;
 \item $\vv$ is the native record that maps $\id_i$ to $\vv_i$, for $i=1..k$.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \efields \eqname [i=1..k: (\id_i, \ve_i)]\\
@@ -3000,6 +3012,7 @@ All of the following apply:
 \end{mathpar}
 \CodeSubsection{\EvalERecordBegin}{\EvalERecordEnd}{../Interpreter.ml}
 
+\hypertarget{def-tupleexpressionterm}{}
 \section{Tuple Expressions\label{sec:TupleExpressions}}
 \subsection{Syntax}
 \begin{flalign*}
@@ -3011,7 +3024,7 @@ All of the following apply:
 \expr \derives\ & \ETuple(\expr^{+}) &
 \end{flalign*}
 
-\subsubsection{ASTRule.ETuple}
+\ASTRuleDef{ETuple}
 \begin{mathpar}
 \inferrule[tuple]{
   \buildplist[\buildexpr](\vexprs) \astarrow \vexprasts
@@ -3022,8 +3035,8 @@ All of the following apply:
 \end{mathpar}
 
 \subsection{Typing}
-\subsubsection{TypingRule.ETuple \label{sec:TypingRule.ETuple}}
-\subsubsection{Prose}
+\TypingRuleDef{ETuple}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{parenthesized}):
@@ -3044,7 +3057,7 @@ One of the following applies:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[parenthesized]{
   \annotateexpr{\tenv, \vep} \typearrow (\vt, \newe, \vses) \OrTypeError
@@ -3065,20 +3078,20 @@ One of the following applies:
 \CodeSubsection{\ETupleBegin}{\ETupleEnd}{../Typing.ml}
 
 \subsection{Semantics}
-\subsubsection{SemanticsRule.ETuple \label{sec:SemanticsRule.ETuple}}
+\SemanticsRuleDef{ETuple}
 \subsubsection{Example}
 In \listingref{semantics-etuple},
 the expression \texttt{(3, Return42())} evaluates to the value \texttt{(3, 42)}.
 \ASLListing{Evaluating a tuple expression}{semantics-etuple}{\semanticstests/SemanticsRule.ETuple.asl}
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ denotes a tuple expression, $\ETuple(\elist)$;
   \item the evaluation of $\elist$ in $\env$ is $\Normal((\vlist, \vg), \newenv)$\ProseOrAbnormal;
   \item $\vv$ is the native vector constructed from the values in $\vlist$.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \evalexprlist{\env, \elist} \evalarrow \Normal((\vlist, \vg), \newenv) \OrAbnormal\\
@@ -3106,7 +3119,7 @@ reason of enabling \ASTRuleRef{CheckNotSamePrec} by distinguishing parenthesized
 expressions from non-parenthesized expressions. However, upon typing such expressions,
 we ignore the parenthesis (see \TypingRuleRef{ETuple}.\textsc{PARENTHESIZED}).
 
-\subsubsection{ASTRule.ParenExpr\label{sec:ASTRule.ParenExpr}}
+\ASTRuleDef{ParenExpr}
 \begin{mathpar}
   \inferrule[sub\_expr]{}{
   \buildexpr(\overname{\Nexpr(\Tlpar, \punnode{\Nexpr}, \Trpar)}{\vparsednode}) \astarrow
@@ -3117,7 +3130,7 @@ we ignore the parenthesis (see \TypingRuleRef{ETuple}.\textsc{PARENTHESIZED}).
 \section{Array Construction Expressions\label{sec:ArrayConstructionExpressions}}
 Array construction expression are used by the type system to express the initialization
 of array-typed variables. Since there is no syntax to initialize arrays, there are also
-no rules for building the AST for such expressions nor rules for type-checking them.
+no rules for building the AST for such expressions nor rules for typechecking them.
 
 \subsection{Abstract Syntax}
 \begin{flalign*}
@@ -3127,11 +3140,11 @@ no rules for building the AST for such expressions nor rules for type-checking t
 
 \subsection{Semantics}
 
-The Semantic Rules use $\evalexprsef\empty$ because the type-checker in
+The Semantic Rules use $\evalexprsef\empty$ because the typechecker in
 $\annotatetype$ guarantees that expressions in types are side-effect-free.
 
-\subsubsection{SemanticsRule.EArray}
-\subsubsection{Prose}
+\SemanticsRuleDef{EArray}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ is an array construction expression with length expression $\elength$ and value expression $\evalue$,
@@ -3140,16 +3153,18 @@ All of the following apply:
   \item evaluating the side-effect-free expression $\elength$ in $\env$ yields \\
         $\Normal((\vlength, \vgtwo))$\ProseOrError;
   \item $\vlength$ is a native integer value for $\nlength$;
+  \item checking that $\nlength$ is non-negative yields $\True$\ProseTerminateAs{\NegativeArrayLength};
   \item define $\vv$ as the native vector of length $\nlength$ where each position has the value $\vvalue$;
   \item define $\vg$ as the parallel composition of $\vgone$ and $\vgtwo$.
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \evalexpr{\env, \evalue} \evalarrow \Normal((\vvalue, \vgone), \newenv) \OrAbnormal\\\\
   \evalexprsef{\env, \elength} \evalarrow \Normal((\vlength, \vgtwo)) \OrDynError\\\\
   \vlength \eqname \nvint(\nlength)\\
+  \checktrans{\nlength \geq 0}{\NegativeArrayLength} \checktransarrow \True \OrDynError\\\\
   \vv \eqdef \nvvector{i=1..\nlength: \vvalue}\\
   \vg \eqdef \vgone \parallelcomp \vgtwo
 }{
@@ -3159,8 +3174,8 @@ All of the following apply:
 \end{mathpar}
 \CodeSubsection{\EvalEArrayBegin}{\EvalEArrayEnd}{../Typing.ml}
 
-\subsubsection{SemanticsRule.EEnumArray}
-\subsubsection{Prose}
+\SemanticsRuleDef{EEnumArray}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\ve$ is an array construction expression for an enumerated-index array with
@@ -3171,7 +3186,7 @@ All of the following apply:
   \item \Proseeqdef{$\vv$}{the native record mapping each label $\vl\in\vlabels$ to $\vvalue$}.
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \evalexpr{\env, \evalue} \evalarrow \Normal((\vvalue, \vg), \newenv) \OrAbnormal\\\\
@@ -3195,8 +3210,8 @@ if $\annotateexpr{\tenv, \ve} \typearrow (\Ignore, \Ignore, \vses)$
 and $\vses$ only contains \sideeffectdescriptorsterm\ for reading storage (\ReadLocal\ and \ReadGlobal).
 
 \subsection{Semantics}
-\subsubsection{SemanticsRule.ESideEffectFreeExpr\label{sec:SemanticsRule.ESideEffectFreeExpr}}
-\subsubsection{Prose}
+\SemanticsRuleDef{ESideEffectFreeExpr}
+\ProseParagraph
 The helper relation
 \hypertarget{def-evalexprsef}{}
 \[
@@ -3207,7 +3222,7 @@ The helper relation
 specializes the expression evaluation relation for side-effect-free expressions
 by omitting throwing configurations as possible output configurations.
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \evalexpr{\env, \ve} \evalarrow \Normal((\vv,\vg), \env) \OrDynError
@@ -3219,8 +3234,8 @@ Notice that the output configuration does not contain an environment,
 since side-effect-free expressions do not modify the environment.
 
 \section{Evaluating a List of Expressions\label{sec:ExprList}}
-\subsubsection{SemanticsRule.EExprList\label{sec:SemanticsRule.EExprList}}
-\subsubsection{Prose}
+\SemanticsRuleDef{EExprList}
+\ProseParagraph
 The relation
 \hypertarget{def-evalexprlist}{}
 \[
@@ -3233,7 +3248,7 @@ and returns the resulting value $\vv$, the parallel composition of the execution
 generated from evaluating each expression, and the new environment $\newenv$.
 If the evaluation of any expression terminates abnormally then the abnormal configuration is returned.
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[empty]{}
 {

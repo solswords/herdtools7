@@ -112,7 +112,7 @@ In particular, rather than directly building the abstract syntax for these \assi
 } &
 \end{flalign*}
 
-\subsubsection{ASTRule.LExpr \label{sec:ASTRule.LExpr}}
+\ASTRuleDef{LExpr}
 \hypertarget{build-lexpr}{}
 The function
 \[
@@ -175,7 +175,7 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 }
 \end{mathpar}
 
-\subsubsection{ASTRule.BasicLexpr \label{sec:ASTRule.BasicLexpr}}
+\ASTRuleDef{BasicLexpr}
 \hypertarget{build-basiclexpr}{}
 The function
 \[
@@ -219,7 +219,7 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 }
 \end{mathpar}
 
-\subsubsection{ASTRule.NestedFields \label{sec:ASTRule.NestedFields}}
+\ASTRuleDef{NestedFields}
 \hypertarget{build-nestedfields}{}
 The function
 \[
@@ -245,7 +245,7 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 }
 \end{mathpar}
 
-\subsubsection{ASTRule.SlicedBasicLexpr \label{sec:ASTRule.SlicedBasicLexpr}}
+\ASTRuleDef{SlicedBasicLexpr}
 \hypertarget{build-slicedbasiclexpr}{}
 The function
 \[
@@ -271,7 +271,7 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 }
 \end{mathpar}
 
-\subsubsection{ASTRule.DiscardOrSlicedBasicLexpr \label{sec:ASTRule.DiscardOrSlicedBasicLexpr}}
+\ASTRuleDef{DiscardOrSlicedBasicLexpr}
 
 \hypertarget{build-discardorslicedbasiclexpr}{}
 The function
@@ -300,7 +300,7 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 }
 \end{mathpar}
 
-\subsubsection{ASTRule.DiscardOrIdentifier \label{sec:ASTRule.DiscardOrIdentifier}}
+\ASTRuleDef{DiscardOrIdentifier}
 
 \hypertarget{build-discardoridentifier}{}
 The function
@@ -340,7 +340,7 @@ They are used in \secref{AssignableExpressionsAbstractSyntaxBuilders} to build $
   \item $\desugarlhsfieldstuple$, which desugars a multi-assignment of a tuple value to multiple fields of an identifier.
 \end{itemize}
 
-\subsubsection{ASTRule.DesugarLHSAccess \label{sec:ASTRule.DesugarLHSAccess}}
+\ASTRuleDef{DesugarLHSAccess}
 \hypertarget{def-desugarlhsaccess}{}
 The function
 \[
@@ -391,7 +391,7 @@ transforms an $\lhsaccess$ into an AST node $\vlexpr$.
   }{\vlhsaccess} \astarrow \overname{\vsliced}{\vlexpr}
 }
 \end{mathpar}
-\subsubsection{ASTRule.DesugarLHSTuple \label{sec:ASTRule.DesugarLHSTuple}}
+\ASTRuleDef{DesugarLHSTuple}
 \hypertarget{def-desugarlhstuple}{}
 The function
 \[
@@ -433,7 +433,7 @@ via the following rules:
 }
 \end{mathpar}
 
-\subsubsection{ASTRule.DesugarLHSFieldsTuple \label{sec:ASTRule.DesugarLHSFieldsTuple}}
+\ASTRuleDef{DesugarLHSFieldsTuple}
 \hypertarget{def-desugarlhsfieldstuple}{}
 The function
 \[
@@ -472,6 +472,7 @@ via the following rules:
 }
 \end{mathpar}
 
+\hypertarget{def-discardlexprterm}{}
 \section{Discarding Assignment Expressions\label{sec:DiscardingAssignmentExpressions}}
 \subsection{Abstract Syntax}
 \begin{flalign*}
@@ -479,15 +480,15 @@ via the following rules:
 \end{flalign*}
 
 \subsection{Typing}
-\subsubsection{TypingRule.LEDiscard\label{sec:TypingRule.LEDiscard}}
-\subsubsection{Prose}
+\TypingRuleDef{LEDiscard}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\vle$ denotes an expression that can be discarded, that is, $\LEDiscard$;
   \item \Proseeqdef{$\newle$}{$\vle$};
   \item \Proseeqdef{$\vses$}{the empty set}.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{}{
   \annotatelexpr{\tenv, \overname{\LEDiscard}{\vle}, \vte} \typearrow (\overname{\LEDiscard}{\newle}, \overname{\emptyset}{\vses})
@@ -496,19 +497,19 @@ All of the following apply:
 \CodeSubsection{\LEDiscardBegin}{\LEDiscardEnd}{../Typing.ml}
 
 \subsection{Semantics}
-\subsubsection{SemanticsRule.LEDiscard\label{sec:SemanticsRule.LEDiscard}}
+\SemanticsRuleDef{LEDiscard}
 \subsubsection{Example}
 In \listingref{semantics-lediscard}, the assignment \texttt{- = 42;} does not affect the environment.
 \ASLListing{Assignment to \texttt{-}}{semantics-lediscard}{\semanticstests/SemanticsRule.LEDiscard.asl}
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\vle$ is a discarding expression, $\LEDiscard$;
   \item $\newg$ is $\vg$;
   \item $\newenv$ is $\env$.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \newg\eqdef\vg\\
@@ -519,6 +520,7 @@ All of the following apply:
 \end{mathpar}
 \CodeSubsection{\EvalLEDiscardBegin}{\EvalLEDiscardEnd}{../Interpreter.ml}
 
+\hypertarget{def-varlexprterm}{}
 \section{Variable Assignment Expressions\label{sec:VariableAssignmentExpressions}}
 \subsection{Abstract Syntax}
 \begin{flalign*}
@@ -526,8 +528,8 @@ All of the following apply:
 \end{flalign*}
 
 \subsection{Typing}
-\subsubsection{TypingRule.LEVar\label{sec:TypingRule.LEVar}}
-\subsubsection{Prose}
+\TypingRuleDef{LEVar}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\vle$ denotes a left-hand-side variable expression for $\vx$, that is, $\LEVar(\vx)$;
@@ -555,7 +557,7 @@ All of the following apply:
     \item the result is a type error $\UndefinedIdentifier$.
   \end{itemize}
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[local]{
   L^\tenv.\localstoragetypes(\vx) = (\tty, k)\\
@@ -593,7 +595,7 @@ All of the following apply:
 \CodeSubsection{\LEVarBegin}{\LEVarEnd}{../Typing.ml}
 
 \subsection{Semantics}
-\subsubsection{SemanticsRule.LEVar\label{sec:SemanticsRule.LEVar}}
+\SemanticsRuleDef{LEVar}
 \subsubsection{Example (Local Variable)}
 In \listingref{semantics-levar}, \SemanticsRuleRef{LEVar} is (only) used
 to assign the value $42$ to the left-hand-side expression
@@ -607,7 +609,7 @@ In \listingref{semantics-leglobalvar},
 \texttt{x} within \texttt{x = 42;}.
 \ASLListing{Assignment to a global variable}{semantics-leglobalvar}{\semanticstests/SemanticsRule.LEGlobalVar.asl}
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
     \item $\vle$ denotes a variable, $\LEVar(\vx)$;
@@ -629,7 +631,7 @@ All of the following apply:
     \item $\newg$ is the ordered composition of $\vg$ and a Write Effect for $\vx$ with the $\asldata$ edge;
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[local]{
   \env \eqname (\tenv, \denv)\\
@@ -653,6 +655,7 @@ All of the following apply:
 \end{mathpar}
 \CodeSubsection{\EvalLEVarBegin}{\EvalLEVarEnd}{../Interpreter.ml}
 
+\hypertarget{def-destructuringlexprterm}{}
 \section{Multi-assignment Expressions\label{sec:MultiAssignmentExpressions}}
 \subsection{Abstract Syntax}
 \begin{flalign*}
@@ -660,29 +663,29 @@ All of the following apply:
 \end{flalign*}
 
 \subsection{Typing}
-\subsubsection{TypingRule.LEDestructuring\label{sec:TypingRule.LEDestructuring}}
-\subsubsection{Prose}
+\TypingRuleDef{LEDestructuring}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\vle$ denotes a tuple of left-hand-side expressions $\les$, that is, $\LEDestructuring(\les)$;
   \item $\les$ is a list $\ve_{1..k}$;
-  \item checking whether $\vte$ is a tuple type yields $\True$\ProseTerminateAs{\ExpectedTupleType};
+  \item checking whether $\vte$ is a tuple type yields $\True$\ProseTerminateAs{\UnexpectedType};
   \item $\vte$ is a tuple type over the list of types $\tys$, that is, $\TTuple(\tys)$;
-  \item determining whether $\les$ and $\subtys$ have the same length yields $\True$\ProseTerminateAs{\LengthsMismatch};
+  \item determining whether $\les$ and $\subtys$ have the same length yields $\True$\ProseTerminateAs{\UnexpectedType};
   \item $\subtys$ is the list of types $\vt_{1..k}$;
   \item annotating the left-hand-side expression $\ve_i$ with the type $\vt_i$, for $i=1..k$, yields $(\vep_i, \vxs_i)$\ProseOrTypeError;
   \item the list of expressions $\lesp$ is $\vep_i$, for $i=1..k$;
   \item $\newle$ is the list of left-hand-side expressions $\lesp$, that is, $\LEDestructuring(\lesp)$;
   \item define $\vses$ as the union of all sets $\vxs_i$, for $i=1..k$.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \les \eqname [\ve_{1..k}]\\
-  \checktrans{\astlabel(\vte) = \TTuple}{\ExpectedTupleType} \checktransarrow \True \OrTypeError\\\\
+  \checktrans{\astlabel(\vte) = \TTuple}{\UnexpectedType} \checktransarrow \True \OrTypeError\\\\
   \vte \eqname \TTuple(\tys)\\
   \equallength(\les, \tys) \typearrow \vb\\
-  \checktrans{\vb}{\LengthsMismatch} \checktransarrow \True \OrTypeError\\\\
+  \checktrans{\vb}{\UnexpectedType} \checktransarrow \True \OrTypeError\\\\
   \tys \eqname [\vt_{1..k}]\\
   i=1..k: \annotatelexpr{\tenv, \ve_i,\vt_i} \typearrow (\vep_i, \vxs_i) \OrTypeError\\\\
   \lesp \eqname [i=1..k: \vep_i]\\
@@ -695,7 +698,7 @@ All of the following apply:
 \CodeSubsection{\LEDestructuringBegin}{\LEDestructuringEnd}{../Typing.ml}
 
 \subsection{Semantics}
-\subsubsection{SemanticsRule.LEDestructuring\label{sec:SemanticsRule.LEDestructuring}}
+\SemanticsRuleDef{LEDestructuring}
 \subsubsection{Example}
 In \listingref{semantics-ledestructuring}, the assignment \texttt{(x, y) = (3, 42)} binds
 \texttt{x} to $\nvint(3)$ and \texttt{y} to
@@ -703,7 +706,7 @@ $\nvint(42)$ in the environment where \texttt{x} is bound to $\nvint(42)$ and
 \texttt{y} is bound to $\nvint(3)$.
 \ASLListing{Assignment to multiple left-hand-side expressions}{semantics-ledestructuring}{\semanticstests/SemanticsRule.LEDestructuring.asl}
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\vle$ denotes a list of left-hand-side expressions, $\LEDestructuring(\vlelist)$;
@@ -715,7 +718,7 @@ All of the following apply:
   in $\env$ achieves the effects of assigning each value to the respective
   subexpressions, resulting in the output configuration $C$.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \vlelist \eqname [\vle_{1..n}]\\
@@ -728,8 +731,8 @@ All of the following apply:
 \end{mathpar}
 \CodeSubsection{\EvalLEDestructuringBegin}{\EvalLEDestructuringEnd}{../Interpreter.ml}
 
-\subsubsection{SemanticsRule.LEMultiAssign\label{sec:SemanticsRule.LEMultiAssign}}
-\subsubsection{Prose}
+\SemanticsRuleDef{LEMultiAssign}
+\ProseParagraph
 The helper relation
 \hypertarget{def-evalmultiassign}{}
 \[
@@ -742,7 +745,7 @@ That is, the simultaneous assignment of the list of value-execution graph pairs 
 to the corresponding list of left-hand side expressions $\vlelist$, in the environment $\env$.
 The result is either the execution graph $\vg$ and new environment $\newenv$ or an abnormal configuration.
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[empty]{}
 {
@@ -766,6 +769,7 @@ have at least one element and shortens the lengths of both lists by one,
 until both lists become empty
 which is when the \textsc{empty} axiom case is used.
 
+\hypertarget{def-setarraylexprterm}{}
 \section{Array Assignment Expressions\label{sec:ArrayAssignmentExpressions}}
 This section details the syntax, abstract syntax, semantics, and typing of array write expressions.
 In the untyped AST, a write to either an integer-indexed array or an enumeration-indexed array is represented
@@ -782,8 +786,8 @@ The semantics utilizes a rule matching the corresponding type of array ---
 \end{flalign*}
 
 \subsection{Typing}
-\subsubsection{TypingRule.LESetArray\label{sec:TypingRule.LESetArray}}
-\subsubsection{Prose}
+\TypingRuleDef{LESetArray}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\vle$ denotes the array access of a left-hand-side expression $\ebase$ by the index $\eindex$, that is, $\LESetArray(\ebase, \eindex)$;
@@ -796,7 +800,7 @@ All of the following apply:
         $(\ebasep, \vsesbase, \eindex)$ in $\tenv$ yields $(\newle, \vses)$\ProseOrTypeError.
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \annotateexpr{\tenv, \torexpr(\ebase)} \typearrow (\tbase, \Ignore, \Ignore) \OrTypeError\\\\
@@ -816,7 +820,7 @@ All of the following apply:
 \end{mathpar}
 \CodeSubsection{\LESetArrayBegin}{\LESetArrayEnd}{../Typing.ml}
 
-\subsubsection{TypingRule.AnnotateSetArray\label{sec:TypingRule.AnnotateSetArray}}
+\TypingRuleDef{AnnotateSetArray}
 \hypertarget{def-annotatesetarray}{}
 The helper function
 \[
@@ -842,7 +846,7 @@ The result is the annotated assignable expression $\newle$ and
 \sideeffectsetterm\ for the annotated expression $\vses$.
 \ProseOrTypeError
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item determining that $\telem$ \typesatisfies\ $\vt$ in $\tenv$ yields $\True$\ProseOrTypeError;
@@ -861,7 +865,7 @@ All of the following apply:
     }
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \checktypesat(\tenv, \rhsty, \telem) \typearrow \True \OrTypeError\\\\
@@ -888,13 +892,13 @@ All of the following apply:
 \end{mathpar}
 
 \subsection{Semantics}
-\subsubsection{SemanticsRule.LESetArray\label{sec:SemanticsRule.LESetArray}}
+\SemanticsRuleDef{LESetArray}
 \subsubsection{Example}
 In \listingref{semantics-lesetarray}, the assignment \verb|my_array[[3]] = 53;| binds the third element
 of \texttt{my\_array} to the value \texttt{53}.
 \ASLListing{Assignment to an array cell}{semantics-lesetarray}{\semanticstests/SemanticsRule.LESetArray.asl}
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\vle$ denotes an array update expression, $\LESetArray(\rearray, \eindex)$;
@@ -911,7 +915,7 @@ All of the following apply:
   Evaluating the left-hand-side expression $\rearray$ in an environment $\envtwo$ with $\vmone$
   is the output configuration $C$.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \evalexpr{\env, \torexpr(\rearray)} \evalarrow \Normal(\rmarray, \envone) \OrAbnormal\\
@@ -942,11 +946,11 @@ getter invocation
 \item invoking the setter to assign the resulting value
 \end{itemize}
 
-We note that the index is guaranteed by the type-checker to be within the array bounds
-via \secref{TypingRule.LESetArray}.
+We note that the index is guaranteed by the typechecker to be within the array bounds
+via \TypingRuleRef{LESetArray}.
 
-\subsubsection{SemanticsRule.LESetEnumArray\label{sec:SemanticsRule.LESetEnumArray}}
-\subsubsection{Prose}
+\SemanticsRuleDef{LESetEnumArray}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\vle$ denotes an array update expression, $\LESetEnumArray(\rearray, \eindex)$;
@@ -964,7 +968,7 @@ All of the following apply:
   is the output configuration $C$.
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \evalexpr{\env, \torexpr(\rearray)} \evalarrow \Normal(\rmarray, \envone) \OrAbnormal\\
@@ -981,6 +985,7 @@ All of the following apply:
 \end{mathpar}
 \CodeSubsection{\EvalLESetEnumArrayBegin}{\EvalLESetEnumArrayEnd}{../Interpreter.ml}
 
+\hypertarget{def-slicelexprterm}{}
 \section{Bitvector Slice Assignment Expressions\label{sec:BitvectorSliceAssignmentExpressions}}
 \subsection{Abstract Syntax}
 \begin{flalign*}
@@ -988,31 +993,31 @@ All of the following apply:
 \end{flalign*}
 
 \subsection{Typing}
-\subsubsection{TypingRule.LESlice\label{sec:TypingRule.LESlice}}
-\subsubsection{Prose}
+\TypingRuleDef{LESlice}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\vle$ denotes the slicing of a left-hand-side expression $\vleone$ by the slices $\slices$, that is, $\LESlice(\vleone, \slices)$;
   \item annotating the right-hand-side expression corresponding to $\vleone$ in $\tenv$ yields \\
         $(\vtleone, \Ignore, \Ignore)$\ProseOrTypeError;
   \item obtaining the \underlyingtype\ of $\vtleone$ in $\tenv$ yields $\tleoneanon$\ProseOrTypeError;
-  \item checking that $\tleoneanon$ is a bitvector type yields $\True$\ProseTerminateAs{\ExpectedBitvectorType};
+  \item checking that $\tleoneanon$ is a bitvector type yields $\True$\ProseTerminateAs{\UnexpectedType};
   \item annotating the left-hand-side expression $\vleone$ in $\tenv$ yields $(\vletwo, \vsesone)$\ProseOrTypeError;
   \item obtaining the width of the slices $\slices$ in $\tenv$ and simplifying them yields $\vwidth$;
   \item $\vt$ is the bitvector type of width $\width$ and empty list of bitfields;
   \item checking whether $\vte$ \typesatisfies\ $\vt$ yields $\True$\ProseOrTypeError;
   \item annotating $\slices$ in $\tenv$ yields $(\slicestwo, \vsestwo)$\ProseOrTypeError;
   \item checking that the slices $\slicestwo$ are all disjoint yields $\True$\ProseOrTypeError;
-  \item checking that $\slices$ is not empty yields $\True$\ProseTerminateAs{\EmptySlice};
+  \item checking that $\slices$ is not empty yields $\True$\ProseTerminateAs{\BadSlices};
   \item $\newle$ is the slicing of $\vletwo$ by $\slicestwo$, that is, $\LESlice(\vletwo, \slicestwo)$;
   \item \Prosenonconflictingunion{$\vsesone$ and $\vsestwo$}{$\vses$}.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \annotateexpr{\tenv, \torexpr(\vleone)} \typearrow (\vtleone, \Ignore, \Ignore) \OrTypeError\\\\
   \makeanonymous(\tenv, \vtleone) \typearrow \tleoneanon \OrTypeError\\\\
-  \checktrans{\astlabel(\tleoneanon) = \TBits}{\ExpectedBitvectorType} \typearrow \True \OrTypeError\\\\
+  \checktrans{\astlabel(\tleoneanon) = \TBits}{\UnexpectedType} \typearrow \True \OrTypeError\\\\
   \annotatelexpr{\tenv, \vleone, \vtleone} \typearrow (\vletwo, \vsesone) \OrTypeError\\
   \sliceswidth(\tenv, \slices) \typearrow \widthp\\
   \normalize(\tenv, \widthp) \typearrow \vwidth\\
@@ -1020,7 +1025,7 @@ All of the following apply:
   \checktypesat(\tenv, \vte, \vt) \typearrow \True \OrTypeError\\\\
   \annotateslices(\tenv, \slices) \typearrow (\slicestwo, \vsestwo) \OrTypeError\\\\
   \checkdisjointslices(\tenv, \slicestwo) \typearrow \True \OrTypeError\\\\
-  \checktrans{\slices \neq \emptylist}{\EmptySlice} \typearrow \True \OrTypeError\\\\
+  \checktrans{\slices \neq \emptylist}{\BadSlices} \typearrow \True \OrTypeError\\\\
   \newle \eqdef \LESlice(\vletwo, \slicestwo)\\
   \nonconflictingunion([\vsesone, \vsestwo]) \typearrow \vses \OrTypeError
 }{
@@ -1029,7 +1034,7 @@ All of the following apply:
 \end{mathpar}
 \CodeSubsection{\LESliceBegin}{\LESliceEnd}{../Typing.ml}
 
-\subsubsection{TypingRule.CheckDisjointSlices\label{sec:}TypingRule.CheckDisjointSlices}
+\TypingRuleDef{CheckDisjointSlices}
 \hypertarget{def-checkdisjointslices}{}
 The function
 \[
@@ -1039,13 +1044,13 @@ The function
 tests whether the list of slices $\slices$ do not overlap in $\tenv$, yielding $\True$.
 \ProseOtherwiseTypeError
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item applying $\disjointslicestopositions$ to $\slices$ in $\tenv$ yields a set of positions\ProseOrTypeError.
   \item the result is $\True$.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \disjointslicestopositions(\tenv, \slices) \typearrow \positions \OrTypeError
@@ -1056,7 +1061,7 @@ All of the following apply:
 \CodeSubsection{\CheckDisjointSlicesBegin}{\CheckDisjointSlicesEnd}{../Typing.ml}
 
 \subsection{Semantics}
-\subsubsection{SemanticsRule.LESlice\label{sec:SemanticsRule.LESlice}}
+\SemanticsRuleDef{LESlice}
 \subsubsection{Example}
 In \listingref{semantics-leslice}, the assignment \texttt{x[3:0] = '0000'} binds
 \texttt{x} to $\nvbitvector(11110000)$
@@ -1065,7 +1070,7 @@ in the environment where \texttt{x} is bound to $\nvbitvector(11111111)$.
 
 \ASLListing{Assignment to a slice}{semantics-leslice}{\semanticstests/SemanticsRule.LESlice.asl}
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\vle$ denotes a left-hand-side slicing expression, $\LESlice(\ebv, \slices)$;
@@ -1086,7 +1091,7 @@ All of the following apply:
   Evaluating the left-hand-side expression $\ebv$ with
   $\newmbv$ in an environment $\envtwo$ is the output configuration $C$,
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \evalexpr{\env, \torexpr(\ebv)} \evalarrow \Normal(\mbv,\envone) \OrAbnormal\\
@@ -1118,7 +1123,7 @@ getter invocation
 \item invoking the setter to assign the resulting value
 \end{itemize}
 
-\subsubsection{SemanticsRule.CheckNonOverlappingSlices\label{sec:SemanticsRule.CheckNonOverlappingSlices}}
+\SemanticsRuleDef{CheckNonOverlappingSlices}
 \hypertarget{def-checknonoverlappingslices}{}
 The helper function
 \[
@@ -1130,7 +1135,7 @@ checks whether the sets of integers represented by the list of ranges $\valueran
 overlap, yielding $\True$.
 \ProseOrError
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item view $\valueranges$ as the list $\vrange_{1..k}$;
@@ -1140,7 +1145,7 @@ All of the following apply:
         yields $\True$\ProseOrError;
   \item the result is $\True$.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   {
@@ -1155,7 +1160,7 @@ All of the following apply:
 }
 \end{mathpar}
 
-\subsubsection{SemanticsRule.CheckTwoRangesNonOverlapping\label{sec:SemanticsRule.CheckTwoRangesNonOverlapping}}
+\SemanticsRuleDef{CheckTwoRangesNonOverlapping}
 \hypertarget{def-checktworangesnonoverlapping}{}
 The helper function
 \[
@@ -1171,7 +1176,7 @@ checks whether two sets of integers represented by the
 ranges $(\vsone, \vlone)$ and $(\vstwo, \vltwo)$ do not intersect, yielding $\True$.
 \ProseOrError
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item evaluating $\PLUS$ for $\vsone$ and $\vlone$ via $\binoprel$ yields $\vsonelone$;
@@ -1179,11 +1184,11 @@ All of the following apply:
   \item evaluating $\PLUS$ for $\vstwo$ and $\vltwo$ yields $\vstwoltwo$;
   \item evaluating $\LEQ$ for $\vstwoltwo$ and $\vsone$ yields $\vstwoltwosone$;
   \item evaluating $\BOR$ for $\vsonelonestwo$ and $\vstwoltwosone$ yields $\nvbool(\vb)$;
-  \item checking whether $\vb$ is $\True$ yields $\True$\ProseTerminateAs{OverlappingSlices};
+  \item checking whether $\vb$ is $\True$ yields $\True$\ProseTerminateAs{\OverlappingSliceAssignment};
   \item the result is $\True$.
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \binoprel(\PLUS, \vsone, \vlone) \evalarrow \vsonelone\\
@@ -1191,12 +1196,13 @@ All of the following apply:
   \binoprel(\PLUS, \vstwo, \vltwo) \evalarrow \vstwoltwo\\
   \binoprel(\LEQ, \vstwoltwo, \vsone) \evalarrow \vstwoltwosone\\
   \binoprel(\BOR, \vsonelonestwo, \vstwoltwosone) \evalarrow \nvbool(\vb)\\
-  \checktrans{\vb}{OverlappingSlices} \checktransarrow \True\OrDynError
+  \checktrans{\vb}{\OverlappingSliceAssignment} \checktransarrow \True\OrDynError
 }{
   \checktworangesnonoverlapping((\vsone, \vlone), (\vstwo, \vltwo)) \evalarrow \True
 }
 \end{mathpar}
 
+\hypertarget{def-setfieldlexprterm}{}
 \section{Structured Type Field Assignment Expressions\label{sec:StructuredTypeFieldAssignmentExpressions}}
 \subsection{Abstract Syntax}
 \begin{flalign*}
@@ -1204,8 +1210,8 @@ All of the following apply:
 \end{flalign*}
 
 \subsection{Typing}
-\subsubsection{TypingRule.LESetBadField\label{sec:TypingRule.LESetBadField}}
-\subsubsection{Prose}
+\TypingRuleDef{LESetBadField}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\vle$ denotes the access to the field named $\field$ in $\vleone$, that is, \\ $\LESetField(\vleone, \field)$;
@@ -1215,7 +1221,7 @@ All of the following apply:
   \item $\vt$ is neither a \structuredtype\ nor a bitvector type;
   \item the result is an error indicating that the type of $\vle$ conflicts with the requirements of a field access expression.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \annotateexpr{\tenv, \torexpr(\vleone)} \typearrow (\vtleone, \Ignore, \Ignore) \OrTypeError\\\\
@@ -1223,13 +1229,13 @@ All of the following apply:
   \makeanonymous(\tenv, \vtleone) \typearrow \tleoneanon \OrTypeError\\\\
   \astlabel(\tleoneanon) \not\in \{\TException, \TRecord, \TBits\}
 }{
-  \annotatelexpr{\tenv, \overname{\LESetField(\vleone, \field)}{\vle}, \vte} \typearrow \TypeErrorVal{TypeConflict}
+  \annotatelexpr{\tenv, \overname{\LESetField(\vleone, \field)}{\vle}, \vte} \typearrow \TypeErrorVal{\UnexpectedType}
 }
 \end{mathpar}
 \CodeSubsection{\LESetBadFieldBegin}{\LESetBadFieldEnd}{../Typing.ml}
 
-\subsubsection{TypingRule.LESetStructuredField\label{sec:TypingRule.LESetStructuredField}}
-\subsubsection{Prose}
+\TypingRuleDef{LESetStructuredField}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\vle$ denotes the access to the field named \texttt{field} in $\vleone$;
@@ -1237,12 +1243,12 @@ All of the following apply:
   \item annotating the left-hand-side expression  $\vleone$ with type $\vtleone$ in $\tenv$ yields \\ $(\vletwo, \vses)$\ProseOrTypeError;
   \item obtaining the \underlyingtype\ of $\vtleone$ in $\tenv$ yields a \structuredtype\ with fields \\
         $\fields$\ProseOrTypeError;
-  \item checking that there exists a type associated with the field $\field$ in $\fields$ $\True$ \ProseTerminateAs{\MissingField};
+  \item checking that there exists a type associated with the field $\field$ in $\fields$ $\True$ \ProseTerminateAs{\BadField};
   \item the type associated with the field $\field$ in $\fields$ is $\vt$;
   \item determining whether $\vte$ \typesatisfies\ $\vt$ yields $\True$\ProseOrTypeError;
   \item $\newle$ is the access to the field $\field$ in $\vletwo$, that is, $\LESetField(\vletwo, \field)$.
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \annotateexpr{\tenv, \torexpr(\vleone)} \typearrow (\vtleone, \Ignore, \Ignore) \OrTypeError\\\\
@@ -1250,7 +1256,7 @@ All of the following apply:
   \makeanonymous(\tenv, \vtleone) \typearrow L(\fields) \OrTypeError\\\\
   L \in \{\TException, \TRecord\}\\
   \assocopt(\fields, \field) \typearrow \tyopt\\
-  \checktrans{\tyopt \neq \None}{\MissingField} \checktransarrow \True \OrTypeError\\\\
+  \checktrans{\tyopt \neq \None}{\BadField} \checktransarrow \True \OrTypeError\\\\
   \tyopt \eqname \langle\vt\rangle\\
   \checktypesat(\tenv, \vte, \vt) \typearrow \True \OrTypeError\\\\
   \newle \eqdef \LESetField(\vletwo, \field)
@@ -1260,6 +1266,7 @@ All of the following apply:
 \end{mathpar}
 \CodeSubsection{\LESetStructuredFieldBegin}{\LESetStructuredFieldEnd}{../Typing.ml}
 
+\hypertarget{def-setfieldslexprterm}{}
 \section{Structured Type Multi-field Assignment Expressions\label{sec:StructuredTypeMultiFieldAssignmentExpressions}}
 \subsection{Abstract Syntax}
 \begin{flalign*}
@@ -1267,8 +1274,8 @@ All of the following apply:
 \end{flalign*}
 
 \subsection{Typing}
-\subsubsection{TypingRule.LESetFields\label{sec:TypingRule.LESetFields}}
-\subsubsection{Prose}
+\TypingRuleDef{LESetFields}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\vle$ is an assignable expression for assigning the list of fields $\vlefields$ of the base
@@ -1307,7 +1314,7 @@ All of the following apply:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[bits]{
   \annotateexpr{\tenv, \torexpr(\lebase)} \typearrow (\tbase, \Ignore, \Ignore) \OrTypeError\\\\
@@ -1349,14 +1356,14 @@ All of the following apply:
   \annotatelexpr{\tenv, \lebase, \tbase} \typearrow (\lebaseannot, \vsesbase) \OrTypeError\\\\
   \makeanonymous(\tenv, \tbase) \typearrow \tbaseanon \OrTypeError\\\\
   \commonprefixline\\\\
-  \checktrans{\astlabel(\tbaseanon) \not\in \{\TBits, \TRecord\}}{UnexpectedType} \typearrow \True \OrTypeError
+  \checktrans{\astlabel(\tbaseanon) \not\in \{\TBits, \TRecord\}}{\UnexpectedType} \typearrow \True \OrTypeError
 }{
   \annotatelexpr{\tenv, \overname{\LESetFields(\lebase, \vlefields)}{\vle}, \vte} \typearrow (\newle, \vses)
 }
 \end{mathpar}
 \CodeSubsection{\LESetFieldsBegin}{\LESetFieldsEnd}{../Typing.ml}
 
-\subsubsection{TypingRule.FoldBitvectorFields\label{sec:TypingRule.FoldBitvectorFields}}
+\TypingRuleDef{FoldBitvectorFields}
 \hypertarget{def-foldbitvectorfields}{}
 The helper function
 \[
@@ -1364,7 +1371,7 @@ The helper function
 \aslto (\overname{\N}\vlength \times \overname{(\N \times N)^*}{\vslices})
 \]
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{empty}):
@@ -1379,7 +1386,7 @@ One of the following applies:
     \item $\vlefields$ is the list with prefix $\vlefieldsone$ (the elements excluding the last one) and last element $\vfield$;
     \item applying $\foldbitvectorfields$ to $\vbasefields$ and $\vlefieldsone$ in $\tenv$ yields $(\vstart, \vslicesone)$\ProseOrTypeError;
     \item applying $\assocopt$ to $\vfields$ and $\vbasefields$ yields $\tyopt$;
-    \item checking that $\tyopt$ is different to $\None$ yields $\True$\ProseTerminateAs{\MissingField};
+    \item checking that $\tyopt$ is different to $\None$ yields $\True$\ProseTerminateAs{\BadField};
     \item view $\tyopt$ as $\langle\vtfield\rangle$;
     \item applying $\getbitvectorconstwidth$ to $\vtfield$ in $\tenv$ yields $\vfieldwidth$\ProseOrTypeError;
     \item \Proseeqdef{$\vlength$}{$\vstart + \vfieldwidth$};
@@ -1387,7 +1394,7 @@ One of the following applies:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[empty]{}{
   \foldbitvectorfields(\tenv, \vbasefields, \overname{\emptylist}{\vlefields}) \typearrow (\overname{0}{\vlength}, \overname{\emptylist}{\vslices})
@@ -1398,7 +1405,7 @@ One of the following applies:
 \inferrule[non\_empty]{
   \foldbitvectorfields(\tenv, \vbasefields, \vlefieldsone) \typearrow (\vstart, \vslicesone)\OrTypeError\\\\
   \assocopt(\vfields, \vbasefields) \typearrow \tyopt\\
-  \checktrans{\tyopt \neq \None}{\MissingField} \typearrow \True \OrTypeError\\\\
+  \checktrans{\tyopt \neq \None}{\BadField} \typearrow \True \OrTypeError\\\\
   \tyoptp \eqname \langle\vtfield\rangle\\
   \getbitvectorconstwidth(\tenv, \vtfield) \typearrow \vfieldwidth \OrTypeError\\\\
 }{
@@ -1412,8 +1419,8 @@ One of the following applies:
 \end{mathpar}
 
 \subsection{Semantics}
-\subsubsection{SemanticsRule.LESetFields}
-\subsubsection{Prose}
+\SemanticsRuleDef{LESetFields}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\vle$ is an expression for assigning each of the fields in $\fields$ of the record expression $\vlerecord$
@@ -1427,7 +1434,7 @@ All of the following apply:
   \item \Proseevallexpr{$\envone$}{$\vlerecord$}{the \concurrentnativevalue\ consisting of $\vvtwo$ and the parallel composition of $\vg$ and $\vgtwo$}{$C$}.
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \evalexpr{\env, \torexpr(\vlerecord), \vrmrecordnew} \evalarrow (\vrmrecord, \envone) \OrAbnormal\\\\
@@ -1440,7 +1447,7 @@ All of the following apply:
 }
 \end{mathpar}
 
-\subsubsection{SemanticsRule.AssignBitvectorFields}
+\SemanticsRuleDef{AssignBitvectorFields}
 \hypertarget{def-assignbitvectorfields}{}
 The helper function
 \[
@@ -1455,7 +1462,7 @@ updates the list of fields $\fields$ of \concurrentnativevalue\ $\vmone$ with th
 slices given by $\vslices$ of the \concurrentnativevalue\ $\vm$, yielding the
 \concurrentnativevalue\ $\vmtwo$.
 
-\subsubsection{Prose}
+\ProseParagraph
 One of the following applies:
 \begin{itemize}
   \item All of the following apply (\textsc{empty}):
@@ -1479,7 +1486,7 @@ One of the following applies:
   \end{itemize}
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[empty]{}{
   \assignbitvectorfields(\vm, \vmone, \overname{\emptylist}{\fields}, \overname{\emptylist}{\vslices}) \evalarrow
@@ -1517,21 +1524,21 @@ One of the following applies:
 \end{flalign*}
 
 \subsection{Typing}
-\subsubsection{TypingRule.LESetBitField\label{sec:TypingRule.LESetBitField}}
-\subsubsection{Prose}
+\TypingRuleDef{LESetBitField}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\vle$ denotes the access to the field named $\field$ in $\vleone$, that is, \\ $\LESetField(\vleone, \field)$;
   \item annotating the right-hand-side expression corresponding to $\vleone$ in $\tenv$ yields \\ $(\vtleone, \Ignore, \Ignore)$\ProseOrTypeError;
   \item annotating the left-hand-side expression $\vleone$ in $\tenv$ yields $(\vletwo, \vses)$\ProseOrTypeError;
-  \item obtaining the \underlyingtype\ of $\vtleone$ in $\tenv$ yields a bitvector type with with bitfields $\bitfields$\ProseOrTypeError;
+  \item obtaining the \underlyingtype\ of $\vtleone$ in $\tenv$ yields a bitvector type with bitfields $\bitfields$\ProseOrTypeError;
   \item One of the following applies:
   \begin{itemize}
     \item All of the following applies (\textsc{error\_missing\_field}):
     \begin{itemize}
       \item applying $\findbitfieldopt$ to $\bitfields$ and $\vfield$ yields $\None$, meaning the field is not declared
             in $\vtleone$;
-      \item the result is a type error $\MissingField$.
+      \item the result is a type error $\BadField$.
     \end{itemize}
 
     \item All of the following applies (\textsc{field\_simple}):
@@ -1569,7 +1576,7 @@ All of the following apply:
     \end{itemize}
   \end{itemize}
 \end{itemize}
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule[error\_missing\_field]{
   \annotateexpr{\tenv, \torexpr(\vleone)} \typearrow (\vtleone, \Ignore, \Ignore) \OrTypeError\\\\
@@ -1578,7 +1585,7 @@ All of the following apply:
   \commonprefixline\\\\
   \findbitfieldopt(\bitfields, \field) \typearrow \None\
 }{
-  \annotatelexpr{\tenv, \overname{\LESetField(\vleone, \field)}{\vle}, \vte} \typearrow \TypeErrorVal{\MissingField}
+  \annotatelexpr{\tenv, \overname{\LESetField(\vleone, \field)}{\vle}, \vte} \typearrow \TypeErrorVal{\BadField}
 }
 \end{mathpar}
 
@@ -1641,7 +1648,7 @@ All of the following apply:
 The semantics for assigning to individual bitvector bitfields is covered by \SemanticsRuleRef{LESlice}
 as the type system transforms the \untypedast\ for assigning to an individual bitfield into an $\LESlice$ \typedast.
 
-\subsubsection{SemanticsRule.LESetField\label{sec:SemanticsRule.LESetField}}
+\SemanticsRuleDef{LESetField}
 
 \subsubsection{Example}
 In \listingref{semantics-lesetfield}, the assignment
@@ -1650,7 +1657,7 @@ in the environment where \texttt{my\_record} is bound to \texttt{\{a: 3, b: 100\
 
 \ASLListing{Assignment to a field}{semantics-lesetfield}{\semanticstests/SemanticsRule.LESetField.asl}
 
-\subsubsection{Prose}
+\ProseParagraph
 All of the following apply:
 \begin{itemize}
   \item $\vle$ denotes a field update expression, $\LESetField(\rerecord, \fieldname)$;
@@ -1668,7 +1675,7 @@ All of the following apply:
   is the output configuration $C$.
 \end{itemize}
 
-\subsubsection{Formally}
+\FormallyParagraph
 \begin{mathpar}
 \inferrule{
     \evalexpr{\env, \torexpr(\rerecord)} \evalarrow \Normal(\rmrecord, \envone) \OrAbnormal\\
@@ -1683,7 +1690,7 @@ All of the following apply:
 \CodeSubsection{\EvalLESetFieldBegin}{\EvalLESetFieldEnd}{../Interpreter.ml}
 
 \subsubsection{Comments}
-We note that the type-checker guarantees that $\fieldname$ exists in the record given by $\record$
+We note that the typechecker guarantees that $\fieldname$ exists in the record given by $\record$
 via \TypingRuleRef{LESetStructuredField}.
 
 \lrmcomment{This is related to \identr{WHRS}:}
