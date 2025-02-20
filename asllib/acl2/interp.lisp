@@ -848,7 +848,45 @@
       (t (ev_error "undefined uop" (list op v)))))
   )
 
+#||
 
+(define eval_slice ((env env-p)
+                    (s slice-p)
+                    &key
+                    ((clk natp) 'clk))
+  
+  (val-case s
+    :slice_single (let**
+                   (((expr_result v) (eval_expr env s.index)))
+                   (val-case v.val
+                     :v_int (ev_normal (expr_result (v_array (v_int v.val.val) (v_int 1)) v.env))
+                     :otherwise (ev_error "Bad single slice" s)))
+    :slice_range (let**
+                  (((expr_result mend) (eval_expr s.end env))
+                   ((expr_result mstart) (eval_expr s.end mend.env)))
+                  (val-case mend.val
+                    :v_int (val-case mstart.val
+                             :v_int (ev_normal (expr_result (v_array (list mstart.val (v_int (- mend.val.val mstart.val.val)))) mstart.env))
+                             :otherwise (ev_error "Bad start in the slice range" s))
+                    :otherwise (ev_error "Bad top/end in the slice range" s)))
+    :slice_length (let**
+                  (((expr_result mstart) (eval_expr s.start env))
+                   ((expr_result mlength) (eval_expr s.length mstart.env)))
+                  (val-case mstart.val
+                    :v_int (val-case mlength.val
+                             :v_int (ev_normal (expr_result (v_array (list mstart.val mlength.val)) mstart.env))
+                             :otherwise (ev_error "Bad start in the slice range" s))
+                    :otherwise (ev_error "Bad top/end in the slice range" s)))
+    :slice_star (let**
+                 (((expr_result mfactor) (eval_expr s.factor env))
+                  ((expr_result mlength) (eval_expr s.length mfactor.env)))
+                 (val-case mfactor.val
+                   :v_int (val-case mlength.val
+                            :v_int (ev_normal (expr_result (v_array (v_int (* mfactor.val.val mlength.val.val)) mlength.val)))
+                            :otherwise "Bad length in factor slice" s)
+                   :otherwise (ev_error "Bad factor in factor slice" s)))
+    :otherwise (ev_error "Bad slice" s)))
+||#
 ;; (i-am-here)
 
 (local
@@ -859,7 +897,7 @@
              (< idx (len l)))
             (val-p (nth idx l)))))
 
-
+(i-am-here)
 (with-output
   :evisc (:gag-mode (evisc-tuple 3 4 nil nil))
   (defines eval_expr
