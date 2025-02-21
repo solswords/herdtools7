@@ -26,6 +26,7 @@
 (include-book "centaur/fty/basetypes" :dir :system)
 (include-book "std/util/defenum" :dir :System)
 (include-book "std/basic/two-nats-measure" :dir :system)
+(local (in-theory (disable (tau-system))))
 
 ;; how should we deal with type aliases?  E.g., an identifier is a string, an uid is an int.
 
@@ -81,7 +82,7 @@
   (:l_bitvector ((len natp :rule-classes :type-prescription)
                  (val natp :rule-classes :type-prescription)))
   (:l_string ((val stringp :rule-classes :type-prescription)))
-  (:l_label ((val stringp :rule-classes :type-prescription))))
+  (:l_label ((val identifier-p :rule-classes :type-prescription))))
 
 
 (defenum subprogram_type-p
