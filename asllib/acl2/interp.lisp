@@ -241,9 +241,40 @@
                             ,acl2::rest-expr))))
 
 (deftagsum env_result
-  (:lk_local ((val val)))
-  (:lk_global ((val val)))
+  (:lk_local ((val)))
+  (:lk_global ((val)))
   (:lk_notfound ()))
+
+
+(defmacro def-env_result (pred res-pred)
+  `(define ,pred (x)
+     (and (env_result-p x)
+          (env_result-case x
+            :lk_local (,res-pred x.val)
+            :lk_global (,res-pred x.val)
+            :otherwise t))
+     ///
+     (defthm ,(intern-in-package-of-symbol
+               (concatenate 'string (symbol-name pred) "-IMPLIES") pred)
+       (implies (,pred x)
+                (and (env_result-p x)
+                     (implies (env_result-case x :lk_local)
+                              (,res-pred (lk_local->val x)))
+                     (implies (env_result-case x :lk_global)
+                              (,res-pred (lk_global->val x))))))
+
+     (defthm ,(intern-in-package-of-symbol
+               (concatenate 'string (symbol-name pred) "-WHEN-ENV_RESULT-P") pred)
+       (implies (and (env_result-p x)
+                     (or (not (env_result-case x :lk_local))
+                         (,res-pred (lk_local->val x)))
+                     (or (not (env_result-case x :lk_global))
+                         (,res-pred (lk_global->val x))))
+                (,pred x)))))
+
+(def-env_result val_env_result-p val-p)
+(def-env_result env_env_result-p env-p)
+
 
 (local (defthm assoc-equal-is-hons-assoc-equal
          (implies k
@@ -258,7 +289,7 @@
 
 (define env-find ((x identifier-p)
                   (env env-p))
-  :returns (res env_result-p)
+  :returns (res val_env_result-p)
   (b* (((env env))
        ((local-env env.local))
        (local-look (assoc-equal (identifier-fix x) env.local.storage))
@@ -266,6 +297,32 @@
        ((global-env env.global))
        (global-look (assoc-equal (identifier-fix x) env.global.storage))
        ((When global-look) (lk_global (cdr global-look))))
+    (lk_notfound)))
+
+(define env-assign ((name identifier-p)
+                    (v val-p)
+                    (env env-p))
+  :returns (res env_env_result-p)
+  (b* (((env env))
+       ((local-env env.local))
+       (name (identifier-fix name))
+       (local-look (assoc-equal name env.local.storage))
+       ((When local-look)
+        (lk_local
+         (change-env env
+                     :local (change-local-env
+                             env.local
+                             :storage (cons (cons name (val-fix v))
+                                            env.local.storage)))))
+       ((global-env env.global))
+       (global-look (assoc-equal name env.global.storage))
+       ((When global-look)
+        (lk_global
+         (change-env env
+                     :global (change-global-env
+                             env.global
+                             :storage (cons (cons name (val-fix v))
+                                            env.global.storage))))))
     (lk_notfound)))
 
 
@@ -294,6 +351,37 @@
                                                            (:minus (- v1.val v2.val)))))
                    :otherwise (ev_error "bad binop" (list op v1 v2)))
          :otherwise (ev_error "bad binop" (list op v1 v2))))
+      ((:eq_op :neq)
+       (val-case v1
+         :v_int (val-case v2 :v_int (ev_normal (v_bool (eql v1.val v2.val)))
+                  :otherwise (ev_error "bad binop" (list op v1 v2)))
+         :v_bool (val-case v2 :v_bool (ev_normal (v_bool (eq v1.val v2.val)))
+                  :otherwise (ev_error "bad binop" (list op v1 v2)))
+         :v_real (val-case v2 :v_real (ev_normal (v_bool (equal v1.val v2.val)))
+                   :otherwise (ev_error "bad binop" (list op v1 v2)))
+         :v_bitvector (val-case v2 :v_bitvector
+                        (if (eql v1.len v2.len)
+                            (ev_normal (v_bool (eql v1.val v2.val)))
+                          (ev_error "bad binop" (list op v1 v2)))
+                        :otherwise (ev_error "bad binop" (list op v1 v2)))
+         :v_string (val-case v2 :v_string (ev_normal (v_bool (equal v1.val v2.val)))
+                     :otherwise (ev_error "bad binop" (list op v1 v2)))
+         :v_label (val-case v2 :v_label (ev_normal (v_bool (equal v1.val v2.val)))
+                    :otherwise (ev_error "bad binop" (list op v1 v2)))
+         :otherwise (ev_error "bad binop" (list op v1 v2))))
+      ((:leq :lt :geq :gt)
+       (b* (((mv err val1 val2)
+             (val-case v1
+               :v_int (val-case v2 :v_int (mv nil v1.val v2.val) :otherwise (mv t nil nil))
+               :v_real (val-case v2 :v_real (mv nil v1.val v2.val) :otherwise (mv t nil nil))
+               :otherwise (mv t nil nil)))
+            ((when err)
+             (ev_error "bad binop" (list op v1 v2))))
+         (ev_normal (v_bool (case op
+                              (:leq (<= val1 val2))
+                              (:lt (< val1 val2))
+                              (:geq (>= val1 val2))
+                              (t (> val1 val2)))))))
       (:div (val-case v1
               :v_int (val-case v2 :v_int (if (and (< 0 v2.val)
                                                   (eql (mod v1.val v2.val) 0))
@@ -324,6 +412,16 @@
                                  (ev_normal (v_real (expt v1.val v2.val))))
                        :otherwise (ev_error "bad binop" (list op v1 v2)))
               :otherwise (ev_error "bad binop" (list op v1 v2))))
+      ((:band :bor :beq :impl)
+       (val-case v1 :v_bool
+         (val-case v2 :v_bool
+           (ev_normal (v_bool (case op
+                                (:band (and v1.val v2.val))
+                                (:bor (or v1.val v2.val))
+                                (:beq (eq v1.val v2.val))
+                                (t    (implies v1.val v2.val)))))
+           :otherwise (ev_error "bad binop" (list op v1 v2)))
+         :otherwise (ev_error "bad binop" (list op v1 v2))))
       (t (ev_error "undefined binop" (list op v1 v2))))))
 
 
@@ -431,7 +529,7 @@
   (defthm maybe-expr-count-linear
     (implies x
              (< (expr-count x) (maybe-expr-count x)))
-    :rule-classes ((:linear :trigger-terms ((maybe-expr-count x))))))
+    :rule-classes :linear))
 
 (define expr*maybe-ty-count ((x expr*maybe-ty-p))
   :returns (count posp :rule-classes :type-prescription)
@@ -798,6 +896,17 @@
     (equal (len names) (len x))))
 
 
+(define declare_local_identifier ((env env-p)
+                                  (name identifier-p)
+                                  (val val-p))
+  :returns (new-env env-p)
+  :prepwork ((local (include-book "std/lists/take" :dir :system)))
+  (b* (((env env))
+       ((local-env l) env.local)
+       (new-storage (cons (cons (identifier-fix name) (val-fix val))
+                          l.storage)))
+    (change-env env :local (change-local-env l :storage new-storage))))
+
 (define declare_local_identifiers ((env env-p)
                                    (names identifierlist-p)
                                    (vals vallist-p))
@@ -895,6 +1004,7 @@
                   (vallist-p (acl2::repeat len v)))
          :hints(("Goal" :in-theory (enable acl2::repeat)))))
 
+
 (with-output
   ;; makes it so it won't take forever to print the induction scheme
   :evisc (:gag-mode (evisc-tuple 3 4 nil nil))
@@ -915,15 +1025,19 @@
                      :lk_global (ev_normal (expr_result look.val env))
                      :lk_notfound (ev_error "Variable not found" desc))) ;; SemanticsRule.EVar
           :e_pattern (let**
-                      (((expr_result v1) (eval_expr env desc.expr)))
-                      (eval_pattern v1.env v1.val desc.pattern))
+                      (((expr_result v1) (eval_expr env desc.expr))
+                       (val (eval_pattern v1.env v1.val desc.pattern)))
+                      (ev_normal (expr_result val v1.env)))
           :e_unop ;; anna
           (let**
            (((expr_result v) (eval_expr env desc.arg))
             (val (eval_unop desc.op v.val))) ;;SemanticsRule.Unop
            (ev_normal (expr_result val v.env)))
           :e_binop ;;
-          (ev_error "Unsupported expression" desc)
+          (b* (((ev (expr_result v1)) (eval_expr env desc.arg1))
+               ((ev (expr_result v2)) (eval_expr v1.env desc.arg2))
+               ((ev val) (eval_binop desc.op v1.val v2.val)))
+            (ev_normal (expr_result val v2.env)))
           :e_call ;; sol
           (b* (((call c) desc.call)
                ((ev (exprlist_result e))
@@ -1011,15 +1125,52 @@
                           ((clk natp) 'clk))
       :measure (nats-measure clk 0 (pattern-count p))
       ;; :returns (val val-p)
-      ;; Note: we may want to have this return just a value since it's not
-      ;; supposed to produce any side effects?
-      :returns (eval expr_eval_result-p)
+      ;; Note: this isn't supposed to produce any side effects so we'll omit
+      ;; the environment and just return the value
+      :returns (eval val_result-p)
       (b* ((desc (pattern->val p)))
         (pattern_desc-case desc
-          :pattern_all (ev_normal (expr_result (v_bool t) env)) ;; SemanticsRule.PAll
+          :pattern_all (ev_normal (v_bool t)) ;; SemanticsRule.PAll
           :pattern_any (eval_pattern-any env val desc.patterns)
-          :otherwise (ev_error "Unsupported pattern" desc))))
+          :pattern_geq (b* (((ev (expr_result v1)) (eval_expr env desc.expr)))
+                         (eval_binop :geq val v1.val))
+          :pattern_leq (b* (((ev (expr_result v1)) (eval_expr env desc.expr)))
+                         (eval_binop :leq val v1.val))
+          :pattern_mask (ev_error "Unsupported pattern" desc)
+          :pattern_not (b* (((ev v1) (eval_pattern env val desc.pattern)))
+                         (eval_unop :bnot v1))
+          :pattern_range (b* (((ev (expr_result v1)) (eval_expr env desc.lower))
+                              ((ev (expr_result v2)) (eval_expr env desc.upper))
+                              ((ev lower) (eval_binop :geq val v1.val))
+                              ((ev upper) (eval_binop :leq val v2.val)))
+                           (eval_binop :band lower upper))
+          :pattern_single (b* (((ev (expr_result v1)) (eval_expr env desc.expr)))
+                            (eval_binop :eq_op val v1.val))
+          :pattern_tuple (b* ((len (len desc.patterns))
+                              ((ev vs) (val-case val
+                                         :v_array (if (eql (len val.arr) len)
+                                                      (ev_normal val.arr)
+                                                    (ev_error "pattern tuple length mismatch" p))
+                                         :otherwise (ev_error "pattern tuple type mismatch" p))))
+                           (eval_pattern_tuple env vs desc.patterns)))))
 
+    (define eval_pattern_tuple ((env env-p)
+                                (vals vallist-p)
+                                (p patternlist-p)
+                                &key
+                                ((clk natp) 'clk))
+      :guard (eql (len vals) (len p))
+      :measure (nats-measure clk 0 (patternlist-count p))
+      :returns (eval val_result-p)
+      (b* (((when (atom p)) (ev_normal (v_bool t)))
+           ((ev first) (eval_pattern env (car vals) (car p)))
+           ;; short circuit?
+           ((when (val-case first :v_bool (not first.val) :otherwise nil))
+            (ev_normal first))
+           ((ev rest) (eval_pattern_tuple env (cdr vals) (cdr p))))
+        (eval_binop :band first rest)))
+        
+    
     (define eval_pattern-any ((env env-p)
                               (val val-p)
                               (p patternlist-p)
@@ -1027,15 +1178,15 @@
                               ((clk natp) 'clk))
       :measure (nats-measure clk 0 (patternlist-count p))
 
-      :returns (eval expr_eval_result-p)
+      :returns (eval val_result-p)
       (if (atom p)
-          (ev_normal (expr_result (v_bool nil) env))
+          (ev_normal (v_bool nil))
         (let**
-         (((expr_result v1) (eval_pattern env val (car p))))
-         (val-case v1.val
-           :v_bool (if v1.val.val
+         ((v1 (eval_pattern env val (car p))))
+         (val-case v1
+           :v_bool (if v1.val
                        (ev_normal v1)
-                     (eval_pattern-any v1.env val (cdr p)))
+                     (eval_pattern-any env val (cdr p)))
            :otherwise (ev_error "Bad result type from eval_pattern" v1)))))
 
 
@@ -1111,6 +1262,44 @@
           :continuing (ev_normal (func_result nil (env->global bodyres.env))))))
 
 
+    (define eval_lexpr ((env env-p)
+                        (lx lexpr-p)
+                        (v val-p)
+                        &key
+                        ((clk natp) 'clk))
+      :returns (eval env_eval_result-p)
+      :measure (nats-measure clk 0 (lexpr-count* lx))
+      (b* ((lx (lexpr->val lx)))
+        (lexpr_desc-case lx
+          :le_discard (ev_normal (env-fix env))
+          :le_var (b* ((envres (env-assign lx.name v env)))
+                    (env_result-case envres
+                      :lk_local (ev_normal envres.val)
+                      :lk_global (ev_normal envres.val)
+                      :lk_notfound (ev_error "assign to undeclared variable" lx)))
+          :le_slice (ev_error "unimplemented lexpr" lx)
+          :le_setarray (ev_error "unimplemented lexpr" lx)
+          :le_setenumarray (ev_error "unimplemented lexpr" lx)
+          :le_setfield (ev_error "unimplemented lexpr" lx)
+          :le_setfields (ev_error "unimplemented lexpr" lx)
+          :le_destructuring (val-case v
+                              :v_array (if (eql (len v.arr) (len lx.elts))
+                                           (eval_lexpr_list env lx.elts v.arr)
+                                         (ev_error "le_destructuring length mismatch" lx))
+                              :otherwise (ev_error "le_destructuring type mismatch" lx)))))
+
+    (define eval_lexpr_list ((env env-p)
+                             (lx lexprlist-p)
+                             (v vallist-p)
+                             &key
+                             ((clk natp) 'clk))
+      :guard (eql (len lx) (len v))
+      :returns (eval env_eval_result-p)
+      :measure (nats-measure clk 0 (lexprlist-count* lx))
+      (b* (((when (atom lx)) (ev_normal (env-fix env)))
+           ((ev env1) (eval_lexpr env (car lx) (car v))))
+        (eval_lexpr_list env1 (cdr lx) (cdr v))))
+
     (define eval_stmt ((env env-p)
                        (s stmt-p)
                        &key
@@ -1122,8 +1311,22 @@
           :s_pass (ev_normal (continuing env))
           :s_seq (b* (((evs env) (eval_stmt env s.first)))
                    (eval_stmt env s.second))
-          :s_decl (ev_error "unsupported statement" s)
-          :s_assign (ev_error "unsupported statement" s)
+          :s_decl
+          (b* (((unless s.expr) (ev_error "uninitialized declaration" s))
+               ((ev (expr_result v)) (eval_expr env s.expr)))
+            (local_decl_item-case s.item
+              :ldi_var (b* ((env (declare_local_identifier v.env s.item.name v.val)))
+                         (ev_normal (continuing env)))
+              :ldi_tuple (val-case v.val
+                           :v_array (if (eql (len v.val.arr) (len s.item.names))
+                                        (b* ((env (declare_local_identifiers v.env s.item.names v.val.arr)))
+                                          (ev_normal (continuing env)))
+                                      (ev_error "tuple length mismatch" s))
+                           :otherwise (ev_error "local declaration type mismatch" s))))
+          :s_assign
+          (b* (((ev (expr_result v)) (eval_expr env s.expr))
+               ((ev new-env) (eval_lexpr v.env s.lexpr v.val)))
+            (ev_normal (continuing new-env)))
           :s_call (ev_error "unsupported statement" s)
           :s_return (ev_error "unsupported statement" s)
           :s_cond (b* (((ev (expr_result test)) (eval_expr env s.test))
@@ -1147,9 +1350,6 @@
           :s_unreachable (ev_error "unreachable" s)
           :s_pragma (ev_error "unsupported statement" s))))
 
-    
-         
-
     ///
     (local (in-theory (disable eval_expr
                                eval_pattern
@@ -1167,8 +1367,13 @@
         :hints ('(:expand ((eval_expr_list env e))))
         :fn eval_expr_list)
       :skip-others t)
-    
-    (verify-guards eval_expr-fn :guard-debug t)))
+
+    (local (defthm len-equal-0
+             (equal (equal 0 (len x))
+                    (not (consp x)))))
+
+    (verify-guards eval_expr-fn :guard-debug t
+      :hints (("goal" :do-not-induct t)))))
 
 (define eval_slice ((env env-p)
                     (s slice-p)
