@@ -28,6 +28,11 @@
 (local (include-book "std/lists/nth" :dir :system))
 (local (include-book "std/lists/repeat" :dir :system))
 (local (include-book "std/lists/take" :dir :system))
+(local (include-book "ihs/quotient-remainder-lemmas" :dir :system))
+(local (include-book "arithmetic/top" :dir :system))
+(local (include-book "std/alists/hons-assoc-equal" :dir :system))
+(local (include-book "std/alists/put-assoc-equal" :dir :system))
+(local (in-theory (disable floor mod)))
 (local (table fty::deftagsum-defaults :short-names t))
 (local (in-theory (disable (tau-system))))
 (local (in-theory (disable put-assoc-equal)))
@@ -88,20 +93,28 @@
     :l_string (v_string x.val)
     :l_label (v_label x.val)))
 
-(fty::defmap int-imap :key-type identifier :val-type integerp :true-listp t)
+;; (fty::defmap int-imap :key-type identifier :val-type integerp :true-listp t)
+  
+;; (local
+;;  (defthm alistp-when-int-imap-p-rw
+;;    (implies (int-imap-p x)
+;;             (alistp x))
+;;    :hints(("Goal" :in-theory (enable int-imap-p)))))
+
+(fty::defmap pos-imap :key-type identifier :val-type posp :true-listp t)
   
 (local
- (defthm alistp-when-int-imap-p-rw
-   (implies (int-imap-p x)
+ (defthm alistp-when-pos-imap-p-rw
+   (implies (pos-imap-p x)
             (alistp x))
-   :hints(("Goal" :in-theory (enable int-imap-p)))))
+   :hints(("Goal" :in-theory (enable pos-imap-p)))))
 
 
 
 (defprod global-env
   ((static static_env_global)
    (storage val-imap)
-   (stack_size int-imap))
+   (stack_size pos-imap))
   :layout :list)
 
 (defprod unit () :layout :list
@@ -381,9 +394,6 @@
 (def-eval_result val_result-p val-p)
 (def-eval_result vallist_result-p vallist-p)
 
-(local (include-book "ihs/quotient-remainder-lemmas" :dir :system))
-(local (include-book "arithmetic/top" :dir :system))
-(local (in-theory (disable floor mod)))
 
 (define eval_binop ((op binop-p)
                     (v1 val-p)
@@ -881,7 +891,7 @@
 
 
 (define env-clk-sum-stack-size ((subs func-ses-imap-p)
-                                (stk int-imap-p))
+                                (stk pos-imap-p))
   :returns (clk natp :rule-classes :type-prescription)
   (b* (((when (atom subs)) 0)
        ((unless (mbt (and (consp (car subs))
@@ -902,6 +912,55 @@
 
 (def-eval_result env_eval_result-p env-p)
 
+(define stack_size-lookup ((name identifier-p)
+                      (stack_size pos-imap-p))
+  :returns (val natp :rule-classes :type-prescription)
+  :hooks (:fix)
+  (b* ((name (identifier-fix name))
+       (stack_size (pos-imap-fix stack_size))
+       (look (assoc-equal name stack_size)))
+    (if look (cdr look) 0)))
+  
+
+(define increment-stack ((name identifier-p)
+                         (stack_size pos-imap-p))
+  :returns (res (and (eval_result-p res)
+                     (implies (eval_result-case res :ev_normal)
+                              (pos-imap-p (ev_normal->res res)))))
+  (b* ((name (identifier-fix name))
+       (stack_size (pos-imap-fix stack_size))
+       (val (stack_size-lookup name stack_size))
+       ((when (<= *recursion-limit-upper-bound* val))
+        (ev_error "Recursion limit overflowed" name)))
+    (ev_normal
+     (put-assoc-equal name (+ 1 val) stack_size)))
+  ///
+  (defret increment-stack-normal
+    (iff (equal (eval_result-kind res) :ev_normal)
+         (< (stack_size-lookup name stack_size) (expt 2 40)))))
+
+(define decrement-stack ((name identifier-p)
+                         (stack_size pos-imap-p))
+  :returns (res pos-imap-p)
+  (b* ((name (identifier-fix name))
+       (stack_size (pos-imap-fix stack_size))
+       (val (- (stack_size-lookup name stack_size) 1)))
+    (if (posp val)
+        (put-assoc-equal name val stack_size)
+      (remove-assoc-equal name stack_size)))
+  ///
+  (defthm decrement-stack-of-increment-stack
+    (b* ((incr-result (increment-stack name stack_size))
+         ((ev_normal incr-result)))
+      (implies (and (eval_result-case incr-result :ev_normal)
+                    (no-duplicatesp-equal (acl2::alist-keys stack-size))
+                    (pos-imap-p stack_size))
+               (equal (decrement-stack name incr-result.res)
+                      stack_size)))
+    :hints(("Goal" :in-theory (enable increment-stack stack_size-lookup)))))
+             
+       
+
 (define env-push-stack ((name identifier-p)
                         (env env-p))
   :returns (new-env env_eval_result-p)
@@ -912,11 +971,8 @@
        (look (assoc-equal name s.subprograms))
        ((unless look)
         (ev_error "Unrecognized subprogram" name))
-       (look (assoc-equal name g.stack_size))
-       (val (lifix (if look (cdr look) 0)))
-       ((when (<= *recursion-limit-upper-bound* val))
-        (ev_error "Recursion limit overflowed" name))
-       (new-g (change-global-env g :stack_size (cons (cons name (+ 1 val)) g.stack_size))))
+       ((ev stack_size) (increment-stack name g.stack_size))
+       (new-g (change-global-env g :stack_size stack_size)))
     (ev_normal (make-env :global new-g :local (empty-local-env))))
 
   ;; ///
@@ -969,9 +1025,9 @@
   ;; and combines it with the global component of the call-env, but decrements name's stack size.
   (b* (((env call) call-env)
        ((global-env g) call-env)
-       (look (assoc-equal name g.stack_size))
-       (val (lifix (if look (cdr look) 0)))
-       (new-g (change-global-env g :stack_size (cons (cons name (- val 1)) g.stack_size))))
+       (new-g (change-global-env g
+                                 :stack_size
+                                 (decrement-stack name g.stack_size))))
     (change-env prev-env :global new-g)))
 
   
@@ -1308,8 +1364,7 @@
 (define pop_scope ((parent env-p)
                    (child env-p))
   :Returns (new-env env-p)
-  :prepwork ((local (include-book "std/alists/hons-assoc-equal" :dir :system))
-             (local (defthm fal-extract-of-val-imap
+  :prepwork ((local (defthm fal-extract-of-val-imap
                       (implies (val-imap-p x)
                                (val-imap-p (acl2::fal-extract keys x)))
                       :hints(("Goal" :in-theory (enable acl2::fal-extract))))))
@@ -1321,7 +1376,9 @@
     (change-env child
                 :local
                 (change-local-env child.local
-                                  :storage (acl2::fal-extract dom child.local.storage)))))
+                                  :storage (acl2::fal-extract
+                                            (remove-duplicates-equal dom)
+                                            child.local.storage)))))
 
 
 
@@ -1544,10 +1601,16 @@
            ((ev sub-env) (env-push-stack name env))
            ((when (zp clk))
             (ev_error "Recursion limit ran out" name))
-           ((ev (func_result subprog-eval)) (eval_subprogram sub-env name vparams.val vargs.val :clk (1- clk)))
-           ;; (vals (read_value_from subprog-eval.val))
-           (env (env-pop-stack name env subprog-eval.env)))
-        (ev_normal (exprlist_result subprog-eval.vals env))))
+           (sub-res
+            (eval_subprogram sub-env name vparams.val vargs.val :clk (1- clk))))
+        (eval_result-case sub-res
+          :ev_normal (b* (((func_result subprog-eval) sub-res.res)
+                          ;; (vals (read_value_from subprog-eval.val))
+                          (env (env-pop-stack name env subprog-eval.env)))
+                       (ev_normal (exprlist_result subprog-eval.vals env)))
+          :ev_throwing (b* ((env (env-pop-stack name env (env->global sub-res.env))))
+                         (ev_throwing sub-res.throwdata env))
+          :ev_error sub-res)))
 
     (define eval_subprogram ((env env-p)
                              (name identifier-p)
