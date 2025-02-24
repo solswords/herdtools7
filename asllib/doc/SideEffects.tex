@@ -72,7 +72,6 @@ Along the way, we also define the concept of \emph{pure expressions} and \symbol
 We divide side effects by \emph{\timeframesterm}, which indicate the phase where a side effect occurs:
 \begin{description}
     \item[Constant] Contains effects that take place during static evaluation (see \chapref{StaticEvaluation}). That is, during typechecking.
-    \item[Configuration] Contains effects that take place while rewriting the initializing value of a \texttt{config} storage element.
     \item[Execution] Contains effects that take place during semantic evaluation.
 \end{description}
 
@@ -81,9 +80,8 @@ Formally, \timeframesterm\ are totally ordered via $\timeframeless$ as follows:
 \hypertarget{def-timeframeless}{}
 \hypertarget{def-timeframeconstant}{}
 \hypertarget{def-timeframeexecution}{}
-\hypertarget{def-timeframeconfig}{}
 \[
-\TTimeFrame \triangleq \{ \timeframeconstant \timeframeless \timeframeconfig \timeframeless \timeframeexecution \}
+\TTimeFrame \triangleq \{ \timeframeconstant \timeframeless \timeframeexecution \}
 \]
 Additionally, we define the less-than-or-equal ordering as follows:
 \hypertarget{def-timeframeleq}{}
@@ -108,6 +106,10 @@ The function
 \]
 constructs a \timeframeterm\ $\vt$ from a local declaration keyword $\ldk$.
 
+\ProseParagraph
+\ProseEqdef{$\vt$}{$\timeframeconstant$ if $\ldk$ is $\LDKConstant$, and
+    $\timeframeexecution$ otherwise}.
+
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{}{
@@ -126,9 +128,16 @@ constructs a \timeframeterm\ $\vt$ from a local declaration keyword $\ldk$.
 \hypertarget{def-timeframeofgdk}{}
 The function
 \[
-    \timeframeofgdk(\overname{\globaldeclkeyword}{\gdk}) \aslto \TTimeFrame
+    \timeframeofgdk(\overname{\globaldeclkeyword}{\gdk}) \aslto \overname{\TTimeFrame}{\vt}
 \]
 constructs a \timeframeterm\ $\vt$ from a global declaration keyword $\gdk$.
+
+\ProseParagraph
+\ProseEqdef{$\vt$}{$\timeframeconstant$ if $\gdk$ is $\GDKConstant$,
+    $\timeframeexecution$ if $\gdk$ is $\GDKConfig$,
+    $\timeframeexecution$ if $\gdk$ is $\GDKLet$, and
+    $\timeframeexecution$ if $\gdk$ is $\GDKVar$.
+}
 
 \FormallyParagraph
 \begin{mathpar}
@@ -137,7 +146,7 @@ constructs a \timeframeterm\ $\vt$ from a global declaration keyword $\gdk$.
         \timeframeofgdk(\gdk) \typearrow
     \begin{cases}
         \timeframeconstant  & \text{if }\gdk = \GDKConstant\\
-        \timeframeconfig & \text{if }\gdk = \GDKConfig\\
+        \timeframeexecution & \text{if }\gdk = \GDKConfig\\
         \timeframeexecution & \text{if }\gdk = \GDKLet\\
         \timeframeexecution & \text{if }\gdk = \GDKVar\\
     \end{cases}
@@ -211,19 +220,53 @@ The function
 \]
 retrieves the \timeframeterm\ $\vt$ from a \sideeffectdescriptorterm\ $\vs$.
 
+\ProseParagraph
+\OneApplies
+\begin{itemize}
+    \item \AllApplyCase{read\_local}
+    \begin{itemize}
+        \item $\vs$ is a \ReadLocalTerm{} for the \timeframeterm{} $\vt$.
+    \end{itemize}
+
+    \item \AllApplyCase{read\_global}
+    \begin{itemize}
+        \item $\vs$ is a \ReadGlobalTerm{} for the \timeframeterm{} $\vt$.
+    \end{itemize}
+
+    \item \AllApplyCase{performs\_assertions}
+    \begin{itemize}
+        \item $\vs$ is a \PerformsAssertionsTerm{};
+        \item \Proseeqdef{$\vt$}{$\timeframeconstant$}.
+    \end{itemize}
+
+    \item \AllApplyCase{other}
+    \begin{itemize}
+        \item $\vs$ is either a \WriteLocalTerm{}, a \WriteGlobalTerm{},
+                a \NonDeterministicTerm{}, a \RecursiveCallTerm{}, or a
+                \ThrowExceptionTerm{};
+        \item \Proseeqdef{$\vt$}{$\timeframeexecution$}.
+    \end{itemize}
+\end{itemize}
+
 \FormallyParagraph
 \begin{mathpar}
-\inferrule{}{
+\inferrule[read\_local]{}{
     \timeframe(\overname{\ReadLocal(\Ignore, \vt, \Ignore)}{\vs}) \typearrow \vt
 }
 \and
-\inferrule{}{
+\inferrule[read\_global]{}{
     \timeframe(\overname{\ReadGlobal(\Ignore, \vt, \Ignore)}{\vs}) \typearrow \vt
 }
 \end{mathpar}
 
 \begin{mathpar}
-\inferrule{
+\inferrule[performs\_assertions]{}{
+    \timeframe(\overname{\PerformsAssertions}{\vs}) \typearrow \overname{\timeframeconstant}{\vt}
+}
+\end{mathpar}
+
+\begin{mathpar}
+\inferrule[other]{
     {
     \configdomain{\vs} \in \left\{
         \begin{array}{c}
@@ -237,12 +280,6 @@ retrieves the \timeframeterm\ $\vt$ from a \sideeffectdescriptorterm\ $\vs$.
     }
 }{
     \timeframe(\vs) \typearrow \overname{\timeframeexecution}{\vt}
-}
-\end{mathpar}
-
-\begin{mathpar}
-\inferrule{}{
-    \timeframe(\overname{\PerformsAssertions}{\vs}) \typearrow \overname{\timeframeconstant}{\vt}
 }
 \end{mathpar}
 
@@ -306,16 +343,16 @@ defines whether there exists a \emph{\sideeffectconflictterm} between the \sidee
 and the \sideeffectdescriptorterm\ $\vstwo$, yielding the result in $\vb$.
 
 \ProseParagraph
-One of the following applies:
+\OneApplies
 \begin{itemize}
-    \item All of the following apply (\textsc{globalread}):
+    \item \AllApplyCase{globalread}
     \begin{itemize}
         \item $\vsone$ is a \ReadGlobalTerm\ for a storage element named $\id$;
         \item define $\vb$ as $\True$ if and only if $\vstwo$ is either
               a \WriteGlobalTerm\ for a storage element named $\id$ or a \RecursiveCallTerm.
     \end{itemize}
 
-    \item All of the following apply (\textsc{globalwrite}):
+    \item \AllApplyCase{globalwrite}
     \begin{itemize}
         \item $\vsone$ is a \WriteGlobalTerm\ for a storage element named $\id$;
         \item define $\vb$ as $\True$ if and only if $\vstwo$ is either
@@ -325,7 +362,7 @@ One of the following applies:
               a \RecursiveCallTerm.
     \end{itemize}
 
-    \item All of the following apply (\textsc{exception}):
+    \item \AllApplyCase{exception}
     \begin{itemize}
         \item $\vsone$ is an \ThrowExceptionTerm;
         \item define $\vb$ as $\True$ if and only if $\vstwo$ is either
@@ -335,7 +372,7 @@ One of the following applies:
                 \RecursiveCallTerm.
     \end{itemize}
 
-    \item All of the following apply (\textsc{localread}):
+    \item \AllApplyCase{localread}
     \begin{itemize}
         \item $\vsone$ is a \ReadLocalTerm\ for a storage element named $\id$;
         \item define $\vb$ as $\True$ if and only if $\vstwo$ is either
@@ -343,7 +380,7 @@ One of the following applies:
                 \RecursiveCallTerm.
     \end{itemize}
 
-    \item All of the following apply (\textsc{localwrite}):
+    \item \AllApplyCase{localwrite}
     \begin{itemize}
         \item $\vsone$ is a \WriteLocalTerm\ for a storage element named $\id$;
         \item define $\vb$ as $\True$ if and only if $\vstwo$ is either
@@ -352,7 +389,7 @@ One of the following applies:
                 \RecursiveCallTerm.
     \end{itemize}
 
-    \item All of the following apply (\textsc{assertion}):
+    \item \AllApplyCase{assertion}
     \begin{itemize}
         \item $\vsone$ is a \PerformsAssertionsTerm;
         \item define $\vb$ as $\True$ if and only if $\vstwo$ is either
@@ -360,13 +397,13 @@ One of the following applies:
             \RecursiveCallTerm.
     \end{itemize}
 
-    \item All of the following apply (\textsc{nondeterminism}):
+    \item \AllApplyCase{nondeterminism}
     \begin{itemize}
         \item $\vsone$ is a \NonDeterministicTerm;
         \item define $\vb$ as $\False$.
     \end{itemize}
 
-    \item All of the following apply (\textsc{recursion}):
+    \item \AllApplyCase{recursion}
     \begin{itemize}
         \item $\vsone$ is a \RecursiveCallTerm;
         \item define $\vb$ as $\True$ if and only if $\vstwo$ is not a \NonDeterministicTerm.
@@ -527,7 +564,7 @@ yields the union of the two sets of \sideeffectdescriptorsterm\ $\vsesone$ and $
 if they are \hyperlink{def-sideeffectconflictterm}{non-conflicting}. \ProseOtherwiseTypeError
 
 \ProseParagraph
-All of the following apply:
+\AllApply
 \begin{itemize}
     \item checking whether $\arenonconflicting$ yields $\True$ for $\vsesone$ and $\vsestwo$ yields\\
          $\True$\ProseTerminateAs{\SideEffectViolation};
@@ -554,9 +591,9 @@ in $\vf$.
 (If $\vses$ is empty, the result is \timeframeconstant.)
 
 \ProseParagraph
-One of the following applies:
+\OneApplies
 \begin{itemize}
-    \item All of the following apply (\textsc{execution}):
+    \item \AllApplyCase{execution}
     \begin{itemize}
         \item there exists a \sideeffectdescriptorterm\ in $\vses$ that is either
             a \WriteLocalTerm, a \WriteGlobalTerm, an \ThrowExceptionTerm, a \RecursiveCallTerm, or
@@ -564,7 +601,7 @@ One of the following applies:
         \item define $\vf$ as \timeframeexecution.
     \end{itemize}
 
-    \item All of the following apply (\textsc{reads}):
+    \item \AllApplyCase{reads}
     \begin{itemize}
         \item define $\vreads$ as the subset of $\vses$ that contains only
             \sideeffectdescriptorsterm\ that are either \ReadLocalTerm\ or \ReadGlobalTerm;
@@ -640,7 +677,7 @@ returns $\True$ if the set of \sideeffectdescriptorsterm\ $\vses$ is \symbolical
 \ProseOtherwiseTypeError
 
 \ProseParagraph
-All of the following applies:
+\AllApply
 \begin{itemize}
   \item applying $\issymbolicallyevaluable$ to $\ve$ in $\tenv$ yields $\vb$;
   \item the result is $\True$ if $\vb$ is $\True$, otherwise it is a type error indicating that the expression
@@ -706,7 +743,7 @@ The function
 \]
 tests whether the \timeframesterm\ of \sideeffectdescriptorsterm\ in $\vses$ are all less than or equal to the \timeframeterm\
 $\vt$, yielding the result in $\vb$.
-% Transliteration note: this abstracts both leq_config_time and leq_constant_time
+% Transliteration note: this abstracts leq_constant_time
 
 \ProseParagraph
 Define $\vb$ as $\True$ if and only if the maximal \timeframeterm\ of all \sideeffectdescriptorsterm\ in $\vses$

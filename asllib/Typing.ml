@@ -539,8 +539,8 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
     | _ -> conflict ~loc [ default_t_bits ] t
   (* End *)
 
-  (* Begin CheckStructureInteger *)
-  let check_structure_integer ~loc env t () =
+  (* Begin CheckUnderlyingInteger *)
+  let check_underlying_integer ~loc env t () =
     let () =
       if false then
         Format.eprintf "Checking that %a is an integer.@." PP.pp_ty t
@@ -588,13 +588,6 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
       fatal_from ~loc:expr_for_error
         (Error.ImpureExpression (expr_for_error, SES.remove_pure ses))
 
-  let leq_config_time ses =
-    TimeFrame.is_before (SES.max_time_frame ses) TimeFrame.Config
-
-  let check_leq_config_time ~loc (_, e, ses_e) () =
-    if leq_config_time ses_e then ()
-    else fatal_from ~loc Error.(ConfigTimeBroken (e, ses_e))
-
   let leq_constant_time ses =
     TimeFrame.is_before (SES.max_time_frame ses) TimeFrame.Constant
 
@@ -606,7 +599,6 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
     let open TimeFrame in
     function
     | TimeFrame.Constant -> check_leq_constant_time
-    | TimeFrame.Config -> check_leq_config_time
     | TimeFrame.Execution -> fun ~loc:_ _ -> ok
 
   let check_bits_equal_width' env t1 t2 () =
@@ -1374,7 +1366,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
   (* Begin AnnotateSymbolicInteger *)
   and annotate_symbolic_integer ~(loc : 'a annotated) env e =
     let t, e', ses = annotate_symbolically_evaluable_expr env e in
-    let+ () = check_structure_integer ~loc env t in
+    let+ () = check_underlying_integer ~loc env t in
     (StaticModel.try_normalize env e', ses)
   (* End *)
 
@@ -1419,7 +1411,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
           and length', ses_length =
             annotate_symbolic_constrained_integer ~loc env length
           in
-          let+ () = check_structure_integer ~loc:offset env t_offset in
+          let+ () = check_underlying_integer ~loc:offset env t_offset in
           let ses = SES.union ses_length ses_offset in
           (Slice_Length (offset', length'), ses |: TypingRule.Slice)
       | Slice_Range (j, i) ->
@@ -2902,7 +2894,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
               WellConstrained [ Constraint_Range (e_bot, e_top) ]
           | T_Int _, _ -> conflict ~loc [ integer' ] end_t
           | _, _ -> conflict ~loc [ integer' ] start_t
-          (* only happens in relaxed type-checking mode because of check_structure_integer earlier. *)
+          (* only happens in relaxed type-checking mode because of check_underlying_integer earlier. *)
           (* TypingRule.ForConstraint) *)
         in
         let ty = T_Int cs |> here in
@@ -3035,7 +3027,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
               let ty, annot_e, ses_e = annotate_expr env e in
               let+ () =
                 check_true (Types.is_singular env ty) @@ fun () ->
-                Error.fatal_from e (Error.BadPrintType ty)
+                Error.fatal_from e (Error.ExpectedSingularType ty)
               in
               (annot_e, ses_e))
             args
@@ -3583,6 +3575,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
 
   (* Begin CheckSetterHasGetter *)
   let check_setter_has_getter ~loc env (func_sig : AST.func) =
+    assert (loc.version = V0);
     let fail () =
       fatal_from ~loc (Error.SetterWithoutCorrespondingGetter func_sig)
     in
@@ -3649,7 +3642,10 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
           func_sig.args
     in
     let+ () = check_var_not_in_genv ~loc env1.global name' in
-    let+ () = check_setter_has_getter ~loc env1 func_sig in
+    let+ () =
+     fun () ->
+      if loc.version = V0 then check_setter_has_getter ~loc env1 func_sig ()
+    in
     let new_func_sig = { func_sig with name = name' } in
     let init_ses =
       match func_sig.body with
@@ -3748,18 +3744,22 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
     let { keyword; initial_value; ty = ty_opt; name } = gsd in
     let+ () = check_var_not_in_genv ~loc genv name in
     let env = with_empty_local genv in
-    let target_time_frame = TimeFrame.of_gdk keyword in
+    let target_time_frame =
+      match keyword with
+      | GDK_Constant | GDK_Config -> TimeFrame.Constant
+      | GDK_Let | GDK_Var -> TimeFrame.Execution
+    in
     let typed_initial_value, ty_opt', declared_t =
       (* AnnotateTyOptInitialValue( *)
       match (ty_opt, initial_value) with
       | Some t, Some e ->
           let t', ses_t = annotate_type ~loc env t
-          and ((t_e, _e', _vses_e) as typed_e) = annotate_expr env e in
+          and ((t_e, _e', ses_e) as typed_e) = annotate_expr env e in
           let+ () = check_type_satisfies ~loc env t_e t' in
           let+ () =
             let fake_e_for_error = E_ATC (e, t') |> here in
             check_is_time_frame ~loc target_time_frame
-              (t', fake_e_for_error, ses_t)
+              (t', fake_e_for_error, SES.union ses_e ses_t)
           in
           (typed_e, Some t', t')
       | Some t, None ->
@@ -3773,25 +3773,29 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
           ((t', e', SES.empty), Some t', t')
       | None, Some e ->
           let ((t_e, _e', _ses_e) as typed_e) = annotate_expr env e in
+          let+ () = check_is_time_frame ~loc target_time_frame typed_e in
           (typed_e, None, t_e)
       | None, None -> fatal_from ~loc UnrespectedParserInvariant
       (* AnnotateTyOptInitialValue) *)
     in
     let genv1 = add_global_storage ~loc name keyword genv declared_t in
     let env1 = with_empty_local genv1 in
-    let _, initial_value', ses_initial_value = typed_initial_value in
+    let initial_value_ty, initial_value', ses_initial_value =
+      typed_initial_value
+    in
     (* UpdateGlobalStorage( *)
     let env2 =
       match keyword with
-      | GDK_Constant ->
-          let+ () = check_leq_constant_time ~loc typed_initial_value in
-          try_add_global_constant name env1 initial_value'
+      | GDK_Constant -> try_add_global_constant name env1 initial_value'
       | GDK_Let when should_remember_immutable_expression ses_initial_value -> (
           match StaticModel.normalize_opt env1 initial_value' with
           | Some e' -> add_global_immutable_expr name e' env1
           | None -> env1)
       | GDK_Config ->
-          let+ () = check_leq_config_time ~loc typed_initial_value in
+          let+ () =
+            check_true (Types.is_singular env initial_value_ty) @@ fun () ->
+            Error.fatal_from loc (Error.ExpectedSingularType initial_value_ty)
+          in
           env1
       | _ -> env1
       (* UpdateGlobalStorage) *)
@@ -3959,7 +3963,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
         ds
     in
     let env_and_fs1 =
-      (* Setters last as they need getters declared. *)
+      (* Only relevant for V0: setters last as they need getters declared. *)
       let setters, others =
         List.partition
           (fun (_, f, _, _) ->

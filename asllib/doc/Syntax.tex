@@ -214,13 +214,13 @@ For example, instead of $\Tidentifier(\id)$, we simply write $\Tidentifier$.
 \Ndecl  \derives \ & \Tfunc \parsesep \Tidentifier \parsesep \Nparamsopt \parsesep \Nfuncargs \parsesep \Nreturntype \parsesep \Nrecurselimit \parsesep &\\
                    & \wrappedline\ \Nfuncbody\\
 |\ & \Tfunc \parsesep \Tidentifier \parsesep \Nparamsopt \parsesep \Nfuncargs \parsesep \Nfuncbody &\\
-|\ & \Tgetter \parsesep \Tidentifier \parsesep \Nparamsopt \parsesep \Nfuncargs \parsesep \Nreturntype \parsesep \Nfuncbody &\\
-|\ & \Tsetter \parsesep \Tidentifier \parsesep \Nparamsopt \parsesep \Nfuncargs \parsesep \Teq \parsesep \Ntypedidentifier & \\
-   & \wrappedline\ \parsesep \Nfuncbody &\\
+|\ & \Taccessor \parsesep \Tidentifier \parsesep \Nparamsopt \parsesep \Nfuncargs \parsesep \Tbiarrow \parsesep \Nty &\\
+   & \wrappedline\ \Tbegin \parsesep \Naccessors \parsesep \Tend \parsesep \Tsemicolon &\\
 |\ & \Ttype \parsesep \Tidentifier \parsesep \Tof \parsesep \Ntydecl \parsesep \Nsubtypeopt \parsesep \Tsemicolon &\\
 |\ & \Ttype \parsesep \Tidentifier \parsesep \Nsubtype \parsesep \Tsemicolon &\\
 |\ & \Nglobaldeclkeyword \parsesep \Nignoredoridentifier \parsesep \option{\Tcolon \parsesep \Nty} &\\
    & \wrappedline\ \Teq \parsesep \Nexpr \parsesep \Tsemicolon &\\
+|\ & \Tconfig \parsesep \Nignoredoridentifier \parsesep \Tcolon \parsesep \Nty \parsesep \Teq \parsesep \Nexpr \parsesep \Tsemicolon &\\
 |\ & \Tvar \parsesep \Nignoredoridentifier \parsesep \option{\Tcolon \parsesep \Nty} \parsesep \Teq \parsesep \Nexpr \parsesep \Tsemicolon &\\
 |\ & \Tvar \parsesep \Nignoredoridentifier \parsesep \Tcolon \parsesep \Nty \parsesep \Tsemicolon &\\
 |\ & \Tpragma \parsesep \Tidentifier \parsesep \ClistZero{\Nexpr} \parsesep \Tsemicolon&
@@ -305,6 +305,15 @@ For example, instead of $\Tidentifier(\id)$, we simply write $\Tidentifier$.
 \Nignoredoridentifier \derives \ & \Tminus \;|\; \Tidentifier &
 \end{flalign*}
 
+\hypertarget{def-naccessors}{}
+\begin{flalign*}
+   \Naccessors \derives \ &
+      \Tgetter \parsesep \Nfuncbody \parsesep
+      \Tsetter \parsesep \Teq \parsesep \Tidentifier \parsesep \Nfuncbody &\\
+   |\ & \Tsetter \parsesep \Teq \parsesep \Tidentifier \parsesep \Nfuncbody \parsesep
+        \Tgetter \parsesep \Nfuncbody &\\
+\end{flalign*}
+
 \vspace*{-\baselineskip}
 \paragraph{Parsing note:} $\Tvar$ is not derived by $\Nlocaldeclkeyword$ to avoid an LR(1) conflict.
 \hypertarget{def-nlocaldeclkeyword}{}
@@ -314,7 +323,7 @@ For example, instead of $\Tidentifier(\id)$, we simply write $\Tidentifier$.
 
 \hypertarget{def-nglobaldeclkeyword}{}
 \begin{flalign*}
-\Nglobaldeclkeyword \derives \ & \Tlet \;|\; \Tconstant \;|\; \Tconfig&
+\Nglobaldeclkeyword \derives \ & \Tlet \;|\; \Tconstant&
 \end{flalign*}
 
 \hypertarget{def-ndirection}{}
@@ -716,15 +725,15 @@ which is never returned by the scanner.
 \begin{tabular}{ll}
 \textbf{Terminals} & \textbf{Associativity}\\
 \hline
-\Telse & \nonassoc\\
-\Tbor, \Tband, \Timpl, \Tbeq, \Tas & \leftassoc\\
-\Teqop, \Tneq & \leftassoc\\
-\Tgt, \Tgeq, \Tlt, \Tleq & \nonassoc\\
-\Tplus, \Tminus, \Tor, \Txor, \Tand, \Tcoloncolon & \leftassoc\\
-\Tmul, \Tdiv, \Tdivrm, \Trdiv, \Tmod, \Tshl, \Tshr & \leftassoc\\
-\Tpow & \leftassoc\\
-$\Tunops$ & \nonassoc\\
-\Tin & \nonassoc\\
-\Tdot, \Tlbracket, \Tllbracket & \leftassoc
+$\Telse$ & $\nonassoc$\\
+$\Tbor$, $\Tband$, $\Timpl$, $\Tas$ & $\leftassoc$\\
+$\Teqop$, $\Tneq$ & $\leftassoc$\\
+$\Tgt$, $\Tgeq$, $\Tlt$, $\Tleq$ & $\nonassoc$\\
+$\Tplus$, $\Tminus$, $\Tor$, $\Txor$, $\Tand$, $\Tcoloncolon$ & $\leftassoc$\\
+$\Tmul$, $\Tdiv$, $\Tdivrm$, $\Trdiv$, $\Tmod$, $\Tshl$, $\Tshr$ & $\leftassoc$\\
+$\Tpow$ & $\leftassoc$\\
+$\Tunops$ & $\nonassoc$\\
+$\Tin$ & $\nonassoc$\\
+$\Tdot$, $\Tlbracket$, $\Tllbracket$ & $\leftassoc$
 \end{tabular}
 \end{center}

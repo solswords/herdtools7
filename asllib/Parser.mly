@@ -472,13 +472,9 @@ let local_decl_keyword_non_var :=
   | VAR       ; { LDK_Var       }
   *)
 
-let global_decl_keyword_non_var :=
+let global_let_or_constant :=
   | LET       ; { GDK_Let      }
   | CONSTANT  ; { GDK_Constant }
-  | CONFIG    ; { GDK_Config   }
-  (* Var conflicts with global_uninit_var and as such is inlined in the decl production
-  | VAR       ; { GDK_Var      }
-  *)
 
 let pass == { S_Pass }
 let assign(x, y) == ~=x ; EQ ; ~=y ; < S_Assign >
@@ -590,8 +586,16 @@ let ignored_or_identifier :=
   | MINUS; { global_ignored () }
   | IDENTIFIER
 
+let accessors :=
+  | GETTER; getter=func_body;
+    SETTER; EQ; setter_arg=IDENTIFIER; setter=func_body;
+    { { getter; setter; setter_arg } }
+  | SETTER; EQ; setter_arg=IDENTIFIER; setter=func_body;
+    GETTER; getter=func_body;
+    { { getter; setter; setter_arg } }
+
 let decl :=
-  annotated (
+  | d=annotated (
     (* Begin func_decl *)
     | FUNC; name=IDENTIFIER; ~=params_opt; ~=func_args; ~=return_type; ~=recurse_limit; body=func_body;
         {
@@ -622,40 +626,6 @@ let decl :=
           }
         }
     (* End *)
-    (* Begin getter *)
-    | GETTER; name=IDENTIFIER; ~=params_opt; ~=func_args; ~=return_type;
-        ~=func_body;
-        {
-          D_Func
-            {
-              name;
-              parameters = params_opt;
-              args = func_args;
-              return_type = Some return_type;
-              body = SB_ASL func_body;
-              subprogram_type = ST_Getter;
-              recurse_limit = None;
-              builtin = false;
-            }
-        }
-    (* End *)
-    (* Begin setter *)
-    | SETTER; name=IDENTIFIER; ~=params_opt; ~=func_args; EQ; v=typed_identifier;
-        ~=func_body;
-        {
-          D_Func
-            {
-              name;
-              parameters = params_opt;
-              args = v :: func_args;
-              return_type = None;
-              body = SB_ASL func_body;
-              subprogram_type = ST_Setter;
-              recurse_limit = None;
-              builtin = false;
-            }
-        }
-    (* End *)
     | terminated_by(SEMI_COLON,
       (* Begin type_decl *)
       | TYPE; x=IDENTIFIER; OF; t=ty_decl; ~=subtype_opt; < D_TypeDecl           >
@@ -664,9 +634,12 @@ let decl :=
       | TYPE; x=IDENTIFIER; s=annotated(subtype);         < make_ty_decl_subtype >
       (* End *)
       (* Begin global_storage *)
-      | keyword=global_decl_keyword_non_var; name=ignored_or_identifier;
+      | keyword=global_let_or_constant; name=ignored_or_identifier;
         ty=option(as_ty); EQ; initial_value=some(expr);
         { D_GlobalStorage { keyword; name; ty; initial_value } }
+      | CONFIG; name=ignored_or_identifier;
+        ty=as_ty; EQ; initial_value=some(expr);
+        { D_GlobalStorage { keyword=GDK_Config; name; ty=Some ty; initial_value } }
       | VAR; name=ignored_or_identifier;
         ty=option(as_ty); EQ; initial_value=some(expr);
         { D_GlobalStorage { keyword=GDK_Var; name; ty; initial_value } }
@@ -679,10 +652,13 @@ let decl :=
       | PRAGMA; x=IDENTIFIER; e=clist0(expr); < D_Pragma >
       (* End *)
     )
-  )
+  ); { [d] }
+  | ACCESSOR; name=IDENTIFIER; ~=params_opt; ~=func_args; BIARROW; ~=ty;
+    BEGIN; ~=accessors; end_semicolon;
+    { desugar_accessor_pair name params_opt func_args ty accessors }
 
 (* Begin AST *)
-let spec := terminated(list(decl), EOF)
+let spec := ~=terminated(list(decl), EOF); < List.concat >
 (* End *)
 
 let opn [@internal true] := body=stmt; EOF;
