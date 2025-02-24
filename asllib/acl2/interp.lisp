@@ -24,6 +24,12 @@
 
 (include-book "ast")
 (include-book "ihs/basic-definitions" :dir :system)
+
+(include-book "centaur/bitops/part-select" :dir :system)
+(include-book "centaur/bitops/part-install" :dir :system)
+
+;; (local (include-book "std/strings/hexify" :dir :system))
+
 (local (table fty::deftagsum-defaults :short-names t))
 
 (deftypes val
@@ -1005,6 +1011,47 @@
          :hints(("Goal" :in-theory (enable acl2::repeat)))))
 
 
+;;substitute slices from srcval to dstval
+(define slice_sub ((srcval integerp)
+                   (vslice intpair-p)
+                   (dstval integerp))
+  :returns (val (implies val (integerp val)))
+
+    (b* (((intpair vslice))
+         (start vslice.first)
+         (len   vslice.second)
+         (srcpart (bitops::part-select srcval :low (nfix start) :width (nfix len)))
+         )
+      (bitops::part-install srcpart dstval :low (nfix start) :width (nfix len)))
+      )
+
+(define slices_sub ((srcval  integerp)
+                    (vslices intpairlist-p)
+                    (dstval  integerp))
+  :returns (resval (implies resval (integerp resval)))
+                
+  :guard-debug t
+  (if (atom vslices) (ifix dstval)
+    (b* ((first (car vslices))
+         (rest  (cdr vslices))
+         (new_dstval (slice_sub srcval first dstval))
+         ((unless new_dstval) nil))
+      (slices_sub srcval rest new_dstval))))
+
+(defprod intpair/env
+  ((pair intpair-p)
+   (env  env-p))
+  :layout :fulltree)
+
+(def-eval_result slice_eval_result-p intpair/env-p)
+
+(defprod intpairlist/env
+  ((pairlist intpairlist-p)
+   (env  env-p))
+  :layout :fulltree)
+
+(def-eval_result slices_eval_result-p intpairlist/env-p)
+
 (with-output
   ;; makes it so it won't take forever to print the induction scheme
   :evisc (:gag-mode (evisc-tuple 3 4 nil nil))
@@ -1048,7 +1095,21 @@
                     (v_array e.val))))
             (ev_normal (expr_result v e.env)))
           :e_slice ;; anna
-          (ev_error "Unsupported expression" desc)
+          (b* (((ev (expr_result vexpr)) (eval_expr env desc.expr))
+               ((ev (intpairlist/env vslices)) (eval_slice_list vexpr.env desc.slices))
+               (srcval vexpr.val)
+               )
+            (val-case srcval
+              :v_int (b* ((res (slices_sub srcval.val vslices.pairlist 0)))
+                       (if res (ev_normal (expr_result (v_int res) vslices.env))
+                         (ev_error "Error in evaluation of e_slice" desc)))
+              :v_bitvector (b* ((res (slices_sub srcval.val vslices.pairlist 0))
+                                (len srcval.len))
+                             (if res (ev_normal (expr_result
+                                                 (v_bitvector len (loghead len res))
+                                                 vslices.env))
+                               (ev_error "Error in evaluation of e_slice" desc)))
+              :otherwise (ev_error "Unexpected result of evaluation of desc.expr" desc)))
           :e_cond  ;; anna
           (let**
            (((expr_result test) (eval_expr env desc.test))
@@ -1349,6 +1410,122 @@
           :s_print (ev_error "unsupported statement" s)
           :s_unreachable (ev_error "unreachable" s)
           :s_pragma (ev_error "unsupported statement" s))))
+   #||
+    (define eval_slice ((env env-p)
+                        (s slice-p)
+                        &key
+                        ((clk natp) 'clk))
+      :returns (eval expr_eval_result-p)
+      :measure (nats-measure clk 0 (slice-count s))
+      (slice-case s
+        :slice_single (let**
+                       (((expr_result v) (eval_expr env s.index)))
+                       (val-case v.val
+                         :v_int (ev_normal (expr_result (v_array (list v.val (v_int 1))) v.env))
+                         :otherwise (ev_error "Bad single slice" s)))
+        :slice_range (let**
+                      (((expr_result mend) (eval_expr env s.end))
+                       ((expr_result mstart) (eval_expr mend.env s.start)))
+                      (val-case mend.val
+                        :v_int (val-case mstart.val
+                                 :v_int (ev_normal
+                                         (expr_result
+                                          (v_array (list mstart.val (v_int (- mend.val.val mstart.val.val))))
+                                          mstart.env))
+                                 :otherwise (ev_error "Bad start in the slice range" s))
+                        :otherwise (ev_error "Bad top/end in the slice range" s)))
+        :slice_length (let**
+                       (((expr_result mstart) (eval_expr env s.start))
+                        ((expr_result mlength) (eval_expr mstart.env s.length)))
+                       (val-case mstart.val
+                         :v_int (val-case mlength.val
+                                  :v_int (ev_normal (expr_result (v_array (list mstart.val mlength.val)) mstart.env))
+                                  :otherwise (ev_error "Bad start in the slice range" s))
+                         :otherwise (ev_error "Bad top/end in the slice range" s)))
+        :slice_star (let**
+                     (((expr_result mfactor) (eval_expr env s.factor))
+                      ((expr_result mlength) (eval_expr mfactor.env s.length)))
+                     (val-case mfactor.val
+                       :v_int (val-case mlength.val
+                                :v_int (ev_normal
+                                        (expr_result
+                                         (v_array (list (v_int (* mfactor.val.val mlength.val.val)) mlength.val))
+                                         mlength.env))
+                                :otherwise (ev_error "Bad length in factor slice" s))
+                       :otherwise (ev_error "Bad factor in factor slice" s)))
+    ))
+    ||#
+     (define eval_slice ((env env-p)
+                        (s slice-p)
+                        &key
+                        ((clk natp) 'clk))
+      :returns (eval slice_eval_result-p)
+      :measure (nats-measure clk 0 (slice-count s))
+      (slice-case s
+        :slice_single (let**
+                       (((expr_result v) (eval_expr env s.index)))
+                       (val-case v.val
+                         :v_int (ev_normal (intpair/env (intpair v.val.val 1) v.env))
+                         :otherwise (ev_error "Bad single slice" s)))
+        :slice_range (let**
+                      (((expr_result mend) (eval_expr env s.end))
+                       ((expr_result mstart) (eval_expr mend.env s.start)))
+                      (val-case mend.val
+                        :v_int (val-case mstart.val
+                                 :v_int (ev_normal
+                                         (intpair/env
+                                          (intpair mstart.val.val (- mend.val.val mstart.val.val))
+                                          mstart.env))
+                                 :otherwise (ev_error "Bad start in the slice range" s))
+                        :otherwise (ev_error "Bad top/end in the slice range" s)))
+        :slice_length (let**
+                       (((expr_result mstart) (eval_expr env s.start))
+                        ((expr_result mlength) (eval_expr mstart.env s.length)))
+                       (val-case mstart.val
+                         :v_int (val-case mlength.val
+                                  :v_int (ev_normal
+                                          (intpair/env (intpair mstart.val.val mlength.val.val) mstart.env))
+                                  :otherwise (ev_error "Bad start in the slice range" s))
+                         :otherwise (ev_error "Bad top/end in the slice range" s)))
+        :slice_star (let**
+                     (((expr_result mfactor) (eval_expr env s.factor))
+                      ((expr_result mlength) (eval_expr mfactor.env s.length)))
+                     (val-case mfactor.val
+                       :v_int (val-case mlength.val
+                                :v_int (ev_normal
+                                        (intpair/env
+                                         (intpair (* mfactor.val.val mlength.val.val) mlength.val.val)
+                                         mlength.env))
+                                :otherwise (ev_error "Bad length in factor slice" s))
+                       :otherwise (ev_error "Bad factor in factor slice" s)))
+        ))
+     #||
+    (define eval_slice_list ((env env-p)
+                             (sl slicelist-p)
+                            &key
+                            ((clk natp) 'clk))
+      :returns (eval exprlist_eval_result-p)
+      :measure (nats-measure clk 0 (slicelist-count sl))
+      (b* (((when (atom sl))
+            (ev_normal (exprlist_result nil env)))
+           ((ev (expr_result first)) (eval_slice env (car sl)))
+           (env first.env)
+           ((ev (exprlist_result rest)) (eval_slice_list env (cdr sl))))
+        (ev_normal (exprlist_result (cons first.val rest.val) rest.env))))
+
+||#
+    (define eval_slice_list ((env env-p)
+                             (sl slicelist-p)
+                            &key
+                            ((clk natp) 'clk))
+      :returns (eval slices_eval_result-p)
+      :measure (nats-measure clk 0 (slicelist-count sl))
+      (b* (((when (atom sl))
+            (ev_normal (intpairlist/env nil env)))
+           ((ev (intpair/env first)) (eval_slice env (car sl)))
+           (env first.env)
+           ((ev (intpairlist/env rest)) (eval_slice_list env (cdr sl))))
+        (ev_normal (intpairlist/env (cons first.pair rest.pairlist) rest.env))))
 
     ///
     (local (in-theory (disable eval_expr
@@ -1357,7 +1534,10 @@
                                eval_expr_list
                                eval_call
                                eval_subprogram
-                               eval_stmt)))
+                               eval_stmt
+                               eval_slice
+                               eval_slice_list
+                               )))
     
     (std::defret-mutual len-of-eval_expr_list
       (defret len-of-eval_expr_list
@@ -1375,40 +1555,4 @@
     (verify-guards eval_expr-fn :guard-debug t
       :hints (("goal" :do-not-induct t)))))
 
-(define eval_slice ((env env-p)
-                    (s slice-p)
-                    &key
-                    ((clk natp) 'clk))
-  
-  (slice-case s
-    :slice_single (let**
-                   (((expr_result v) (eval_expr env s.index)))
-                   (val-case v.val
-                     :v_int (ev_normal (expr_result (v_array (list v.val (v_int 1))) v.env))
-                     :otherwise (ev_error "Bad single slice" s)))
-    :slice_range (let**
-                  (((expr_result mend) (eval_expr env s.end))
-                   ((expr_result mstart) (eval_expr mend.env s.start)))
-                  (val-case mend.val
-                    :v_int (val-case mstart.val
-                             :v_int (ev_normal (expr_result (v_array (list mstart.val (v_int (- mend.val.val mstart.val.val)))) mstart.env))
-                             :otherwise (ev_error "Bad start in the slice range" s))
-                    :otherwise (ev_error "Bad top/end in the slice range" s)))
-    :slice_length (let**
-                   (((expr_result mstart) (eval_expr env s.start))
-                    ((expr_result mlength) (eval_expr mstart.env s.length)))
-                   (val-case mstart.val
-                     :v_int (val-case mlength.val
-                              :v_int (ev_normal (expr_result (v_array (list mstart.val mlength.val)) mstart.env))
-                              :otherwise (ev_error "Bad start in the slice range" s))
-                     :otherwise (ev_error "Bad top/end in the slice range" s)))
-    :slice_star (let**
-                 (((expr_result mfactor) (eval_expr env s.factor))
-                  ((expr_result mlength) (eval_expr mfactor.env s.length)))
-                 (val-case mfactor.val
-                   :v_int (val-case mlength.val
-                            :v_int (ev_normal
-                                    (expr_result (v_array (list (v_int (* mfactor.val.val mlength.val.val)) mlength.val)) mlength.env))
-                            :otherwise (ev_error "Bad length in factor slice" s))
-                   :otherwise (ev_error "Bad factor in factor slice" s)))
-    ))
+
