@@ -29,8 +29,13 @@
 (include-book "centaur/bitops/part-install" :dir :system)
 
 ;; (local (include-book "std/strings/hexify" :dir :system))
-
+(include-book "std/alists/alist-defuns" :dir :system)
+(local (include-book "std/lists/nth" :dir :system))
+(local (include-book "std/lists/repeat" :dir :system))
+(local (include-book "std/lists/take" :dir :system))
 (local (table fty::deftagsum-defaults :short-names t))
+(local (in-theory (disable (tau-system))))
+(local (in-theory (disable put-assoc-equal)))
 
 (deftypes val
   (deftagsum val
@@ -39,7 +44,7 @@
     (:v_real ((val rationalp)))
     (:v_string ((val stringp)))
     (:v_bitvector ((len natp) (val natp)))
-    (:v_label ((val stringp)))
+    (:v_label ((val identifier-p)))
     (:v_record ((rec val-imap)))
     (:v_array  ((arr vallist))))
   (fty::deflist vallist :elt-type val :true-listp t)
@@ -49,7 +54,33 @@
     (implies (and (identifierlist-p keys)
                   (vallist-p vals)
                   (equal (len keys) (len vals)))
-             (val-imap-p (pairlis$ keys vals)))))
+             (val-imap-p (pairlis$ keys vals))))
+
+  (defthm vallist-p-of-update-nth
+    (implies (and (vallist-p x)
+                  (val-p v)
+                  (<= (nfix n) (len x)))
+             (vallist-p (update-nth n v x)))
+    :hints(("Goal" :in-theory (enable update-nth vallist-p))))
+
+  (defthm val-imap-p-of-put-assoc-equal
+    (implies (and (val-imap-p x)
+                  (identifier-p k)
+                  (val-p v))
+             (val-imap-p (put-assoc-equal k v x)))
+    :hints(("Goal" :in-theory (enable put-assoc-equal)))))
+
+(local
+  (defthm alistp-when-val-imap-p-rw
+    (implies (val-imap-p x)
+             (alistp x))
+    :hints(("Goal" :in-theory (enable val-imap-p)))))
+
+(local
+ (defthm alistp-when-func-ses-imap-p-rw
+   (implies (func-ses-imap-p x)
+            (alistp x))
+   :hints(("Goal" :in-theory (enable func-ses-imap-p)))))
 
 
 (define v_of_literal ((x literal-p))
@@ -63,6 +94,12 @@
     :l_label (v_label x.val)))
 
 (fty::defmap int-imap :key-type identifier :val-type integerp :true-listp t)
+  
+(local
+ (defthm alistp-when-int-imap-p-rw
+   (implies (int-imap-p x)
+            (alistp x))
+   :hints(("Goal" :in-theory (enable int-imap-p)))))
 
 
 
@@ -305,6 +342,30 @@
        ((When global-look) (lk_global (cdr global-look))))
     (lk_notfound)))
 
+(define env-assign-local ((name identifier-p)
+                          (v val-p)
+                          (env env-p))
+  :returns (new-env env-p)
+  (b* (((env env))
+       ((local-env env.local))
+       (name (identifier-fix name)))
+    (change-env env
+                :local (change-local-env
+                        env.local
+                        :storage (put-assoc-equal name (val-fix v) env.local.storage)))))
+
+(define env-assign-global ((name identifier-p)
+                           (v val-p)
+                           (env env-p))
+  :returns (new-env env-p)
+  (b* (((env env))
+       ((global-env env.global))
+       (name (identifier-fix name)))
+    (change-env env
+                :global (change-global-env
+                         env.global
+                         :storage (put-assoc-equal name (val-fix v) env.global.storage)))))
+
 (define env-assign ((name identifier-p)
                     (v val-p)
                     (env env-p))
@@ -314,25 +375,16 @@
        (name (identifier-fix name))
        (local-look (assoc-equal name env.local.storage))
        ((When local-look)
-        (lk_local
-         (change-env env
-                     :local (change-local-env
-                             env.local
-                             :storage (cons (cons name (val-fix v))
-                                            env.local.storage)))))
+        (lk_local (env-assign-local name v env)))
        ((global-env env.global))
        (global-look (assoc-equal name env.global.storage))
        ((When global-look)
-        (lk_global
-         (change-env env
-                     :global (change-global-env
-                             env.global
-                             :storage (cons (cons name (val-fix v))
-                                            env.global.storage))))))
+        (lk_global (env-assign-global name v env))))
     (lk_notfound)))
 
 
 (def-eval_result val_result-p val-p)
+(def-eval_result vallist_result-p vallist-p)
 
 (local (include-book "ihs/quotient-remainder-lemmas" :dir :system))
 (local (include-book "arithmetic/top" :dir :system))
@@ -430,28 +482,27 @@
          :otherwise (ev_error "bad binop" (list op v1 v2))))
       (t (ev_error "undefined binop" (list op v1 v2))))))
 
-
 (defines lexpr-count*
   (define lexpr_desc-count* ((x lexpr_desc-p))
     :measure (lexpr_desc-count x)
     :returns (count posp :rule-classes :type-prescription)
     (lexpr_desc-case x
-      :le_slice (+ 1
+      :le_slice (+ 3
                    (lexpr-count* x.base)
                    (slicelist-count x.slices))
-      :le_setarray (+ 1 (lexpr-count* x.base)
+      :le_setarray (+ 3 (lexpr-count* x.base)
                       (expr-count x.index))
-      :le_setenumarray (+ 1 (lexpr-count* x.base)
+      :le_setenumarray (+ 3 (lexpr-count* x.base)
                           (expr-count x.index))
-      :le_setfield (+ 1 (lexpr-count* x.base))
-      :le_setfields (+ 1 (lexpr-count* x.base))
-      :le_destructuring (+ 1 (lexprlist-count* x.elts))
+      :le_setfield (+ 3 (lexpr-count* x.base))
+      :le_setfields (+ 3 (lexpr-count* x.base))
+      :le_destructuring (+ 2 (lexprlist-count* x.elts))
       :otherwise 1))
 
   (define lexpr-count* ((x lexpr-p))
     :measure (lexpr-count x)
     :returns (count posp :rule-classes :type-prescription)
-    (+ 1 (lexpr_desc-count* (lexpr->val x))))
+    (+ 2 (lexpr_desc-count* (lexpr->val x))))
 
   (define lexprlist-count* ((x lexprlist-p))
     :measure (lexprlist-count x)
@@ -525,6 +576,61 @@
                 (lexprlist-count* x)))
     :hints (("goal" :expand ((lexprlist-count* x))))
     :rule-classes :linear))
+
+
+(defines expr_of_lexpr
+  :ruler-extenders (expr)
+  (define expr_of_lexpr ((x lexpr-p))
+    :returns (res expr-p)
+    :measure (lexpr-count x)
+    :verify-guards nil
+    (b* ((x (lexpr->val x)))
+      (expr
+       (lexpr_desc-case x
+         :le_var (e_var x.name)
+         :le_slice (e_slice (expr_of_lexpr x.base) x.slices)
+         :le_setarray (e_getarray (expr_of_lexpr x.base) x.index)
+         :le_setenumarray (e_getenumarray (expr_of_lexpr x.base) x.index)
+         :le_setfield (e_getfield (expr_of_lexpr x.base) x.field)
+         :le_setfields (e_getfields (expr_of_lexpr x.base) x.fields)
+         :le_discard (e_var "-") ;; ??? i think this is supposed to be prevented by type safety
+         :le_destructuring (e_tuple (exprlist_of_lexprlist x.elts))))))
+  (define exprlist_of_lexprlist ((x lexprlist-p))
+    :returns (res exprlist-p)
+    :measure (lexprlist-count x)
+    (if (atom x)
+        nil
+      (cons (expr_of_lexpr (car x))
+            (exprlist_of_lexprlist (cdr x)))))
+  ///
+  (verify-guards expr_of_lexpr)
+
+  (std::defret-mutual expr-count-of-<fn>
+    (defret expr-count-of-<fn>
+      (<= (expr-count (expr_of_lexpr x))
+          (lexpr-count* x))
+      :hints ('(:expand ((expr_of_lexpr x)
+                         (lexpr-count* x)
+                         (lexpr_desc-count* (lexpr->val x))
+                         (:free (x) (expr-count (expr x)))
+                         (:free (x) (expr_desc-count (e_var x)))
+                         (:free (x y) (expr_desc-count (e_slice x y)))
+                         (:free (x y) (expr_desc-count (e_getarray x y)))
+                         (:free (x y) (expr_desc-count (e_getenumarray x y)))
+                         (:free (x y) (expr_desc-count (e_getfield x y)))
+                         (:free (x y) (expr_desc-count (e_getfields x y)))
+                         (:free (x) (expr_desc-count (e_tuple x))))))
+      :rule-classes :linear
+      :fn expr_of_lexpr)
+    (defret exprlist-count-of-<fn>
+      (<= (exprlist-count (exprlist_of_lexprlist x))
+          (lexprlist-count* x))
+      :hints ('(:expand ((exprlist_of_lexprlist x)
+                         (lexprlist-count* x)
+                         (:free (x y) (exprlist-count (cons x y)))
+                         (exprlist-count nil))))
+      :rule-classes :linear
+      :fn exprlist_of_lexprlist)))
 
 
 
@@ -906,11 +1012,18 @@
                                   (name identifier-p)
                                   (val val-p))
   :returns (new-env env-p)
-  :prepwork ((local (include-book "std/lists/take" :dir :system)))
   (b* (((env env))
        ((local-env l) env.local)
        (new-storage (cons (cons (identifier-fix name) (val-fix val))
                           l.storage)))
+    (change-env env :local (change-local-env l :storage new-storage))))
+
+(define remove_local_identifier ((env env-p)
+                                 (name identifier-p))
+  :returns (new-env env-p)
+  (b* (((env env))
+       ((local-env l) env.local)
+       (new-storage (remove-assoc-equal (identifier-fix name) l.storage)))
     (change-env env :local (change-local-env l :storage new-storage))))
 
 (define declare_local_identifiers ((env env-p)
@@ -918,7 +1031,6 @@
                                    (vals vallist-p))
   :guard (eql (len names) (len vals))
   :returns (new-env env-p)
-  :prepwork ((local (include-book "std/lists/take" :dir :system)))
   (b* (((env env))
        ((local-env l) env.local)
        (new-storage (append (pairlis$ (identifierlist-fix names)
@@ -1003,12 +1115,211 @@
     (equal (len names) (len x))))
 
 
-(local (include-book "std/lists/repeat" :dir :system))
 
-(local (defthm vallist-p-of-repeat
-         (implies (val-p v)
-                  (vallist-p (acl2::repeat len v)))
-         :hints(("Goal" :in-theory (enable acl2::repeat)))))
+
+
+
+(def-eval_result int_eval_result-p integerp)
+
+(define v_to_int ((x val-p))
+  :returns (i int_eval_result-p)
+  (val-case x
+    :v_int (ev_normal x.val)
+    :otherwise (ev_error "v_to_int bad type" x)))
+
+(def-eval_result bool_eval_result-p booleanp)
+
+(define v_to_bool ((x val-p))
+  :returns (i bool_eval_result-p)
+  (val-case x
+    :v_bool (ev_normal x.val)
+    :otherwise (ev_error "v_to_bool bad type" x)))
+
+(def-eval_result id_eval_result-p identifier-p)
+
+(define v_to_label ((x val-p))
+  :returns (i id_eval_result-p)
+  (val-case x
+    :v_label (ev_normal x.val)
+    :otherwise (ev_error "v_to_label bad type" x)))
+
+(local (defthm rationalp-when-integerp-rw
+         (implies (integerp x)
+                  (rationalp x))))
+
+
+
+(define get_field! ((field identifier-p)
+                    (rec val-imap-p))
+  :returns (v val_result-p)
+  (b* ((look (assoc-equal (identifier-fix field)
+                          (val-imap-fix rec)))
+       ((unless look) (ev_error "get_field not found" field)))
+    (ev_normal (cdr look))))
+
+(define get_field ((field identifier-p)
+                   (rec val-p))
+  :returns (v val_result-p)
+  (val-case rec
+    :v_record (get_field! field rec.rec)
+    :otherwise (ev_error "get_field non record" rec)))
+
+(define map-get_field! ((fields identifierlist-p)
+                        (rec val-imap-p))
+  :returns (v vallist_result-p)
+  (b* (((when (atom fields)) (ev_normal nil))
+       ((ev val1) (get_field! (car fields) rec))
+       ((ev rest) (map-get_field! (cdr fields) rec)))
+    (ev_normal (cons val1 rest))))
+
+(define map-get_field ((fields identifierlist-p)
+                       (rec val-p))
+  :returns (v vallist_result-p)
+  (val-case rec
+    :v_record (map-get_field! fields rec.rec)
+    :otherwise (ev_error "map-get_field non record" rec)))
+
+(define concat_bitvectors ((vals vallist-p))
+  ;; Check order?
+  :returns (v val_result-p)
+  :verify-guards nil
+  (B* (((when (atom vals))
+        (ev_normal (v_bitvector 0 0)))
+       ((ev (v_bitvector rest)) (concat_bitvectors (cdr vals)))
+       (v1 (car vals)))
+    (val-case v1
+      :v_bitvector (ev_normal
+                    (v_bitvector (+ v1.len rest.len)
+                                 (logapp rest.len rest.val v1.val)))
+      :otherwise (ev_error "concat_bitvectors non bitvector" v1)))
+  ///
+  (defret kind-of-<fn>
+    (implies (eval_result-case v :ev_normal)
+             (equal (val-kind (ev_normal->res v))
+                    :v_bitvector)))
+  
+  (verify-guards concat_bitvectors))
+
+(local (in-theory (disable loghead logtail)))
+
+(define bitvec_fields_to_record! ((fields identifierlist-p)
+                                  (slices intpairlist-p)
+                                  (rec val-imap-p)
+                                  (bv integerp)
+                                  (width acl2::maybe-integerp))
+  :guard (eql (len fields) (len slices))
+  :returns (v val_result-p)
+  (b* (((when (atom fields)) (ev_normal (v_record rec)))
+       (field (identifier-fix (car fields)))
+       ((unless (assoc-equal field (val-imap-fix rec)))
+        (ev_error "bitvec_fields_to_record!: field not in record" field))
+       ((intpair s) (car slices))
+       (start s.first)
+       (length s.second)
+       ((unless (and (<= 0 start)
+                     (<= 0 length)
+                     (or (not width)
+                         (<= (+ start length) width))))
+        (ev_error "bitvec_fields_to_record!: out of bounds slice" (car slices)))
+       (fieldval (loghead length (logtail start bv)))
+       (new-rec (put-assoc-equal field (v_bitvector length fieldval) (val-imap-fix rec))))
+    (bitvec_fields_to_record! (cdr fields) (cdr slices) new-rec bv width)))
+       
+       
+
+(define bitvec_fields_to_record ((fields identifierlist-p)
+                                 (slices intpairlist-p)
+                                 (rec val-p)
+                                 (bv val-p))
+  :guard (eql (len fields) (len slices))
+  :returns (v val_result-p)
+  (b* (((unless (val-case rec :v_record))
+        (ev_error "bitvec_fields_to_record non record" rec))
+       ((unless (or (val-case bv :v_bitvector)
+                    (val-case bv :v_int)))
+        (ev_error "bitvec_fields_to_record non bitvec/integer" bv))
+       ((v_record rec))
+       ((mv bv-val bv-len) (val-case bv
+                             :v_bitvector (mv bv.val bv.len)
+                             :otherwise (mv (v_int->val bv) nil))))
+    (bitvec_fields_to_record! fields slices rec.rec bv-val bv-len)))
+       
+
+(define for_loop-test ((v_start integerp)
+                       (v_end integerp)
+                       (dir for_direction-p))
+  ;; says whether we terminate
+  (if (eq (for_direction-fix dir) :up)
+      (< (lifix v_end) (lifix v_start))
+    (> (lifix v_end) (lifix v_start))))
+
+(define for_loop-measure ((v_start integerp)
+                          (v_end integerp)
+                          (dir for_direction-p))
+  :returns (meas natp :rule-classes :type-prescription)
+  (nfix (+ 3 (if (eq (for_direction-fix dir) :up)
+                 (- (lifix v_end) (lifix v_start))
+               (- (lifix v_start) (lifix v_end)))))
+  ///
+  (defthm for_loop-measure-when-not-test
+    (implies (not (for_loop-test v_start v_end dir))
+             (<= 2 (for_loop-measure v_start v_end dir)))
+    :hints(("Goal" :in-theory (enable for_loop-test)))
+    :rule-classes :linear))
+
+
+
+(define for_loop-step ((v_start integerp)
+                       (dir for_direction-p))
+  ;; says whether we terminate
+  (+ (lifix v_start)
+     (if (eq (for_direction-fix dir) :up) 1 -1))
+  ///
+  (defthm for_loop-step-decreases-measure
+    (implies (not (for_loop-test v_start v_end dir))
+             (< (for_loop-measure (for_loop-step v_start dir) v_end dir)
+                (for_loop-measure v_start v_end dir)))
+    :hints(("Goal" :in-theory (e/d (for_loop-measure
+                                    for_loop-test))))
+    :otf-flg t
+    :rule-classes :linear))
+
+  
+
+
+(define eval_for_step ((env env-p)
+                       (index_name identifier-p)
+                       ;; missing limit
+                       (v_start integerp)
+                       (dir for_direction-p))
+  :returns (mv (v_step integerp)
+               (new-env env-p))
+  (b* ((v_step (for_loop-step v_start dir)))
+    (mv v_step (env-assign-local index_name (v_int v_step) env)))
+  ///
+  (defret v_step-of-eval_for_step
+    (equal v_step
+           (for_loop-step v_start dir))))
+
+
+(define pop_scope ((parent env-p)
+                   (child env-p))
+  :Returns (new-env env-p)
+  :prepwork ((local (include-book "std/alists/hons-assoc-equal" :dir :system))
+             (local (defthm fal-extract-of-val-imap
+                      (implies (val-imap-p x)
+                               (val-imap-p (acl2::fal-extract keys x)))
+                      :hints(("Goal" :in-theory (enable acl2::fal-extract))))))
+  (b* (((env child))
+       ((env parent))
+       ((local-env parent.local))
+       ((local-env child.local))
+       (dom (acl2::alist-keys parent.local.storage)))
+    (change-env child
+                :local
+                (change-local-env child.local
+                                  :storage (acl2::fal-extract dom child.local.storage)))))
+
 
 
 ;;substitute slices from srcval to dstval
@@ -1055,6 +1366,7 @@
 (with-output
   ;; makes it so it won't take forever to print the induction scheme
   :evisc (:gag-mode (evisc-tuple 3 4 nil nil))
+  :off (event)
   (defines eval_expr
     (define eval_expr ((env env-p)
                        (e expr-p)
@@ -1062,7 +1374,7 @@
                        ((clk natp) 'clk))
       :verify-guards nil
       :returns (eval expr_eval_result-p)
-      :measure (nats-measure clk 0 (expr-count e))
+      :measure (nats-measure clk 0 (expr-count e) 0)
       (b* ((desc (expr->desc e)))
         (expr_desc-case desc
           :e_literal (ev_normal (expr_result (v_of_literal desc.val) env)) ;; SemanticsRule.ELit
@@ -1146,7 +1458,10 @@
           :e_getfield ;; anna
           (ev_error "Unsupported expression" desc)
           :e_getfields ;; sol
-          (ev_error "Unsupported expression" desc)
+          (b* (((ev (expr_result recres)) (eval_expr env desc.base))
+               ((ev fieldvals) (map-get_field desc.fields recres.val))
+               ((ev val) (concat_bitvectors fieldvals)))
+            (ev_normal (expr_result val recres.env)))
           :e_getitem ;; anna
           (let**
            (((expr_result varr) (eval_expr env desc.base)))
@@ -1184,7 +1499,7 @@
                           (p pattern-p)
                           &key
                           ((clk natp) 'clk))
-      :measure (nats-measure clk 0 (pattern-count p))
+      :measure (nats-measure clk 0 (pattern-count p) 0)
       ;; :returns (val val-p)
       ;; Note: this isn't supposed to produce any side effects so we'll omit
       ;; the environment and just return the value
@@ -1221,7 +1536,7 @@
                                 &key
                                 ((clk natp) 'clk))
       :guard (eql (len vals) (len p))
-      :measure (nats-measure clk 0 (patternlist-count p))
+      :measure (nats-measure clk 0 (patternlist-count p) 0)
       :returns (eval val_result-p)
       (b* (((when (atom p)) (ev_normal (v_bool t)))
            ((ev first) (eval_pattern env (car vals) (car p)))
@@ -1237,7 +1552,7 @@
                               (p patternlist-p)
                               &key
                               ((clk natp) 'clk))
-      :measure (nats-measure clk 0 (patternlist-count p))
+      :measure (nats-measure clk 0 (patternlist-count p) 0)
 
       :returns (eval val_result-p)
       (if (atom p)
@@ -1256,7 +1571,7 @@
                             &key
                             ((clk natp) 'clk))
       :returns (eval exprlist_eval_result-p)
-      :measure (nats-measure clk 0 (exprlist-count e))
+      :measure (nats-measure clk 0 (exprlist-count e) 0)
       (b* (((when (atom e))
             (ev_normal (exprlist_result nil env)))
            ((ev (expr_result first)) (eval_expr env (car e)))
@@ -1271,7 +1586,7 @@
                        &key
                        ((clk natp) 'clk))
       :measure (nats-measure clk 0 (+ (exprlist-count params)
-                                      (exprlist-count args)))
+                                      (exprlist-count args)) 0)
       :returns (eval exprlist_eval_result-p)
       (b* (((ev (exprlist_result vargs)) (eval_expr_list env args))
            ((ev (exprlist_result vparams)) (eval_expr_list vargs.env params))
@@ -1292,7 +1607,7 @@
                              (vargs vallist-p)
                              &key
                              ((clk natp) 'clk))
-      :measure (nats-measure clk 1 0)
+      :measure (nats-measure clk 1 0 0)
       :returns (eval func_eval_result-p)
       (b* ((look (assoc-equal (identifier-fix name)
                               (static_env_global->subprograms
@@ -1329,7 +1644,7 @@
                         &key
                         ((clk natp) 'clk))
       :returns (eval env_eval_result-p)
-      :measure (nats-measure clk 0 (lexpr-count* lx))
+      :measure (nats-measure clk 0 (lexpr-count* lx) 0)
       (b* ((lx (lexpr->val lx)))
         (lexpr_desc-case lx
           :le_discard (ev_normal (env-fix env))
@@ -1338,11 +1653,47 @@
                       :lk_local (ev_normal envres.val)
                       :lk_global (ev_normal envres.val)
                       :lk_notfound (ev_error "assign to undeclared variable" lx)))
-          :le_slice (ev_error "unimplemented lexpr" lx)
-          :le_setarray (ev_error "unimplemented lexpr" lx)
-          :le_setenumarray (ev_error "unimplemented lexpr" lx)
-          :le_setfield (ev_error "unimplemented lexpr" lx)
-          :le_setfields (ev_error "unimplemented lexpr" lx)
+          :le_slice ;; (b* ((rbase (expr_of_lexpr lx.base))
+                    ;;      ((ev (expr_result rbv)) (eval_expr env rbase))
+          (ev_error "unimplemented lexpr" lx)
+          :le_setarray (b* ((rbase (expr_of_lexpr lx.base))
+                            ((ev (expr_result rbv)) (eval_expr env rbase))
+                            ((ev (expr_result idx)) (eval_expr rbv.env lx.index))
+                            ((ev idxv) (v_to_int idx.val))
+                            ((ev newarray)
+                             (val-case rbv.val
+                               :v_array (if (and (<= 0 idxv)
+                                                 (< idxv (len rbv.val.arr)))
+                                            (ev_normal (v_array (update-nth idxv v rbv.val.arr)))
+                                          (ev_error "le_setarray index out of obunds" lx))
+                               :otherwise (ev_error "le_setarray non array base" lx))))
+                         (eval_lexpr idx.env lx.base newarray))
+          :le_setenumarray (b* ((rbase (expr_of_lexpr lx.base))
+                                ((ev (expr_result rbv)) (eval_expr env rbase))
+                                ((ev (expr_result idx)) (eval_expr rbv.env lx.index))
+                                ((ev idxv) (v_to_label idx.val))
+                                ((ev newarray)
+                                 (val-case rbv.val
+                                   :v_record (if (assoc-equal idxv rbv.val.rec)
+                                                 (ev_normal (v_record (put-assoc-equal idxv v rbv.val.rec)))
+                                               (ev_error "le_setenumarray unrecognized index" lx))
+                                   :otherwise (ev_error "le_setenumarray non record base" lx))))
+                             (eval_lexpr idx.env lx.base newarray))
+          :le_setfield (b* ((rbase (expr_of_lexpr lx.base))
+                            ((ev (expr_result rbv)) (eval_expr env rbase))
+                            ((ev newrec)
+                             (val-case rbv.val
+                               :v_record (if (assoc-equal lx.field rbv.val.rec)
+                                             (ev_normal (v_record (put-assoc-equal lx.field v rbv.val.rec)))
+                                           (ev_error "le_setfield unrecognized field" lx))
+                               :otherwise (ev_error "le_setfield non record base" lx))))
+                         (eval_lexpr rbv.env lx.base newrec))
+          :le_setfields (b* (((when (not (eql (len lx.fields) (len lx.pairs))))
+                              (ev_error "le_setfields length mismatch" lx))
+                             (rbase (expr_of_lexpr lx.base))
+                             ((ev (expr_result rbv)) (eval_expr env rbase))
+                             ((ev newval) (bitvec_fields_to_record lx.fields lx.pairs rbv.val v)))
+                          (eval_lexpr rbv.env lx.base newval))
           :le_destructuring (val-case v
                               :v_array (if (eql (len v.arr) (len lx.elts))
                                            (eval_lexpr_list env lx.elts v.arr)
@@ -1356,7 +1707,7 @@
                              ((clk natp) 'clk))
       :guard (eql (len lx) (len v))
       :returns (eval env_eval_result-p)
-      :measure (nats-measure clk 0 (lexprlist-count* lx))
+      :measure (nats-measure clk 0 (lexprlist-count* lx) 0)
       (b* (((when (atom lx)) (ev_normal (env-fix env)))
            ((ev env1) (eval_lexpr env (car lx) (car v))))
         (eval_lexpr_list env1 (cdr lx) (cdr v))))
@@ -1365,7 +1716,7 @@
                        (s stmt-p)
                        &key
                        ((clk natp) 'clk))
-      :measure (nats-measure clk 0 (stmt-count* s))
+      :measure (nats-measure clk 0 (stmt-count* s) 0)
       :returns (eval stmt_eval_result-p)
       (b* ((s (stmt->val s)))
         (stmt_desc-case s
@@ -1388,8 +1739,18 @@
           (b* (((ev (expr_result v)) (eval_expr env s.expr))
                ((ev new-env) (eval_lexpr v.env s.lexpr v.val)))
             (ev_normal (continuing new-env)))
-          :s_call (ev_error "unsupported statement" s)
-          :s_return (ev_error "unsupported statement" s)
+          :s_call (b* (((call c) s.call)
+                       ((ev (exprlist_result cres)) (eval_call c.name env c.params c.args)))
+                    (ev_normal (continuing cres.env)))
+          :s_return (b* (((unless s.expr)
+                          (ev_normal (returning nil (env->global env))))
+                         (x (expr->desc s.expr)))
+                      (expr_desc-case x
+                        :e_tuple (b* (((ev (exprlist_result xr)) (eval_expr_list env x.exprs)))
+                                   (ev_normal (returning xr.val (env->global xr.env))))
+                        :otherwise (b* (((ev (expr_result xr)) (eval_expr env s.expr)))
+                                     (ev_normal (returning (list xr.val) (env->global xr.env))))))
+                         
           :s_cond (b* (((ev (expr_result test)) (eval_expr env s.test))
                        ((ev testval) (val-case test.val
                                        :v_bool (ev_normal test.val.val)
@@ -1402,65 +1763,35 @@
                                     (ev_normal (continuing assert.env))
                                   (ev_error "Assertion failed" s.expr))
                         :otherwise (ev_error "Non-boolean assertion result" s.expr)))
-          :s_for (ev_error "unsupported statement" s)
-          :s_while (ev_error "unsupported statement" s)
-          :s_repeat (ev_error "unsupported statement" s)
+          :s_for (b* (((ev (expr_result startr)) (eval_expr env s.start_e))
+                      ((ev (expr_result endr))   (eval_expr env s.end_e))
+                      ;;; BOZO FIXME TODO: Add loop limit
+                      (env (declare_local_identifier env s.index_name startr.val))
+                      ;; Type constraints ensure that start and end are integers,
+                      ;; will do this here so we don't have to wrap them in values
+                      ((ev startv) (v_to_int startr.val))
+                      ((ev endv)   (v_to_int endr.val))
+                      ((evs env2)
+                       (eval_for env s.index_name ;; missing loop limit
+                                      startv s.dir endv s.body))
+                      (env3 (remove_local_identifier env2 s.index_name)))
+                   (ev_normal (continuing env3)))
+                      
+          :s_while (eval_loop env t s.test s.body)
+          :s_repeat (b* (((evs env1) (eval_block env s.body)))
+                      (eval_loop env1 nil s.test s.body))
           :s_throw (ev_error "unsupported statement" s)
           :s_try (ev_error "unsupported statement" s)
           :s_print (ev_error "unsupported statement" s)
           :s_unreachable (ev_error "unreachable" s)
           :s_pragma (ev_error "unsupported statement" s))))
-   #||
-    (define eval_slice ((env env-p)
-                        (s slice-p)
-                        &key
-                        ((clk natp) 'clk))
-      :returns (eval expr_eval_result-p)
-      :measure (nats-measure clk 0 (slice-count s))
-      (slice-case s
-        :slice_single (let**
-                       (((expr_result v) (eval_expr env s.index)))
-                       (val-case v.val
-                         :v_int (ev_normal (expr_result (v_array (list v.val (v_int 1))) v.env))
-                         :otherwise (ev_error "Bad single slice" s)))
-        :slice_range (let**
-                      (((expr_result mend) (eval_expr env s.end))
-                       ((expr_result mstart) (eval_expr mend.env s.start)))
-                      (val-case mend.val
-                        :v_int (val-case mstart.val
-                                 :v_int (ev_normal
-                                         (expr_result
-                                          (v_array (list mstart.val (v_int (- mend.val.val mstart.val.val))))
-                                          mstart.env))
-                                 :otherwise (ev_error "Bad start in the slice range" s))
-                        :otherwise (ev_error "Bad top/end in the slice range" s)))
-        :slice_length (let**
-                       (((expr_result mstart) (eval_expr env s.start))
-                        ((expr_result mlength) (eval_expr mstart.env s.length)))
-                       (val-case mstart.val
-                         :v_int (val-case mlength.val
-                                  :v_int (ev_normal (expr_result (v_array (list mstart.val mlength.val)) mstart.env))
-                                  :otherwise (ev_error "Bad start in the slice range" s))
-                         :otherwise (ev_error "Bad top/end in the slice range" s)))
-        :slice_star (let**
-                     (((expr_result mfactor) (eval_expr env s.factor))
-                      ((expr_result mlength) (eval_expr mfactor.env s.length)))
-                     (val-case mfactor.val
-                       :v_int (val-case mlength.val
-                                :v_int (ev_normal
-                                        (expr_result
-                                         (v_array (list (v_int (* mfactor.val.val mlength.val.val)) mlength.val))
-                                         mlength.env))
-                                :otherwise (ev_error "Bad length in factor slice" s))
-                       :otherwise (ev_error "Bad factor in factor slice" s)))
-    ))
-    ||#
+   
      (define eval_slice ((env env-p)
                         (s slice-p)
                         &key
                         ((clk natp) 'clk))
       :returns (eval slice_eval_result-p)
-      :measure (nats-measure clk 0 (slice-count s))
+      :measure (nats-measure clk 0 (slice-count s) 0)
       (slice-case s
         :slice_single (let**
                        (((expr_result v) (eval_expr env s.index)))
@@ -1499,33 +1830,70 @@
                                 :otherwise (ev_error "Bad length in factor slice" s))
                        :otherwise (ev_error "Bad factor in factor slice" s)))
         ))
-     #||
-    (define eval_slice_list ((env env-p)
-                             (sl slicelist-p)
-                            &key
-                            ((clk natp) 'clk))
-      :returns (eval exprlist_eval_result-p)
-      :measure (nats-measure clk 0 (slicelist-count sl))
-      (b* (((when (atom sl))
-            (ev_normal (exprlist_result nil env)))
-           ((ev (expr_result first)) (eval_slice env (car sl)))
-           (env first.env)
-           ((ev (exprlist_result rest)) (eval_slice_list env (cdr sl))))
-        (ev_normal (exprlist_result (cons first.val rest.val) rest.env))))
-
-||#
+     
     (define eval_slice_list ((env env-p)
                              (sl slicelist-p)
                             &key
                             ((clk natp) 'clk))
       :returns (eval slices_eval_result-p)
-      :measure (nats-measure clk 0 (slicelist-count sl))
+      :measure (nats-measure clk 0 (slicelist-count sl) 0)
       (b* (((when (atom sl))
             (ev_normal (intpairlist/env nil env)))
            ((ev (intpair/env first)) (eval_slice env (car sl)))
            (env first.env)
            ((ev (intpairlist/env rest)) (eval_slice_list env (cdr sl))))
         (ev_normal (intpairlist/env (cons first.pair rest.pairlist) rest.env))))
+
+    (define eval_for ((env env-p)
+                      (index_name identifier-p)
+                      ;; missing loop limit
+                      (v_start integerp)
+                      (dir for_direction-p)
+                      (v_end   integerp)
+                      (body stmt-p)
+                      &key
+                      ((clk natp) 'clk))
+      :measure (nats-measure clk 0
+                             (stmt-count* body)
+                             (for_loop-measure v_start v_end dir))
+      :returns (eval stmt_eval_result-p)
+      (b* (;; TODO tick loop limit
+           ((when (for_loop-test v_start v_end dir))
+            (ev_normal (continuing env)))
+           ((evs env1) (eval_block env body))
+           ((mv v_step env2) (eval_for_step env1 index_name v_start dir)))
+        (eval_for env2 index_name v_step dir v_end body)))
+
+    (define eval_loop ((env env-p)
+                       (is_while booleanp)
+                       ;; missing loop limit
+                       (e_cond expr-p)
+                       (body stmt-p)
+                       &key
+                       ((clk natp) 'clk))
+      :measure (nats-measure clk 0 (+ (expr-count e_cond)
+                                      (stmt-count* body))
+                             2)
+      :returns (eval stmt_eval_result-p)
+      (b* (((ev (expr_result cres)) (eval_expr env e_cond))
+           ((ev cbool) (v_to_bool cres.val))
+           ((when (xor is_while cbool))
+            (ev_normal (continuing cres.env)))
+           ((evs env2) (eval_block cres.env body))
+           ((when (zp clk))
+            (ev_error "Loop limit ran out" body)))
+        (eval_loop env2 is_while e_cond body :clk (1- clk))))
+           
+    (define eval_block ((env env-p)
+                        (x stmt-p)
+                        &key
+                        ((clk natp) 'clk))
+      :measure (nats-measure clk 0 (stmt-count* x) 1)
+      :returns (eval stmt_eval_result-p)
+      (b* (((evs env1) (eval_stmt env x)))
+        (ev_normal (continuing (pop_scope env env1)))))
+           
+                        
 
     ///
     (local (in-theory (disable eval_expr
@@ -1554,5 +1922,4 @@
 
     (verify-guards eval_expr-fn :guard-debug t
       :hints (("goal" :do-not-induct t)))))
-
 
