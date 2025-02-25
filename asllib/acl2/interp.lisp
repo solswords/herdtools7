@@ -723,20 +723,6 @@
          ((unless new_dstval) nil))
       (slices_sub srcval rest new_dstval))))
 
-(defprod intpair/env
-  ((pair intpair-p)
-   (env  env-p))
-  :layout :fulltree)
-
-(def-eval_result slice_eval_result-p intpair/env-p)
-
-(defprod intpairlist/env
-  ((pairlist intpairlist-p)
-   (env  env-p))
-  :layout :fulltree)
-
-(def-eval_result slices_eval_result-p intpairlist/env-p)
-
 
 (define eval_primitive ((name identifier-p)
                         (params vallist-p)
@@ -852,7 +838,9 @@
                 (ev_normal (expr_result (cdr look) idx.env))
               (ev_error "getenumarray index not found" desc)))
           :e_getfield ;; anna
-          (ev_error "Unsupported expression" desc)
+          (b* (((ev (expr_result recres)) (eval_expr env desc.base))
+               ((ev fieldval) (get_field desc.field recres.val)))
+            (ev_normal (expr_result fieldval recres.env)))
           :e_getfields ;; sol
           (b* (((ev (expr_result recres)) (eval_expr env desc.base))
                ((ev fieldvals) (map-get_field desc.fields recres.val))
@@ -885,8 +873,13 @@
                             :otherwise (ev_error "array non-integer length" desc))))
             (ev_normal (expr_result (v_array (make-list lenv :initial-element v.val)) len.env)))
           :e_enumarray ;; anna
-          (ev_error "Unsupported expression" desc)
-          :e_arbitrary ;; sol
+          (b* (((ev (expr_result v)) (eval_expr env desc.value))
+               (len (len desc.labels))
+               (vals (make-list len :initial-element v.val)) 
+               (rec (pairlis$ desc.labels vals))
+               )
+            (ev_normal (expr_result (v_record rec) v.env)))
+           :e_arbitrary ;; sol
           (ev_error "Unsupported expression" desc)
           :otherwise (ev_error "Unsupported expression" desc))))
 
