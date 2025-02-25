@@ -443,7 +443,7 @@
 
 
 
-(defenum timeframe-p (:constant :config :execution))
+(defenum timeframe-p (:constant :execution))
 
 (defprod read ((name identifier)
                (time_frame timeframe-p)

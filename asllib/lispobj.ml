@@ -535,7 +535,6 @@ let of_iset x =
 let of_timeframe  (x : SideEffect.TimeFrame.t) =
   key(match x with
       | Constant -> "CONSTANT"
-      | Config -> "CONFIG"
       | Execution -> "EXECUTION")
 
 let of_read (x : SideEffect.read) =
