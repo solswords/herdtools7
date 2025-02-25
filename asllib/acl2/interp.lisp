@@ -737,6 +737,28 @@
 
 (def-eval_result slices_eval_result-p intpairlist/env-p)
 
+
+(define eval_primitive ((name identifier-p)
+                        (params vallist-p)
+                        (args vallist-p))
+  :returns (res vallist_result-p)
+  (cond ((and (equal name "Real")
+              (equal params nil)
+              (eql (len args) 1)
+              (b* ((arg (car args)))
+                (val-case arg :v_int)))
+         (ev_normal (list (v_real (v_int->val (car args))))))
+        ((and (equal name "Log2")
+              (equal params nil)
+              (eql (len args) 1)
+              (b* ((arg (car args)))
+                (and (val-case arg :v_int)
+                     (< 0 (v_int->val arg)))))
+         (ev_normal (list (v_int (1- (integer-length (v_int->val (car args))))))))
+        (t (ev_error "bad primitive" (list name params args)))))
+
+
+
 (with-output
   ;; makes it so it won't take forever to print the induction scheme
   :evisc (:gag-mode (evisc-tuple 3 4 nil nil))
@@ -996,8 +1018,8 @@
            ((unless look)
             (ev_error "Subprogam not found" name))
            ((func f) (func-ses->fn (cdr look)))
-           ((unless (subprogram_body-case f.body :sb_asl))
-            (ev_error "Primitive subfunctions not supported" name))
+           ;; ((unless (subprogram_body-case f.body :sb_asl))
+           ;;  (ev_error "Primitive subfunctions not supported" name))
 
            ((unless (and (eql (len vparams) (len f.parameters))
                          (eql (len vargs) (len f.args))))
@@ -1005,17 +1027,18 @@
          
            ;; probably redundant but in the document
            (env1 (change-env env :local (empty-local-env)))
-           ((ev ?ign) (check_recurse_limit env1 name f.recurse_limit))
-
-           (arg-names (typed_identifierlist->names f.args))
-           (param-names (maybe-typed_identifierlist->names f.parameters))
-           (env2 (declare_local_identifiers env1 arg-names vargs))
-           (env3 (declare_local_identifiers env2 param-names vparams))
-
-           ((ev bodyres) (eval_stmt env3 (sb_asl->stmt f.body))))
-        (control_flow_state-case bodyres
-          :returning (ev_normal (func_result bodyres.vals bodyres.env))
-          :continuing (ev_normal (func_result nil (env->global bodyres.env))))))
+           ((ev ?ign) (check_recurse_limit env1 name f.recurse_limit)))
+        (subprogram_body-case f.body
+          :sb_asl (b* ((arg-names (typed_identifierlist->names f.args))
+                       (param-names (maybe-typed_identifierlist->names f.parameters))
+                       (env2 (declare_local_identifiers env1 arg-names vargs))
+                       (env3 (declare_local_identifiers env2 param-names vparams))
+                       ((ev bodyres) (eval_stmt env3 f.body.stmt)))
+                    (control_flow_state-case bodyres
+                      :returning (ev_normal (func_result bodyres.vals bodyres.env))
+                      :continuing (ev_normal (func_result nil (env->global bodyres.env)))))
+          :sb_primitive (b* (((ev primres) (eval_primitive name vparams vargs)))
+                          (ev_normal (func_result primres (env->global env)))))))
 
 
     (define eval_lexpr ((env env-p)

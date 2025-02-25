@@ -60,6 +60,17 @@
     (loop-induct blkev.res.env (1- clk) test body whilep)))
 (in-theory (enable (:i loop-induct)))
 
+
+(define for-induct ((env env-p) (index_name identifier-p) (start integerp) (dir for_direction-p) (end integerp) (body stmt-p) (clk natp))
+  :verify-guards nil
+  :measure (for_loop-measure start end dir)
+  (b* (((when (for_loop-test start end dir))
+        env)
+       ((ev_normal blkev) (eval_block env body))
+       ((continuing blkev.res))
+       ((mv step env2) (eval_for_step blkev.res.env index_name start dir)))
+    (for-induct env2 index_name step dir end body clk)))
+
     
 
 (define spmatch-force-exec (x) x
