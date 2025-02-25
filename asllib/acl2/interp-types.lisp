@@ -150,3 +150,17 @@
                          (,res-pred (ev_normal->res x))))
                 (,pred x)))))
 
+
+(defprod intpair/env
+  ((pair intpair-p)
+   (env  env-p))
+  :layout :fulltree)
+
+(def-eval_result slice_eval_result-p intpair/env-p)
+
+(defprod intpairlist/env
+  ((pairlist intpairlist-p)
+   (env  env-p))
+  :layout :fulltree)
+
+(def-eval_result slices_eval_result-p intpairlist/env-p)
