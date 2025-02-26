@@ -772,6 +772,46 @@
          (ev_normal (list (v_int (1- (integer-length (v_int->val (car args))))))))
         (t (ev_error "bad primitive" (list name params args)))))
 
+;; Could send to console or collect output -- might want to prove something
+;; about printed output.  Print is type-constrained to deal only with singular
+;; types, not compound, but we'll produce some string for records/arrays
+;; anyway.
+(define val-to-string ((v val-p))
+  :returns (str stringp :rule-classes :type-prescription)
+  :prepwork ((local (defthm character-listp-of-explode-nonnegative-integer
+                      (implies (character-listp ans)
+                               (character-listp (explode-nonnegative-integer n print-base ans)))))
+             (local (defthm character-listp-of-explode-nonnegative-atom
+                      (character-listp (explode-atom n print-base))))
+             (local (in-theory (disable explode-atom))))
+  (val-case v
+    :v_int (coerce (explode-atom v.val 10) 'string)
+    :v_bool (if v.val "TRUE" "FALSE")
+    :v_real (b* ((num (numerator v.val))
+                 (numstr (coerce (explode-atom num 10) 'string))
+                 (den (denominator v.val))
+                 ((when (eql den 1)) numstr)
+                 (denstr (coerce (explode-atom den 10) 'string)))
+              (concatenate 'string numstr "/" denstr))
+    :v_string v.val
+    :v_bitvector (b* ((digits (coerce (explode-atom v.val 16) 'string))
+                      (length (ceiling v.len 4))
+                      (zeros (coerce (make-list (nfix (- length (length digits)))
+                                                :initial-element #\0)
+                                     'string)))
+                   (concatenate 'string "0x" zeros digits))
+    :v_label (identifier->val v.val)
+    :v_array "<array>"
+    :v_record "<record>"))
+
+(define vallist-to-string ((v vallist-p))
+  :returns (str stringp :rule-classes :type-prescription)
+  (if (atom v)
+      ""
+    (concatenate 'string (val-to-string (car v))
+                 (vallist-to-string (cdr v)))))
+  
+
 
 
 (with-output
@@ -1025,6 +1065,13 @@
                          (ev_throwing sub-res.throwdata env))
           :ev_error sub-res)))
 
+    ;; (trace$ (eval_subprogram :entry (list 'eval_subprogram name vparams vargs)
+    ;;                          :exit (list 'eval_subprogram
+    ;;                                      (eval_result-case value
+    ;;                                        :ev_normal (b* (((func_result value.res)))
+    ;;                                                     (list 'ev_normal value.res.vals))
+    ;;                                        :otherwise value))))
+    
     (define eval_subprogram ((env env-p)
                              (name identifier-p)
                              (vparams vallist-p)
@@ -1207,7 +1254,10 @@
                       (eval_loop env1 nil s.test s.body))
           :s_throw (ev_error "unsupported statement" s)
           :s_try (ev_error "unsupported statement" s)
-          :s_print (ev_error "unsupported statement" s)
+          :s_print (b* (((ev (exprlist_result e)) (eval_expr_list env s.args))
+                        (str (vallist-to-string e.val))
+                        (- (cw (if s.newline "~s0~%" "~s0") str)))
+                     (ev_normal (continuing e.env)))
           :s_unreachable (ev_error "unreachable" s)
           :s_pragma (ev_error "unsupported statement" s))))
    
