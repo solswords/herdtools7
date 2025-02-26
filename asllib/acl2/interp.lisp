@@ -725,32 +725,27 @@
 
 
 
-;;substitute slices from srcval to dstval
-(define slice_sub ((srcval integerp)
-                   (vslice intpair-p)
-                   (dstval integerp))
-  :returns (val (implies val (integerp val)))
-
-    (b* (((intpair vslice))
-         (start vslice.first)
-         (len   vslice.second)
-         (srcpart (bitops::part-select srcval :low (nfix start) :width (nfix len)))
-         )
-      (bitops::part-install srcpart dstval :low (nfix start) :width (nfix len)))
-      )
-
 (define slices_sub ((srcval  integerp)
                     (vslices intpairlist-p)
-                    (dstval  integerp))
-  :returns (resval (implies resval (integerp resval)))
+                    )
+  :returns (res (and (intpair-p res)
+                     (integerp (intpair->first res))
+                     (<= 0 (intpair->first res))
+                     (integerp (intpair->second res))
+                     (<= 0 (intpair->second res)))
+                "(length . value)")
                 
   :guard-debug t
-  (if (atom vslices) (ifix dstval)
-    (b* ((first (car vslices))
+  (if (atom vslices) (intpair 0 0)
+    (b* (((intpair first_vslice) (car vslices))
          (rest  (cdr vslices))
-         (new_dstval (slice_sub srcval first dstval))
-         ((unless new_dstval) nil))
-      (slices_sub srcval rest new_dstval))))
+         ((intpair dstval_rest) (slices_sub srcval rest))
+         (start (nfix first_vslice.first))
+         (len   (nfix first_vslice.second))
+         (srcpart (bitops::part-select srcval :low start :width len))
+         (val (logapp dstval_rest.second dstval_rest.first srcpart)) 
+         )
+      (intpair (+ len dstval_rest.first) val))))
 
 
 (define eval_primitive ((name identifier-p)
@@ -867,15 +862,16 @@
                (srcval vexpr.val)
                )
             (val-case srcval
-              :v_int (b* ((res (slices_sub srcval.val vslices.pairlist 0)))
-                       (if res (ev_normal (expr_result (v_int res) vslices.env))
-                         (ev_error "Error in evaluation of e_slice" desc)))
-              :v_bitvector (b* ((res (slices_sub srcval.val vslices.pairlist 0))
-                                (len srcval.len))
-                             (if res (ev_normal (expr_result
-                                                 (v_bitvector len (loghead len res))
-                                                 vslices.env))
-                               (ev_error "Error in evaluation of e_slice" desc)))
+              :v_int (b* (((intpair res) (slices_sub srcval.val vslices.pairlist)))
+                       (ev_normal
+                        (expr_result
+                         (v_bitvector res.first (loghead res.first res.second))
+                         vslices.env)))
+              :v_bitvector (b* (((intpair res) (slices_sub srcval.val vslices.pairlist)))
+                             (ev_normal
+                              (expr_result
+                               (v_bitvector res.first (loghead res.first res.second))
+                               vslices.env)))
               :otherwise (ev_error "Unexpected result of evaluation of desc.expr" desc)))
           :e_cond  ;; anna
           (let**

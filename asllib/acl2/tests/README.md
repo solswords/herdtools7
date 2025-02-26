@@ -12,7 +12,7 @@ Dump the static environment and AST for an ASL program into a Lisp object file u
 Run ACL2 and submit the form:
 ```
     (assign :fname "myprogram-ast.lsp")
-    (ld "runtest.lsp")
+    (ld "run-test.lsp")
 ```
 
 Caveats: Currently runtest.lsp only interprets the "main" function of the program; it
