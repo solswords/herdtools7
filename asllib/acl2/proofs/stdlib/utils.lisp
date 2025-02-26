@@ -70,6 +70,7 @@
        ((continuing blkev.res))
        ((mv step env2) (eval_for_step blkev.res.env index_name start dir)))
     (for-induct env2 index_name step dir end body clk)))
+(in-theory (enable (:i for-induct)))
 
     
 

@@ -314,7 +314,36 @@
   ///
   (defret increment-stack-normal
     (iff (equal (eval_result-kind res) :ev_normal)
-         (< (stack_size-lookup name stack_size) (expt 2 40)))))
+         (< (stack_size-lookup name stack_size) (expt 2 40))))
+  
+  (defret stack_size-lookup-of-increment-stack
+    (implies (equal (eval_result-kind res) :ev_normal)
+             (equal (stack_size-lookup name2 (ev_normal->res res))
+                    (if (identifier-equiv name name2)
+                        (+ 1 (stack_size-lookup name stack_size))
+                      (stack_size-lookup name2 stack_size))))
+    :hints(("Goal" :in-theory (enable stack_size-lookup))))
+
+  (local (include-book "std/lists/sets" :dir :system))
+  (local (include-book "std/alists/alist-keys" :dir :system))
+  
+  (local (defthm no-duplicatesp-equal-of-append
+           (implies (and (no-duplicatesp-equal x)
+                         (no-duplicatesp-equal y)
+                         (not (intersectp-equal x y)))
+                    (no-duplicatesp-equal (append x y)))
+           :hints(("Goal" :in-theory (e/d (intersectp-equal))))))
+
+  (local (defthm intersectp-singleton
+           (iff (intersectp-equal x (list k))
+                (member-equal k x))
+           :hints(("Goal" :in-theory (enable intersectp-equal)))))
+  
+  (defret no-duplicate-keys-of-<fn>
+    (implies (and (equal (eval_result-kind res) :ev_normal)
+                  (no-duplicatesp-equal (acl2::alist-keys (pos-imap-fix stack_size))))
+             (no-duplicatesp-equal (acl2::alist-keys (ev_normal->res res))))
+    :hints(("Goal" :in-theory (enable acl2::alist-keys-member-hons-assoc-equal)))))
 
 (define decrement-stack ((name identifier-p)
                          (stack_size pos-imap-p))

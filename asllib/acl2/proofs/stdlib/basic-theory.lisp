@@ -92,3 +92,21 @@
   (implies (no-duplicatesp-equal x)
            (no-duplicatesp-equal (intersection-equal x y)))
   :hints(("Goal" :in-theory (enable intersection-equal))))
+
+(defthm put-assoc-equal-normalize
+  (implies (and ;; (syntaxp (and (not (equal k k1))
+                ;;               (member-equal k (put-assoc-equal-term-keys x))))
+                (hons-assoc-equal k x)
+                (not (equal k k1)))
+           (equal (put-assoc-equal k v (put-assoc-equal k1 v1 x))
+                  (put-assoc-equal k1 v1 (put-assoc-equal k v x))))
+  :hints(("Goal" :in-theory (enable put-assoc-equal))))
+
+
+(defthm hons-assoc-equal-of-remove-assoc-equal
+  (implies (syntaxp (and (quotep k) (quotep k1)))
+           (equal (hons-assoc-equal k (remove-assoc-equal k1 x))
+                  (if (equal k k1)
+                      nil
+                    (hons-assoc-equal k x)))))
+
