@@ -757,20 +757,17 @@
                         (params vallist-p)
                         (args vallist-p))
   :returns (res vallist_result-p)
-  (cond ((and (equal name "Real")
-              (equal params nil)
-              (eql (len args) 1)
-              (b* ((arg (car args)))
-                (val-case arg :v_int)))
-         (ev_normal (list (v_real (v_int->val (car args))))))
-        ((and (equal name "Log2")
-              (equal params nil)
-              (eql (len args) 1)
-              (b* ((arg (car args)))
-                (and (val-case arg :v_int)
-                     (< 0 (v_int->val arg)))))
-         (ev_normal (list (v_int (1- (integer-length (v_int->val (car args))))))))
-        (t (ev_error "bad primitive" (list name params args)))))
+  (fty::multicase
+    ((fty::case*-equal name)
+     ((list val-case p0 p1) params)
+     ((list val-case a0 a1 a2) args))
+
+    (("Real" nil (:v_int))       (ev_normal (list (v_real a0.val))))
+    (("Log2" nil (:v_int))       (ev_normal (list (v_int (1- (integer-length (v_int->val (car args))))))))
+    (("SInt" (-) (:v_bitvector)) (ev_normal (list (v_int (logext (acl2::pos-fix a0.len) a0.val)))))
+    (-                           (ev_error "Bad primitive" (list name params args)))))
+
+
 
 ;; Could send to console or collect output -- might want to prove something
 ;; about printed output.  Print is type-constrained to deal only with singular
