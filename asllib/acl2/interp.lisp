@@ -783,6 +783,10 @@
                                (character-listp (explode-nonnegative-integer n print-base ans)))))
              (local (defthm character-listp-of-explode-nonnegative-atom
                       (character-listp (explode-atom n print-base))))
+             (local (defthm character-listp-of-repeat
+                      (implies (characterp x)
+                               (character-listp (acl2::repeat n x)))
+                      :hints(("Goal" :in-theory (enable acl2::repeat)))))
              (local (in-theory (disable explode-atom))))
   (val-case v
     :v_int (coerce (explode-atom v.val 10) 'string)
