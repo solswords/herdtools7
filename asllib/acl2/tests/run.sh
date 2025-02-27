@@ -2,15 +2,24 @@
 
 
 aslfile="$1"
-astfile="$aslfile".lsp
-outfile="$aslfile".out
+base=`basename "$aslfile"`
+astfile="$base".lsp
+outfile="$base".out
+
+scriptdir="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
+acl2asldir=$(cd "$scriptdir"/../; pwd)
+
+export ACL2_PROJECTS="$acl2asldir"/PROJECT_DIRS
+export PATH="$acl2asldir"/bin:$PATH
 
 if ! ( aslref --print-lisp --no-exec "$aslfile" > "$astfile" ); then
     echo "aslref error"
     exit 1;
 fi
 
-echo "(assign :fname \"$astfile\") (ld \"run-test.lsp\")" | acl2 > "$outfile"
+echo "(asl::read-ast-file-into-globals \"$astfile\") (ld \"${scriptdir}/run-test.lsp\")" | aslcl2 > "$outfile"
+
+status=$?
 
 start_pattern='!@#$%^%$#@ begin ASL interpreter output'
 end_pattern='!@#$%^%$#@ end ASL interpreter output'
@@ -27,3 +36,4 @@ awk -v start="$start_pattern" -v end="$end_pattern" '
     index($0, end) && flag {exit} 
     flag { printf "%s", sep $0; sep=ORS }' "$outfile"
 
+exit $status

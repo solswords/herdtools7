@@ -514,3 +514,29 @@
      (endp (cdr *test*)))
 
 |#
+
+
+(define read-ast-file ((fname stringp) &key (state 'state))
+  :returns (mv err static-env ast state)
+  :mode :program
+  (b* (((mv err contents state) (acl2::read-file fname state))
+       ((when err) (mv err nil nil state)))
+    (case-match contents
+      (((static-env . ast))
+       (mv nil static-env ast state))
+      (& (mv "Malformed Lisp AST file." nil nil state)))))
+
+(define read-ast-file-into-globals ((fname stringp)
+                                    &key (state 'state))
+  ;; Reads a Lisp AST file as dumped by aslref, and stores its static env and AST in state globals :static-env and :ast.
+  :returns (mv err ok state)
+  :mode :program
+  (b* (((mv err static-env ast state) (read-ast-file fname))
+       ((when err)
+        (er soft 'read-ast-file-into-globals "~@0" err))
+       (state (f-put-global ':static-env static-env state))
+       (state (f-put-global ':ast ast state)))
+    (value :ok)))
+
+
+       
