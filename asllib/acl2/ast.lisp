@@ -196,8 +196,8 @@
     (:t_tuple ((types tylist)))
     (:t_array ((index array_index)
                (type ty)))
-    (:t_record ((fields fieldlist)))
-    (:t_exception ((fields fieldlist)))
+    (:t_record ((fields typed_identifierlist)))
+    (:t_exception ((fields typed_identifierlist)))
     (:t_named ((name identifier)))
     :measure (acl2::two-nats-measure (acl2-count x) 10))
 
@@ -222,7 +222,7 @@
     (:wellconstrained ((constraints int_constraintlist)))
     (:pendingconstrained ())
     (:parametrized ((id uid)
-                     (name identifier)))
+                    (name identifier)))
     :measure (acl2::two-nats-measure (acl2-count x) 10))
 
   (deftagsum bitfield
@@ -241,7 +241,7 @@
     :measure (acl2::two-nats-measure (acl2-count x) 10))
 
   (deftagsum array_index
-    (:arraylength ((length expr)))
+    (:arraylength_expr ((length expr)))
     (:arraylength_enum ((name identifier)
                         (elts identifierlist)))
     :measure (acl2::two-nats-measure (acl2-count x) 10))
@@ -258,18 +258,18 @@
     :measure-debug t)
 
   (defoption maybe-ty ty
-    :measure (acl2::two-nats-measure (acl2-count x) 30)))
+    :measure (acl2::two-nats-measure (acl2-count x) 30))
 
-(defprod typed_identifier
-  ((name identifier)
-   (type ty))
-  :measure (acl2::two-nats-measure (acl2-count x) 30)
-  :layout :fulltree)
+  (defprod typed_identifier
+    ((name identifier)
+     (type ty))
+    :measure (acl2::two-nats-measure (acl2-count x) 30)
+    :layout :fulltree)
 
-(deflist typed_identifierlist :elt-type typed_identifier :true-listp t
-  :measure (acl2::two-nats-measure (acl2-count x) 10)
+  (deflist typed_identifierlist :elt-type typed_identifier :true-listp t
+    :measure (acl2::two-nats-measure (acl2-count x) 10)
 
-  :measure-debug t)
+    :measure-debug t))
 
 
 (defprod intpair
