@@ -758,9 +758,11 @@
      ((list val-case a0 a1 a2) args))
 
     (("Real" nil (:v_int))       (ev_normal (list (v_real a0.val))))
-    (("Log2" nil (:v_int))       (ev_normal (list (v_int (1- (integer-length (v_int->val (car args))))))))
+    (("Log2" nil (:v_int))       (ev_normal (list (v_int (1- (integer-length a0.val))))))
     (("SInt" (-) (:v_bitvector)) (ev_normal (list (v_int (logext (acl2::pos-fix a0.len) a0.val)))))
-    (-                           (ev_error "Bad primitive" (list name params args)))))
+    (("UInt" (-) (:v_bitvector)) (ev_normal (list (v_int (loghead (acl2::pos-fix a0.len) a0.val)))))
+    (-                           (ev_error "Bad primitive" (list name params args))))
+  )
 
 
 
