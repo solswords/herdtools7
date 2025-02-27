@@ -113,7 +113,7 @@
     ((:bv_concat :v_bitvector :v_bitvector)
                                   (ev_normal (v_bitvector (+ v1.len v2.len)
                                                           ;; FIXME check order?
-                                                          (logapp v1.len v1.val v2.val))))
+                                                          (logapp v2.len v2.val v1.val))))
     ;; bits -> integer -> bits
     ((:plus :v_bitvector :v_int)  (ev_normal (v_bitvector v1.len
                                                           (loghead v1.len (+ v1.val v2.val)))))
