@@ -808,7 +808,13 @@
                  (vallist-to-string (cdr v)))))
   
 
-
+(defmacro trace-eval_expr ()
+  '(trace$ (eval_expr-fn :entry (list 'eval_expr e)
+                         :exit (cons 'eval_expr
+                                     (eval_result-case value
+                                       :ev_normal (list 'ev_normal (expr_result->val value.res))
+                                       :ev_error value
+                                       :ev_throwing (list 'ev_throwing value.throwdata))))))
 
 (with-output
   ;; makes it so it won't take forever to print the induction scheme
