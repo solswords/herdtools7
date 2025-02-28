@@ -153,10 +153,13 @@ stdlib.t/sint.asl \
 stdlib.t/pow2.asl \
 stdlib.t/log2.asl \
 stdlib.t/ilog2.asl \
-
+stdlib.t/misc.asl \
+regressions.t/lhs-tuple-fields.asl \
+regressions.t/concat02.asl \
+regressions.t/bitvectors.asl \
+ASLSemanticsReference.t/SemanticsRule.LESlice.asl \
 
 FAILING_TESTS := \
-stdlib.t/misc.asl \
 stdlib.t/round.asl \
 stdlib.t/sqrt.asl \
 stdlib.t/bits.asl \
@@ -172,7 +175,6 @@ side-effects.t/binop-throw-unknown.asl \
 side-effects.t/binop-throw-otherwised.asl \
 side-effects.t/binop-throw-caught.asl \
 side-effects.t/binop-throw-read.asl \
-regressions.t/lhs-tuple-fields.asl \
 regressions.t/single-slice.asl \
 regressions.t/getter_subfields.asl \
 regressions.t/getter_subslice.asl \
@@ -191,8 +193,6 @@ regressions.t/func7.asl \
 regressions.t/exceptions.asl \
 regressions.t/constrained-types-example.asl \
 regressions.t/constrained-integer-types-example.asl \
-regressions.t/concat02.asl \
-regressions.t/bitvectors.asl \
 regressions.t/bitfields.asl \
 regressions.t/rename-returned-tuples.asl \
 regressions.t/array-lca.asl \
@@ -218,7 +218,6 @@ ASLSemanticsReference.t/SemanticsRule.Catch.asl \
 ASLSemanticsReference.t/SemanticsRule.CatchOtherwise.asl \
 ASLSemanticsReference.t/SemanticsRule.PMask.asl \
 ASLSemanticsReference.t/SemanticsRule.PTuple.asl \
-ASLSemanticsReference.t/SemanticsRule.LESlice.asl \
 ASLSemanticsReference.t/SemanticsRule.EBinopAndFalse.asl \
 ASLSemanticsReference.t/EvalCatchers.asl \
 ASLSemanticsReference.t/SemanticsRule.ATCNotDynamicErrorIfFalse.asl \

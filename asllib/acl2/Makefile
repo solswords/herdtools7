@@ -5,6 +5,8 @@ export ACL2_IMAGES=$(CURDIR)/bin
 export ACL2_IMAGE_SRC_DIR=$(CURDIR)/image-src
 export ACL2_PROJECTS=$(CURDIR)/PROJECT_DIRS
 
+all : bin/aslcl2
+
 bin :
 	mkdir bin
 
