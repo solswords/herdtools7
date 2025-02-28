@@ -813,6 +813,93 @@
 
 
 
+
+(define check_two_ranges_non_overlapping ((x intpair-p)
+                                          (y intpair-p))
+  :returns (err eval_result-p)
+  (b* (((intpair x))
+       (xstart (nfix x.first))
+       (xlen   (nfix x.second))
+       (xend   (+ xstart xlen))
+       ((intpair y))
+       (ystart (nfix y.first))
+       (ylen   (nfix y.second))
+       (yend   (+ ystart ylen))
+       (xend-<=-ystart (<= xend ystart))
+       (yend-<=-xstart (<= yend xstart)))
+    (if (or xend-<=-ystart yend-<=-xstart)
+        (ev_normal nil)
+      (ev_error "Dynamic error: overlapping slice assignment" (list x y)))))
+
+
+(define check_non_overlapping_slices-1 ((x intpair-p)
+                                       (y intpairlist-p))
+  :returns (err eval_result-p)
+  (B* (((when (atom y)) (ev_normal nil))
+       ((ev -) (check_two_ranges_non_overlapping x (car y))))
+    (check_non_overlapping_slices-1 x (cdr y))))
+
+(define check_non_overlapping_slices ((x intpairlist-p))
+  :returns (err eval_result-p)
+  (B* (((when (atom x)) (ev_normal nil))
+       ((ev -) (check_non_overlapping_slices-1 (car x) (cdr x))))
+    (check_non_overlapping_slices (cdr x))))
+
+
+(define vbv-to-int ((x val-p))
+  :returns (res int_eval_result-p)
+  (val-case x
+    :v_int (ev_normal x.val)
+    :v_bitvector (ev_normal x.val)
+    :otherwise (ev_error "vbv-to-int type error" x)))
+
+(define slices-width ((slices intpairlist-p))
+  :returns (width natp :rule-classes :type-prescription)
+  (if (atom slices)
+      0
+    (+ (nfix (intpair->second (car slices)))
+       (slices-width (cdr slices)))))
+
+(define write_to_bitvector-aux ((width)
+                                (slices intpairlist-p)
+                                (src integerp)
+                                (dst integerp))
+  :guard (eql width (slices-width slices))
+  :guard-hints (("goal" :expand ((slices-width slices))))
+  :returns (res integerp :rule-classes :type-prescription)
+  (b* (((when (atom slices)) (lifix dst))
+       (width (mbe :logic (slices-width slices)
+                   :exec width))
+       ((intpair x) (car slices))
+       (xstart (nfix x.first))
+       (xlen   (nfix x.second))
+       (next-width (- width xlen))
+       (next-dst (bitops::part-install (logtail next-width src) dst :width xlen :low xstart)))
+    (write_to_bitvector-aux next-width (cdr slices) src next-dst)))
+
+
+
+
+(define write_to_bitvector ((slices intpairlist-p)
+                            (src val-p)
+                            (dst val-p))
+  :returns (res val_result-p)
+  (b* (((unless (val-case dst :v_bitvector))
+        (ev_error "write_to_bitvector type error" dst))
+       ((v_bitvector dst))
+       ((ev src.val) (vbv-to-int src))
+       (width (slices-width slices)))
+    (ev_normal (v_bitvector dst.len (loghead dst.len (write_to_bitvector-aux width slices src.val dst.val)))))
+  ///
+  (assert-event
+   (equal (write_to_bitvector '((28 . 4) (20 . 4) (12 . 4) (4 . 4))
+                              (v_int #xabcd)
+                              (v_bitvector 32 0))
+          (ev_normal (v_bitvector 32 #xa0b0c0d0)))))
+
+
+
+
 (defmacro trace-eval_expr ()
   '(trace$ (eval_expr-fn :entry (list 'eval_expr e)
                          :exit (cons 'eval_expr
@@ -1165,9 +1252,11 @@
                       :lk_local (ev_normal envres.val)
                       :lk_global (ev_normal envres.val)
                       :lk_notfound (ev_error "assign to undeclared variable" lx)))
-          :le_slice ;; (b* ((rbase (expr_of_lexpr lx.base))
-                    ;;      ((ev (expr_result rbv)) (eval_expr env rbase))
-          (ev_error "unimplemented lexpr" lx)
+          :le_slice (b* ((rbase (expr_of_lexpr lx.base))
+                         ((ev (expr_result rbv)) (eval_expr env rbase))
+                         ((ev (intpairlist/env vslices)) (eval_slice_list rbv.env lx.slices))
+                         ((ev newbase) (write_to_bitvector vslices.pairlist v rbv.val)))
+                      (eval_lexpr vslices.env lx.base newbase))
           :le_setarray (b* ((rbase (expr_of_lexpr lx.base))
                             ((ev (expr_result rbv)) (eval_expr env rbase))
                             ((ev (expr_result idx)) (eval_expr rbv.env lx.index))
