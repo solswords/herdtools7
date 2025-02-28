@@ -38,6 +38,8 @@
 (local (include-book "arithmetic/top" :dir :system))
 (local (include-book "std/alists/hons-assoc-equal" :dir :system))
 (local (include-book "std/alists/put-assoc-equal" :dir :system))
+(local (include-book "centaur/vl/util/default-hints" :dir :system))
+
 (local (in-theory (disable floor mod)))
 (local (table fty::deftagsum-defaults :short-names t))
 (local (in-theory (disable (tau-system))))
@@ -747,7 +749,7 @@
          )
       (intpair (+ len dstval_rest.first) val))))
 
-
+;;need RoundUp
 (define eval_primitive ((name identifier-p)
                         (params vallist-p)
                         (args vallist-p))
@@ -758,9 +760,11 @@
      ((list val-case a0 a1 a2) args))
 
     (("Real" nil (:v_int))       (ev_normal (list (v_real a0.val))))
-    (("Log2" nil (:v_int))       (ev_normal (list (v_int (1- (integer-length (v_int->val (car args))))))))
+    (("Log2" nil (:v_int))       (ev_normal (list (v_int (1- (integer-length a0.val))))))
     (("SInt" (-) (:v_bitvector)) (ev_normal (list (v_int (logext (acl2::pos-fix a0.len) a0.val)))))
-    (-                           (ev_error "Bad primitive" (list name params args)))))
+    (("UInt" (-) (:v_bitvector)) (ev_normal (list (v_int (loghead (acl2::pos-fix a0.len) a0.val)))))
+    (-                           (ev_error "Bad primitive" (list name params args))))
+  )
 
 
 
@@ -806,7 +810,8 @@
       ""
     (concatenate 'string (val-to-string (car v))
                  (vallist-to-string (cdr v)))))
-  
+
+
 
 
 (define check_two_ranges_non_overlapping ((x intpair-p)
@@ -1038,10 +1043,42 @@
                (rec (pairlis$ desc.labels vals))
                )
             (ev_normal (expr_result (v_record rec) v.env)))
-           :e_arbitrary ;; sol
+          :e_arbitrary ;; sol
           (ev_error "Unsupported expression" desc)
-          :otherwise (ev_error "Unsupported expression" desc))))
+          :e_atc (b* (((ev (expr_result v)) (eval_expr env desc.expr))
+                      ((ev b) (is_val_of_type v.env v.val desc.type)))
+                   (if b (ev_normal v) (ev_error "DynError(DETAF" desc)))
+          ;;:otherwise (ev_error "Unsupported expression" desc)
+          )))
 
+    (define check_int_constraints ((env env-p) (i integerp) (constrs int_constraintlist-p)
+                                   &key ((clk natp) 'clk))
+      :short "At least one constraint needs to be satisfied"
+      :long "We assume that any expr eval is sidefect free, therefore there is nto nedd to return env"
+      :returns (sat bool_eval_result-p)
+      :measure (nats-measure clk 0 (int_constraintlist-count constrs) 0)
+      (if (atom constrs)
+          (ev_normal nil)
+        (b* ((constr (car constrs)))
+          (int_constraint-case constr
+            :constraint_exact (b* (((ev (expr_result c)) (eval_expr env constr.val)))
+                                (val-case c.val
+                                  :v_int (if (equal c.val.val i)
+                                             (ev_normal t)
+                                           (check_int_constraints env i (cdr constrs)))
+                                  :otherwise (ev_error "Constraint_exact evaluated to unexpected type" constr)))
+            :constraint_range (b* (((ev (expr_result from)) (eval_expr env (constraint_range->from constr)))
+                                   ((ev (expr_result to)) (eval_expr env (constraint_range->to constr))))
+                                (fty::multicase
+                                  ((val-case from.val)
+                                   (val-case to.val))
+                                  ((:v_int :v_int) (if (and (<= from.val.val i)
+                                                            (<= i to.val.val))
+                                                       (ev_normal t)
+                                                     (check_int_constraints env i (cdr constrs))))
+                                  (- (ev_error "Constraint_range evaluated to unexpected type" constr)))))
+           )))
+    
     (define eval_pattern ((env env-p)
                           (val val-p)
                           (p pattern-p)
@@ -1460,7 +1497,53 @@
       (b* (((evs env1) (eval_stmt env x)))
         (ev_normal (continuing (pop_scope env env1)))))
            
-                        
+    
+    (define is_val_of_type_tuple ((env env-p) (vals vallist-p) (types tylist-p)
+                                  &key ((clk natp) 'clk))
+      :returns (res bool_eval_result-p)
+      :measure (nats-measure clk 0 (tylist-count types) 0);;(vallist-count vals)
+      :guard-debug t
+      :verify-guards nil
+      (if (and (atom vals) (atom types))
+          (ev_normal t)
+        (if (and (consp vals) (consp types))
+            (b* ((v (car vals))
+                 (ty (car types))
+                 ((ev first-ok) (is_val_of_type env v ty))
+                 ((unless first-ok) (ev_normal nil))
+                 ((ev rest_ok) (is_val_of_type_tuple env (cdr vals) (cdr types)))
+                 )
+              (ev_normal rest_ok))
+          (ev_error "is_val_of_type_tuple failed: value list and type list of unqual length" (cons vals types)))))
+    
+    (define is_val_of_type ((env env-p) (v val-p) (ty ty-p)
+                            &key ((clk natp) 'clk))
+      :returns (res bool_eval_result-p)
+      :measure (nats-measure clk 0 (ty-count ty) 0);;(val-count v)
+      :guard-debug t
+      :verify-guards nil
+      (b* ((ty (ty->val ty)))
+        (fty::multicase
+          ((val-case v)
+           (type_desc-case ty))
+          ((:v_int :t_int) (constraint_kind-case ty.constraint
+                             :unconstrained (ev_normal t)        ;;INT_UNCONSTRAINED
+                             :wellconstrained (check_int_constraints env v.val ty.constraint.constraints) ;;INT_WELLCONSTRAINED
+                             :otherwise ;;pendingconstraines and parametrized are not mentioned in ASLRef????
+                             (ev_error "is_val_of_type failed - cases of int constrained not covered in ASLRef" (cons v ty))))
+          ((-      :t_int) (constraint_kind-case ty.constraint
+                             :unconstrained (ev_normal t)        ;;INT_UNCONSTRAINED
+                             :otherwise (ev_error "is_val_of_type failed T_INT with other than v_int" (cons v ty))))
+          ((:v_bitvector :t_bits) (b* (((ev (expr_result n)) (eval_expr env ty.expr)))
+                                    (val-case n.val
+                                      :v_int (ev_normal (equal n.val.val v.len))   ;;BITS
+                                      :otherwise (ev_error "is_val_of_type failed - unexpected value of e in (T_BITS e,-)" (cons v ty)))))
+          ((:v_array :t_tuple) (b* (((unless (and (consp v.arr)
+                                                  (consp ty.types)))
+                                     (ev_error "For the case of tuple, both v-arr and ty.types must be non-empty lists" (cons v ty))))
+                                 (is_val_of_type_tuple env v.arr ty.types)))
+          (- (ev_normal t)) ;;TYPE_EQUAL
+        )))
 
     ///
     (local (in-theory (disable eval_expr
@@ -1472,7 +1555,9 @@
                                eval_stmt
                                eval_slice
                                eval_slice_list
-                               )))
+                               check_int_constraints
+                               is_val_of_type_tuple
+                               is_val_of_type)))
     
     (std::defret-mutual len-of-eval_expr_list
       (defret len-of-eval_expr_list
@@ -1488,5 +1573,13 @@
                     (not (consp x)))))
 
     (verify-guards eval_expr-fn :guard-debug t
-      :hints (("goal" :do-not-induct t)))))
+      :hints (("goal" :do-not-induct t)))
+    (verify-guards is_val_of_type-fn :guard-debug t
+    :hints (("goal" :do-not-induct t)))
+    (verify-guards is_val_of_type_tuple-fn :guard-debug t
+      :hints (("goal" :do-not-induct t)))
+    ))
+
+
+
 
