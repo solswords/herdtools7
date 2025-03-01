@@ -1,6 +1,7 @@
 
 
 PASSING_TESTS := \
+ASLSemanticsReference.t/SemanticsRule.ATCNotDynamicErrorIfFalse.asl \
 ASLSemanticsReference.t/SemanticsRule.Lit.asl \
 ASLSemanticsReference.t/SemanticsRule.EGlobalVar.asl \
 ASLSemanticsReference.t/SemanticsRule.ELocalVar.asl \
@@ -220,7 +221,6 @@ ASLSemanticsReference.t/SemanticsRule.PMask.asl \
 ASLSemanticsReference.t/SemanticsRule.PTuple.asl \
 ASLSemanticsReference.t/SemanticsRule.EBinopAndFalse.asl \
 ASLSemanticsReference.t/EvalCatchers.asl \
-ASLSemanticsReference.t/SemanticsRule.ATCNotDynamicErrorIfFalse.asl \
 ASLSemanticsReference.t/SemanticsRule.CatchNoThrow.asl \
 
 
