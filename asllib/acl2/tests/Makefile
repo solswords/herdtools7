@@ -155,17 +155,17 @@ stdlib.t/pow2.asl \
 stdlib.t/log2.asl \
 stdlib.t/ilog2.asl \
 stdlib.t/misc.asl \
+stdlib.t/uint.asl \
+stdlib.t/round.asl \
+stdlib.t/sqrt.asl \
+stdlib.t/bits.asl \
+stdlib.t/align.asl \
 regressions.t/lhs-tuple-fields.asl \
 regressions.t/concat02.asl \
 regressions.t/bitvectors.asl \
 ASLSemanticsReference.t/SemanticsRule.LESlice.asl \
 
 FAILING_TESTS := \
-stdlib.t/round.asl \
-stdlib.t/sqrt.asl \
-stdlib.t/bits.asl \
-stdlib.t/align.asl \
-stdlib.t/uint.asl \
 side-effects.t/rec-binop-unknown.asl \
 side-effects.t/assert-unknown.asl \
 side-effects.t/constant-func-local-type-local-let.asl \

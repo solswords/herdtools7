@@ -763,6 +763,9 @@
     (("Log2" nil (:v_int))       (ev_normal (list (v_int (1- (integer-length a0.val))))))
     (("SInt" (-) (:v_bitvector)) (ev_normal (list (v_int (logext (acl2::pos-fix a0.len) a0.val)))))
     (("UInt" (-) (:v_bitvector)) (ev_normal (list (v_int (loghead (acl2::pos-fix a0.len) a0.val)))))
+    (("RoundUp" nil (:v_real))   (ev_normal (list (v_int (ceiling a0.val 1)))))
+    (("RoundDown" nil (:v_real)) (ev_normal (list (v_int (floor a0.val 1)))))
+    (("RoundTowardsZero" nil (:v_real)) (ev_normal (list (v_int (truncate a0.val 1)))))
     (-                           (ev_error "Bad primitive" (list name params args))))
   )
 
