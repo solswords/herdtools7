@@ -938,10 +938,38 @@
             (val (eval_unop desc.op v.val))) ;;SemanticsRule.Unop
            (ev_normal (expr_result val v.env)))
           :e_binop ;;
-          (b* (((ev (expr_result v1)) (eval_expr env desc.arg1))
-               ((ev (expr_result v2)) (eval_expr v1.env desc.arg2))
-               ((ev val) (eval_binop desc.op v1.val v2.val)))
-            (ev_normal (expr_result val v2.env)))
+          ;;shortcuts first
+          (case desc.op
+            (:band (b* (((ev (expr_result v1)) (eval_expr env desc.arg1)))
+                    (val-case v1.val
+                      :v_bool (if v1.val.val
+                                  (b* (((ev (expr_result v2)) (eval_expr v1.env desc.arg2))
+                                       ((ev val) (eval_binop desc.op v1.val v2.val)))
+                                    (ev_normal (expr_result val v2.env)))
+                                (ev_normal (expr_result (v_bool nil) v1.env)))
+                      :otherwise (ev_error "First argument of && evaluated to non-boolean" desc))))
+            (:bor (b* (((ev (expr_result v1)) (eval_expr env desc.arg1)))
+                   (val-case v1.val
+                     :v_bool (if v1.val.val
+                                 (ev_normal (expr_result (v_bool t) v1.env))
+                               (b* (((ev (expr_result v2)) (eval_expr v1.env desc.arg2))
+                                    ((ev val) (eval_binop desc.op v1.val v2.val)))
+                                 (ev_normal (expr_result val v2.env))))
+                     :otherwise (ev_error "First argument of || evaluated to non-boolean" desc))))
+            (:impl (b* (((ev (expr_result v1)) (eval_expr env desc.arg1)))
+                    (val-case v1.val
+                      :v_bool (if v1.val.val
+                                  (b* (((ev (expr_result v2)) (eval_expr v1.env desc.arg2))
+                                       ((ev val) (eval_binop desc.op v1.val v2.val)))
+                                    (ev_normal (expr_result val v2.env)))
+                                (ev_normal (expr_result (v_bool t) v1.env)))
+                      :otherwise (ev_error "First argument of ==> evaluated to non-boolean" desc))))
+            ;;all other ops
+            (otherwise 
+             (b* (((ev (expr_result v1)) (eval_expr env desc.arg1))
+                  ((ev (expr_result v2)) (eval_expr v1.env desc.arg2))
+                  ((ev val) (eval_binop desc.op v1.val v2.val)))
+               (ev_normal (expr_result val v2.env)))))
           :e_call ;; sol
           (b* (((call c) desc.call)
                ((ev (exprlist_result e))
@@ -1045,10 +1073,10 @@
             (ev_normal (expr_result (v_record rec) v.env)))
           :e_arbitrary ;; sol
           (ev_error "Unsupported expression" desc)
-          :e_atc (b* (((ev (expr_result v)) (eval_expr env desc.expr))
-                      ((ev b) (is_val_of_type v.env v.val desc.type)))
-                   (if b (ev_normal v) (ev_error "DynError(DETAF" desc)))
-          ;;:otherwise (ev_error "Unsupported expression" desc)
+          :e_atc ;;anna
+          (b* (((ev (expr_result v)) (eval_expr env desc.expr))
+               ((ev b) (is_val_of_type v.env v.val desc.type)))
+            (if b (ev_normal v) (ev_error "DynError(DETAF" desc)))
           )))
 
     (define check_int_constraints ((env env-p) (i integerp) (constrs int_constraintlist-p)
