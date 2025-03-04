@@ -763,6 +763,9 @@
     (("Log2" nil (:v_int))       (ev_normal (list (v_int (1- (integer-length a0.val))))))
     (("SInt" (-) (:v_bitvector)) (ev_normal (list (v_int (logext (acl2::pos-fix a0.len) a0.val)))))
     (("UInt" (-) (:v_bitvector)) (ev_normal (list (v_int (loghead (acl2::pos-fix a0.len) a0.val)))))
+    (("RoundUp" nil (:v_real))   (ev_normal (list (v_int (ceiling a0.val 1)))))
+    (("RoundDown" nil (:v_real)) (ev_normal (list (v_int (floor a0.val 1)))))
+    (("RoundTowardsZero" nil (:v_real)) (ev_normal (list (v_int (truncate a0.val 1)))))
     (-                           (ev_error "Bad primitive" (list name params args))))
   )
 
@@ -897,7 +900,21 @@
                               (v_bitvector 32 0))
           (ev_normal (v_bitvector 32 #xa0b0c0d0)))))
 
-
+(define eval_pattern_mask ((val val-p)
+                           (mask bitvector_mask-p))
+      :returns  (res val_result-p)
+      :guard-hints (("goal" :in-theory (enable eval_binop)))
+      (b* (((bitvector_mask mask)))
+            (val-case val
+              :v_bitvector (b* ((set_bv   (v_bitvector mask.length mask.set))
+                                (unset_bv (v_bitvector mask.length mask.unset))
+                                ((ev val/set) (eval_binop :and val set_bv))
+                                ((ev set-ok)  (eval_binop :eq_op val/set set_bv))
+                                ((unless (v_bool->val set-ok)) (ev_normal (v_bool nil)))
+                                ((ev val_inv) (eval_unop :not val))
+                                ((ev val/unset) (eval_binop :and val_inv unset_bv)))
+                             (eval_binop :eq_op val/unset unset_bv))
+              :otherwise (ev_error "Unsupported pattern_mask case" (cons val mask)))))
 
 
 (defmacro trace-eval_expr ()
@@ -907,6 +924,15 @@
                                        :ev_normal (list 'ev_normal (expr_result->val value.res))
                                        :ev_error value
                                        :ev_throwing (list 'ev_throwing value.throwdata))))))
+
+(defmacro trace-eval_stmt ()
+  '(trace$ (eval_stmt-fn :entry (list 'eval_stmt e)
+                         :exit (cons 'eval_stmt
+                                     (eval_result-case value
+                                       :ev_normal (list 'ev_normal (stmt_result->val value.res))
+                                       :ev_error value
+                                       :ev_throwing (list 'ev_throwing value.throwdata))))))
+
 
 (with-output
   ;; makes it so it won't take forever to print the induction scheme
@@ -1106,6 +1132,7 @@
                                                      (check_int_constraints env i (cdr constrs))))
                                   (- (ev_error "Constraint_range evaluated to unexpected type" constr)))))
            )))
+
     
     (define eval_pattern ((env env-p)
                           (val val-p)
@@ -1125,7 +1152,10 @@
                          (eval_binop :geq val v1.val))
           :pattern_leq (b* (((ev (expr_result v1)) (eval_expr env desc.expr)))
                          (eval_binop :leq val v1.val))
-          :pattern_mask (ev_error "Unsupported pattern" desc)
+          :pattern_mask  ;;We are not checking whether set/unset are consistent
+          (val-case val
+            :v_bitvector (eval_pattern_mask val desc.mask)
+            :otherwise (ev_error "Unsupported patter_mask case" desc))
           :pattern_not (b* (((ev v1) (eval_pattern env val desc.pattern)))
                          (eval_unop :bnot v1))
           :pattern_range (b* (((ev (expr_result v1)) (eval_expr env desc.lower))
