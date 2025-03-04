@@ -67,6 +67,11 @@ ASLSemanticsReference.t/SemanticsRule.SCond4.asl \
 ASLSemanticsReference.t/SemanticsRule.EGetEnumArray.asl \
 ASLSemanticsReference.t/SemanticsRule.EBinopAndFalse.asl \
 ASLSemanticsReference.t/SemanticsRule.ETuple.asl \
+ASLSemanticsReference.t/SemanticsRule.PTuple.asl \
+ASLSemanticsReference.t/SemanticsRule.LESlice.asl \
+ASLSemanticsReference.t/SemanticsRule.PMask.asl \
+ASLSemanticsReference.t/SemanticsRule.LDTuple.asl \
+ASLSemanticsReference.t/SemanticsRule.LESetField.asl \
 stdlib.t/align.asl \
 stdlib.t/sint.asl \
 stdlib.t/pow2.asl \
@@ -80,7 +85,7 @@ stdlib.t/bits.asl \
 regressions.t/lhs-tuple-fields.asl \
 regressions.t/concat02.asl \
 regressions.t/bitvectors.asl \
-ASLSemanticsReference.t/SemanticsRule.LESlice.asl \
+
 
 FAILING_TESTS := \
 side-effects.t/rec-binop-unknown.asl \
@@ -124,8 +129,6 @@ ASLSemanticsReference.t/SemanticsRule.SThrowNone.asl \
 ASLSemanticsReference.t/SemanticsRule.SThrowSomeTyped.asl \
 ASLSemanticsReference.t/SemanticsRule.SPrint.asl \
 ASLSemanticsReference.t/SemanticsRule.CatchNamed.asl \
-ASLSemanticsReference.t/SemanticsRule.LESetField.asl \
-ASLSemanticsReference.t/SemanticsRule.LDTuple.asl \
 ASLSemanticsReference.t/SemanticsRule.SReturnSome.asl \
 ASLSemanticsReference.t/SemanticsRule.STry.asl \
 ASLSemanticsReference.t/SemanticsRule.EArbitraryInteger0.asl \
@@ -133,8 +136,6 @@ ASLSemanticsReference.t/SemanticsRule.EArbitraryIntegerRange3-42-3.asl \
 ASLSemanticsReference.t/SemanticsRule.EArbitraryArray.asl \
 ASLSemanticsReference.t/SemanticsRule.Catch.asl \
 ASLSemanticsReference.t/SemanticsRule.CatchOtherwise.asl \
-ASLSemanticsReference.t/SemanticsRule.PMask.asl \
-ASLSemanticsReference.t/SemanticsRule.PTuple.asl \
 control-flow.t/with-return.asl \
 control-flow.t/if-return-return.asl \
 control-flow.t/if-return-throw.asl \
