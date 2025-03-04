@@ -435,7 +435,7 @@ let of_local_decl_item x =
   tagged_list_of_list
     (match x with
      | LDI_Var i -> [key "LDI_VAR"; of_identifier i]
-     | LDI_Tuple i ->[key "LDI_VAR"; of_list_map of_identifier i])
+     | LDI_Tuple i ->[key "LDI_TUPLE"; of_list_map of_identifier i])
 
 let of_for_direction x =
   key(match x with
