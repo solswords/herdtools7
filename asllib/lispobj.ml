@@ -53,7 +53,12 @@ module MakePrinter (Conf:PrinterConf) = struct
     if x = String.uppercase_ascii x then
       if downcase then String.lowercase_ascii x else x
     else "|" ^ x ^ "|"
+
   
+  (* In strings we need to escape both quotes and backslashes, so that the Lisp reader will get the right string.
+   We need four backslashes to represent each one backslash in both the regex input and output. *)
+  let escape_backslashes_and_quotes s =
+    Str.global_replace (Str.regexp "\"") "\\\"" (Str.global_replace (Str.regexp "\\\\") "\\\\\\\\" s)
   
   let rec pp_obj f x =
     match x with
@@ -61,7 +66,7 @@ module MakePrinter (Conf:PrinterConf) = struct
                       Q.pp_print f r
                     else
                       fprintf f "#C(@[<hov 0>%a@ %a@]" Q.pp_print r Q.pp_print i
-    | String s -> fprintf f "\"%s\"" s
+    | String s -> fprintf f "\"%s\"" (escape_backslashes_and_quotes s)
     | Symbol (pkg, name) ->
        (* BOZO neither packages nor escaping are handled correctly *)
        if pkg = "KEYWORD" then
