@@ -250,13 +250,20 @@ regressions.t/masks.asl \
 regressions.t/tuples.asl \
 regressions.t/rename-returned-tuples.asl \
 regressions.t/base_values_tuple.asl \
+regressions.t/subtypes-with.asl \
+regressions.t/records.asl \
+regressions.t/records-2.asl \
+regressions.t/record-getfields.asl \
 ASLSemanticsReference.t/SemanticsRule.EBinopAndFalse.asl \
+ASLSemanticsReference.t/SemanticsRule.ERecord.asl \
 ASLSemanticsReference.t/SemanticsRule.ETuple.asl \
 ASLSemanticsReference.t/SemanticsRule.LDTuple.asl \
 ASLSemanticsReference.t/SemanticsRule.PMask.asl \
 ASLSemanticsReference.t/SemanticsRule.PTuple.asl \
 ASLSemanticsReference.t/SemanticsRule.SPrint.asl \
 ASLSemanticsReference.t/SemanticsRule.SReturnSome.asl \
+ASLSemanticsReference.t/SemanticsRule.LESetField.asl \
+
 
 FAILING_TESTS := \
 side-effects.t/rec-binop-unknown.asl \
@@ -268,23 +275,17 @@ side-effects.t/binop-throw-unknown.asl \
 side-effects.t/binop-throw-otherwised.asl \
 side-effects.t/binop-throw-caught.asl \
 side-effects.t/binop-throw-read.asl \
-regressions.t/subtypes-with.asl \
-regressions.t/records.asl \
-regressions.t/records-2.asl \
 regressions.t/exceptions.asl \
 regressions.t/constrained-integer-types-example.asl \
 regressions.t/bitfields.asl \
 regressions.t/array-lca.asl \
-regressions.t/record-getfields.asl \
 control-flow.t/try-03.asl \
 control-flow.t/try-02.asl \
 control-flow.t/try-00.asl \
 control-flow.t/always-throw.asl \
-ASLSemanticsReference.t/SemanticsRule.ERecord.asl \
 ASLSemanticsReference.t/SemanticsRule.SThrowNone.asl \
 ASLSemanticsReference.t/SemanticsRule.SThrowSomeTyped.asl \
 ASLSemanticsReference.t/SemanticsRule.CatchNamed.asl \
-ASLSemanticsReference.t/SemanticsRule.LESetField.asl \
 ASLSemanticsReference.t/SemanticsRule.STry.asl \
 ASLSemanticsReference.t/SemanticsRule.EArbitraryInteger0.asl \
 ASLSemanticsReference.t/SemanticsRule.EArbitraryIntegerRange3-42-3.asl \
