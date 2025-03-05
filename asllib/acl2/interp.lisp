@@ -745,7 +745,7 @@
          (start (nfix first_vslice.first))
          (len   (nfix first_vslice.second))
          (srcpart (bitops::part-select srcval :low start :width len))
-         (val (logapp dstval_rest.second dstval_rest.first srcpart)) 
+         (val (logapp dstval_rest.first dstval_rest.second srcpart)) 
          )
       (intpair (+ len dstval_rest.first) val))))
 
