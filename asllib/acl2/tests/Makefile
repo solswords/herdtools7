@@ -146,6 +146,7 @@ regressions.t/inherit-integer-constraints.asl \
 regressions.t/operator_precedence.asl \
 regressions.t/array-lca.asl \
 regressions.t/constrained-integer-types-example.asl \
+regressions.t/subtypes-with.asl \
 control-flow.t/with-return.asl \
 control-flow.t/if-return-return.asl \
 control-flow.t/if-return-throw.asl \
@@ -171,9 +172,7 @@ loop-limits.t/recursion-correct.asl \
 loop-limits.t/recursion-exact.asl \
 
 #regressions.t/exceptions.asl \    unsupported :s_try 
-#regressions.t/constrained-integer-types-example.asl \  unsuported :e_arbitrary
-#regressions.t/operator_precedence.asl \  runs forever
-#regressions.t/subtypes-with.asl \  not ast-p :ast
+
 
 FAILING_TESTS := \
 side-effects.t/rec-binop-unknown.asl \
@@ -187,7 +186,6 @@ side-effects.t/binop-throw-otherwised.asl \
 side-effects.t/binop-throw-caught.asl \
 side-effects.t/binop-throw-read.asl \
 regressions.t/exceptions.asl \
-regressions.t/subtypes-with.asl \
 control-flow.t/try-03.asl \
 control-flow.t/try-02.asl \
 control-flow.t/try-00.asl \
