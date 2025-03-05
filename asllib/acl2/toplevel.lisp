@@ -40,24 +40,26 @@
     (change-env env :global (change-global-env g :storage new-storage))))
 
 (define eval_global ((env env-p)
-                     (x decl-p))
-  :returns (res env_eval_result-p)
+                     (x decl-p)
+                     &key (orac 'orac))
+  :returns (mv (res env_eval_result-p) new-orac)
   (b* ((x (decl->val x)))
     (decl_desc-case x
       :d_globalstorage
       (b* (((global_decl d) x.decl)
            ((unless d.initial_value)
-            (ev_error "TypeInferenceNeeded" x))
-           ((ev (expr_result iv)) (eval_expr env d.initial_value :clk *eval_global-initial-clock*)))
-        (ev_normal (declare_global  iv.env d.name iv.val)))
-      :otherwise (ev_normal (env-fix env)))))
+            (evo_error "TypeInferenceNeeded" x))
+           ((mv (evo (expr_result iv)) orac) (eval_expr env d.initial_value :clk *eval_global-initial-clock*)))
+        (evo_normal (declare_global  iv.env d.name iv.val)))
+      :otherwise (evo_normal (env-fix env)))))
 
 (define eval_globals ((env env-p)
-                      (x ast-p))
+                      (x ast-p)
+                     &key (orac 'orac))
   :measure (len x)
-  :returns (res env_eval_result-p)
-  (b* (((when (atom x)) (ev_normal (env-fix env)))
-       ((ev env2) (eval_global env (car x))))
+  :returns (mv (res env_eval_result-p) new-orac)
+  (b* (((when (atom x)) (evo_normal (env-fix env)))
+       ((mv (evo env2) orac) (eval_global env (car x))))
     (eval_globals env2 (cdr x))))
 
 
@@ -70,15 +72,15 @@
                            (and (consp x)
                                 (equal (len (cdr x)) (1- n))))))))
 
-(define run ((tenv static_env_global-p) (ast ast-p))
-  :returns (val val_result-p)
+(define run ((tenv static_env_global-p) (ast ast-p) &key (orac 'orac))
+  :returns (mv (val val_result-p) new-orac)
   (b* ((env0 (make-env :local (empty-local-env)
                        :global (make-global-env :static tenv)))
-       ((ev env1) (eval_globals env0 ast))
-       ((ev (func_result res))
+       ((mv (evo env1) orac) (eval_globals env0 ast))
+       ((mv (evo (func_result res)) orac)
         (eval_subprogram env1 "main" nil nil :clk *main-initial-clock*))
        ((when (eql (len res.vals) 1))
-        (ev_normal (car res.vals))))
-    (ev_error "malformed return values from main" res.vals)))
+        (evo_normal (car res.vals))))
+    (evo_error "malformed return values from main" res.vals)))
 
     

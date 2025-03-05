@@ -65,6 +65,8 @@
              (val-imap-p (put-assoc-equal k v x)))
     :hints(("Goal" :in-theory (enable put-assoc-equal)))))
 
+(fty::defoption maybe-val val)
+
 
 (fty::defmap pos-imap :key-type identifier :val-type posp :true-listp t)
 
