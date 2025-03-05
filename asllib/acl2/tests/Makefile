@@ -74,6 +74,8 @@ ASLSemanticsReference.t/SemanticsRule.LDTuple.asl \
 ASLSemanticsReference.t/SemanticsRule.LESetField.asl \
 ASLSemanticsReference.t/SemanticsRule.ERecord.asl \
 ASLSemanticsReference.t/SemanticsRule.SPrint.asl \
+ASLSemanticsReference.t/SemanticsRule.SReturnSome.asl \
+ASLSemanticsReference.t/SemanticsRule.LESlice.asl \
 stdlib.t/align.asl \
 stdlib.t/sint.asl \
 stdlib.t/pow2.asl \
@@ -141,10 +143,35 @@ regressions.t/static.asl \
 regressions.t/subtypes-example.asl \
 regressions.t/declaration-primitive-local.asl \
 regressions.t/inherit-integer-constraints.asl \
+regressions.t/operator_precedence.asl \
+regressions.t/array-lca.asl \
+regressions.t/constrained-integer-types-example.asl \
+control-flow.t/with-return.asl \
+control-flow.t/if-return-return.asl \
+control-flow.t/if-return-throw.asl \
+division.t/examples.asl \
+division.t/div-multi-slices.asl \
+division.t/zero-pow-zero.asl \
+explicit-parameters.t/explicit-parameters.asl \
+recursive.t/simple-recursive.asl \
+recursive.t/double-recursive.asl \
+recursive.t/double-recursive-without-limit.asl \
+recursive.t/enum-fn-recursive.asl \
+loop-limits.t/while-correct.asl \
+loop-limits.t/while-exact.asl \
+loop-limits.t/while-no-limit.asl \
+loop-limits.t/repeat-correct.asl \
+loop-limits.t/repeat-exact.asl \
+loop-limits.t/repeat-no-limit.asl \
+loop-limits.t/double-while-correct-correct.asl \
+loop-limits.t/for-exact-minus-one.asl \
+loop-limits.t/for-no-limit.asl \
+loop-limits.t/recursion-no-limit.asl \
+loop-limits.t/recursion-correct.asl \
+loop-limits.t/recursion-exact.asl \
 
 #regressions.t/exceptions.asl \    unsupported :s_try 
 #regressions.t/constrained-integer-types-example.asl \  unsuported :e_arbitrary
-#regressions.t/array-lca.asl \  unsuported :e_arbitrary
 #regressions.t/operator_precedence.asl \  runs forever
 #regressions.t/subtypes-with.asl \  not ast-p :ast
 
@@ -160,9 +187,6 @@ side-effects.t/binop-throw-otherwised.asl \
 side-effects.t/binop-throw-caught.asl \
 side-effects.t/binop-throw-read.asl \
 regressions.t/exceptions.asl \
-regressions.t/constrained-integer-types-example.asl \
-regressions.t/array-lca.asl \
-regressions.t/operator_precedence.asl \
 regressions.t/subtypes-with.asl \
 control-flow.t/try-03.asl \
 control-flow.t/try-02.asl \
@@ -178,33 +202,8 @@ ASLSemanticsReference.t/SemanticsRule.EArbitraryIntegerRange3-42-3.asl \
 ASLSemanticsReference.t/SemanticsRule.EArbitraryArray.asl \
 ASLSemanticsReference.t/SemanticsRule.Catch.asl \
 ASLSemanticsReference.t/SemanticsRule.CatchOtherwise.asl \
-ASLSemanticsReference.t/SemanticsRule.SReturnSome.asl \
 ASLSemanticsReference.t/EvalCatchers.asl \
 ASLSemanticsReference.t/SemanticsRule.CatchNoThrow.asl \
-ASLSemanticsReference.t/SemanticsRule.LESlice.asl \
-control-flow.t/with-return.asl \
-control-flow.t/if-return-return.asl \
-control-flow.t/if-return-throw.asl \
-division.t/examples.asl \
-division.t/div-multi-slices.asl \
-division.t/zero-pow-zero.asl \
-explicit-parameters.t/explicit-parameters.asl \
-loop-limits.t/while-correct.asl \
-loop-limits.t/while-exact.asl \
-loop-limits.t/while-no-limit.asl \
-loop-limits.t/repeat-correct.asl \
-loop-limits.t/repeat-exact.asl \
-loop-limits.t/repeat-no-limit.asl \
-loop-limits.t/double-while-correct-correct.asl \
-loop-limits.t/for-exact-minus-one.asl \
-loop-limits.t/for-no-limit.asl \
-loop-limits.t/recursion-no-limit.asl \
-loop-limits.t/recursion-correct.asl \
-loop-limits.t/recursion-exact.asl \
-recursive.t/simple-recursive.asl \
-recursive.t/double-recursive.asl \
-recursive.t/double-recursive-without-limit.asl \
-recursive.t/enum-fn-recursive.asl \
 side-effects.t/binop-read-read.asl \
 side-effects.t/binop-read-write-diff.asl \
 side-effects.t/binop-write-write-diff.asl \
