@@ -122,7 +122,7 @@
     (:e_getitem ((base expr)
                  (index acl2::int)))
     (:e_record ((type ty)
-                (fields fieldlist)))
+                (fields named_exprlist)))
     (:e_tuple ((exprs exprlist)))
     (:e_array ((length expr)
                (value expr)))
@@ -246,13 +246,13 @@
                         (elts identifierlist)))
     :measure (acl2::two-nats-measure (acl2-count x) 10))
 
-  (defprod field
+  (defprod named_expr
     ((name identifier)
      (expr expr))
     :measure (acl2::two-nats-measure (acl2-count x) 30)
     :layout :fulltree)
 
-  (deflist fieldlist :elt-type field :true-listp t
+  (deflist named_exprlist :elt-type named_expr :true-listp t
     :measure (acl2::two-nats-measure (acl2-count x) 10)
 
     :measure-debug t)
@@ -422,7 +422,7 @@
   :layout :alist)
 
 (defprod supertype ((name identifier)
-                    (fields fieldlist))
+                    (fields typed_identifierlist))
   :layout :fulltree)
 
 (defoption maybe-supertype supertype)
