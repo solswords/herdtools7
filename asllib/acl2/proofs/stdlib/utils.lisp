@@ -46,30 +46,32 @@
 
 
 ;; Induction scheme for while loops
-(define loop-induct ((env env-p) (clk natp) (test expr-p) (body stmt-p) (whilep))
+(define loop-induct ((env env-p) (clk natp) (test expr-p) (body stmt-p) (whilep) orac)
   :verify-guards nil
+  :non-executable t
   :measure (nfix clk)
-  (b* (((ev_normal cev) (eval_expr env test))
+  (b* (((mv (ev_normal cev) orac) (eval_expr env test))
        ((expr_result cev.res))
        ((unless (iff (ev_normal->res (v_to_bool cev.res.val)) whilep))
         env)
-       ((ev_normal blkev) (eval_block cev.res.env body))
+       ((mv (ev_normal blkev) orac) (eval_block cev.res.env body))
        ((continuing blkev.res))
        ((when (zp clk))
         blkev.res.env))
-    (loop-induct blkev.res.env (1- clk) test body whilep)))
+    (loop-induct blkev.res.env (1- clk) test body whilep orac)))
 (in-theory (enable (:i loop-induct)))
 
 
-(define for-induct ((env env-p) (index_name identifier-p) (start integerp) (dir for_direction-p) (end integerp) (body stmt-p) (clk natp))
+(define for-induct ((env env-p) (index_name identifier-p) (start integerp) (dir for_direction-p) (end integerp) (body stmt-p) (clk natp) orac)
   :verify-guards nil
+  :non-executable t
   :measure (for_loop-measure start end dir)
   (b* (((when (for_loop-test start end dir))
         env)
-       ((ev_normal blkev) (eval_block env body))
+       ((mv (ev_normal blkev) orac) (eval_block env body))
        ((continuing blkev.res))
        ((mv step env2) (eval_for_step blkev.res.env index_name start dir)))
-    (for-induct env2 index_name step dir end body clk)))
+    (for-induct env2 index_name step dir end body clk orac)))
 (in-theory (enable (:i for-induct)))
 
     

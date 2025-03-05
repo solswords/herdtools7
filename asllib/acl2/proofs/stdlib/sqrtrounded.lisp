@@ -73,7 +73,7 @@
                     (integerp end)
                     (<= start (+ 1 end))
                     (no-duplicatesp-equal (acl2::alist-keys storage)))
-               (b* (((ev_normal res) (eval_for env "__stdlib_local_n" start :up end *sqrtrounded-loop-body*))
+               (b* (((mv (ev_normal res) &) (eval_for env "__stdlib_local_n" start :up end *sqrtrounded-loop-body*))
                     ((continuing res.res))
                     ((mv root-spec prec-spec) (acl2::sqrtrounded-loop mant.val root.val prec.val start (+ 1 end)))
                     ((env env))
@@ -91,7 +91,7 @@
                                                                                                              env.local.storage))))))
                       (equal (eval_result-kind res) :ev_normal)
                       (equal (control_flow_state-kind res.res) :continuing)))))
-    :hints (("goal" :induct (for-induct env "__stdlib_local_n" start :up end *sqrtrounded-loop-body* clk)
+    :hints (("goal" :induct (for-induct env "__stdlib_local_n" start :up end *sqrtrounded-loop-body* clk orac)
              :in-theory (enable check_recurse_limit
                                 declare_local_identifiers
                                 declare_local_identifier
@@ -169,8 +169,8 @@
                      (expt 2 40))
                   (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
                                                            (env->global env)))))
-             (equal (eval_subprogram env "SqrtRounded" nil (list (v_real val)
-                                                                 (v_int fracbits)) :clk clk)
+             (equal (mv-nth 0 (eval_subprogram env "SqrtRounded" nil (list (v_real val)
+                                                                           (v_int fracbits)) :clk clk))
                     (ev_normal (func_result (list (v_real (acl2::sqrtrounded val fracbits))) (env->global env)))))
     :hints (("goal" :expand ((eval_subprogram  env "SqrtRounded" nil (list (v_real val)
                                                                            (v_int fracbits)) :clk clk))

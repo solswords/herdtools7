@@ -33,7 +33,7 @@
   (implies (subprograms-match '("Abs") 
                               (global-env->static (env->global env))
                               (stdlib-static-env))
-           (equal (eval_subprogram env "Abs" nil (list (v_real val)) :clk clk)
+           (equal (mv-nth 0 (eval_subprogram env "Abs" nil (list (v_real val)) :clk clk))
                   (ev_normal (func_result (list (v_real (abs val))) (env->global env)))))
   :hints (("goal" :expand ((eval_subprogram  env "Abs" nil (list (v_real val)) :clk clk))
            :in-theory (enable (stdlib-static-env)

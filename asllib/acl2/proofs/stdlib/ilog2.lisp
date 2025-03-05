@@ -66,7 +66,7 @@
                     (natp clk)
                     (< (- (+ 1 (acl2::rational-exponent val.val)) high.val) clk)
                     (no-duplicatesp-equal (acl2::alist-keys storage)))
-               (b* (((ev_normal res) (eval_loop env t *ilog2-loop-1-test* *ilog2-loop-1-body*))
+               (b* (((mv (ev_normal res) &) (eval_loop env t *ilog2-loop-1-test* *ilog2-loop-1-body*))
                     ((continuing res.res))
                     ((mv low-spec high-spec) (acl2::ilog2-search-up val.val low.val high.val))
                     ((env env))
@@ -82,7 +82,7 @@
                                                                                             env.local.storage)))))
                       (equal (eval_result-kind res) :ev_normal)
                       (equal (control_flow_state-kind res.res) :continuing)))))
-    :hints (("goal" :induct (loop-induct env clk *ilog2-loop-1-test* *ilog2-loop-1-body* t)
+    :hints (("goal" :induct (loop-induct env clk *ilog2-loop-1-test* *ilog2-loop-1-body* t orac)
              :in-theory (enable check_recurse_limit
                                 declare_local_identifiers
                                 declare_local_identifier
@@ -143,7 +143,7 @@
                     (natp clk)
                     (< (- (+ 1 (- (acl2::rational-exponent val.val))) (- low.val)) clk)
                     (no-duplicatesp-equal (acl2::alist-keys storage)))
-               (b* (((ev_normal res) (eval_loop env t *ilog2-loop-2-test* *ilog2-loop-2-body*))
+               (b* (((mv (ev_normal res) &) (eval_loop env t *ilog2-loop-2-test* *ilog2-loop-2-body*))
                     ((continuing res.res))
                     ((mv low-spec high-spec) (acl2::ilog2-search-down val.val low.val high.val))
                     ((env env))
@@ -159,7 +159,7 @@
                                                                                             env.local.storage)))))
                       (equal (eval_result-kind res) :ev_normal)
                       (equal (control_flow_state-kind res.res) :continuing)))))
-    :hints (("goal" :induct (loop-induct env clk *ilog2-loop-2-test* *ilog2-loop-2-body* t)
+    :hints (("goal" :induct (loop-induct env clk *ilog2-loop-2-test* *ilog2-loop-2-body* t orac)
              :in-theory (enable check_recurse_limit
                                 declare_local_identifiers
                                 declare_local_identifier
@@ -221,7 +221,7 @@
                     (natp clk)
                     (< (- high.val low.val) clk)
                     (no-duplicatesp-equal (acl2::alist-keys storage)))
-               (b* (((ev_normal res) (eval_loop env t *ilog2-loop-3-test* *ilog2-loop-3-body*))
+               (b* (((mv (ev_normal res) &) (eval_loop env t *ilog2-loop-3-test* *ilog2-loop-3-body*))
                     ((continuing res.res))
                     ((mv low-spec high-spec) (acl2::ilog2-binary-search val.val low.val high.val))
                     ((env env))
@@ -237,7 +237,7 @@
                                                                                             env.local.storage)))))
                       (equal (eval_result-kind res) :ev_normal)
                       (equal (control_flow_state-kind res.res) :continuing)))))
-    :hints (("goal" :induct (loop-induct env clk *ilog2-loop-3-test* *ilog2-loop-3-body* t)
+    :hints (("goal" :induct (loop-induct env clk *ilog2-loop-3-test* *ilog2-loop-3-body* t orac)
              :in-theory (enable check_recurse_limit
                                 declare_local_identifiers
                                 declare_local_identifier
@@ -302,7 +302,7 @@
                      (expt 2 40))
                   (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
                                                            (env->global env)))))
-             (equal (eval_subprogram env "ILog2" nil (list (v_real val)) :clk clk)
+             (equal (mv-nth 0 (eval_subprogram env "ILog2" nil (list (v_real val)) :clk clk))
                     (ev_normal (func_result (list (v_int (acl2::ilog2 val))) (env->global env)))))
     :hints (("goal" :expand ((eval_subprogram  env "ILog2" nil (list (v_real val)) :clk clk))
              :in-theory (enable (stdlib-static-env)
