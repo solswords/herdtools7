@@ -484,28 +484,28 @@
             (val-p (nth idx l)))))
 
 
-(define fieldlist->exprs ((x fieldlist-p))
+(define named_exprlist->exprs ((x named_exprlist-p))
   :returns (exprs exprlist-p)
   (if (atom x)
       nil
-    (cons (field->expr (car x))
-          (fieldlist->exprs (cdr x))))
+    (cons (named_expr->expr (car x))
+          (named_exprlist->exprs (cdr x))))
   ///
   (defret len-of-<fn>
     (equal (len exprs) (len x)))
 
   (defret exprlist-count-of-<fn>
-    (<= (exprlist-count (fieldlist->exprs x))
-        (fieldlist-count x))
-    :hints(("Goal" :in-theory (enable fieldlist-count exprlist-count)))
+    (<= (exprlist-count (named_exprlist->exprs x))
+        (named_exprlist-count x))
+    :hints(("Goal" :in-theory (enable named_exprlist-count exprlist-count)))
     :rule-classes :linear))
 
-(define fieldlist->names ((x fieldlist-p))
+(define named_exprlist->names ((x named_exprlist-p))
   :returns (names identifierlist-p)
   (if (atom x)
       nil
-    (cons (field->name (car x))
-          (fieldlist->names (cdr x))))
+    (cons (named_expr->name (car x))
+          (named_exprlist->names (cdr x))))
   ///
   (defret len-of-<fn>
     (equal (len names) (len x))))
@@ -967,7 +967,8 @@
                        ((clk natp) 'clk)
                        (orac 'orac))
       :verify-guards nil
-      :returns (mv (eval expr_eval_result-p) new-orac)
+      :returns (mv (eval expr_eval_result-p)
+                   new-orac)
       :measure (nats-measure clk 0 (expr-count e) 0)
       (b* ((desc (expr->desc e)))
         (expr_desc-case desc
@@ -1092,8 +1093,8 @@
                         (evo_normal (expr_result (nth desc.index varr.val.arr) varr.env)))
              :otherwise (evo_error "evaluation of the base did not return v_array as expected" desc)))
           :e_record ;; sol
-          (b* ((exprs (fieldlist->exprs desc.fields))
-               (names (fieldlist->names desc.fields))
+          (b* ((exprs (named_exprlist->exprs desc.fields))
+               (names (named_exprlist->names desc.fields))
                ((mv (evo (exprlist_result e)) orac) (eval_expr_list env exprs)))
             (evo_normal (expr_result (v_record (pairlis$ names e.val)) e.env)))
           :e_tuple ;; anna

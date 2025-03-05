@@ -315,7 +315,7 @@ let rec of_expr_desc x =
      | E_GetField (x, i) -> [key "E_GETFIELD"; of_expr x; of_identifier i]
      | E_GetFields (x, i) -> [key "E_GETFIELDS"; of_expr x; of_list_map of_identifier i ]
      | E_GetItem (x, i) -> [key "E_GETITEM"; of_expr x; of_int i]
-     | E_Record (t, lst) -> [key "E_RECORD"; of_ty t; of_list_map (fun (i, e) -> Cons (of_identifier i, of_expr e)) lst]
+     | E_Record (t, lst) -> [key "E_RECORD"; of_ty t; of_list_map (fun (i, e) -> Cons(of_identifier i, of_expr e)) lst]
      | E_Tuple lst -> [key "E_TUPLE"; of_list_map of_expr lst]
      | E_Array { length; value } -> [key "E_ARRAY"; of_expr length; of_expr value]
      | E_EnumArray { enum; labels; value } -> [key "E_ENUMARRAY"; of_identifier enum; of_list_map of_identifier labels; of_expr value]

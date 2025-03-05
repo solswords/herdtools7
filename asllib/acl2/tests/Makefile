@@ -259,4 +259,6 @@ TESTDIR := $(shell cd ../../tests; pwd)
 
 
 
-
+.PHONY: clean
+clean :
+	@rm -f $(PASSING_TARGETS) $(FAILING_TARGETS)
