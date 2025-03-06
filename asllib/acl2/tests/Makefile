@@ -147,6 +147,7 @@ regressions.t/operator_precedence.asl \
 regressions.t/array-lca.asl \
 regressions.t/constrained-integer-types-example.asl \
 regressions.t/subtypes-with.asl \
+regressions.t/exceptions.asl \
 control-flow.t/with-return.asl \
 control-flow.t/if-return-return.asl \
 control-flow.t/if-return-throw.asl \
@@ -170,21 +171,45 @@ loop-limits.t/for-no-limit.asl \
 loop-limits.t/recursion-no-limit.asl \
 loop-limits.t/recursion-correct.asl \
 loop-limits.t/recursion-exact.asl \
+side-effects.t/binop-read-read.asl \
+side-effects.t/binop-read-write-diff.asl \
+side-effects.t/binop-write-write-diff.asl \
+side-effects.t/bool-binop-write-write.asl \
+side-effects.t/binop-throw-read.asl \
+side-effects.t/binop-throw-caught.asl \
+side-effects.t/binop-throw-otherwised.asl \
+side-effects.t/binop-throw-unknown.asl \
+side-effects.t/binop-write-unknown.asl \
+side-effects.t/binop-unknown-unknown.asl \
+side-effects.t/constant-func.asl \
+side-effects.t/constant-func-throw-caught.asl \
+side-effects.t/constant-func-local-var.asl \
+side-effects.t/constant-func-local-type-local-let.asl \
+side-effects.t/for-var-no-edit.asl \
+side-effects.t/while-var-edits.asl \
+side-effects.t/repeat-var-edits.asl \
+side-effects.t/for-read.asl \
+side-effects.t/config-uses-constant.asl \
+side-effects.t/config-uses-local-var.asl \
+side-effects.t/config-uses-local-let.asl \
+side-effects.t/config-uses-local-constant.asl \
+side-effects.t/config-uses-constant-through-func.asl \
+side-effects.t/assert-read.asl \
+side-effects.t/type-read-config.asl \
+side-effects.t/type-read-constant.asl \
+side-effects.t/type-read-let.asl \
+side-effects.t/type-read-local-let.asl \
+side-effects.t/type-func-local-var.asl \
+side-effects.t/rec-binop-unknown.asl \
+side-effects.t/rec-binop-read-local.asl \
+side-effects.t/rec-constant.asl \
+side-effects.t/print-var.asl \
+side-effects.t/global-var-initialisation.asl \
 
-#regressions.t/exceptions.asl \    unsupported :s_try 
-
+#        unsupported :s_try 
+# side-effects.t/assert-unknown.asl \   assertion fails due to the expectation that ARBITRARY returns a default value 
 
 FAILING_TESTS := \
-side-effects.t/rec-binop-unknown.asl \
-side-effects.t/assert-unknown.asl \
-side-effects.t/constant-func-local-type-local-let.asl \
-side-effects.t/constant-func-throw-caught.asl \
-side-effects.t/binop-unknown-unknown.asl \
-side-effects.t/binop-write-unknown.asl \
-side-effects.t/binop-throw-unknown.asl \
-side-effects.t/binop-throw-otherwised.asl \
-side-effects.t/binop-throw-caught.asl \
-side-effects.t/binop-throw-read.asl \
 regressions.t/exceptions.asl \
 control-flow.t/try-03.asl \
 control-flow.t/try-02.asl \
@@ -202,33 +227,9 @@ ASLSemanticsReference.t/SemanticsRule.Catch.asl \
 ASLSemanticsReference.t/SemanticsRule.CatchOtherwise.asl \
 ASLSemanticsReference.t/EvalCatchers.asl \
 ASLSemanticsReference.t/SemanticsRule.CatchNoThrow.asl \
-side-effects.t/binop-read-read.asl \
-side-effects.t/binop-read-write-diff.asl \
-side-effects.t/binop-write-write-diff.asl \
-side-effects.t/bool-binop-write-write.asl \
-side-effects.t/constant-func.asl \
-side-effects.t/constant-func-local-var.asl \
-side-effects.t/for-var-no-edit.asl \
-side-effects.t/while-var-edits.asl \
-side-effects.t/repeat-var-edits.asl \
-side-effects.t/for-read.asl \
-side-effects.t/config-uses-constant.asl \
-side-effects.t/config-uses-local-var.asl \
-side-effects.t/config-uses-local-let.asl \
-side-effects.t/config-uses-local-constant.asl \
-side-effects.t/config-uses-constant-through-func.asl \
-side-effects.t/assert-read.asl \
-side-effects.t/type-read-config.asl \
-side-effects.t/type-read-constant.asl \
-side-effects.t/type-read-let.asl \
-side-effects.t/type-read-local-let.asl \
-side-effects.t/type-func-local-var.asl \
-side-effects.t/assert-read.asl \
-side-effects.t/rec-binop-read-local.asl \
-side-effects.t/rec-constant.asl \
-side-effects.t/print-var.asl \
-side-effects.t/global-var-initialisation.asl \
-side-effects.t/constant-func-local-type-local-let.asl \
+side-effects.t/assert-unknown.asl \
+
+
 
 ERRORING_TESTS := \
 ASLSemanticsReference.t/SemanticsRule.EGetArrayTooSmall.asl \
@@ -250,7 +251,7 @@ TESTDIR := $(shell cd ../../tests; pwd)
 
 %.pass :
 	@asl=$(patsubst %.pass,%.asl,$@) ;\
-	echo Test: $$asl ;\
+	echo \Test: $$asl ;\
 	mkdir -p $$asl ;\
 	( cd $$asl ; $(CURDIR)/run.sh $(TESTDIR)/$$asl )
 	@touch $@
