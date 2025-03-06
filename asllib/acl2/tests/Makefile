@@ -76,6 +76,16 @@ ASLSemanticsReference.t/SemanticsRule.ERecord.asl \
 ASLSemanticsReference.t/SemanticsRule.SPrint.asl \
 ASLSemanticsReference.t/SemanticsRule.SReturnSome.asl \
 ASLSemanticsReference.t/SemanticsRule.LESlice.asl \
+ASLSemanticsReference.t/SemanticsRule.SThrowNone.asl \
+ASLSemanticsReference.t/SemanticsRule.SThrowSomeTyped.asl \
+ASLSemanticsReference.t/SemanticsRule.CatchNamed.asl \
+ASLSemanticsReference.t/SemanticsRule.SReturnSome.asl \
+ASLSemanticsReference.t/SemanticsRule.STry.asl \
+ASLSemanticsReference.t/SemanticsRule.EArbitraryArray.asl \
+ASLSemanticsReference.t/SemanticsRule.Catch.asl \
+ASLSemanticsReference.t/SemanticsRule.CatchOtherwise.asl \
+ASLSemanticsReference.t/EvalCatchers.asl \
+ASLSemanticsReference.t/SemanticsRule.CatchNoThrow.asl \
 stdlib.t/align.asl \
 stdlib.t/sint.asl \
 stdlib.t/pow2.asl \
@@ -205,28 +215,16 @@ side-effects.t/rec-binop-read-local.asl \
 side-effects.t/rec-constant.asl \
 side-effects.t/print-var.asl \
 side-effects.t/global-var-initialisation.asl \
-
-#        unsupported :s_try 
-# side-effects.t/assert-unknown.asl \   assertion fails due to the expectation that ARBITRARY returns a default value 
-
-FAILING_TESTS := \
-regressions.t/exceptions.asl \
 control-flow.t/try-03.asl \
 control-flow.t/try-02.asl \
 control-flow.t/try-00.asl \
 control-flow.t/always-throw.asl \
-ASLSemanticsReference.t/SemanticsRule.SThrowNone.asl \
-ASLSemanticsReference.t/SemanticsRule.SThrowSomeTyped.asl \
-ASLSemanticsReference.t/SemanticsRule.CatchNamed.asl \
-ASLSemanticsReference.t/SemanticsRule.SReturnSome.asl \
-ASLSemanticsReference.t/SemanticsRule.STry.asl \
+
+# side-effects.t/assert-unknown.asl \   assertion fails due to the expectation that ARBITRARY returns a default value 
+
+FAILING_TESTS := \
 ASLSemanticsReference.t/SemanticsRule.EArbitraryInteger0.asl \
 ASLSemanticsReference.t/SemanticsRule.EArbitraryIntegerRange3-42-3.asl \
-ASLSemanticsReference.t/SemanticsRule.EArbitraryArray.asl \
-ASLSemanticsReference.t/SemanticsRule.Catch.asl \
-ASLSemanticsReference.t/SemanticsRule.CatchOtherwise.asl \
-ASLSemanticsReference.t/EvalCatchers.asl \
-ASLSemanticsReference.t/SemanticsRule.CatchNoThrow.asl \
 side-effects.t/assert-unknown.asl \
 
 
