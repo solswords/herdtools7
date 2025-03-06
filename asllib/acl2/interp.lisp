@@ -936,24 +936,98 @@
                             ,acl2::rest-expr))))
 
 
+(encapsulate nil
+  (local (in-theory (enable nfix)))
+  ;; Note: if the subtypes map is malformed, this function won't terminate.
+  (acl2::def-tr subtypes_names (tenv name1 name2)
+    (declare (xargs :guard (and (static_env_global-p tenv)
+                                (identifier-p name1)
+                                (identifier-p name2))))
+    (b* ((name1 (identifier-fix name1))
+         (name2 (identifier-fix name2))
+         ((when (equal name1 name2)) t)
+         (look (hons-assoc-equal name1 (static_env_global->subtypes tenv)))
+         ((unless look) nil))
+      (subtypes_names tenv (cdr look) name2))
+    :diverge nil))
+
+(define subtypes ((tenv static_env_global-p)
+                  (ty1 ty-p)
+                  (ty2 ty-p))
+  (b* ((ty1 (ty->val ty1))
+       (ty2 (ty->val ty2)))
+    (fty::multicase ((type_desc-case ty1)
+                     (type_desc-case ty2))
+      ((:t_named :t_named) (subtypes_names tenv ty1.name ty2.name))
+      (- nil))))
+
+
+(fty::defoption maybe-catcher catcher)
+
+(define find_catcher ((tenv static_env_global-p)
+                      (ty ty-p)
+                      (catchers catcherlist-p))
+  :returns (catcher maybe-catcher-p)
+  (b* (((when (atom catchers)) nil)
+       ((catcher c) (car catchers))
+       ((when (subtypes tenv ty c.ty))
+        (catcher-fix c)))
+    (find_catcher tenv ty (cdr catchers)))
+  ///
+  (defret catcher-count*-of-<fn>
+    (implies catcher
+             (< (catcher-count* catcher)
+                (catcherlist-count* catchers)))
+    :hints (("goal" :induct (len catchers)
+             :expand ((catcherlist-count* catchers))))
+    :rule-classes :linear))
+    
+
+(define rethrow_implicit ((throw throwdata-p)
+                          (blkres stmt_eval_result-p))
+  :returns (res stmt_eval_result-p
+                :hyp (stmt_eval_result-p blkres))
+  (b* (((when (eval_result-case blkres
+                :ev_throwing (not blkres.throwdata)
+                :otherwise nil))
+        (ev_throwing throw (ev_throwing->env blkres))))
+    blkres))
+
 (defmacro trace-eval_expr ()
   '(trace$ (eval_expr-fn :entry (list 'eval_expr e)
                          :exit (cons 'eval_expr
-                                     (eval_result-case value
-                                       :ev_normal (list 'ev_normal (expr_result->val value.res))
-                                       :ev_error value
-                                       :ev_throwing (list 'ev_throwing value.throwdata))))))
+                                     (let ((value (car values)))
+                                       (eval_result-case value
+                                         :ev_normal (list 'ev_normal (expr_result->val value.res))
+                                         :ev_error value
+                                         :ev_throwing (list 'ev_throwing value.throwdata)))))))
 
-(defmacro trace-eval_stmt ()
-  '(trace$ (eval_stmt-fn :entry (list 'eval_stmt s)
+(defmacro trace-eval_stmt (&key locals)
+  `(trace$ (eval_stmt-fn :entry (list 'eval_stmt s
+                                      . ,(and locals '((local-env->storage (env->local env)))))
                          :exit (cons 'eval_stmt
-                                     (eval_result-case value
-                                       :ev_normal (cons 'ev_normal
-                                                        (control_flow_state-case value.res
-                                                          :returning `(:returning value.res.vals)
-                                                          :continuing '(:continuing)))
-                                       :ev_error value
-                                       :ev_throwing (list 'ev_throwing value.throwdata))))))
+                                     (let ((value (car values)))
+                                       (eval_result-case value
+                                         :ev_normal (cons 'ev_normal
+                                                          (control_flow_state-case value.res
+                                                            :returning `(:returning ,value.res.vals)
+                                                            :continuing ,(if locals
+                                                                             `(list :continuing (local-env->storage (env->local value.res.env)))
+                                                                           ''(:continuing))))
+                                         :ev_error value
+                                         :ev_throwing (list 'ev_throwing
+                                                            value.throwdata
+                                                            . ,(and locals '((local-env->storage (env->local value.env)))))))))))
+
+
+(defmacro trace-eval_subprogram ()
+  '(trace$ (eval_subprogram :entry (list 'eval_subprogram name vparams vargs)
+                            :exit (list 'eval_subprogram
+                                        (let ((value (car values)))
+                                          (eval_result-case value
+                                            :ev_normal (b* (((func_result value.res)))
+                                                         (list 'ev_normal value.res.vals))
+                                            :otherwise value))))))
 
 
 (with-output
@@ -1118,8 +1192,6 @@
             (evo_normal (expr_result (v_record rec) v.env)))
           :e_arbitrary ;; sol
           (b* (((mv (evo ty) orac) (resolve-ty env desc.type))
-               ((unless (ty-resolved-p ty))
-                (evo_error "Unresolved type in e_arbitrary" desc))
                ((mv val orac) (ty-oracle-val ty orac))
                ((unless val)
                 (evo_error "Unsatisfiable type in e_arbitrary" desc)))
@@ -1408,13 +1480,6 @@
                          (mv (ev_throwing sub-res.throwdata env) orac))
           :ev_error (mv sub-res orac))))
 
-    ;; (trace$ (eval_subprogram :entry (list 'eval_subprogram name vparams vargs)
-    ;;                          :exit (list 'eval_subprogram
-    ;;                                      (eval_result-case value
-    ;;                                        :ev_normal (b* (((func_result value.res)))
-    ;;                                                     (list 'ev_normal value.res.vals))
-    ;;                                        :otherwise value))))
-    
     (define eval_subprogram ((env env-p)
                              (name identifier-p)
                              (vparams vallist-p)
@@ -1601,14 +1666,61 @@
           :s_while (eval_loop env t s.test s.body)
           :s_repeat (b* (((evs env1) (eval_block env s.body)))
                       (eval_loop env1 nil s.test s.body))
-          :s_throw (evo_error "unsupported statement" s)
-          :s_try (evo_error "unsupported statement" s)
+          :s_throw (b* (((unless s.val)
+                         (mv (ev_throwing nil env) orac))
+                        ((expr*maybe-ty s.val))
+                        ((unless s.val.ty)
+                         (evo_error "Throw with untyped exception" s))
+                        ((mv (evo (expr_result ex)) orac) (eval_expr env s.val.expr)))
+                     (mv (ev_throwing (throwdata ex.val s.val.ty) ex.env) orac))
+          :s_try (b* (((mv try orac) (eval_block env s.body))
+                      ((when (eval_result-case try
+                               :ev_throwing (not try.throwdata)
+                               :otherwise t))
+                       (mv try orac))
+                      ((ev_throwing try)))
+                   ;; NOTE: The eval_catchers semantics rule takes the original env (from before the eval_block above!)
+                   ;; but then uses it just for the static env, combining its static env with the dynamic env from the throw.
+                   ;; But it seems the static env shouldn't ever change so why bother?
+                   (eval_catchers try.env s.catchers s.otherwise try.throwdata))
+                      
           :s_print (b* (((mv (evo (exprlist_result e)) orac) (eval_expr_list env s.args))
                         (str (vallist-to-string e.val))
                         (- (cw (if s.newline "~s0~%" "~s0") str)))
                      (evo_normal (continuing e.env)))
           :s_unreachable (evo_error "unreachable" s)
           :s_pragma (evo_error "unsupported statement" s))))
+
+     (define eval_catchers ((env env-p)
+                            (catchers catcherlist-p)
+                            (otherwise maybe-stmt-p)
+                            (throw throwdata-p)
+                            &key
+                            ((clk natp) 'clk)
+                            (orac 'orac))
+      :returns (mv (eval stmt_eval_result-p) new-orac)
+      :measure (nats-measure clk 0 (+ (catcherlist-count* catchers)
+                                      (maybe-stmt-count* otherwise))
+                             0)
+      (b* (((throwdata throw))
+           (catcher? (find_catcher (global-env->static (env->global env)) throw.ty catchers))
+           ((unless catcher?)
+            (b* (((unless otherwise)
+                  (mv (ev_throwing throw env) orac))
+                 ((mv blkres orac) (eval_block env otherwise)))
+              (mv (rethrow_implicit throw blkres) orac)))
+           ((catcher c) catcher?)
+           ((unless c.name)
+            (b* (((mv blkres orac) (eval_block env c.stmt)))
+              (mv (rethrow_implicit throw blkres) orac)))
+           (env2 (declare_local_identifier env c.name throw.val))
+           ((mv blkres orac)
+            (b* (((evs blkenv) (eval_block env2 c.stmt))
+                 (env3 (remove_local_identifier blkenv c.name)))
+              (evo_normal (continuing env3)))))
+        (mv (rethrow_implicit throw blkres) orac)))
+           
+    
    
      (define eval_slice ((env env-p)
                         (s slice-p)
@@ -1795,11 +1907,50 @@
              (equal (equal 0 (len x))
                     (not (consp x)))))
 
+
+    (std::defret-mutual resolved-p-of-resolve-ty
+      (defret resolved-p-of-<fn>
+        (implies (eval_result-case res :ev_normal)
+                 (int_constraintlist-resolved-p (ev_normal->res res)))
+        :hints ('(:expand (<call>)
+                  :in-theory (enable int_constraintlist-resolved-p
+                                     int_constraint-resolved-p
+                                     int-literal-expr-p)))
+        :fn resolve-int_constraints)
+      (defret resolved-p-of-<fn>
+        (implies (eval_result-case res :ev_normal)
+                 (constraint_kind-resolved-p (ev_normal->res res)))
+        :hints ('(:expand (<call>)
+                  :in-theory (enable constraint_kind-resolved-p)))
+        :fn resolve-constraint_kind)
+
+      (defret resolved-p-of-<fn>
+        (implies (eval_result-case res :ev_normal)
+                 (tylist-resolved-p (ev_normal->res res)))
+        :hints ('(:expand (<call>)
+                  :in-theory (enable tylist-resolved-p)))
+        :fn resolve-tylist)
+
+      (defret resolved-p-of-<fn>
+        (implies (eval_result-case res :ev_normal)
+                 (typed_identifierlist-resolved-p (ev_normal->res res)))
+        :hints ('(:expand (<call>)
+                  :in-theory (enable typed_identifierlist-resolved-p
+                                     typed_identifier-resolved-p)))
+        :fn resolve-typed_identifierlist)
+
+      (defret resolved-p-of-<fn>
+        (implies (eval_result-case res :ev_normal)
+                 (ty-resolved-p (ev_normal->res res)))
+        :hints ('(:expand (<call>)
+                  :in-theory (enable ty-resolved-p
+                                     array_index-resolved-p
+                                     int-literal-expr-p)))
+        :fn resolve-ty)
+      :skip-others t)
+
+    
     (verify-guards eval_expr-fn :guard-debug t
-      :hints (("goal" :do-not-induct t)))
-    (verify-guards is_val_of_type-fn :guard-debug t
-    :hints (("goal" :do-not-induct t)))
-    (verify-guards is_val_of_type_tuple-fn :guard-debug t
       :hints (("goal" :do-not-induct t)))
     ))
 

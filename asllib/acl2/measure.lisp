@@ -23,7 +23,7 @@
 (in-package "ASL")
 
 (include-book "ast")
-
+(local (std::add-default-post-define-hook :fix))
 
 
 (defines lexpr-count*
@@ -119,7 +119,9 @@
                    (lexprlist-count* (cdr x)))
                 (lexprlist-count* x)))
     :hints (("goal" :expand ((lexprlist-count* x))))
-    :rule-classes :linear))
+    :rule-classes :linear)
+
+  (fty::deffixequiv-mutual lexpr-count*))
 
 
 (defines expr_of_lexpr
@@ -205,7 +207,10 @@
   (defthm maybe-[expr*maybe-ty]-count-linear
     (implies x
              (< (expr*maybe-ty-count x) (maybe-[expr*maybe-ty]-count x)))
-    :rule-classes ((:linear :trigger-terms ((maybe-[expr*maybe-ty]-count x))))))
+    :rule-classes ((:linear
+                    :trigger-terms
+                    ((maybe-[expr*maybe-ty]-count x)
+                     (expr*maybe-ty-count x))))))
 
 
 (defines stmt-count*
@@ -402,7 +407,8 @@
   (defthm maybe-stmt-count*-linear
     (implies x
              (< (stmt-count* x) (maybe-stmt-count* x)))
-    :rule-classes ((:linear :trigger-terms ((maybe-stmt-count* x)))))
+    :rule-classes ((:linear :trigger-terms ((maybe-stmt-count* x)
+                                            (stmt-count* x)))))
 
   (defthm catcher-count*-linear
     (b* (((catcher x)))
@@ -414,5 +420,12 @@
              (< (+ (catcher-count* (car x))
                    (catcherlist-count* (cdr x)))
                 (catcherlist-count* x)))
-    :rule-classes :linear))
+    :rule-classes :linear)
 
+  (defthm maybe-stmt-fix-when-x
+    (implies x
+             (equal (maybe-stmt-fix x) (stmt-fix x)))
+    :hints(("Goal" :in-theory (enable maybe-stmt-fix))))
+
+  (local (set-default-hints nil))
+  (fty::deffixequiv-mutual stmt-count*))

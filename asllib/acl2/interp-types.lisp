@@ -114,7 +114,7 @@
 (fty::deflist val_read_from-list :elt-type val_read_from :true-listp t)
 
 (defprod throwdata
-  ((val val_read_from)
+  ((val val-p)
    (ty ty))
   :layout :list)
 
