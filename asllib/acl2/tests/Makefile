@@ -248,11 +248,15 @@ failing : $(FAILING_TARGETS)
 
 TESTDIR := $(shell cd ../../tests; pwd)
 
+BINDIR := $(shell cd ../bin; pwd)
+
+export PATH := $(BINDIR):$(PATH)
+
 %.pass :
 	@asl=$(patsubst %.pass,%.asl,$@) ;\
 	echo Test: $$asl ;\
 	mkdir -p $$asl ;\
-	( cd $$asl ; $(CURDIR)/run.sh $(TESTDIR)/$$asl )
+	( cd $$asl ; run-acl2asl.sh $(TESTDIR)/$$asl) || (touch $*.fail; exit 1)
 	@touch $@
 
 

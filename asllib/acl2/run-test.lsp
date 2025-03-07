@@ -14,6 +14,9 @@
 
 (defconst *magic-delimiter* "!@#$%^%$#@")
 
+(set-fmt-hard-right-margin 2000 state)
+(set-fmt-soft-right-margin 1000 state)
+
 (time$
  (b* ((- (cw "~%~s0 begin ASL interpreter output~%" *magic-delimiter*))
       ((mv result orac) (run (@ :static-env) (@ :ast)))

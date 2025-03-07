@@ -17,7 +17,7 @@ if ! ( aslref --print-lisp --no-exec "$aslfile" > "$astfile" ); then
     exit 1;
 fi
 
-echo "(asl::read-ast-file-into-globals \"$astfile\") (ld \"${scriptdir}/run-test.lsp\")" | aslcl2 > "$outfile"
+echo "(asl::read-ast-file-into-globals \"$astfile\") (ld \"${acl2asldir}/run-test.lsp\")" | acl2asl > "$outfile"
 
 status=$?
 
