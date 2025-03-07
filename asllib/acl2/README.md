@@ -1,0 +1,69 @@
+
+ACL2 ASL interpreter
+=====================
+
+This directory contains an implementation of the ASLRef interpreter in the
+[ACL2](https://www.cs.utexas.edu/~moore/acl2) theorem prover.
+
+Installation
+------------
+
+The interpreter requires an up-to-date (Github bleeding-edge) copy of
+the [ACL2 system and books](https://github.com/acl2/acl2). To install, see
+[this installation guide](https://www.cs.utexas.edu/~moore/acl2/current/HTML/installation/installation.html).
+
+Ensure the following environment variables are set and exported:
+
+    ACL2_DIR=<path to the root of your ACL2 git clone>
+    ACL2ASL_DIR=<this directory>
+    ACL2=${ACL2_DIR}/saved_acl2
+    ACL2_SYSTEM_BOOKS=${ACL2_DIR}/books
+    ACL2_IMAGES=${ACL2ASL_DIR}/bin
+    ACL2_IMAGE_SRC_DIR=${ACL2ASL_DIR}/image-src
+    ACL2_PROJECTS=${ACL2ASL_DIR}/PROJECT_DIRS
+    PATH=${ACL2_SYSTEM_BOOKS}/build:${ACL2ASL_DIR}/bin:$PATH
+
+Once these are set, an ACL2 executable with the ASL interpreter code
+pre-loaded can be built using `make` in this directory.
+
+To run examples, aslref must also be built and installed in your PATH --
+see the README.mld in the parent directory.
+
+Usage
+-----
+
+The ACL2 ASL interpreter reads an ASL type-checked AST which can be
+dumped by aslref using the `--print-lisp` option. E.g.,
+
+    aslref --print-lisp --no-exec mytest.asl > mytest.asl.lsp
+
+The file `tests/run-interactive.lsp` can be used to run the ASL
+program interactively in acl2asl as follows:
+
+    (assign :fname "mytest.asl.lsp")
+    (ld "run-interactive.lsp")
+
+Some example proofs showing the correctness of ASL stdlib functions
+are in proofs/stdlib/.
+
+The script `bin/run-acl2asl.sh` takes an asl file as an argument, uses
+aslref to write out the AST object, then runs the interpreter on that
+object using acl2asl. It prints the output from the ACL2 ASL
+interpreter and exits with either the status returned from the ASL
+"main" function if it completed successfully, or 1 otherwise,
+including in cases of runtime errors or uncaught exceptions.
+
+Testing
+-------
+
+The aslreftests subdirectory has a script `test-all.sh` that
+replicates the aslref regression tests using acl2asl. The output is a
+set of diffs showing what the output/status of each run was supposed
+to be versus what it is. Some discrepancies are a result of the
+ACL2ASL interpreter producing different error messages than aslref;
+currently we don't plan to fix these so they can be disregarded as
+long as the meaning of the error message is the same in both cases.
+
+A lighter set of tests can be run using `make` in the tests
+subdirectory. These consist of most aslref tests that are supposed to
+complete without error.
