@@ -29,6 +29,7 @@
 (include-book "centaur/bitops/part-select" :dir :system)
 (include-book "centaur/bitops/part-install" :dir :system)
 (include-book "oracle")
+(include-book "std/strings/case-conversion" :dir :system)
 
 ;; (local (include-book "std/strings/hexify" :dir :system))
 (include-book "std/alists/alist-defuns" :dir :system)
@@ -141,7 +142,8 @@
   :body
   `(b* ((evresult ,(car acl2::forms)))
      (eval_result-case evresult
-       :ev_normal (b* ((,(car acl2::args) evresult.res))
+       :ev_normal (b* ,(and (not (eq (car acl2::args) '&))
+                            `((,(car acl2::args) evresult.res)))
                     ,acl2::rest-expr)
        :otherwise evresult)))
 
@@ -789,7 +791,10 @@
                  (denstr (coerce (explode-atom den 10) 'string)))
               (concatenate 'string numstr "/" denstr))
     :v_string v.val
-    :v_bitvector (b* ((digits (coerce (explode-atom v.val 16) 'string))
+    :v_bitvector (b* (((when (eql v.len 0))
+                       ;; special case to match aslref -- not sure if this is a bug though
+                       "0x")
+                      (digits (str::downcase-string (coerce (explode-atom v.val 16) 'string)))
                       (length (ceiling v.len 4))
                       (zeros (coerce (make-list (nfix (- length (length digits)))
                                                 :initial-element #\0)
@@ -921,7 +926,8 @@
   :body
   `(b* ((evresult ,(car acl2::forms)))
      (eval_result-case evresult
-       :ev_normal (b* ((,(car acl2::args) evresult.res))
+       :ev_normal (b* ,(and (not (eq (car acl2::args) '&))
+                           `((,(car acl2::args) evresult.res)))
                     ,acl2::rest-expr)
        :otherwise (mv evresult orac))))
 
@@ -932,7 +938,8 @@
   `(b* (((mv (evo cflow) orac) ,(car acl2::forms)))
      (control_flow_state-case cflow
               :returning (evo_normal cflow)
-              :continuing (b* ((,(car acl2::args) cflow.env))
+              :continuing (b* ,(and (not (eq (car acl2::args) '&))
+                                    `((,(car acl2::args) cflow.env)))
                             ,acl2::rest-expr))))
 
 
@@ -1538,6 +1545,7 @@
           :le_slice (b* ((rbase (expr_of_lexpr lx.base))
                          ((mv (evo (expr_result rbv)) orac) (eval_expr env rbase))
                          ((mv (evo (intpairlist/env vslices)) orac) (eval_slice_list rbv.env lx.slices))
+                         ((evo &) (check_non_overlapping_slices vslices.pairlist))
                          ((evo newbase) (write_to_bitvector vslices.pairlist v rbv.val)))
                       (eval_lexpr vslices.env lx.base newbase))
           :le_setarray (b* ((rbase (expr_of_lexpr lx.base))

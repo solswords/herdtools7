@@ -118,7 +118,7 @@
     ((:plus :v_bitvector :v_int)  (ev_normal (v_bitvector v1.len
                                                           (loghead v1.len (+ v1.val v2.val)))))
     ((:minus :v_bitvector :v_int) (ev_normal (v_bitvector v1.len
-                                                          (loghead v1.len (+ v1.val v2.val)))))
+                                                          (loghead v1.len (- v1.val v2.val)))))
     ;; string -> string -> bool
     ((:eq_op :v_string :v_string) (ev_normal (v_bool (equal v1.val v2.val))))
     ((:neq   :v_string :v_string) (ev_normal (v_bool (not (equal v1.val v2.val)))))

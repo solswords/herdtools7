@@ -25,7 +25,7 @@
          :ev_error (prog2$ (cw "Error: ~s0 -- ~x1~%" result.desc result.data)
                            1)
          :ev_throwing (prog2$ (cw "Uncaught exception: ~x0~%" result.throwdata)
-                              2)
+                              1)
          :ev_normal (val-case result.res
                       :v_int result.res.val
                       :otherwise (prog2$ (cw "bad return value from main: ~x0" result.res)
