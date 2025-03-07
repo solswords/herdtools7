@@ -59,7 +59,7 @@
      :when (<= 0 v2.val)         (ev_normal (v_int (expt v1.val v2.val))))
     ((:shl   :v_int :v_int)      
      :when (<= 0 v2.val)         (ev_normal (v_int (ash v1.val v2.val))))
-    ((:shl   :v_int :v_int)      
+    ((:shr   :v_int :v_int)      
      :when (<= 0 v2.val)         (ev_normal (v_int (ash v1.val (- v2.val)))))
     ;; int -> int -> bool        
     ((:eq_op :v_int :v_int)      (ev_normal (v_bool (eql v1.val v2.val))))

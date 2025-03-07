@@ -378,3 +378,5 @@
   (defthm orac-read-string-to-orac-st
     (equal (mv-nth 1 (orac-read-string orac))
            (orac-st '(:string) orac))))
+
+(in-theory (disable acl2::oracp))

@@ -24,7 +24,9 @@ Ensure the following environment variables are set and exported:
     PATH=${ACL2_SYSTEM_BOOKS}/build:${ACL2ASL_DIR}/bin:$PATH
 
 Once these are set, an ACL2 executable with the ASL interpreter code
-pre-loaded can be built using `make` in this directory.
+pre-loaded can be built using (Gnu) `make` in this directory. Using
+Make's parallel build capability is very useful to speed this up;
+e.g., `make -j 8`.
 
 To run examples, aslref must also be built and installed in your PATH --
 see the README.mld in the parent directory.
@@ -59,10 +61,12 @@ Testing
 The aslreftests subdirectory has a script `test-all.sh` that
 replicates the aslref regression tests using acl2asl. The output is a
 set of diffs showing what the output/status of each run was supposed
-to be versus what it is. Some discrepancies are a result of the
-ACL2ASL interpreter producing different error messages than aslref;
-currently we don't plan to fix these so they can be disregarded as
-long as the meaning of the error message is the same in both cases.
+to be versus what it is.
+
+The output when there is an error differs between aslref and acl2asl;
+we aren't likely to fix all these differences because this would
+require reimplementing all the pretty printing. For now, when both
+interpreters produce a dynamic error, we don't compare their outputs.
 
 A lighter set of tests can be run using `make` in the tests
 subdirectory. These consist of most aslref tests that are supposed to

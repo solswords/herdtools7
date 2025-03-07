@@ -390,6 +390,18 @@
                                  (decrement-stack name g.stack_size))))
     (change-env prev-env :global new-g)))
 
+
+(define get_stack_size ((name identifier-p)
+                        (env env-p))
+  :returns (sz natp :rule-classes :type-prescription)
+  (b* (((env env))
+       ((global-env g) env.global))
+    (stack_size-lookup name g.stack_size)))
+    
+       
+    
+    
+
   
 
 
@@ -462,10 +474,14 @@
 
 (define check_recurse_limit ((env env-p)
                              (name identifier-p)
-                             (recurse-limit maybe-expr-p))
+                             (recurse-limit acl2::maybe-integerp))
   :returns (eval eval_result-p)
   (declare (ignorable env name recurse-limit))
-  (ev_normal nil))
+  (if (and recurse-limit
+           (< (lifix recurse-limit) (get_stack_size name env)))
+      (ev_error "Recursion limit ran out" name)
+    (ev_normal nil)))
+       
 
 
 (defthm call-count-linear
@@ -720,6 +736,21 @@
                                             child.local.storage)))))
 
 
+(define check-bad-slices ((width acl2::maybe-natp)
+                          (slices intpairlist-p))
+  :returns (res eval_result-p)
+  (b* (((when (atom slices)) (ev_normal nil))
+       ((intpair s1) (car slices))
+       (start s1.first)
+       (len s1.second)
+       ((when (or (< start 0)
+                  (< len 0)))
+        (ev_error "Bad slice" s1))
+       ((when (and width
+                   (< (lnfix width) (+ start len))))
+        (ev_error "Slice out of range of width" (list s1 width))))
+    (check-bad-slices width (cdr slices))))
+
 
 (define slices_sub ((srcval  integerp)
                     (vslices intpairlist-p)
@@ -888,6 +919,7 @@
         (ev_error "write_to_bitvector type error" dst))
        ((v_bitvector dst))
        ((ev src.val) (vbv-to-int src))
+       ((ev &) (check-bad-slices dst.len slices))
        (width (slices-width slices)))
     (ev_normal (v_bitvector dst.len (loghead dst.len (write_to_bitvector-aux width slices src.val dst.val)))))
   ///
@@ -1000,6 +1032,17 @@
         (ev_throwing throw (ev_throwing->env blkres))))
     blkres))
 
+
+(define tick_loop_limit ((x acl2::maybe-integerp))
+  :returns (res (and (eval_result-p res)
+                     (implies (eval_result-case res :ev_normal)
+                              (acl2::maybe-integerp (ev_normal->res res)))))
+  (if x
+      (if (< 0 (lifix x))
+          (ev_normal (1- (lifix x)))
+        (ev_error "Loop limit ran out" nil))
+    (ev_normal nil)))
+
 (defmacro trace-eval_expr ()
   '(trace$ (eval_expr-fn :entry (list 'eval_expr e)
                          :exit (cons 'eval_expr
@@ -1037,11 +1080,13 @@
                                             :otherwise value))))))
 
 
+
 (with-output
   ;; makes it so it won't take forever to print the induction scheme
   :evisc (:gag-mode (evisc-tuple 3 4 nil nil))
   :off (event)
   (defines eval_expr
+    :prepwork ((local (in-theory (disable xor not))))
     (define eval_expr ((env env-p)
                        (e expr-p)
                        &key
@@ -1114,12 +1159,14 @@
                (srcval vexpr.val)
                )
             (val-case srcval
-              :v_int (b* (((intpair res) (slices_sub srcval.val vslices.pairlist)))
+              :v_int (b* (((evo &) (check-bad-slices nil vslices.pairlist))
+                          ((intpair res) (slices_sub srcval.val vslices.pairlist)))
                        (evo_normal
                         (expr_result
                          (v_bitvector res.first (loghead res.first res.second))
                          vslices.env)))
-              :v_bitvector (b* (((intpair res) (slices_sub srcval.val vslices.pairlist)))
+              :v_bitvector (b* (((evo &) (check-bad-slices srcval.len vslices.pairlist))
+                                ((intpair res) (slices_sub srcval.val vslices.pairlist)))
                              (evo_normal
                               (expr_result
                                (v_bitvector res.first (loghead res.first res.second))
@@ -1512,7 +1559,8 @@
          
            ;; probably redundant but in the document
            (env1 (change-env env :local (empty-local-env)))
-           ((evo ?ign) (check_recurse_limit env1 name f.recurse_limit)))
+           ((mv (evo limit) orac) (eval_limit env1 f.recurse_limit))
+           ((evo &) (check_recurse_limit env1 name limit)))
         (subprogram_body-case f.body
           :sb_asl (b* ((arg-names (typed_identifierlist->names f.args))
                        (param-names (maybe-typed_identifierlist->names f.parameters))
@@ -1605,6 +1653,21 @@
            ((mv (evo env1) orac) (eval_lexpr env (car lx) (car v))))
         (eval_lexpr_list env1 (cdr lx) (cdr v))))
 
+    (define eval_limit ((env env-p)
+                        (x maybe-expr-p)
+                        &key
+                        ((clk natp) 'clk)
+                        (orac 'orac))
+      :measure (nats-measure clk 0 (maybe-expr-count x) 0)
+      :returns (mv (res (and (eval_result-p res)
+                             (implies (eval_result-case res :ev_normal)
+                                      (acl2::maybe-integerp (ev_normal->res res)))))
+                   new-orac)
+      (b* (((unless x) (evo_normal nil))
+           ((mv (evo (expr_result res)) orac) (eval_expr env x))
+           ((evo val) (v_to_int res.val)))
+        (evo_normal val)))
+
     (define eval_stmt ((env env-p)
                        (s stmt-p)
                        &key
@@ -1659,6 +1722,7 @@
                         :otherwise (evo_error "Non-boolean assertion result" s.expr)))
           :s_for (b* (((mv (evo (expr_result startr)) orac) (eval_expr env s.start_e))
                       ((mv (evo (expr_result endr)) orac)   (eval_expr env s.end_e))
+                      ((mv (evo limit) orac)                (eval_limit env s.limit))
                       ;;; BOZO FIXME TODO: Add loop limit
                       (env (declare_local_identifier env s.index_name startr.val))
                       ;; Type constraints ensure that start and end are integers,
@@ -1666,14 +1730,17 @@
                       ((evo startv) (v_to_int startr.val))
                       ((evo endv)   (v_to_int endr.val))
                       ((evs env2)
-                       (eval_for env s.index_name ;; missing loop limit
+                       (eval_for env s.index_name limit
                                       startv s.dir endv s.body))
                       (env3 (remove_local_identifier env2 s.index_name)))
                    (evo_normal (continuing env3)))
                       
-          :s_while (eval_loop env t s.test s.body)
-          :s_repeat (b* (((evs env1) (eval_block env s.body)))
-                      (eval_loop env1 nil s.test s.body))
+          :s_while (b* (((mv (evo limit) orac) (eval_limit env s.limit)))
+                     (eval_loop env t limit s.test s.body))
+          :s_repeat (b* (((mv (evo limit) orac) (eval_limit env s.limit))
+                         ((evo limit2) (tick_loop_limit limit))
+                         ((evs env1) (eval_block env s.body)))
+                      (eval_loop env1 nil limit2 s.test s.body))
           :s_throw (b* (((unless s.val)
                          (mv (ev_throwing nil env) orac))
                         ((expr*maybe-ty s.val))
@@ -1748,7 +1815,7 @@
                         :v_int (val-case mstart.val
                                  :v_int (evo_normal
                                          (intpair/env
-                                          (intpair mstart.val.val (- mend.val.val mstart.val.val))
+                                          (intpair mstart.val.val (+ 1 (- mend.val.val mstart.val.val)))
                                           mstart.env))
                                  :otherwise (evo_error "Bad start in the slice range" s))
                         :otherwise (evo_error "Bad top/end in the slice range" s)))
@@ -1788,7 +1855,7 @@
 
     (define eval_for ((env env-p)
                       (index_name identifier-p)
-                      ;; missing loop limit
+                      (limit acl2::maybe-integerp)
                       (v_start integerp)
                       (dir for_direction-p)
                       (v_end   integerp)
@@ -1800,16 +1867,16 @@
                              (stmt-count* body)
                              (for_loop-measure v_start v_end dir))
       :returns (mv (eval stmt_eval_result-p) new-orac)
-      (b* (;; TODO tick loop limit
+      (b* (((evo limit1) (tick_loop_limit limit))
            ((when (for_loop-test v_start v_end dir))
             (evo_normal (continuing env)))
            ((evs env1) (eval_block env body))
            ((mv v_step env2) (eval_for_step env1 index_name v_start dir)))
-        (eval_for env2 index_name v_step dir v_end body)))
+        (eval_for env2 index_name limit1 v_step dir v_end body)))
 
     (define eval_loop ((env env-p)
                        (is_while booleanp)
-                       ;; missing loop limit
+                       (limit acl2::maybe-integerp)
                        (e_cond expr-p)
                        (body stmt-p)
                        &key
@@ -1823,10 +1890,11 @@
            ((evo cbool) (v_to_bool cres.val))
            ((when (xor is_while cbool))
             (evo_normal (continuing cres.env)))
+           ((evo limit1) (tick_loop_limit limit))
            ((evs env2) (eval_block cres.env body))
            ((when (zp clk))
             (evo_error "Loop limit ran out" body)))
-        (eval_loop env2 is_while e_cond body :clk (1- clk))))
+        (eval_loop env2 is_while limit1 e_cond body :clk (1- clk))))
            
     (define eval_block ((env env-p)
                         (x stmt-p)
@@ -1835,8 +1903,15 @@
                         (orac 'orac))
       :measure (nats-measure clk 0 (stmt-count* x) 1)
       :returns (mv (eval stmt_eval_result-p) new-orac)
-      (b* (((evs env1) (eval_stmt env x)))
-        (evo_normal (continuing (pop_scope env env1)))))
+      (b* (((mv stmtres orac) (eval_stmt env x)))
+        (eval_result-case stmtres
+          :ev_normal (control_flow_state-case stmtres.res
+                       :returning (evo_normal stmtres.res)
+                       :continuing (evo_normal (continuing (pop_scope env stmtres.res.env))))
+          :ev_throwing (mv (ev_throwing stmtres.throwdata
+                                        (pop_scope env stmtres.env))
+                           orac)
+          :otherwise (mv stmtres orac))))
            
     
     (define is_val_of_type_tuple ((env env-p) (vals vallist-p) (types tylist-p)
@@ -1889,18 +1964,8 @@
         )))
 
     ///
-    (local (in-theory (disable eval_expr
-                               eval_pattern
-                               eval_pattern-any
-                               eval_expr_list
-                               eval_call
-                               eval_subprogram
-                               eval_stmt
-                               eval_slice
-                               eval_slice_list
-                               check_int_constraints
-                               is_val_of_type_tuple
-                               is_val_of_type)))
+    (local (make-event
+            `(in-theory (disable . ,(fgetprop 'eval_expr-fn 'acl2::recursivep nil (w state))))))
     
     (std::defret-mutual len-of-eval_expr_list
       (defret len-of-eval_expr_list

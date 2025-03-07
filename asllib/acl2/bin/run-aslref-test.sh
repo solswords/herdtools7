@@ -3,18 +3,25 @@
 
 
 # Initialize variables
-noexec=0
+incompatible=0
+notypecheck=0
 aslargs=()
 aslfile=""
 
 # Process arguments
 for arg in "$@"; do
-    if [[ "$arg" == "--no-exec" ]]; then
-        noexec=1
+    if [[ "$arg" == "--no-exec" || "$arg" == "--no-type-check" || "$arg" == "-0" ]]; then
+        incompatible=1
+	aslargs+=("$arg")
     else
         aslargs+=("$arg")
     fi
 done
+
+# If incompatible, just run aslref to get the expected output
+if [[ $incompatible == 1 ]]; then
+    exec aslref ${aslargs[@]} ;
+fi
 
 # Extract the last argument as aslfile
 if [[ ${#aslargs[@]} -gt 0 ]]; then
@@ -25,7 +32,7 @@ else
     exit 1;
 fi
 
-# echo "noexec=$noexec"
+# echo "incompatible=$incompatible"
 # echo "aslargs=${aslargs[@]}"
 # echo "aslfile=$aslfile"
 
@@ -42,10 +49,6 @@ export PATH="$acl2asldir"/bin:$PATH
 # echo aslref ${aslargs[@]} "$aslfile" --no-exec;
 # echo aslref ${aslargs[@]} "$aslfile --print-lisp --no-exec";
 
-if [[ $noexec == 1 ]]; then
-    exec aslref ${aslargs[@]} "$aslfile" --no-exec ;
-fi
-
 # echo aslref ${aslargs[@]} "$aslfile" --print-lisp --no-exec
 aslref_out=$( ( aslref ${aslargs[@]} "$aslfile" --print-lisp --no-exec > "$astfile" ) 2>&1 )
 if [[ $? != 0 ]]; then
@@ -54,7 +57,9 @@ if [[ $? != 0 ]]; then
     exit 1;
 fi
 
-echo "(asl::read-ast-file-into-globals \"$astfile\") (ld \"${acl2asldir}/run-test.lsp\")" | acl2asl > "$outfile"
+echo "(asl::read-ast-file-into-globals \"$astfile\")
+    (acl2::update-oracle-mode 1 asl::orac) ;; HACK -- Set the oracle to deterministic mode for compatibility
+    (ld \"${acl2asldir}/run-test.lsp\")" | acl2asl > "$outfile"
 
 status=$?
 
