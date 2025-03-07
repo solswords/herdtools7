@@ -46,7 +46,7 @@
 
 
 ;; Induction scheme for while loops
-(define loop-induct ((env env-p) (clk natp) (test expr-p) (body stmt-p) (whilep) orac)
+(define loop-induct ((env env-p) (clk natp) (test expr-p) (body stmt-p) (whilep) (limit acl2::maybe-integerp) orac)
   :verify-guards nil
   :non-executable t
   :measure (nfix clk)
@@ -54,24 +54,26 @@
        ((expr_result cev.res))
        ((unless (iff (ev_normal->res (v_to_bool cev.res.val)) whilep))
         env)
+       (limit (ev_normal->res (tick_loop_limit limit)))
        ((mv (ev_normal blkev) orac) (eval_block cev.res.env body))
        ((continuing blkev.res))
        ((when (zp clk))
         blkev.res.env))
-    (loop-induct blkev.res.env (1- clk) test body whilep orac)))
+    (loop-induct blkev.res.env (1- clk) test body whilep limit orac)))
 (in-theory (enable (:i loop-induct)))
 
 
-(define for-induct ((env env-p) (index_name identifier-p) (start integerp) (dir for_direction-p) (end integerp) (body stmt-p) (clk natp) orac)
+(define for-induct ((env env-p) (index_name identifier-p) (start integerp) (dir for_direction-p) (end integerp) (body stmt-p) (clk natp) (limit acl2::maybe-integerp) orac)
   :verify-guards nil
   :non-executable t
   :measure (for_loop-measure start end dir)
   (b* (((when (for_loop-test start end dir))
         env)
+       (limit (ev_normal->res (tick_loop_limit limit)))
        ((mv (ev_normal blkev) orac) (eval_block env body))
        ((continuing blkev.res))
        ((mv step env2) (eval_for_step blkev.res.env index_name start dir)))
-    (for-induct env2 index_name step dir end body clk orac)))
+    (for-induct env2 index_name step dir end body clk limit orac)))
 (in-theory (enable (:i for-induct)))
 
     

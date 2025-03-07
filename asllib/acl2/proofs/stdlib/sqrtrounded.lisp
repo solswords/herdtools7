@@ -73,7 +73,7 @@
                     (integerp end)
                     (<= start (+ 1 end))
                     (no-duplicatesp-equal (acl2::alist-keys storage)))
-               (b* (((mv (ev_normal res) &) (eval_for env "__stdlib_local_n" start :up end *sqrtrounded-loop-body*))
+               (b* (((mv (ev_normal res) &) (eval_for env "__stdlib_local_n" nil start :up end *sqrtrounded-loop-body*))
                     ((continuing res.res))
                     ((mv root-spec prec-spec) (acl2::sqrtrounded-loop mant.val root.val prec.val start (+ 1 end)))
                     ((env env))
@@ -91,7 +91,7 @@
                                                                                                              env.local.storage))))))
                       (equal (eval_result-kind res) :ev_normal)
                       (equal (control_flow_state-kind res.res) :continuing)))))
-    :hints (("goal" :induct (for-induct env "__stdlib_local_n" start :up end *sqrtrounded-loop-body* clk orac)
+    :hints (("goal" :induct (for-induct env "__stdlib_local_n" start :up end *sqrtrounded-loop-body* clk nil orac)
              :in-theory (enable check_recurse_limit
                                 declare_local_identifiers
                                 declare_local_identifier
@@ -118,12 +118,14 @@
                        START (+ 1 END)))
              :do-not-induct t)
             (and stable-under-simplificationp
-                 '(:expand ((eval_for env "__stdlib_local_n" (V_INT->VAL
-                                                              (CDR (HONS-ASSOC-EQUAL "__stdlib_local_n"
-                                                                                     (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
+                 '(:expand ((eval_for env "__stdlib_local_n"
+                                      nil
+                                      (V_INT->VAL
+                                       (CDR (HONS-ASSOC-EQUAL "__stdlib_local_n"
+                                                              (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
                                       :up end *sqrtrounded-loop-body*)
-                            (eval_for env "__stdlib_local_n" end :up end *sqrtrounded-loop-body*)
-                            (eval_for env "__stdlib_local_n" (+ 1 end) :up end *sqrtrounded-loop-body*)))))))
+                            (eval_for env "__stdlib_local_n" nil end :up end *sqrtrounded-loop-body*)
+                            (eval_for env "__stdlib_local_n" nil (+ 1 end) :up end *sqrtrounded-loop-body*)))))))
 
 
 (local (in-theory (disable (stdlib-static-env)
@@ -163,6 +165,7 @@
                   (posp fracbits)
                   (integerp clk)
                   (<= (sqrtrounded-safe-clock val) clk)
+                  (<= (sqrtrounded-safe-clock val) (expt 2 128))
                   (< (stack_size-lookup "Abs" (global-env->stack_size (env->global env)))
                      (expt 2 40))
                   (< (stack_size-lookup "ILog2" (global-env->stack_size (env->global env)))

@@ -54,4 +54,5 @@
 (defopener open-eval_call eval_call :hyp (syntaxp (quotep name)))
 (defopener open-eval_expr_list eval_expr_list :hyp (syntaxp (quotep e)))
 (defopener open-eval_lexpr eval_lexpr :hyp (syntaxp (quotep lx)))
+(defopener open-eval_limit eval_limit :hyp (syntaxp (quotep x)))
 

@@ -65,8 +65,10 @@
                     (val-case low :v_int)
                     (natp clk)
                     (< (- (+ 1 (acl2::rational-exponent val.val)) high.val) clk)
+                    (integerp limit)
+                    (< (- (+ 1 (acl2::rational-exponent val.val)) high.val) limit)
                     (no-duplicatesp-equal (acl2::alist-keys storage)))
-               (b* (((mv (ev_normal res) &) (eval_loop env t *ilog2-loop-1-test* *ilog2-loop-1-body*))
+               (b* (((mv (ev_normal res) &) (eval_loop env t limit *ilog2-loop-1-test* *ilog2-loop-1-body*))
                     ((continuing res.res))
                     ((mv low-spec high-spec) (acl2::ilog2-search-up val.val low.val high.val))
                     ((env env))
@@ -82,7 +84,7 @@
                                                                                             env.local.storage)))))
                       (equal (eval_result-kind res) :ev_normal)
                       (equal (control_flow_state-kind res.res) :continuing)))))
-    :hints (("goal" :induct (loop-induct env clk *ilog2-loop-1-test* *ilog2-loop-1-body* t orac)
+    :hints (("goal" :induct (loop-induct env clk *ilog2-loop-1-test* *ilog2-loop-1-body* t limit orac)
              :in-theory (enable check_recurse_limit
                                 declare_local_identifiers
                                 declare_local_identifier
@@ -92,7 +94,8 @@
                                 env-assign-global
                                 env-push-stack
                                 env-pop-stack
-                                pop_scope)
+                                pop_scope
+                                tick_loop_limit)
              :expand ((ACL2::ILOG2-SEARCH-UP
                        (V_REAL->VAL (CDR (HONS-ASSOC-EQUAL "__stdlib_local_val"
                                                            (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
@@ -103,7 +106,7 @@
                                                (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))))
              :do-not-induct t)
             (and stable-under-simplificationp
-                 '(:expand ((eval_loop env t *ilog2-loop-1-test* *ilog2-loop-1-body*)))))))
+                 '(:expand ((eval_loop env t limit *ilog2-loop-1-test* *ilog2-loop-1-body*)))))))
 
 
 (defsection ilog2-loop-2
@@ -142,8 +145,10 @@
                     (<= low.val -1)
                     (natp clk)
                     (< (- (+ 1 (- (acl2::rational-exponent val.val))) (- low.val)) clk)
+                    (integerp limit)
+                    (< (- (+ 1 (- (acl2::rational-exponent val.val))) (- low.val)) limit)
                     (no-duplicatesp-equal (acl2::alist-keys storage)))
-               (b* (((mv (ev_normal res) &) (eval_loop env t *ilog2-loop-2-test* *ilog2-loop-2-body*))
+               (b* (((mv (ev_normal res) &) (eval_loop env t limit *ilog2-loop-2-test* *ilog2-loop-2-body*))
                     ((continuing res.res))
                     ((mv low-spec high-spec) (acl2::ilog2-search-down val.val low.val high.val))
                     ((env env))
@@ -159,7 +164,7 @@
                                                                                             env.local.storage)))))
                       (equal (eval_result-kind res) :ev_normal)
                       (equal (control_flow_state-kind res.res) :continuing)))))
-    :hints (("goal" :induct (loop-induct env clk *ilog2-loop-2-test* *ilog2-loop-2-body* t orac)
+    :hints (("goal" :induct (loop-induct env clk *ilog2-loop-2-test* *ilog2-loop-2-body* t limit orac)
              :in-theory (enable check_recurse_limit
                                 declare_local_identifiers
                                 declare_local_identifier
@@ -170,7 +175,8 @@
                                 env-push-stack
                                 env-pop-stack
                                 pop_scope
-                                v_to_bool)
+                                v_to_bool
+                                tick_loop_limit)
              :expand ((ACL2::ILOG2-SEARCH-down
                        (V_REAL->VAL (CDR (HONS-ASSOC-EQUAL "__stdlib_local_val"
                                                       (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
@@ -181,7 +187,7 @@
                                           (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))))
              :do-not-induct t)
             (and stable-under-simplificationp
-                 '(:expand ((eval_loop env t *ilog2-loop-2-test* *ilog2-loop-2-body*)))))))
+                 '(:expand ((eval_loop env t limit *ilog2-loop-2-test* *ilog2-loop-2-body*)))))))
 
 (defsection ilog2-loop-3
   
@@ -220,8 +226,10 @@
                     (not mid-look)
                     (natp clk)
                     (< (- high.val low.val) clk)
+                    (integerp limit)
+                    (< (- high.val low.val) limit)
                     (no-duplicatesp-equal (acl2::alist-keys storage)))
-               (b* (((mv (ev_normal res) &) (eval_loop env t *ilog2-loop-3-test* *ilog2-loop-3-body*))
+               (b* (((mv (ev_normal res) &) (eval_loop env t limit *ilog2-loop-3-test* *ilog2-loop-3-body*))
                     ((continuing res.res))
                     ((mv low-spec high-spec) (acl2::ilog2-binary-search val.val low.val high.val))
                     ((env env))
@@ -237,7 +245,7 @@
                                                                                             env.local.storage)))))
                       (equal (eval_result-kind res) :ev_normal)
                       (equal (control_flow_state-kind res.res) :continuing)))))
-    :hints (("goal" :induct (loop-induct env clk *ilog2-loop-3-test* *ilog2-loop-3-body* t orac)
+    :hints (("goal" :induct (loop-induct env clk *ilog2-loop-3-test* *ilog2-loop-3-body* t limit orac)
              :in-theory (enable check_recurse_limit
                                 declare_local_identifiers
                                 declare_local_identifier
@@ -248,7 +256,8 @@
                                 env-push-stack
                                 env-pop-stack
                                 pop_scope
-                                v_to_bool)
+                                v_to_bool
+                                tick_loop_limit)
              :expand ((acl2::ilog2-binary-search
                        (V_REAL->VAL (CDR (HONS-ASSOC-EQUAL "__stdlib_local_val"
                                                       (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
@@ -259,7 +268,7 @@
                                           (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))))
              :do-not-induct t)
             (and stable-under-simplificationp
-                 '(:expand ((eval_loop env t *ilog2-loop-3-test* *ilog2-loop-3-body*)))))))
+                 '(:expand ((eval_loop env t limit *ilog2-loop-3-test* *ilog2-loop-3-body*)))))))
 
 
 (defsection ilog2-correct
@@ -298,6 +307,7 @@
                   (< 0 val)
                   (integerp clk)
                   (<= (ilog2-safe-clock val) clk)
+                  (<= (ilog2-safe-clock val) (expt 2 128))
                   (< (stack_size-lookup "Abs" (global-env->stack_size (env->global env)))
                      (expt 2 40))
                   (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
