@@ -56,7 +56,7 @@
    :bor 
    :div 
    :divrm
-   :eor 
+   :xor 
    :eq_op
    :gt  
    :geq 
@@ -83,6 +83,10 @@
                  (val natp :rule-classes :type-prescription)))
   (:l_string ((val stringp :rule-classes :type-prescription)))
   (:l_label ((val identifier-p :rule-classes :type-prescription))))
+
+(deftagsum precision_loss_flag
+  (:precision_full ())
+  (:precision_lost ()))
 
 
 (defenum subprogram_type-p
@@ -119,6 +123,9 @@
                   (field identifier)))
     (:e_getfields ((base expr)
                    (fields identifierlist)))
+    (:e_getcollectionfields
+     ((base identifier)
+      (fields identifierlist)))
     (:e_getitem ((base expr)
                  (index acl2::int)))
     (:e_record ((type ty)
@@ -198,6 +205,7 @@
                (type ty)))
     (:t_record ((fields typed_identifierlist)))
     (:t_exception ((fields typed_identifierlist)))
+    (:t_collection ((fields typed_identifierlist)))
     (:t_named ((name identifier)))
     :measure (acl2::two-nats-measure (acl2-count x) 10))
 
@@ -219,7 +227,8 @@
   
   (deftagsum constraint_kind
     (:unconstrained ())
-    (:wellconstrained ((constraints int_constraintlist)))
+    (:wellconstrained ((constraints int_constraintlist)
+                       (flag precision_loss_flag)))
     (:pendingconstrained ())
     (:parametrized ((id uid)
                     (name identifier)))
@@ -295,6 +304,10 @@
     (:le_setfields ((base lexpr)
                     (fields identifierlist)
                     (pairs intpairlist)))
+    (:le_setcollectionfields
+     ((base identifier)
+      (fields identifierlist)
+      (pairs intpairlist)))
     (:le_destructuring ((elts lexprlist)))
     :base-case-override :le_discard
     :measure (acl2::two-nats-measure (acl2-count x) 10))

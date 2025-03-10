@@ -216,6 +216,16 @@
        ((When global-look) (lk_global (cdr global-look))))
     (lk_notfound)))
 
+(define env-find-global ((x identifier-p)
+                         (env env-p))
+  ;; Gets the value of global variable x if exists, error otherwise
+  :returns (res val_result-p)
+  (b* (((env env))
+       ((global-env env.global))
+       (global-look (assoc-equal (identifier-fix x) env.global.storage))
+       ((When global-look) (ev_normal (cdr global-look))))
+    (ev_error "Global variable not found" x)))
+
 (define env-assign-local ((name identifier-p)
                           (v val-p)
                           (env env-p))
@@ -1213,6 +1223,11 @@
                ((evo fieldvals) (map-get_field desc.fields recres.val))
                ((evo val) (concat_bitvectors fieldvals)))
             (evo_normal (expr_result val recres.env)))
+          :e_getcollectionfields
+          (b* (((evo gval) (env-find-global desc.base env))
+               ((evo fieldvals) (map-get_field desc.fields gval))
+               ((evo val) (concat_bitvectors fieldvals)))
+            (evo_normal (expr_result val env)))
           :e_getitem ;; anna
           (b* (((mv (evo (expr_result varr)) orac) (eval_expr env desc.base)))
            (val-case varr.val
@@ -1301,7 +1316,7 @@
         :unconstrained (evo_normal (unconstrained))
         :wellconstrained (b* (((mv (evo (expr_result constrs)) orac)
                                (resolve-int_constraints env x.constraints)))
-                           (evo_normal (wellconstrained constrs)))
+                           (evo_normal (wellconstrained constrs x.flag)))
         :otherwise (evo_error "Can't resolve constraint_kind" x)))
 
     (define resolve-tylist ((env env-p)
@@ -1372,6 +1387,9 @@
           :t_exception (b* (((mv (evo fields) orac)
                              (resolve-typed_identifierlist env ty.fields)))
                          (evo_normal (ty (t_exception fields))))
+          :t_collection (b* (((mv (evo fields) orac)
+                             (resolve-typed_identifierlist env ty.fields)))
+                         (evo_normal (ty (t_collection fields))))
           :t_named  (b* ((decl_types (static_env_global->declared_types
                                       (global-env->static (env->global env))))
                          (look (hons-assoc-equal ty.name decl_types))
@@ -1634,6 +1652,12 @@
                              ((mv (evo (expr_result rbv)) orac) (eval_expr env rbase))
                              ((evo newval) (bitvec_fields_to_record lx.fields lx.pairs rbv.val v)))
                           (eval_lexpr rbv.env lx.base newval))
+          :le_setcollectionfields (b* (((when (not (eql (len lx.fields) (len lx.pairs))))
+                                        (evo_error "le_setfields length mismatch" lx))
+                                       ((evo rbv) (env-find-global lx.base env))
+                                       ((evo newval) (bitvec_fields_to_record lx.fields lx.pairs rbv v))
+                                       (newenv (env-assign-global lx.base newval env)))
+                                    (evo_normal newenv))
           :le_destructuring (val-case v
                               :v_array (if (eql (len v.arr) (len lx.elts))
                                            (eval_lexpr_list env lx.elts v.arr)
@@ -2018,7 +2042,9 @@
         :hints ('(:expand (<call>)
                   :in-theory (enable ty-resolved-p
                                      array_index-resolved-p
-                                     int-literal-expr-p)))
+                                     int-literal-expr-p))
+                (and stable-under-simplificationp
+                     '(:expand ((ty-resolved-p x)))))
         :fn resolve-ty)
       :skip-others t)
 

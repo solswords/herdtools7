@@ -29,7 +29,10 @@
 (include-book "std/stobjs/clone" :dir :system)
 (local (include-book "std/stobjs/absstobjs" :dir :system))
 (local (include-book "std/lists/repeat" :dir :system))
+(local (include-book "centaur/misc/arith-equivs" :dir :System))
+(local (std::add-default-post-define-hook :fix))
 
+(local (in-theory (disable ifix)))
 
 (stobjs::defstobj-clone orac acl2::orac :pkg asl-pkg)
 
@@ -110,6 +113,7 @@
                       (ty-resolved-p x.type))
         :t_record (typed_identifierlist-resolved-p x.fields)
         :t_exception (typed_identifierlist-resolved-p x.fields)
+        :t_collection (typed_identifierlist-resolved-p x.fields)
         :t_named nil
         :otherwise t))
     ///
@@ -129,6 +133,8 @@
                                (typed_identifierlist-resolved-p (t_record->fields x)))
                       (implies (type_desc-case x :t_exception)
                                (typed_identifierlist-resolved-p (t_exception->fields x)))
+                      (implies (type_desc-case x :t_collection)
+                               (typed_identifierlist-resolved-p (t_collection->fields x)))
                       (not (type_desc-case x :t_named)))))))
 
   (define tylist-resolved-p ((x tylist-p))
@@ -163,7 +169,9 @@
       (implies (typed_identifierlist-resolved-p x)
                (and (typed_identifierlist-resolved-p (cdr x))
                     (implies (consp x)
-                             (typed_identifier-resolved-p (car x))))))))
+                             (typed_identifier-resolved-p (car x)))))))
+  ///
+  (fty::deffixequiv-mutual ty-resolved-p))
 
 
 (define int_constraint-satisfied ((x integerp)
@@ -226,6 +234,8 @@
          (record-type-satisfied x.rec ty.fields))
         ((:t_exception :v_record)
          (record-type-satisfied x.rec ty.fields))
+        ((:t_collection :v_record)
+         (record-type-satisfied x.rec ty.fields))
         (- nil))))
 
   (define tuple-type-satisfied ((x vallist-p)
@@ -251,15 +261,18 @@
                                  (fields typed_identifierlist-p))
     :guard (typed_identifierlist-resolved-p fields)
     :measure (acl2::two-nats-measure (typed_identifierlist-count fields) 0)
-    (if (atom fields)
-        (atom x)
-      (and (consp x)
-           (consp (car x))
-           (b* (((cons key val) (car x))
-                ((typed_identifier f1) (car fields)))
-             (and (equal key f1.name)
-                  (ty-satisfied val f1.type)))
-           (record-type-satisfied (cdr x) (cdr fields))))))
+    (b* ((x (val-imap-fix x)))
+      (if (atom fields)
+          (atom x)
+        (and (consp x)
+             (consp (car x))
+             (b* (((cons key val) (car x))
+                  ((typed_identifier f1) (car fields)))
+               (and (equal key f1.name)
+                    (ty-satisfied val f1.type)))
+             (record-type-satisfied (cdr x) (cdr fields))))))
+  ///
+  (fty::deffixequiv-mutual ty-satisfied))
 
 
 (define int_constraint-satisfying-val ((x int_constraint-p))
@@ -361,6 +374,9 @@
         :t_exception (b* (((mv ok val) (typed_identifierlist-satisfying-val x.fields)))
                        (and ok
                             (v_record val)))
+        :t_collection (b* (((mv ok val) (typed_identifierlist-satisfying-val x.fields)))
+                        (and ok
+                             (v_record val)))
         :t_named nil)))
 
   (define tylist-satisfying-val ((x tylist-p))
@@ -464,7 +480,9 @@
       :hints ('(:expand ((array-type-satisfied x ty))))
       :flag array-type-satisfied
       :skip t)
-    :skip-others t))
+    :skip-others t)
+
+  (fty::deffixequiv-mutual ty-satisfying-val))
 
 
 
@@ -628,6 +646,10 @@
                        (mv (and ok
                                 (v_record vals))
                            orac))
+        :t_collection (b* (((mv ok vals orac) (typed_identifierlist-oracle-val x.fields orac)))
+                        (mv (and ok
+                                 (v_record vals))
+                            orac))
         :t_named (mv nil orac))))
   
   (define tylist-oracle-val ((x tylist-p) orac)
@@ -749,4 +771,6 @@
       :hints ('(:expand (<call>
                          (typed_identifierlist-satisfying-val x))
                 :in-theory (enable record-type-satisfied)))
-      :fn typed_identifierlist-oracle-val)))
+      :fn typed_identifierlist-oracle-val))
+
+  (fty::deffixequiv-mutual ty-oracle-val))

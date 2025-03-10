@@ -139,6 +139,7 @@
          :le_setenumarray (e_getenumarray (expr_of_lexpr x.base) x.index)
          :le_setfield (e_getfield (expr_of_lexpr x.base) x.field)
          :le_setfields (e_getfields (expr_of_lexpr x.base) x.fields)
+         :le_setcollectionfields (e_getcollectionfields x.base x.fields)
          :le_discard (e_var "-") ;; ??? i think this is supposed to be prevented by type safety
          :le_destructuring (e_tuple (exprlist_of_lexprlist x.elts))))))
   (define exprlist_of_lexprlist ((x lexprlist-p))
@@ -165,6 +166,7 @@
                          (:free (x y) (expr_desc-count (e_getenumarray x y)))
                          (:free (x y) (expr_desc-count (e_getfield x y)))
                          (:free (x y) (expr_desc-count (e_getfields x y)))
+                         (:free (x y) (expr_desc-count (e_getcollectionfields x y)))
                          (:free (x) (expr_desc-count (e_tuple x))))))
       :rule-classes :linear
       :fn expr_of_lexpr)

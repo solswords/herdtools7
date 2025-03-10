@@ -75,6 +75,9 @@
     ((:impl :v_bool :v_bool)     (ev_normal (v_bool (or (not v1.val) v2.val))))
     ((:eq_op :v_bool :v_bool)    (ev_normal (v_bool (iff v1.val v2.val))))
     ((:neq   :v_bool :v_bool)    (ev_normal (v_bool (xor v1.val v2.val))))
+    ;; int -> real -> real,  real -> int -> real
+    ((:mul :v_int :v_real)       (ev_normal (v_real (* v1.val v2.val))))
+    ((:mul :v_real :v_int)       (ev_normal (v_real (* v1.val v2.val))))
     ;; real -> real -> real      
     ((:plus :v_real :v_real)     (ev_normal (v_real (+ v1.val v2.val))))
     ((:mul  :v_real :v_real)     (ev_normal (v_real (* v1.val v2.val))))
@@ -102,7 +105,7 @@
      :when (eql v1.len v2.len)    (ev_normal (v_bitvector v1.len (logior v1.val v2.val))))
     ((:and :v_bitvector :v_bitvector)
      :when (eql v1.len v2.len)    (ev_normal (v_bitvector v1.len (logand v1.val v2.val))))
-    ((:eor :v_bitvector :v_bitvector)
+    ((:xor :v_bitvector :v_bitvector)
      :when (eql v1.len v2.len)    (ev_normal (v_bitvector v1.len (logxor v1.val v2.val))))
     ((:plus :v_bitvector :v_bitvector)
      :when (eql v1.len v2.len)    (ev_normal (v_bitvector v1.len
