@@ -23,10 +23,11 @@
 (in-package "ASL")
 
 (include-book "ast")
+(include-book "ihs/logops-definitions" :dir :system)
 (local (include-book "std/lists/nth" :dir :system))
 (local (include-book "std/lists/repeat" :dir :system))
 (local (include-book "std/lists/take" :dir :system))
-
+(local (include-book "centaur/bitops/ihsext-basics" :dir :system))
 
 (local (table fty::deftagsum-defaults :short-names t))
 (local (in-theory (disable (tau-system))))
@@ -38,7 +39,8 @@
     (:v_bool ((val booleanp)))
     (:v_real ((val rationalp)))
     (:v_string ((val stringp)))
-    (:v_bitvector ((len natp) (val natp)))
+    (:v_bitvector ((len natp) (val natp :reqfix (loghead len val)))
+     :require (unsigned-byte-p len val))
     (:v_label ((val identifier-p)))
     (:v_record ((rec val-imap)))
     (:v_array  ((arr vallist))))

@@ -28,11 +28,16 @@
 (local (include-book "centaur/bitops/ihsext-basics" :dir :system))
 (local (include-book "ihs/quotient-remainder-lemmas" :dir :system))
 (local (include-book "arithmetic/top" :dir :system))
-(local (in-theory (disable (tau-system))))
+(local (in-theory (disable (tau-system) unsigned-byte-p)))
 
 (def-eval_result val_result-p val-p)
 
 (fty::def-enumcase binop-case binop-p)
+
+(local (defthm unsigned-byte-p-of-v_bitvector->val-free
+         (b* (((v_bitvector x)))
+           (implies (equal n x.len)
+                    (unsigned-byte-p n x.val)))))
 
 
 (define eval_binop ((op binop-p)

@@ -30,9 +30,10 @@
 (local (include-book "std/stobjs/absstobjs" :dir :system))
 (local (include-book "std/lists/repeat" :dir :system))
 (local (include-book "centaur/misc/arith-equivs" :dir :System))
+(local (include-book "centaur/bitops/ihsext-basics" :dir :System))
 (local (std::add-default-post-define-hook :fix))
 
-(local (in-theory (disable ifix)))
+(local (in-theory (disable ifix unsigned-byte-p)))
 
 (stobjs::defstobj-clone orac acl2::orac :pkg asl-pkg)
 
@@ -330,7 +331,6 @@
     (implies (constraint_kind-satisfied someval x)
              val)
     :hints(("Goal" :in-theory (enable constraint_kind-satisfied)))))
-
 
 
 (defines ty-satisfying-val

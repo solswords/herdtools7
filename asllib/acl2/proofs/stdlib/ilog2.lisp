@@ -22,7 +22,7 @@
 
 (in-package "ASL")
 
-(include-book "abs")
+(include-book "misc")
 (include-book "ilog2-alg")
 (local (include-book "ast-theory"))
 (local (in-theory (disable (tau-system)
