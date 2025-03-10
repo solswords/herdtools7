@@ -140,11 +140,11 @@ module NativeBackend (C : Config) = struct
   let non_tuple_exception v = mismatch_type v [ T_Tuple [] ]
 
   let bad_index i n =
-    let range = Constraint_Range (expr_of_int 0, expr_of_int (n - 1)) in
-    mismatch_type (v_of_int i) [ T_Int (WellConstrained [ range ]) ]
+    mismatch_type (v_of_int i)
+      [ integer_range' zero_expr (expr_of_int (n - 1)) ]
 
   let doesnt_have_fields_exception v =
-    mismatch_type v [ T_Record []; T_Exception [] ]
+    mismatch_type v [ T_Record []; T_Exception []; T_Collection [] ]
 
   let get_index i vec =
     match vec with
@@ -217,21 +217,9 @@ module NativeBackend (C : Config) = struct
       | NV_Literal (L_BitVector bv) when Bitvector.length bv > max_pos -> bv
       | NV_Literal (L_Int i) -> Bitvector.of_z (max_pos + 1) i
       | _ ->
-          mismatch_type bv
-            [
-              T_Bits
-                ( E_ATC
-                    ( E_Var "-" |> add_dummy_annotation,
-                      T_Int
-                        (WellConstrained
-                           [
-                             Constraint_Range
-                               (expr_of_int 0, expr_of_int max_pos);
-                           ])
-                      |> add_dummy_annotation )
-                  |> add_dummy_annotation,
-                  [] );
-            ]
+          let ( ~! ) = add_dummy_annotation in
+          let t = integer_range zero_expr (expr_of_int max_pos) in
+          mismatch_type bv [ T_Bits (~!(E_ATC (~!(E_Var "-"), t)), []) ]
     in
     let res = Bitvector.extract_slice bv positions in
     bitvector_to_value res
@@ -286,8 +274,7 @@ module NativeBackend (C : Config) = struct
           Error.fatal_unknown_pos
           @@ Error.BadArity (Dynamic, "DecStr", 1, List.length li)
 
-    let ascii_range = Constraint_Range (!$0, !$127)
-    let ascii_integer = T_Int (WellConstrained [ ascii_range ])
+    let ascii_integer = integer_range' !$0 !$127
 
     let ascii_str =
       let open! Z in
@@ -300,21 +287,15 @@ module NativeBackend (C : Config) = struct
           Error.fatal_unknown_pos
           @@ Error.BadArity (Dynamic, "DecStr", 1, List.length li)
 
+    let is_power_of_2 z = Int.equal (Z.log2 z) (Z.log2up z)
+
     let log2 = function
-      | [ NV_Literal (L_Int i) ] when Z.gt i Z.zero ->
+      | [ NV_Literal (L_Int i) ] when Z.gt i Z.zero && is_power_of_2 i ->
           [ L_Int (Z.log2 i |> Z.of_int) |> nv_literal ]
       | [ v ] -> mismatch_type v [ integer' ]
       | li ->
           Error.fatal_unknown_pos
           @@ Error.BadArity (Dynamic, "Log2", 1, List.length li)
-
-    let int_to_real = function
-      | [ NV_Literal (L_Int i) ] ->
-          L_Real (Q.of_bigint i) |> nv_literal |> return_one
-      | [ v ] -> mismatch_type v [ integer' ]
-      | li ->
-          Error.fatal_unknown_pos
-          @@ Error.BadArity (Dynamic, "Real", 1, List.length li)
 
     let truncate q = Q.to_bigint q
 
@@ -343,16 +324,11 @@ module NativeBackend (C : Config) = struct
       let e_var x = E_Var x |> add_dummy_annotation in
       let eoi i = expr_of_int i in
       let binop = ASTUtils.binop in
-      let minus_one e = binop MINUS e (eoi 1) in
-      let pow_2 = binop POW (eoi 2) in
+      let minus_one e = binop `MINUS e (eoi 1) in
+      let pow_2 = binop `POW (eoi 2) in
       let neg e = E_Unop (NEG, e) |> add_pos_from e in
       (* [t_bits "N"] is the bitvector type of length [N]. *)
       let t_bits x = T_Bits (e_var x, []) |> add_dummy_annotation in
-      (* [t_int_ctnt e1 e2] is [integer {e1..e2}] *)
-      let t_int_ctnt e1 e2 =
-        T_Int (WellConstrained [ Constraint_Range (e1, e2) ])
-        |> add_dummy_annotation
-      in
       (* [p ~parameters ~args ~returns name f] declares a primtive named [name]
          with body [f], and signature specified by [parameters] [args] and
          [returns]. *)
@@ -371,6 +347,7 @@ module NativeBackend (C : Config) = struct
             return_type;
             subprogram_type;
             recurse_limit;
+            override = None;
             builtin = true;
           },
           (* All native primitives ignore parameters *)
@@ -378,7 +355,7 @@ module NativeBackend (C : Config) = struct
       in
       [
         (let two_pow_n_minus_one = minus_one (pow_2 (e_var "N")) in
-         let returns = t_int_ctnt (eoi 0) two_pow_n_minus_one in
+         let returns = integer_range (eoi 0) two_pow_n_minus_one in
          p
            ~parameters:[ ("N", None) ]
            ~args:[ ("x", t_bits "N") ]
@@ -387,7 +364,7 @@ module NativeBackend (C : Config) = struct
          let minus_two_pow_n_minus_one = neg two_pow_n_minus_one
          and two_pow_n_minus_one_minus_one = minus_one two_pow_n_minus_one in
          let returns =
-           t_int_ctnt minus_two_pow_n_minus_one two_pow_n_minus_one_minus_one
+           integer_range minus_two_pow_n_minus_one two_pow_n_minus_one_minus_one
          in
          p
            ~parameters:[ ("N", None) ]
@@ -397,7 +374,6 @@ module NativeBackend (C : Config) = struct
         p ~args:[ ("x", integer) ] ~returns:string "HexStr" hex_str;
         p ~args:[ ("x", integer) ] ~returns:string "AsciiStr" ascii_str;
         p ~args:[ ("x", integer) ] ~returns:integer "Log2" log2;
-        p ~args:[ ("x", integer) ] ~returns:real "Real" int_to_real;
         p ~args:[ ("x", real) ] ~returns:integer "RoundDown" round_down;
         p ~args:[ ("x", real) ] ~returns:integer "RoundUp" round_up;
         p
@@ -448,13 +424,9 @@ let rec unknown_of_aggregate_type unknown_of_singular_type ~eval_expr_sef ty =
       |> List.map (fun (field_name, t) -> (field_name, unknown_of_type t))
       |> IMap.of_list
       |> fun record -> NV_Record record
-  | T_Enum li ->
-      let n = List.length li |> expr_of_int in
-      let range = Constraint_Range (expr_of_int 0, n) in
-      let t = T_Int (WellConstrained [ range ]) |> add_pos_from ty in
-      unknown_of_singular_type ~eval_expr_sef t
+  | T_Enum li -> NV_Literal (L_Label (List.hd li))
   | T_Tuple types -> NV_Vector (List.map (fun t -> unknown_of_type t) types)
-  | T_Named _ -> Error.(fatal_from ty TypeInferenceNeeded)
+  | T_Collection _ | T_Named _ -> Error.(fatal_from ty TypeInferenceNeeded)
 
 module DeterministicBackend = struct
   include NativeBackend (struct
@@ -481,7 +453,7 @@ module DeterministicBackend = struct
     | T_String -> NV_Literal (L_String "")
     | T_Real -> NV_Literal (L_Real Q.zero)
     | T_Int UnConstrained -> NV_Literal (L_Int Z.zero)
-    | T_Int (WellConstrained constraints) ->
+    | T_Int (WellConstrained (constraints, _)) ->
         deterministic_unknown_of_constraints ~eval_expr_sef ty constraints
     | T_Int (Parameterized (_, x)) -> eval_expr_sef (E_Var x |> add_pos_from ty)
     | T_Bits (e, _) -> (
@@ -489,7 +461,8 @@ module DeterministicBackend = struct
         | NV_Literal (L_Int n) ->
             NV_Literal (L_BitVector (Bitvector.zeros (Z.to_int n)))
         | _ -> (* Bad types *) assert false)
-    | T_Enum _ | T_Tuple _ | T_Array _ | T_Record _ | T_Exception _ | T_Named _
+    | T_Enum _ | T_Tuple _ | T_Array _ | T_Record _ | T_Exception _
+    | T_Collection _ | T_Named _
     | T_Int PendingConstrained ->
         assert false
 

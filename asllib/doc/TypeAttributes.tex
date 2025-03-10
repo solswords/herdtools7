@@ -20,8 +20,6 @@ functions that inspect the structure of types:
   \item Checked constrained integers (\TypingRuleRef{CheckConstrainedInteger})
 \end{itemize}
 
-Finally, constrained types are defined in \secref{ConstrainedTypes}.
-
 \TypingRuleDef{BuiltinSingularType}
 \hypertarget{def-isbuiltinsingular}{}
 The predicate
@@ -80,10 +78,11 @@ The builtin aggregate types are:
 \item tuple;
 \item \texttt{array};
 \item \texttt{record};
-\item \texttt{exception}.
+\item \texttt{exception};
+\item \texttt{collection}.
 \end{itemize}
 
-\ExampleDef{Builtin Aggreate Types}
+\ExampleDef{Builtin Aggregate Types}
 \listingref{typing-builtinaggregatetypes} provides examples of some builtin aggregate types.
 \ASLListing{Builtin aggregate types}{typing-builtinaggregatetypes}{\typingtests/TypingRule.BuiltinAggregateTypes.asl}
 
@@ -120,7 +119,7 @@ omitted in type declarations, as is the case for \texttt{Not\_found}.
 
 \FormallyParagraph
 \begin{mathpar}
-\inferrule{ \vb \eqdef \astlabel(\tty) \in \{\TTuple, \TArray, \TRecord, \TException\} }
+\inferrule{ \vb \eqdef \astlabel(\tty) \in \{\TTuple, \TArray, \TRecord, \TException, \TCollection\} }
 { \isbuiltinaggregate(\tty) \typearrow \vb }
 \end{mathpar}
 \CodeSubsection{\BuiltinAggregateBegin}{\BuiltinAggregateEnd}{../types.ml}
@@ -163,8 +162,8 @@ The predicate
 \]
 tests whether the type $\tty$ is a \emph{named type}.
 
-\Enumerationtypesterm{}, record types, and exception types must be declared
-and associated with a named type.
+\Enumerationtypesterm{}, record types, collection types, and exception types
+must be declared and associated with a named type.
 
 \ExampleDef{Named Types}
 In the specification
@@ -292,8 +291,10 @@ type C of B;
 \TypingRuleDef{StructuredType}
 \hypertarget{def-isstructured}{}
 \hypertarget{def-structuredtype}{}
-A \emph{\structuredtype} is any type that consists of a list of field identifiers
-that denote individual storage elements. In ASL there are two such types --- record types and exception types.
+A \emph{\structuredtype} is any type that consists of a list of field
+identifiers that denote individual storage elements.
+In ASL there are three such types --- record types, collection types, and
+exception types.
 
 The predicate
 \[
@@ -310,13 +311,14 @@ type PointRecord of Record {x : real, y: real, z: real};
 \end{lstlisting}
 
 \ProseParagraph
-The result $\vb$ is $\True$ if and only if $\tty$ is either a record type or an exception type,
-which is determined via the AST label of $\tty$.
+The result $\vb$ is $\True$ if and only if $\tty$ is either a record type, a
+collection type or an exception type, which is determined via the AST label of
+$\tty$.
 
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{}{
-  \isstructured(\tty) \typearrow \overname{\astlabel(\tty) \in \{\TRecord, \TException\}}{\vb}
+  \isstructured(\tty) \typearrow \overname{\astlabel(\tty) \in \{\TRecord, \TException, \TCollection\}}{\vb}
 }
 \end{mathpar}
 
@@ -406,7 +408,7 @@ Boolean variables by using the types denoted by $\vt$ as a subscript.
 
 \begin{mathpar}
 \inferrule[structured]{
-  L \in \{\TRecord, \TException\}\\
+  L \in \{\TRecord, \TException, \TCollection\}\\
   (\Ignore,\vt) \in \fields : \isnonprimitive(\vt) \typearrow \vb_\vt\\
   \vb \eqdef \bigvee_{\vt \in \vli} \vb_{\vt}
 }{
@@ -520,7 +522,7 @@ the type of \texttt{z} is the anonymous non-primitive type
   \begin{itemize}
   \item $\tty$ is a \structuredtype\ with fields $\fields$;
   \item obtaining the structure for each type $\vt$ associated with field $\id$ yields a type $\vt_\id$\ProseOrTypeError;
-  \item $\vt$ is a record or an exception, in correspondence to $\tty$, with the list of pairs $(\id, \vt\_\id)$;
+  \item $\vt$ is a record, a collection or an exception, in correspondence to $\tty$, with the list of pairs $(\id, \vt\_\id)$;
   \end{itemize}
 \end{itemize}
 
@@ -553,7 +555,7 @@ the type of \texttt{z} is the anonymous non-primitive type
 }
 \and
 \inferrule[structured]{
-  L \in \{\TRecord, \TException\}\\\\
+  L \in \{\TRecord, \TException, \TCollection\}\\\\
   (\id,\vt) \in \fields : \tstruct(\tenv, \vt) \typearrow \vt_\id \OrTypeError
 }{
   \tstruct(\tenv, L(\fields)) \typearrow
@@ -626,12 +628,22 @@ The \underlyingtype{} of \texttt{(integer, T2)} and \texttt{T3} is
 \CodeSubsection{\MakeAnonymousBegin}{\MakeAnonymousEnd}{../types.ml}
 
 \TypingRuleDef{CheckConstrainedInteger}
+A type is a \emph{\constrainedinteger} if it is either a \wellconstrainedintegertype{}
+or a \parameterizedintegertype.
+
 \hypertarget{def-checkconstrainedinteger}{}
 The function
 \[
   \checkconstrainedinteger(\overname{\staticenvs}{\tenv} \aslsep \overname{\ty}{\tty}) \aslto \{\True\} \cup \overname{\TTypeError}{\TypeErrorConfig}
 \]
-checks whether the type $\vt$ is a \constrainedinteger. If so, the result is $\True$, otherwise a type error is returned.
+checks whether the type $\vt$ is a \constrainedinteger{} type.
+If so, the result is $\True$, otherwise the result is a \typingerrorterm.
+
+\ExampleDef{Checking for Constrained Integers}
+\listingref{check-constrained-integer}
+shows examples of checking whether a type (used for the width of a bitvector type)
+is a \constrainedinteger{} type.
+\ASLListing{Checking for constrained integers}{check-constrained-integer}{\typingtests/TypingRule.CheckConstrainedInteger.asl}
 
 \ProseParagraph
 \OneApplies
@@ -675,10 +687,8 @@ checks whether the type $\vt$ is a \constrainedinteger. If so, the result is $\T
 \and
 \inferrule[unconstrained]{
   \astlabel(\vc) = \unconstrained \;\lor\; \astlabel(\vc) = \pendingconstrained
-}
-{
-  \checkconstrainedinteger(\tenv, \TInt(\vc)) \typearrow \\
-  \TypeErrorVal{\UnexpectedType}
+}{
+  \checkconstrainedinteger(\tenv, \TInt(\vc)) \typearrow \TypeErrorVal{\UnexpectedType}
 }
 \and
 \inferrule[conflicting\_type]{
@@ -688,18 +698,3 @@ checks whether the type $\vt$ is a \constrainedinteger. If so, the result is $\T
 }
 \end{mathpar}
 \CodeSubsection{\CheckConstrainedIntegerBegin}{\CheckConstrainedIntegerEnd}{../Typing.ml}
-
-\section{Constrained Types\label{sec:ConstrainedTypes}}
-\begin{itemize}
-  \item A \emph{constrained type} is a type whose definition is parameterized by an expression.
-        In ASL only integer types and bitvector types can be constrained.
-        An integer type with a non-empty list of constrained is referred to as a
-        \hypertarget{def-wellconstrainedintegertype}{\wellconstrainedintegertype}.
-  \item A type which is not constrained is \emph{unconstrained}.
-        Specifically, the \hypertarget{def-unconstrainedintegertype}{\unconstrainedintegertype}.
-  \item A constrained type with a non-empty constraint is \emph{well-constrained}.
-  \hypertarget{def-parameterizedintegertype}
-  \item A \hypertarget{def-pendingconstrainedintegertype}{\emph{\pendingconstrainedintegertype}} is an integer type whose constraints will be inferred during typechecking.
-  \item A \emph{\parameterizedintegertype} is an implicit type of a subprogram parameter.
-  \end{itemize}
-The widths of bitvector storage elements are constrained integers.

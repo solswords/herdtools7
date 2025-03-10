@@ -215,7 +215,8 @@ yielding the subprogram description $\vnewf$.
    \funcreturntype &:& \rettyopt,\\
    \funcsubprogramtype &:& \vsubtype\\
    \funcrecurselimit    &:& \vlimitexpr\\
-   \funcbuiltin &:& \vbuiltin
+   \funcbuiltin &:& \vbuiltin\\
+   \funcoverride &:& \voverride
   \end{array}
   \right\}
   }
@@ -236,7 +237,8 @@ yielding the subprogram description $\vnewf$.
      \funcreturntype &:& \newrettyopt,\\
      \funcsubprogramtype &:& \vsubtype\\
      \funcrecurselimit    &:& \vlimitexpr\\
-     \funcbuiltin &:& \vbuiltin
+     \funcbuiltin &:& \vbuiltin\\
+     \funcoverride &:& \voverride
     \end{array}
     \right\}
     }
@@ -271,7 +273,7 @@ $\args$, yielding the list of arguments $\newargs$.
     \item \Proserenamelocalsname{$\name$}{$\namep$};
     \item \Proserenamelocalsty{$\vt$}{$\vtp$};
     \item \Proserenamelocalsargs{$\vargsone$}{$\vargsonep$};
-    \item \Proseeqdef{$\newargs$}{the list with headp $(\namep,\vtp)$ and \tail\ $\vargsonep$}.
+    \item \Proseeqdef{$\newargs$}{the list with \head{} $(\namep,\vtp)$ and \tail\ $\vargsonep$}.
   \end{itemize}
 \end{itemize}
 
@@ -317,7 +319,7 @@ yielding the list of parameters $\newparams$.
     \item \Proserenamelocalsname{$\name$}{$\namep$};
     \item \Prosemapopt{$\renamelocalsty$}{$\tyopt$}{$\tyoptp$};
     \item \Proserenamelocalsnamedargs{$\paramsone$}{$\paramsonep$};
-    \item \Proseeqdef{$\newargs$}{the list with headp $(\namep,\tyoptp)$ and \tail\ $\paramsonep$}.
+    \item \Proseeqdef{$\newargs$}{the list with \head{} $(\namep,\tyoptp)$ and \tail\ $\paramsonep$}.
   \end{itemize}
 \end{itemize}
 
@@ -457,7 +459,7 @@ yielding the type $\newty$.
 
 \begin{mathpar}
 \inferrule[structured]{
-  L \in \{\TRecord, \TException\}\\
+  L \in \{\TRecord, \TException, \TCollection\} \\
   \newli \eqdef [(\name, \vt) \in \vli: (\name, \renamelocalsty(\vt))]
 }{
   \renamelocalsty(\overname{L(\vli)}{\tty}) \astarrow \overname{L(\newli)}{\newty}

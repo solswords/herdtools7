@@ -46,6 +46,16 @@ type identifier = string
 type uid = int
 (** Unique identifiers *)
 
+type delayed_warning = unit -> unit
+(** Represents a delayed warning by a continuation that will print the warning
+    message. *)
+
+(** Indicates if any precision loss occurred. *)
+type precision_loss_flag =
+  | Precision_Full  (** No loss of precision *)
+  | Precision_Lost of delayed_warning list
+      (** A loss of precision comes with a list of warnings that can explain why the loss of precision happened. *)
+
 (* -------------------------------------------------------------------------
 
                                    Operations
@@ -60,33 +70,33 @@ type unop =
   | NEG  (** Integer or real negation *)
   | NOT  (** Bitvector bitwise inversion *)
 
-(** Operations on base value of arity two. *)
 type binop =
-  | AND  (** Bitvector bitwise and *)
-  | BAND  (** Boolean and *)
-  | BEQ  (** Boolean equivalence *)
-  | BOR  (** Boolean or *)
-  | DIV  (** Integer division *)
-  | DIVRM
-      (** Inexact integer division, with rounding towards negative infinity. *)
-  | EOR  (** Bitvector bitwise exclusive or *)
-  | EQ_OP  (** Equality on two base values of same type *)
-  | GT  (** Greater than for int or reals *)
-  | GEQ  (** Greater or equal for int or reals *)
-  | IMPL  (** Boolean implication *)
-  | LT  (** Less than for int or reals *)
-  | LEQ  (** Less or equal for int or reals *)
-  | MOD  (** Remainder of integer division *)
-  | MINUS  (** Substraction for int or reals or bitvectors *)
-  | MUL  (** Multiplication for int or reals or bitvectors *)
-  | NEQ  (** Non equality on two base values of same type *)
-  | OR  (** Bitvector bitwise or *)
-  | PLUS  (** Addition for int or reals or bitvectors *)
-  | POW  (** Exponentiation for ints *)
-  | RDIV  (** Division for reals *)
-  | SHL  (** Shift left for ints *)
-  | SHR  (** Shift right for ints *)
-  | BV_CONCAT  (** Bit vector concatenation *)
+  [ `AND  (** Bitvector bitwise and *)
+  | `BAND  (** Boolean and *)
+  | `BEQ  (** Boolean equivalence *)
+  | `BOR  (** Boolean or *)
+  | `DIV  (** Integer division *)
+  | `DIVRM
+    (** Inexact integer division, with rounding towards negative infinity. *)
+  | `XOR  (** Bitvector bitwise exclusive or *)
+  | `EQ_OP  (** Equality on two base values of same type *)
+  | `GT  (** Greater than for int or reals *)
+  | `GEQ  (** Greater or equal for int or reals *)
+  | `IMPL  (** Boolean implication *)
+  | `LT  (** Less than for int or reals *)
+  | `LEQ  (** Less or equal for int or reals *)
+  | `MOD  (** Remainder of integer division *)
+  | `MINUS  (** Substraction for int or reals or bitvectors *)
+  | `MUL  (** Multiplication for int or reals or bitvectors *)
+  | `NEQ  (** Non equality on two base values of same type *)
+  | `OR  (** Bitvector bitwise or *)
+  | `PLUS  (** Addition for int or reals or bitvectors *)
+  | `POW  (** Exponentiation for ints *)
+  | `RDIV  (** Division for reals *)
+  | `SHL  (** Shift left for ints *)
+  | `SHR  (** Shift right for ints *)
+  | `BV_CONCAT  (** Bit vector concatenation *) ]
+(** Operations on base value of arity two. *)
 
 (* -------------------------------------------------------------------------
 
@@ -162,6 +172,7 @@ type expr_desc =
     *)
   | E_GetField of expr * identifier
   | E_GetFields of expr * identifier list
+  | E_GetCollectionFields of identifier * identifier list
   | E_GetItem of expr * int
   | E_Record of ty * (identifier * expr) list
       (** Represents a record or an exception construction expression. *)
@@ -242,6 +253,7 @@ and type_desc =
   | T_Array of array_index * ty
   | T_Record of field list
   | T_Exception of field list
+  | T_Collection of field list
   | T_Named of identifier  (** A type variable. *)
 
 and ty = type_desc annotated
@@ -256,7 +268,7 @@ and int_constraint =
 (** The constraint_kind constrains an integer type to a certain subset. *)
 and constraint_kind =
   | UnConstrained  (** The normal, unconstrained, integer type. *)
-  | WellConstrained of int_constraint list
+  | WellConstrained of int_constraint list * precision_loss_flag
       (** An integer type constrained from ASL syntax: it is the union of each
           constraint in the list. *)
   | PendingConstrained
@@ -315,7 +327,11 @@ type lexpr_desc =
     *)
   | LE_SetField of lexpr * identifier
   | LE_SetFields of lexpr * identifier list * (int * int) list
-      (** LE_SetFields (le, fields, _) unpacks the various fields. Third argument is a type annotation. *)
+      (** [LE_SetFields (le, fields, _)] unpacks the various fields. Third
+          argument is a type annotation. *)
+  | LE_SetCollectionFields of identifier * identifier list * (int * int) list
+      (** [LE_SetCollectionFields (x, fields, _)] unpacks the various fields.
+          Third argument is a type annotation. *)
   | LE_Destructuring of lexpr list
 
 and lexpr = lexpr_desc annotated
@@ -405,6 +421,11 @@ type subprogram_body =
   | SB_ASL of stmt  (** A normal body of a subprogram *)
   | SB_Primitive of bool  (** Whether or not this primitive is side-effecting *)
 
+type override_info =
+  | Impdef  (** A function which can be overridden *)
+  | Implementation
+      (** A function which overrides a corresponding [Impdef] function *)
+
 type func = {
   name : identifier;
   parameters : (identifier * ty option) list;
@@ -413,6 +434,7 @@ type func = {
   return_type : ty option;
   subprogram_type : subprogram_type;
   recurse_limit : expr option;
+  override : override_info option;
   builtin : bool;
       (** Builtin functions are treated specially when checking parameters at
           call sites - see [Typing.insert_stdlib_param]. *)

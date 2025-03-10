@@ -64,6 +64,7 @@
         parameters;
         subprogram_type;
         recurse_limit;
+        override = None;
         builtin = false;
       }
 
@@ -71,7 +72,7 @@
       match es with
       | [] -> E_Literal (L_BitVector Bitvector.empty)
       | [ bv ] -> bv |> desc
-      | bv :: bvs -> List.fold_left (binop BV_CONCAT) bv bvs |> desc
+      | bv :: bvs -> List.fold_left (binop `BV_CONCAT) bv bvs |> desc
 
   end
 
@@ -118,7 +119,7 @@
 %token ENUMERATION
 %token EOF
 %token EOL
-%token EOR
+%token XOR
 %token EQ
 %token EQ_EQ
 %token EQ_GT
@@ -220,7 +221,7 @@
 %left AMP_AMP BAR_BAR IMPLIES
 %left EQ_EQ BANG_EQ
 %nonassoc GT_EQ LT_EQ LT GT IN
-%left PLUS MINUS EOR AND OR
+%left PLUS MINUS XOR AND OR
 %left STAR SLASH MOD LT_LT GT_GT DIV
 %left CARET
 %nonassoc UNOPS
@@ -246,6 +247,7 @@ let opn := list(EOL); body=list(stmts); EOF;
           return_type = None;
           subprogram_type = ST_Procedure;
           recurse_limit = None;
+          override = None;
           builtin = false;
         } |> ASTUtils.add_pos_from body
       ]
@@ -356,7 +358,7 @@ let expr :=
   | binop_expr(expr, binop)
   | annotated (
       e1=expr; COLON; e2=expr;
-          { AST.E_Binop (BV_CONCAT, e1, e2) }
+          { AST.E_Binop (`BV_CONCAT, e1, e2) }
   )
 
 let binop_expr(e, b) ==
@@ -472,6 +474,7 @@ let getter_decl ==
           parameters;
           subprogram_type;
           recurse_limit;
+          override = None;
           builtin = false;
         }
       }
@@ -492,6 +495,7 @@ let getter_decl ==
           parameters;
           subprogram_type;
           recurse_limit;
+          override = None;
           builtin = false;
         }
       }
@@ -511,6 +515,7 @@ let getter_decl ==
           parameters;
           subprogram_type;
           recurse_limit;
+          override = None;
           builtin = false;
         }
       }
@@ -539,6 +544,7 @@ let setter_decl ==
           parameters;
           subprogram_type;
           recurse_limit;
+          override = None;
           builtin = false;
         }
       }
@@ -559,6 +565,7 @@ let setter_decl ==
           parameters;
           subprogram_type;
           recurse_limit;
+          override = None;
           builtin = false;
         }
       }
@@ -585,6 +592,7 @@ let procedure_decl ==
             parameters;
             subprogram_type;
             recurse_limit;
+            override = None;
             builtin = false;
           }
         }
@@ -774,27 +782,27 @@ let unop ==
   | MINUS ; { AST.NEG }
   | NOT   ; { AST.NOT }
 
-let unimplemented_binop(x) == x ; { AST.PLUS }
+let unimplemented_binop(x) == x ; { `PLUS }
 
 let abinop ==
-  | AND        ; { AST.AND    }
-  | AMP_AMP    ; { AST.BAND   }
-  | BAR_BAR    ; { AST.BOR    }
-  | DIV        ; { AST.DIV    }
-  | EOR        ; { AST.EOR    }
-  | EQ_EQ      ; { AST.EQ_OP  }
-  | BANG_EQ    ; { AST.NEQ    }
-  | GT_EQ      ; { AST.GEQ    }
-  | IMPLIES    ; { AST.IMPL   }
-  | LT_EQ      ; { AST.LEQ    }
-  | PLUS       ; { AST.PLUS   }
-  | MINUS      ; { AST.MINUS  }
-  | MOD        ; { AST.MOD    }
-  | STAR       ; { AST.MUL    }
-  | OR         ; { AST.OR     }
-  | SLASH      ; { AST.RDIV   }
-  | LT_LT      ; { AST.SHL    }
-  | GT_GT      ; { AST.SHR    }
+  | AND        ; { `AND    }
+  | AMP_AMP    ; { `BAND   }
+  | BAR_BAR    ; { `BOR    }
+  | DIV        ; { `DIV    }
+  | XOR        ; { `XOR    }
+  | EQ_EQ      ; { `EQ_OP  }
+  | BANG_EQ    ; { `NEQ    }
+  | GT_EQ      ; { `GEQ    }
+  | IMPLIES    ; { `IMPL   }
+  | LT_EQ      ; { `LEQ    }
+  | PLUS       ; { `PLUS   }
+  | MINUS      ; { `MINUS  }
+  | MOD        ; { `MOD    }
+  | STAR       ; { `MUL    }
+  | OR         ; { `OR     }
+  | SLASH      ; { `RDIV   }
+  | LT_LT      ; { `SHL    }
+  | GT_GT      ; { `SHR    }
 
   | unimplemented_binop(
     | CARET
@@ -802,5 +810,5 @@ let abinop ==
 
 let binop ==
   | abinop
-  | LT         ; { AST.LT     }
-  | GT         ; { AST.GT     }
+  | LT         ; { `LT     }
+  | GT         ; { `GT     }

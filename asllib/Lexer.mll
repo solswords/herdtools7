@@ -94,6 +94,7 @@ let token_of_string =
  | "BOR"                -> s BOR
  | "CASE"               -> s CASE
  | "CATCH"              -> s CATCH
+ | "COLLECTION"         -> s COLLECTION
  | "COLON"              -> s COLON
  | "COLON_COLON"        -> s COLON_COLON
  | "COMMA"              -> s COMMA
@@ -110,7 +111,7 @@ let token_of_string =
  | "END"                -> s END
  | "ENUMERATION"        -> s ENUMERATION
  | "EOF"                -> s EOF
- | "EOR"                -> s EOR
+ | "XOR"                -> s XOR
  | "EQ"                 -> s EQ
  | "EQ_OP"              -> s EQ_OP
  | "EXCEPTION"          -> s EXCEPTION
@@ -120,6 +121,8 @@ let token_of_string =
  | "GETTER"             -> s GETTER
  | "GT"                 -> s GT
  | "IF"                 -> s IF
+ | "IMPLEMENTATION"     -> s IMPLEMENTATION
+ | "IMPDEF"             -> s IMPDEF
  | "IMPL"               -> s IMPL
  | "IN"                 -> s IN
  | "INTEGER"            -> s INTEGER
@@ -230,6 +233,7 @@ let token_to_symbol = function
   | BOOLEAN            -> "boolean"
   | CASE               -> "case"
   | CATCH              -> "catch"
+  | COLLECTION         -> "collection"
   | CONFIG             -> "config"
   | CONSTANT           -> "constant"
   | DIV                -> "DIV"
@@ -240,12 +244,14 @@ let token_to_symbol = function
   | ELSIF              -> "elsif"
   | END                -> "end"
   | ENUMERATION        -> "enumeration"
-  | EOR                -> "XOR"
+  | XOR                -> "XOR"
   | EXCEPTION          -> "exception"
   | FOR                -> "for"
   | FUNC               -> "func"
   | GETTER             -> "getter"
   | IF                 -> "if"
+  | IMPLEMENTATION     -> "implementation"
+  | IMPDEF             -> "impdef"
   | IN                 -> "IN"
   | INTEGER            -> "integer"
   | LET                -> "let"
@@ -298,6 +304,7 @@ exception LexerError
 let new_line lexbuf = Lexing.new_line lexbuf; lexbuf
 let bitvector_lit lxm = BITVECTOR_LIT (Bitvector.of_string lxm)
 let mask_lit lxm = MASK_LIT (Bitvector.mask_of_string lxm)
+let mask_alt_lit lxm = MASK_LIT (Bitvector.mask_of_alt_string lxm)
 let reserved_err s = Error.fatal_unknown_pos @@ (Error.ReservedIdentifier s)
 
 let fatal lexbuf desc =
@@ -322,6 +329,7 @@ let tr_name s = match s with
 | "boolean"       -> BOOLEAN
 | "case"          -> CASE
 | "catch"         -> CATCH
+| "collection"    -> COLLECTION
 | "config"        -> CONFIG
 | "constant"      -> CONSTANT
 | "__debug__"
@@ -334,13 +342,15 @@ let tr_name s = match s with
 | "elsif"         -> ELSIF
 | "end"           -> END
 | "enumeration"   -> ENUMERATION
-| "XOR"           -> EOR
+| "XOR"           -> XOR
 | "exception"     -> EXCEPTION
 | "FALSE"         -> BOOL_LIT false
 | "for"           -> FOR
 | "func"          -> FUNC
 | "getter"        -> GETTER
 | "if"            -> IF
+| "impdef"        -> IMPDEF
+| "implementation" -> IMPLEMENTATION
 | "IN"            -> IN
 | "integer"       -> INTEGER
 | "let"           -> LET
@@ -394,8 +404,10 @@ let hex_lit = '0' 'x' (digit | hex_alpha) ('_' | digit | hex_alpha)*
 let real_lit = int_lit '.' int_lit
 let alpha = ['a'-'z' 'A'-'Z']
 let string_lit = '"' [^ '"']* '"'
-let bits = ['0' '1' ' ']*
-let mask = ['0' '1' 'x' ' ']*
+let bit = ['0' '1' ' ']
+let bits = bit*
+let mask = (bit | 'x')*
+let mask_alt = (bit | '(' bit+ ')')*
 let identifier = (alpha | '_') (alpha|digit|'_')*
 
 (*
@@ -460,6 +472,7 @@ and token = parse
     | '"'                      { string_lit (Buffer.create 16) lexbuf }
     | '\'' (bits as lxm) '\''  { bitvector_lit lxm                }
     | '\'' (mask as lxm) '\''  { mask_lit lxm                     }  (* Warning: masks with no unknown 'x' characters will be lexed as bitvectors. *)
+    | '\'' (mask_alt as lxm) '\'' { mask_alt_lit lxm              }
     | '!'                      { BNOT                             }
     | ','                      { COMMA                            }
     | '<'                      { LT                               }

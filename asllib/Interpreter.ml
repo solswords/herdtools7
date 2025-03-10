@@ -374,6 +374,10 @@ module Make (B : Backend.S) (C : Config) = struct
   let return_identifier i = "return-" ^ string_of_int i
   let throw_identifier () = fresh_var "thrown"
 
+  (* Begin CollectionFieldEffectVar *)
+  let collection_field_effect_var base field = (base ^ ".") ^ field
+  (* End *)
+
   (* Begin EvalReadValueFrom *)
   let read_value_from ((v, name, scope) : value_read_from) =
     let* () = B.on_read_identifier name scope v in
@@ -398,13 +402,13 @@ module Make (B : Backend.S) (C : Config) = struct
       let* () = m in
       let cond =
         let* s1l1s2 =
-          let* s1l1 = B.binop PLUS s1 l1 in
-          B.binop LEQ s1l1 s2
+          let* s1l1 = B.binop `PLUS s1 l1 in
+          B.binop `LEQ s1l1 s2
         and* s2l2s1 =
-          let* s2l2 = B.binop PLUS s2 l2 in
-          B.binop LEQ s2l2 s1
+          let* s2l2 = B.binop `PLUS s2 l2 in
+          B.binop `LEQ s2l2 s1
         in
-        B.binop BOR s1l1s2 s2l2s1
+        B.binop `BOR s1l1s2 s2l2s1
       in
       let* b = choice cond true false in
       if b then return ()
@@ -459,7 +463,7 @@ module Make (B : Backend.S) (C : Config) = struct
         | NotFound -> fatal_from e @@ Error.UndefinedIdentifier x)
         |: SemanticsRule.EVar
     (* End *)
-    | E_Binop (((BAND | BOR | IMPL) as op), e1, e2)
+    | E_Binop (((`BAND | `BOR | `IMPL) as op), e1, e2)
       when is_simple_expr e1 && is_simple_expr e2 ->
         let*= v1 = eval_expr_sef env e1 in
         if B.is_undetermined v1 then
@@ -474,27 +478,26 @@ module Make (B : Backend.S) (C : Config) = struct
           let ret_true () = m_true and ret_false () = m_false in
           let on_true, on_false =
             match op with
-            | BAND -> (eval_e2, ret_false)
-            | BOR -> (ret_true, eval_e2)
-            | IMPL -> (eval_e2, ret_true)
-            | _ -> assert false
+            | `BAND -> (eval_e2, ret_false)
+            | `BOR -> (ret_true, eval_e2)
+            | `IMPL -> (eval_e2, ret_true)
           in
           let* v = B.ternary v1 on_true on_false in
           return_normal (v, env)
     (* Begin EvalBinopAnd *)
-    | E_Binop (BAND, e1, e2) ->
+    | E_Binop (`BAND, e1, e2) ->
         (* if e1 then e2 else false *)
         E_Cond (e1, e2, false')
         |> add_pos_from e |> eval_expr env |: SemanticsRule.BinopAnd
     (* End *)
     (* Begin EvalBinopOr *)
-    | E_Binop (BOR, e1, e2) ->
+    | E_Binop (`BOR, e1, e2) ->
         (* if e1 then true else e2 *)
         E_Cond (e1, true', e2)
         |> add_pos_from e |> eval_expr env |: SemanticsRule.BinopOr
     (* End *)
     (* Begin EvalBinopImpl *)
-    | E_Binop (IMPL, e1, e2) ->
+    | E_Binop (`IMPL, e1, e2) ->
         (* if e1 then e2 else true *)
         E_Cond (e1, e2, true')
         |> add_pos_from e |> eval_expr env |: SemanticsRule.BinopImpl
@@ -642,7 +645,26 @@ module Make (B : Backend.S) (C : Config) = struct
         let** v1, new_env = eval_expr env e in
         let* v = eval_pattern env e v1 p in
         return_normal (v, new_env) |: SemanticsRule.EPattern
-  (* End *)
+    (* End *)
+    (* Begin EvalEGetCollectionFields *)
+    | E_GetCollectionFields (base, field_names) ->
+        let v_record = IEnv.find_global base env in
+        let scope = B.Scope.global ~init:false in
+        let* v_list =
+          List.map
+            (fun field_name ->
+              let* v = B.get_field field_name v_record in
+              let* () =
+                B.on_read_identifier
+                  (collection_field_effect_var base field_name)
+                  scope v
+              in
+              return v)
+            field_names
+          |> sync_list
+        in
+        let* v = B.concat_bitvectors v_list in
+        return_normal (v, env)
 
   (* Evaluation of Side-Effect-Free Expressions *)
   (* ------------------------------------------ *)
@@ -676,7 +698,7 @@ module Make (B : Backend.S) (C : Config) = struct
 
   (* Begin EvalValOfType *)
   and is_val_of_type loc env v ty : bool B.m =
-    let big_or = big_op m_false (B.binop BOR) in
+    let big_or = big_op m_false (B.binop `BOR) in
     let rec in_values v ty =
       match ty.desc with
       | T_Int UnConstrained -> m_true
@@ -696,19 +718,19 @@ module Make (B : Backend.S) (C : Config) = struct
              checks that all expressions on which a type depends are statically
              evaluable, i.e. side-effect-free. *)
           let* v' = eval_expr_sef env e and* v_length = B.bitvector_length v in
-          B.binop EQ_OP v_length v'
-      | T_Int (WellConstrained constraints) ->
+          B.binop `EQ_OP v_length v'
+      | T_Int (WellConstrained (constraints, _)) ->
           (* The calls to [eval_expr_sef] are justified since annotate_type
              checks that all expressions on which a type depends are statically
              evaluable, i.e., side-effect-free. *)
           let is_constraint_sat = function
             | Constraint_Exact e ->
                 let* v' = eval_expr_sef env e in
-                B.binop EQ_OP v v' |: SemanticsRule.IsConstraintSat
+                B.binop `EQ_OP v v' |: SemanticsRule.IsConstraintSat
             | Constraint_Range (e1, e2) ->
                 let* v1 = eval_expr_sef env e1 and* v2 = eval_expr_sef env e2 in
-                let* c1 = B.binop LEQ v1 v and* c2 = B.binop LEQ v v2 in
-                B.binop BAND c1 c2 |: SemanticsRule.IsConstraintSat
+                let* c1 = B.binop `LEQ v1 v and* c2 = B.binop `LEQ v v2 in
+                B.binop `BAND c1 c2 |: SemanticsRule.IsConstraintSat
           in
           List.map is_constraint_sat constraints |> big_or
       | T_Tuple tys ->
@@ -716,7 +738,7 @@ module Make (B : Backend.S) (C : Config) = struct
             let m =
               let* v' = B.get_index i v in
               let* here = in_values v' ty' in
-              prev >>= B.binop BAND here
+              prev >>= B.binop `BAND here
             in
             (i + 1, m)
           in
@@ -761,12 +783,14 @@ module Make (B : Backend.S) (C : Config) = struct
     (* End *)
     (* Begin EvalLESlice *)
     | LE_Slice (e_bv, slices) ->
-        let*^ m_bv, env1 = expr_of_lexpr e_bv |> eval_expr env in
+        let*^ m_bv_lhs, env1 = expr_of_lexpr e_bv |> eval_expr env in
         let*^ m_slice_ranges, env2 = eval_slices env1 slices in
         let new_m_bv =
-          let* v = m and* slice_ranges = m_slice_ranges and* v_bv = m_bv in
+          let* v_rhs = m
+          and* slice_ranges = m_slice_ranges
+          and* v_bv_lhs = m_bv_lhs in
           let* () = check_non_overlapping_slices slices slice_ranges in
-          B.write_to_bitvector slice_ranges v v_bv
+          B.write_to_bitvector slice_ranges v_rhs v_bv_lhs
         in
         eval_lexpr ver e_bv env2 new_m_bv |: SemanticsRule.LESlice
     (* End *)
@@ -816,18 +840,46 @@ module Make (B : Backend.S) (C : Config) = struct
             fatal_from le Error.TypeInferenceNeeded
         in
         let*^ rm_record, env1 = expr_of_lexpr le_record |> eval_expr env in
-        (* AssignBitvectorFields( *)
-        let m2 =
-          List.fold_left2
-            (fun m1 field_name (i1, i2) ->
-              let slice = [ (B.v_of_int i1, B.v_of_int i2) ] in
-              let* v_record_slices = m >>= B.read_from_bitvector slice
-              and* rv_record = m1 in
-              B.set_field field_name v_record_slices rv_record)
-            rm_record fields slices
-          (* AssignBitvectorFields) *)
-        in
+        let onwrite _ m = m in
+        let m2 = assign_bitvector_fields onwrite m rm_record slices fields in
         eval_lexpr ver le_record env1 m2 |: SemanticsRule.LESetFields
+    (* End *)
+    (* Begin EvalLESetCollectionFields *)
+    | LE_SetCollectionFields (base, fieldnames, slices) ->
+        let rv_record =
+          match IEnv.find base env with
+          | Global v -> return v
+          | Local _ | NotFound -> assert false
+        in
+        let scope = B.Scope.global ~init:false in
+        let onwrite field_name m =
+          let* v = m in
+          let* () =
+            B.on_write_identifier
+              (collection_field_effect_var base field_name)
+              scope v
+          in
+          return v
+        in
+        let* rv_record2 =
+          assign_bitvector_fields onwrite m rv_record slices fieldnames
+        in
+        let new_env = IEnv.assign_global base rv_record2 env in
+        return_normal new_env
+  (* End *)
+
+  (* Begin AssignBitvectorFields *)
+  and assign_bitvector_fields onwrite mbitvector mrecord slices fieldnames =
+    match (slices, fieldnames) with
+    | (i1, i2) :: slices, field_name :: fieldnames ->
+        let slice = [ (B.v_of_int i1, B.v_of_int i2) ] in
+        let* v_record_slices =
+          mbitvector >>= B.read_from_bitvector slice |> onwrite field_name
+        and* rv_record = mrecord in
+        let m2 = B.set_field field_name v_record_slices rv_record in
+        assign_bitvector_fields onwrite mbitvector m2 slices fieldnames
+    | [], [] -> mrecord
+    | [], _ :: _ | _ :: _, [] -> assert false
   (* End *)
 
   (* Evaluation of Expression Lists *)
@@ -864,13 +916,13 @@ module Make (B : Backend.S) (C : Config) = struct
           let*^ m_top, env1 = eval_expr env e_top in
           let*^ m_start, new_env = eval_expr env1 e_start in
           let* v_top = m_top and* v_start = m_start in
-          let* v_length = B.binop MINUS v_top v_start >>= B.binop PLUS one in
+          let* v_length = B.binop `MINUS v_top v_start >>= B.binop `PLUS one in
           return_normal ((v_start, v_length), new_env) |: SemanticsRule.Slice
       | Slice_Star (e_factor, e_length) ->
           let*^ m_factor, env1 = eval_expr env e_factor in
           let*^ m_length, new_env = eval_expr env1 e_length in
           let* v_factor = m_factor and* v_length = m_length in
-          let* v_start = B.binop MUL v_factor v_length in
+          let* v_start = B.binop `MUL v_factor v_length in
           return_normal ((v_start, v_length), new_env) |: SemanticsRule.Slice
       (* End *)
     in
@@ -885,8 +937,8 @@ module Make (B : Backend.S) (C : Config) = struct
   and eval_pattern env pos v : pattern -> B.value m =
     let true_ = B.v_of_literal (L_Bool true) |> return in
     let false_ = B.v_of_literal (L_Bool false) |> return in
-    let disjunction = big_op false_ (B.binop BOR)
-    and conjunction = big_op true_ (B.binop BAND) in
+    let disjunction = big_op false_ (B.binop `BOR)
+    and conjunction = big_op true_ (B.binop `BAND) in
     (* The calls to [eval_expr_sef] are justified since annotate_pattern
        checks that all expressions on which a type depends are statically
        evaluable, i.e. side-effect-free. *)
@@ -903,12 +955,12 @@ module Make (B : Backend.S) (C : Config) = struct
       (* Begin EvalPGeq *)
       | Pattern_Geq e ->
           let* v1 = eval_expr_sef env e in
-          B.binop GEQ v v1 |: SemanticsRule.PGeq
+          B.binop `GEQ v v1 |: SemanticsRule.PGeq
       (* End *)
       (* Begin EvalPLeq *)
       | Pattern_Leq e ->
           let* v1 = eval_expr_sef env e in
-          B.binop LEQ v v1 |: SemanticsRule.PLeq
+          B.binop `LEQ v v1 |: SemanticsRule.PLeq
       (* End *)
       (* Begin EvalPNot *)
       | Pattern_Not p1 ->
@@ -919,17 +971,17 @@ module Make (B : Backend.S) (C : Config) = struct
       | Pattern_Range (e1, e2) ->
           let* b1 =
             let* v1 = eval_expr_sef env e1 in
-            B.binop GEQ v v1
+            B.binop `GEQ v v1
           and* b2 =
             let* v2 = eval_expr_sef env e2 in
-            B.binop LEQ v v2
+            B.binop `LEQ v v2
           in
-          B.binop BAND b1 b2 |: SemanticsRule.PRange
+          B.binop `BAND b1 b2 |: SemanticsRule.PRange
       (* End *)
       (* Begin EvalPSingle *)
       | Pattern_Single e ->
           let* v1 = eval_expr_sef env e in
-          B.binop EQ_OP v v1 |: SemanticsRule.PSingle
+          B.binop `EQ_OP v v1 |: SemanticsRule.PSingle
       (* End *)
       (* Begin EvalPMask *)
       | Pattern_Mask m ->
@@ -938,10 +990,10 @@ module Make (B : Backend.S) (C : Config) = struct
           and m_unset = Bitvector.mask_unset m in
           let m_specified = Bitvector.logor m_set m_unset in
           let* nv = B.unop NOT v in
-          let* v_set = B.binop AND (bv m_set) v
-          and* v_unset = B.binop AND (bv m_unset) nv in
-          let* v_set_or_unset = B.binop OR v_set v_unset in
-          B.binop EQ_OP v_set_or_unset (bv m_specified) |: SemanticsRule.PMask
+          let* v_set = B.binop `AND (bv m_set) v
+          and* v_unset = B.binop `AND (bv m_unset) nv in
+          let* v_set_or_unset = B.binop `OR v_set v_unset in
+          B.binop `EQ_OP v_set_or_unset (bv m_specified) |: SemanticsRule.PMask
       (* End *)
       (* Begin EvalPTuple *)
       | Pattern_Tuple ps ->
@@ -1139,9 +1191,15 @@ module Make (B : Backend.S) (C : Config) = struct
   (* Begin EvalBlock *)
   and eval_block env stm =
     let block_env = IEnv.push_scope env in
-    let*> block_env1 = eval_stmt block_env stm in
-    IEnv.pop_scope env block_env1 |> return_continue |: SemanticsRule.Block
-  (* End *)
+    let*| res = eval_stmt block_env stm in
+    match res with
+    | Normal (Returning _) -> return res
+    | Normal (Continuing env_cont) ->
+        let new_env = IEnv.pop_scope env env_cont in
+        return_continue new_env
+    | Throwing (v, env_throw) ->
+        let new_env = IEnv.pop_scope env env_throw in
+        return (Throwing (v, new_env))
 
   (* Evaluation of while and repeat loops *)
   (* ------------------------------------ *)
@@ -1212,13 +1270,13 @@ module Make (B : Backend.S) (C : Config) = struct
     (* Evaluate the condition: "has the for loop terminated?" *)
     let* next_limit_opt = tick_loop_limit body limit_opt in
     let cond_m =
-      let comp_for_dir = match dir with Up -> LT | Down -> GT in
+      let comp_for_dir = match dir with Up -> `LT | Down -> `GT in
       let* () = B.on_read_identifier index_name (IEnv.get_scope env) v_start in
       B.binop comp_for_dir v_end v_start
     in
     (* Increase the loop counter *)
     let step env index_name v_start dir =
-      let op_for_dir = match dir with Up -> PLUS | Down -> MINUS in
+      let op_for_dir = match dir with Up -> `PLUS | Down -> `MINUS in
       let* () = B.on_read_identifier index_name (IEnv.get_scope env) v_start in
       let* v_step = B.binop op_for_dir v_start one in
       let* new_env = assign_local_identifier env index_name v_step in
@@ -1322,8 +1380,8 @@ module Make (B : Backend.S) (C : Config) = struct
       The arguments/parameters are labelled to avoid confusion. *)
   (* Begin EvalCall *)
   and eval_call pos name env ~params ~args =
-    let*^ vargs, env1 = eval_expr_list_m env args in
-    let*^ vparams, env2 = eval_expr_list_m env1 params in
+    let*^ vparams, env1 = eval_expr_list_m env params in
+    let*^ vargs, env2 = eval_expr_list_m env1 args in
     let* vargs = vargs and* vparams = vparams in
     let genv = IEnv.incr_stack_size name env2.global in
     let res = eval_subprogram genv name pos ~params:vparams ~args:vargs in

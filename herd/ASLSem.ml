@@ -116,6 +116,8 @@ module Make (C : Config) = struct
     let output_format = Asllib.Error.HumanReadable
     let print_typed = false
     let use_field_getter_extension = is_experimental
+    let use_conflicting_side_effects_extension = false
+    let override_mode = Asllib.Typing.Permissive
   end)
 
   module ASLInterpreterConfig = struct
@@ -323,28 +325,28 @@ module Make (C : Config) = struct
       let v_true = V.Val (Constant.Concrete (ASLScalar.S_Bool true))
       and v_false = V.Val (Constant.Concrete (ASLScalar.S_Bool false)) in
       function
-      | AND -> M.op Op.And
-      | BAND -> boolop Op.And (fun b v -> if b then v else v_false)
-      | BEQ -> M.op Op.Eq
-      | BOR -> boolop Op.Or (fun b v -> if b then v_true else v)
-      | DIV -> M.op Op.Div
-      | MOD -> M.op Op.Rem
-      | DIVRM -> M.op (Op.ArchOp ASLOp.Divrm)
-      | EOR -> M.op Op.Xor
-      | EQ_OP -> M.op Op.Eq
-      | GT -> M.op Op.Gt
-      | GEQ -> M.op Op.Ge
-      | LT -> M.op Op.Lt
-      | LEQ -> M.op Op.Le
-      | MINUS -> M.op Op.Sub
-      | MUL -> M.op Op.Mul
-      | NEQ -> M.op Op.Ne
-      | OR -> logor
-      | PLUS -> M.op Op.Add
-      | SHL -> M.op Op.ShiftLeft
-      | SHR -> M.op Op.ShiftRight
-      | BV_CONCAT -> concat
-      | (POW | IMPL | RDIV) as op ->
+      | `AND -> M.op Op.And
+      | `BAND -> boolop Op.And (fun b v -> if b then v else v_false)
+      | `BEQ -> M.op Op.Eq
+      | `BOR -> boolop Op.Or (fun b v -> if b then v_true else v)
+      | `DIV -> M.op Op.Div
+      | `MOD -> M.op Op.Rem
+      | `DIVRM -> M.op (Op.ArchOp ASLOp.Divrm)
+      | `XOR -> M.op Op.Xor
+      | `EQ_OP -> M.op Op.Eq
+      | `GT -> M.op Op.Gt
+      | `GEQ -> M.op Op.Ge
+      | `LT -> M.op Op.Lt
+      | `LEQ -> M.op Op.Le
+      | `MINUS -> M.op Op.Sub
+      | `MUL -> M.op Op.Mul
+      | `NEQ -> M.op Op.Ne
+      | `OR -> logor
+      | `PLUS -> M.op Op.Add
+      | `SHL -> M.op Op.ShiftLeft
+      | `SHR -> M.op Op.ShiftRight
+      | `BV_CONCAT -> concat
+      | (`POW | `IMPL | `RDIV) as op ->
           Warn.fatal "ASL operation %s not yet implement in ASLSem."
             (Asllib.PP.binop_to_string op)
 
@@ -393,7 +395,7 @@ module Make (C : Config) = struct
         A.Location_reg (ii.A.proc, ASLBase.ArchReg AArch64Base.ResAddr)
       else A.Location_reg (ii.A.proc, ASLBase.ASLLocalId (scope, x))
 
-    (* AArch64 registers hold integers, not bitvectors *) 
+    (* AArch64 registers hold integers, not bitvectors *)
     let is_aarch64_reg = function
       | A.Location_reg (_, ASLBase.ArchReg _) -> true
       | _ -> false
@@ -644,6 +646,7 @@ module Make (C : Config) = struct
           subprogram_type;
           recurse_limit;
           builtin = true;
+          override = None;
         }
         [@warning "-40-42"],
         f )
@@ -756,9 +759,7 @@ module Make (C : Config) = struct
       let open AST in
       let with_pos e = Asllib.ASTUtils.add_dummy_annotation ~version:V0 e in
       let integer = Asllib.ASTUtils.integer in
-      let int_ctnt e1 e2 =
-        T_Int (WellConstrained [ Constraint_Range (e1, e2) ]) |> with_pos
-      in
+      let int_ctnt e1 e2 = Asllib.ASTUtils.integer_range' e1 e2 |> with_pos in
       let boolean = Asllib.ASTUtils.boolean in
       let reg = integer in
       let var x = E_Var x |> with_pos in
@@ -768,8 +769,8 @@ module Make (C : Config) = struct
       let bv_lit x = bv @@ lit x in
       let bv_64 = bv_lit 64 in
       let binop = Asllib.ASTUtils.binop in
-      let minus_one e = binop MINUS e (lit 1) in
-      let pow_2 = binop POW (lit 2) in
+      let minus_one e = binop `MINUS e (lit 1) in
+      let pow_2 = binop `POW (lit 2) in
       let t_named x = T_Named x |> with_pos in
       let side_effecting = true in
       let uint_returns = int_ctnt (lit 0) (minus_one (pow_2 (var "N")))

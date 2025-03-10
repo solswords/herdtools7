@@ -41,6 +41,7 @@ let array_length_equal = thing_equal array_length_equal
 let bitwidth_equal = thing_equal bitwidth_equal
 let slices_equal = thing_equal slices_equal
 let bitfield_equal = thing_equal bitfield_equal
+let constraint_equal = thing_equal constraint_equal
 let constraints_equal = thing_equal constraints_equal
 let assoc_map map li = List.map (fun (x, y) -> (x, map y)) li
 
@@ -72,6 +73,9 @@ let rec get_structure (env : env) (ty : ty) : ty =
   | T_Int _ | T_Real | T_String | T_Bool | T_Bits _ | T_Enum _ -> ty
   | T_Tuple tys -> T_Tuple (List.map (get_structure env) tys) |> with_pos
   | T_Array (e, t) -> T_Array (e, (get_structure env) t) |> with_pos
+  | T_Collection fields ->
+      let fields' = assoc_map (get_structure env) fields |> canonical_fields in
+      T_Collection fields' |> with_pos
   | T_Record fields ->
       let fields' = assoc_map (get_structure env) fields |> canonical_fields in
       T_Record fields' |> with_pos
@@ -87,14 +91,17 @@ let rec get_structure (env : env) (ty : ty) : ty =
 let is_builtin_singular ty =
   (match ty.desc with
   | T_Real | T_String | T_Bool | T_Bits _ | T_Enum _ | T_Int _ -> true
-  | T_Tuple _ | T_Array (_, _) | T_Record _ | T_Exception _ | T_Named _ -> false)
+  | T_Tuple _
+  | T_Array (_, _)
+  | T_Collection _ | T_Record _ | T_Exception _ | T_Named _ ->
+      false)
   |: TypingRule.BuiltinSingularType
 (* End *)
 
 (* Begin BuiltinAggregate *)
 let is_builtin_aggregate ty =
   (match ty.desc with
-  | T_Tuple _ | T_Array _ | T_Record _ | T_Exception _ -> true
+  | T_Tuple _ | T_Array _ | T_Collection _ | T_Record _ | T_Exception _ -> true
   | T_Int _ | T_Bits (_, _) | T_Real | T_String | T_Bool | T_Enum _ | T_Named _
     ->
       false)
@@ -136,7 +143,7 @@ let rec is_non_primitive ty =
   | T_Named _ -> true
   | T_Tuple tys -> List.exists is_non_primitive tys
   | T_Array (_, ty) -> is_non_primitive ty
-  | T_Record fields | T_Exception fields ->
+  | T_Record fields | T_Exception fields | T_Collection fields ->
       List.exists (fun (_, ty) -> is_non_primitive ty) fields)
   |: TypingRule.NonPrimitiveType
 (* End *)
@@ -280,16 +287,15 @@ module Domain = struct
           try SEnv.type_of env x |> of_type env
           with Not_found -> Error.fatal_from e (Error.UndefinedIdentifier x)))
     | E_Unop (NEG, e1) ->
-        of_expr env (E_Binop (MINUS, !$0, e1) |> add_pos_from e)
-    | E_Binop (((PLUS | MINUS | MUL) as op), e1, e2) ->
+        of_expr env (E_Binop (`MINUS, !$0, e1) |> add_pos_from e)
+    | E_Binop (((`PLUS | `MINUS | `MUL) as op), e1, e2) ->
         let is1 = of_expr env e1
         and is2 = of_expr env e2
         and fop =
           match op with
-          | PLUS -> monotone_interval_op Z.add
-          | MINUS -> anti_monotone_interval_op Z.sub
-          | MUL -> monotone_interval_op Z.mul
-          | _ -> assert false
+          | `PLUS -> monotone_interval_op Z.add
+          | `MINUS -> anti_monotone_interval_op Z.sub
+          | `MUL -> monotone_interval_op Z.mul
         in
         int_set_raise_interval_op fop op is1 is2
     | _ ->
@@ -316,13 +322,13 @@ module Domain = struct
     | T_Int UnConstrained -> Top
     | T_Int (Parameterized (_uid, var)) ->
         FromSyntax [ Constraint_Exact (var_ var) ]
-    | T_Int (WellConstrained constraints) ->
+    | T_Int (WellConstrained (constraints, _)) ->
         int_set_of_int_constraints env constraints
     | T_Int PendingConstrained -> assert false
     | T_Bool | T_String | T_Real ->
         failwith "Unimplemented: domain of primitive type"
-    | T_Bits _ | T_Enum _ | T_Array _ | T_Exception _ | T_Record _ | T_Tuple _
-      ->
+    | T_Bits _ | T_Enum _ | T_Array _ | T_Collection _ | T_Exception _
+    | T_Record _ | T_Tuple _ ->
         failwith "Unimplemented: domain of a non singular type."
     | T_Named _ -> assert false (* make anonymous *)
 
@@ -406,7 +412,7 @@ module Domain = struct
     and approx_type approx env t =
       match t.desc with
       | T_Named _ -> make_anonymous env t |> approx_type approx env
-      | T_Int (WellConstrained cs) -> approx_constraints approx env cs
+      | T_Int (WellConstrained (cs, _)) -> approx_constraints approx env cs
       | _ -> bottom_top approx
     (* End *)
 
@@ -455,15 +461,18 @@ module Domain = struct
     (match (is1, is2) with
     | _, Top -> true
     | Top, _ -> false
-    | Finite ints1, Finite ints2 -> IntSet.(is_empty (diff ints1 ints2))
+    | Finite ints1, Finite ints2 -> IntSet.subset ints1 ints2
     | FromSyntax cs1, FromSyntax cs2 -> (
         constraints_equal env cs1 cs2
-        ||
-        try
-          let s1 = approx_constraints Over env cs1
-          and s2 = approx_constraints Under env cs2 in
-          IntSet.subset s1 s2
-        with CannotOverApproximate -> false)
+        || Fun.flip List.for_all cs1 @@ fun c1 ->
+           Fun.flip List.exists cs2 @@ fun c2 ->
+           constraint_equal env c1 c2
+           ||
+           try
+             let s1 = approx_constraint Over env c1
+             and s2 = approx_constraint Under env c2 in
+             IntSet.subset s1 s2
+           with CannotOverApproximate -> false)
     | Finite s1, FromSyntax cs2 ->
         let s2 = approx_constraints Under env cs2 in
         IntSet.subset s1 s2
@@ -603,6 +612,7 @@ and subtype_satisfies env t s =
      If S has the structure of a record type then T must have the
      structure of a record type with at least the same fields
      (each with the same type) as S. *)
+  | T_Collection fields_s, T_Collection fields_t
   | T_Exception fields_s, T_Exception fields_t
   | T_Record fields_s, T_Record fields_t ->
       List.for_all
@@ -750,13 +760,11 @@ let rec lowest_common_ancestor env s t =
       Some integer
   | T_Int _, T_Int (Parameterized _) | T_Int (Parameterized _), T_Int _ ->
       lowest_common_ancestor env (to_well_constrained s) (to_well_constrained t)
-  | T_Int (WellConstrained cs_s), T_Int (WellConstrained cs_t) ->
+  | T_Int (WellConstrained (cs_s, p1)), T_Int (WellConstrained (cs_t, p2)) ->
       (* If S and T both are well-constrained integer types: the
          well-constrained integer type with domain the union of the
          domains of S and T. *)
-      (* TODO: simplify domains ? If domains use a form of diets,
-         this could be more efficient. *)
-      Some (add_dummy_annotation (T_Int (WellConstrained (cs_s @ cs_t))))
+      Some (well_constrained ~precision:(precision_join p1 p2) (cs_s @ cs_t))
   | T_Bits (e_s, _), T_Bits (e_t, _) when expr_equal env e_s e_t ->
       (* We forget the bitfields if they are not equal. *)
       Some (T_Bits (e_s, []) |> add_dummy_annotation)

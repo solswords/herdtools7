@@ -90,30 +90,30 @@ let pp_pos_str_no_char { pos_start; pos_end } =
     pos_start.pos_lnum pos_end.pos_lnum
 
 let binop_to_string : binop -> string = function
-  | AND -> "AND"
-  | BAND -> "&&"
-  | BEQ -> "<->"
-  | BOR -> "||"
-  | DIV -> "DIV"
-  | DIVRM -> "DIVRM"
-  | EOR -> "EOR"
-  | EQ_OP -> "=="
-  | GT -> ">"
-  | GEQ -> ">="
-  | IMPL -> "-->"
-  | LT -> "<"
-  | LEQ -> "<="
-  | MOD -> "MOD"
-  | MINUS -> "-"
-  | MUL -> "*"
-  | NEQ -> "!="
-  | OR -> "OR"
-  | PLUS -> "+"
-  | RDIV -> "/"
-  | SHL -> "<<"
-  | SHR -> ">>"
-  | POW -> "^"
-  | BV_CONCAT -> "::"
+  | `AND -> "AND"
+  | `BAND -> "&&"
+  | `BEQ -> "<->"
+  | `BOR -> "||"
+  | `DIV -> "DIV"
+  | `DIVRM -> "DIVRM"
+  | `XOR -> "XOR"
+  | `EQ_OP -> "=="
+  | `GT -> ">"
+  | `GEQ -> ">="
+  | `IMPL -> "-->"
+  | `LT -> "<"
+  | `LEQ -> "<="
+  | `MOD -> "MOD"
+  | `MINUS -> "-"
+  | `MUL -> "*"
+  | `NEQ -> "!="
+  | `OR -> "OR"
+  | `PLUS -> "+"
+  | `RDIV -> "/"
+  | `SHL -> "<<"
+  | `SHR -> ">>"
+  | `POW -> "^"
+  | `BV_CONCAT -> "::"
 
 let unop_to_string = function BNOT -> "!" | NEG -> "-" | NOT -> "NOT"
 
@@ -152,6 +152,8 @@ let rec pp_expr f e =
   | E_GetField (e, x) -> fprintf f "@[%a@,.%s@]" pp_expr e x
   | E_GetFields (e, xs) ->
       fprintf f "@[%a@,.[@[%a@]]@]" pp_expr e (pp_comma_list pp_print_string) xs
+  | E_GetCollectionFields (e, fields) ->
+      fprintf f "@[%s@,.[@[%a@]]@]" e (pp_comma_list pp_print_string) fields
   | E_GetItem (e, i) -> fprintf f "@[%a@,.item%d@]" pp_expr e i
   | E_Record (ty, li) ->
       let pp_one f (x, e) = fprintf f "@[<h>%s =@ %a@]" x pp_expr e in
@@ -191,7 +193,7 @@ and pp_slice_list f = pp_comma_list pp_slice f
 and pp_ty f t =
   match t.desc with
   | T_Int UnConstrained -> pp_print_string f "integer"
-  | T_Int (WellConstrained cs) ->
+  | T_Int (WellConstrained (cs, _)) ->
       fprintf f "@[integer {%a}@]" pp_int_constraints cs
   | T_Int PendingConstrained -> pp_print_string f "integer{-}"
   | T_Int (Parameterized (_uid, var)) -> fprintf f "@[integer {%s}@]" var
@@ -206,15 +208,19 @@ and pp_ty f t =
         (pp_comma_list pp_print_string)
         enum_ty
   | T_Tuple ty_list -> fprintf f "@[(%a)@]" (pp_comma_list pp_ty) ty_list
-  | T_Array (ArrayLength_Expr e, elt_type) ->
-      fprintf f "@[array [[%a]] of %a@]" pp_expr e pp_ty elt_type
-  | T_Array (ArrayLength_Enum (enum, _), elt_type) ->
-      fprintf f "@[array [[%s]] of %a@]" enum pp_ty elt_type
-  | T_Record record_ty ->
-      fprintf f "@[<hv 2>record {@ %a@;<1 -2>}@]" pp_fields record_ty
-  | T_Exception record_ty ->
-      fprintf f "@[exception { %a@;<1 -2>}@]" pp_fields record_ty
+  | T_Array (length, elt_type) ->
+      fprintf f "@[array [[%a]] of %a@]" pp_array_index length pp_ty elt_type
+  | T_Collection record_ty -> pp_record_like f "collection" record_ty
+  | T_Record record_ty -> pp_record_like f "record" record_ty
+  | T_Exception record_ty -> pp_record_like f "exception" record_ty
   | T_Named x -> pp_print_string f x
+
+and pp_record_like f label record_ty =
+  fprintf f "@[<hv 2>%s {@ %a@;<1 -2>}@]" label pp_fields record_ty
+
+and pp_array_index f = function
+  | ArrayLength_Expr e -> pp_expr f e
+  | ArrayLength_Enum (enum, _) -> pp_print_string f enum
 
 and pp_bitfield f = function
   | BitField_Simple (name, slices) ->
@@ -257,6 +263,8 @@ let rec pp_lexpr f le =
   | LE_SetArray (le, e) -> fprintf f "%a[[%a]]" pp_lexpr le pp_expr e
   | LE_SetEnumArray (le, e) -> fprintf f "%a[[%a]]" pp_lexpr le pp_expr e
   | LE_SetField (le, x) -> fprintf f "@[%a@,.%s@]" pp_lexpr le x
+  | LE_SetCollectionFields (x, fields, _) ->
+      fprintf f "@[%s@,.[@[%a@]]@]" x (pp_comma_list pp_print_string) fields
   | LE_SetFields (le, li, _) ->
       fprintf f "@[%a@,.@[[%a]@]@]" pp_lexpr le
         (pp_comma_list pp_print_string)
@@ -373,7 +381,15 @@ let pp_decl f =
     | { name = _; keyword = _; ty = None; initial_value = None } -> assert false
   in
   let pp_func_sig f
-      { name; args; return_type; parameters; subprogram_type; body = _ } =
+      {
+        name;
+        args;
+        return_type;
+        parameters;
+        subprogram_type;
+        body = _;
+        override;
+      } =
     let pp_args = pp_comma_list pp_typed_identifier in
     let pp_return_type_opt f = function
       | Some return_type -> fprintf f "@;<1 -2>=> %a" pp_ty return_type
@@ -388,24 +404,32 @@ let pp_decl f =
           in
           fprintf f "@ {%a}" (pp_comma_list pp_one) parameters
     in
+    let override_keyword =
+      match override with
+      | None -> ""
+      | Some Impdef -> "impdef "
+      | Some Implementation -> "implementation "
+    in
     match subprogram_type with
     | ST_Function | ST_Procedure ->
-        fprintf f "@[<hv 4>func @[%s%a@] (@,%a)%a@]" name pp_parameters
-          parameters pp_args args pp_return_type_opt return_type
+        fprintf f "@[<hv 4>%sfunc @[%s%a@] (@,%a)%a@]" override_keyword name
+          pp_parameters parameters pp_args args pp_return_type_opt return_type
     | ST_Getter ->
-        fprintf f "@[<hv 4>getter %s%a [@,%a]%a@]" name pp_parameters parameters
-          pp_args args pp_return_type_opt return_type
+        fprintf f "@[<hv 4>%sgetter %s%a [@,%a]%a@]" override_keyword name
+          pp_parameters parameters pp_args args pp_return_type_opt return_type
     | ST_EmptyGetter ->
-        fprintf f "@[<hv 4>getter %s%a@]" name pp_return_type_opt return_type
+        fprintf f "@[<hv 4>%sgetter %s%a@]" override_keyword name
+          pp_return_type_opt return_type
     | ST_Setter ->
         let new_v, args =
           match args with [] -> assert false | h :: t -> (h, t)
         in
-        fprintf f "@[<hv 4>setter %s%a [@,%a]@ = %a@]" name pp_parameters
-          parameters pp_args args pp_typed_identifier new_v
+        fprintf f "@[<hv 4>%ssetter %s%a [@,%a]@ = %a@]" override_keyword name
+          pp_parameters parameters pp_args args pp_typed_identifier new_v
     | ST_EmptySetter ->
         let new_v = match args with [ h ] -> h | _ -> assert false in
-        fprintf f "@[<hv 4>setter %s@ = %a]" name pp_typed_identifier new_v
+        fprintf f "@[<hv 4>%ssetter %s@ = %a]" override_keyword name
+          pp_typed_identifier new_v
   in
   let pp_body f = function
     | SB_ASL s -> pp_stmt f s

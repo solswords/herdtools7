@@ -46,30 +46,30 @@ module Untyped (C : Config.S) = struct
 
   let binop : binop gen option =
     [
-      (if C.Syntax.plus then Some PLUS else None);
-      (if C.Syntax.and_ then Some AND else None);
-      (if C.Syntax.band then Some BAND else None);
-      (if C.Syntax.beq then Some BEQ else None);
-      (if C.Syntax.bor then Some BOR else None);
-      (if C.Syntax.div then Some DIV else None);
-      (if C.Syntax.divrm then Some DIVRM else None);
-      (if C.Syntax.eor then Some EOR else None);
-      (if C.Syntax.eq_op then Some EQ_OP else None);
-      (if C.Syntax.gt then Some GT else None);
-      (if C.Syntax.geq then Some GEQ else None);
-      (if C.Syntax.impl then Some IMPL else None);
-      (if C.Syntax.lt then Some LT else None);
-      (if C.Syntax.leq then Some LEQ else None);
-      (if C.Syntax.mod_ then Some MOD else None);
-      (if C.Syntax.minus then Some MINUS else None);
-      (if C.Syntax.mul then Some MUL else None);
-      (if C.Syntax.neq then Some NEQ else None);
-      (if C.Syntax.or_ then Some OR else None);
-      (if C.Syntax.pow then Some POW else None);
-      (if C.Syntax.rdiv then Some RDIV else None);
-      (if C.Syntax.shl then Some SHL else None);
-      (if C.Syntax.shr then Some SHR else None);
-      (if C.Syntax.bv_concat then Some BV_CONCAT else None);
+      (if C.Syntax.plus then Some `PLUS else None);
+      (if C.Syntax.and_ then Some `AND else None);
+      (if C.Syntax.band then Some `BAND else None);
+      (if C.Syntax.beq then Some `BEQ else None);
+      (if C.Syntax.bor then Some `BOR else None);
+      (if C.Syntax.div then Some `DIV else None);
+      (if C.Syntax.divrm then Some `DIVRM else None);
+      (if C.Syntax.xor then Some `XOR else None);
+      (if C.Syntax.eq_op then Some `EQ_OP else None);
+      (if C.Syntax.gt then Some `GT else None);
+      (if C.Syntax.geq then Some `GEQ else None);
+      (if C.Syntax.impl then Some `IMPL else None);
+      (if C.Syntax.lt then Some `LT else None);
+      (if C.Syntax.leq then Some `LEQ else None);
+      (if C.Syntax.mod_ then Some `MOD else None);
+      (if C.Syntax.minus then Some `MINUS else None);
+      (if C.Syntax.mul then Some `MUL else None);
+      (if C.Syntax.neq then Some `NEQ else None);
+      (if C.Syntax.or_ then Some `OR else None);
+      (if C.Syntax.pow then Some `POW else None);
+      (if C.Syntax.rdiv then Some `RDIV else None);
+      (if C.Syntax.shl then Some `SHL else None);
+      (if C.Syntax.shr then Some `SHR else None);
+      (if C.Syntax.bv_concat then Some `BV_CONCAT else None);
     ]
     |> protected_filter_oneofl
 
@@ -219,7 +219,7 @@ module Untyped (C : Config.S) = struct
     and t_int n =
       Fun.flip Option.map ctnt @@ fun ctnt ->
       let+ ctnts = Nat.list_sized ctnt n in
-      T_Int (WellConstrained ctnts) |> annot
+      well_constrained ctnts
     and t_bits n =
       let+ width = expr n and+ bitfields = pure [] (* TODO *) in
       T_Bits (width, bitfields) |> annot
@@ -363,6 +363,7 @@ module Untyped (C : Config.S) = struct
           return_type;
           subprogram_type;
           recurse_limit;
+          override = None;
           builtin = false;
         }
       |> annot
@@ -395,7 +396,7 @@ module Typed (C : Config.S) = struct
     | T_Named _ -> assert false
     | T_Array _ -> 1000000000
     | T_Tuple li -> list_sum ~init:2 (minimal_direct_fuel_ty env) li
-    | T_Record fields | T_Exception fields ->
+    | T_Record fields | T_Exception fields | T_Collection fields ->
         list_sum ~init:2 (fun (_, ty) -> minimal_direct_fuel_ty env ty) fields
 
   let literal ty : literal gen =
@@ -510,29 +511,31 @@ module Typed (C : Config.S) = struct
       let* op, t1, t2 =
         match ty.desc with
         | T_Int _ ->
-            [| PLUS; MINUS; MUL; DIV; DIVRM; MOD; SHL; SHR; POW |]
+            [| `PLUS; `MINUS; `MUL; `DIV; `DIVRM; `MOD; `SHL; `SHR; `POW |]
             |> oneofa
             |> map (fun op -> (op, integer, integer))
         | T_Bool ->
             [
-              [| BAND; BOR; BEQ; IMPL |] |> oneofa
+              [| `BAND; `BOR; `BEQ; `IMPL |]
+              |> oneofa
               |> map (fun op -> (op, boolean, boolean));
-              (let+ op = [| EQ_OP; NEQ |] |> oneofa
+              (let+ op = [| `EQ_OP; `NEQ |] |> oneofa
                and+ t = [| integer; boolean; real |] |> oneofa in
                (op, t, t));
-              (let+ op = [| LEQ; GEQ; GT; LT |] |> oneofa
+              (let+ op = [| `LEQ; `GEQ; `GT; `LT |] |> oneofa
                and+ t = [| integer; real |] |> oneofa in
                (op, t, t));
             ]
             |> oneof
         | T_Real ->
-            [| PLUS; MINUS; MUL |] |> oneofa |> map (fun op -> (op, real, real))
+            [| `PLUS; `MINUS; `MUL |] |> oneofa
+            |> map (fun op -> (op, real, real))
         | T_Bits _ ->
             [
-              [| AND; OR; EOR; BV_CONCAT |]
+              [| `AND; `OR; `XOR; `BV_CONCAT |]
               |> oneofa
               |> map (fun op -> (op, ty, ty));
-              [| PLUS; MINUS |] |> oneofa |> map (fun op -> (op, ty, integer));
+              [| `PLUS; `MINUS |] |> oneofa |> map (fun op -> (op, ty, integer));
             ]
             |> oneof
         | _ -> assert false
@@ -714,7 +717,7 @@ module Typed (C : Config.S) = struct
         (if n >= 1 && max = None then
            Fun.flip Option.map cnts @@ fun cnts ->
            let+ cnts = cnts n in
-           T_Int (WellConstrained cnts) |> annot
+           well_constrained cnts
          else None);
       ]
       |> filter_oneof
@@ -978,6 +981,7 @@ module Typed (C : Config.S) = struct
           return_type;
           subprogram_type;
           recurse_limit;
+          override = None;
           builtin = false;
         }
       in
@@ -1017,6 +1021,7 @@ module Typed (C : Config.S) = struct
           return_type;
           subprogram_type;
           recurse_limit;
+          override = None;
           builtin = false;
         }
       in

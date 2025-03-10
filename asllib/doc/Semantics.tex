@@ -51,12 +51,7 @@ These semantic rules are defined by induction over the typed AST.
 \paragraph{Execution:}
 A valid execution of an ASL specification transitions from an \emph{initial semantic configuration},
 which consists of the given specification and the standard library specification, to an output semantic configuration
-consisting of an output value and a concurrent execution graph.
-
-\paragraph{Primitive Subprograms:}
-The semantics of ASL are parameterized by a set of primitive subprograms ---
-subprograms whose implementation is not defined by ASL statements and whose effect on the dynamic environment
-is defined externally. Critically, access to memory is given by primitive subprograms.
+consisting of an output value and a concurrent execution graph.\\
 
 We define two types of semantics --- \emph{sequential semantics} and \emph{concurrent semantics}.
 
@@ -137,7 +132,7 @@ The set of \nativevalues\ $\vals$ is the minimal set satisfying all of the follo
   { \nvrecord{\vr} \in \vals }
 \end{mathpar}
 
-We define the following shorthands for \nativevalue\ literals:
+We define the following shorthand notations for \nativevalue\ literals:
 \hypertarget{def-nvint}{}
 \[
 \begin{array}{rcl}
@@ -387,7 +382,7 @@ ASL dynamic semantics mainly utilize the following types of output semantic conf
 \end{description}
 Helper relations often have output semantic configurations that are just tuples, without an associated configuration domain.
 
-We define the following shorthands for types of output semantic configurations:
+We define the following shorthand notations for types of output semantic configurations:
 \hypertarget{def-tnormal}{}
 \hypertarget{def-tcontinuing}{}
 \hypertarget{def-tthrowing}{}
@@ -417,7 +412,7 @@ $\Error$, and
 erroneously.
 \end{itemize}
 
-We introduce the following shorthands for semantic configurations where all variables
+We introduce the following shorthand notations for semantic configurations where all variables
 appearing are \hyperlink{def-freshvariables}{fresh}:
 \begin{itemize}
 \hypertarget{def-throwingconfig}{}
@@ -492,14 +487,10 @@ like $C$ where the environment component, if one exists, is substituted with $\e
 
 \section{Semantic Evaluation}
 \hypertarget{def-evalrel}{}
-\hypertarget{def-primitiverel}{}
-The semantics of ASL is given by the relations\footnote{The reason that relations, rather than functions, are used is due to the
-potential non-determinism in the primitive subprograms
-and the non-determinism inherent in the \texttt{ARBITRARY} expression.}
-\evalrel\ and \primitiverel.
+The semantics of ASL is given by the relation\footnote{The reason that a relation, rather than a function, is used is due to
+the non-determinism inherent in the \texttt{ARBITRARY} expression.}
+\evalrel.
 The relation \evalrel\ is defined as the disjoint union of the relations defined in this reference.
-The relation \primitiverel\ provides the semantics of primitive subprograms and is not otherwise defined
-constructively.
 
 \subsection{Natural Operational Semantics}
 We define the ASL dynamic semantics in the style of \emph{natural operational semantics}~\cite{SemanticsWithApplicationsBook}
@@ -584,3 +575,68 @@ rule, along with the rule for binary operator (for multiplication), to evaluate 
     \Normal(\nvint(27), \emptyenv)
   }
 \end{mathpar}
+
+\subsection{Evaluation Order\label{sec:EvaluationOrder}}
+ASL specifies an evaluation order to ensure predictability of side-effects and exceptions.
+In particular, semantic rules use short-circuiting rule macros to impose an ordering on premises and their associated side-effects, errors, and exceptions.
+
+For example, \SemanticsRuleRef{ECond} is duplicated below:
+\begin{mathpar}
+\inferrule{
+  \evalexpr{\env, \econd} \evalarrow \Normal(\mcond, \envone) \OrAbnormal\\\\
+  \mcond \eqname (\nvbool(\vb), \vgone)\\
+  \vep \eqdef \choice{\vb}{\veone}{\vetwo}\\\\
+  \evalexpr{\envone, \vep} \evalarrow \Normal((\vv, \vgtwo), \newenv)  \OrAbnormal\\\\
+  \vg \eqdef \ordered{\vgone}{\aslctrl}{\vgtwo}
+}{
+  \evalexpr{\env, \overname{\ECond(\econd, \veone, \vetwo)}{\ve}} \evalarrow
+  \Normal((\vv, \vg), \newenv)
+}
+\end{mathpar}
+The use of $\OrAbnormal$ rule macros here define an evaluation order: $\econd$ must be evaluated first, then exactly one of $\veone$ or $\vetwo$.
+
+For most ASL constructs, there is only one evaluation order that makes sense for the intended purpose of the construct.
+In the example above, it is not feasible to evaluate $\veone$ before evaluating $\econd$.
+However, some ASL constructs could feasibly be evaluated in different ways.
+These are:
+\begin{itemize}
+  \item arguments and parameters to a function call (\SemanticsRuleRef{ECall} and \SemanticsRuleRef{SCall});
+  \item tuple expressions (\SemanticsRuleRef{ETuple} and \SemanticsRuleRef{LEDestructuring});
+  \item non-short-circuiting binary operations (\SemanticsRuleRef{Binop});
+  \item array-indexing (\SemanticsRuleRef{EGetArray}, \SemanticsRuleRef{EGetEnumArray}) --- in particular, for \verb|arr[[idx]]| whether \verb|arr| or \verb|idx| is evaluated first;
+  \item slicing expressions (\SemanticsRuleRef{ESlice} and \SemanticsRuleRef{LESlice});
+  \item record construction expressions (\SemanticsRuleRef{ERecord});
+  \item arguments to \verb|print| and \verb|println| (\SemanticsRuleRef{SPrint});
+  \item for-loop start/end expressions (\SemanticsRuleRef{SFor}).
+\end{itemize}
+
+For these constructs, ASL defines an evaluation order of \underline{left-to-right}.
+That is, when there are multiple feasible choices for the next evaluation transition, ASL is defined to take the syntactically leftmost transition.
+Note that the usage of \emph{left-to-right} here is in a technical sense rather than a literal one: it applies only when there are multiple feasible choices for the next evaluation transition.
+For example, assignment statements (\secref{AssignmentStatements}) must still evaluate their right-hand side before considering their left-hand side.
+
+\ExampleDef{Left-to-right Evaluation}
+\listingref{left-to-right} shows examples of the constructs above, followed by output to the console from running the specification.
+\textbf{Note:} the ordering for slicing expressions seems not to be left-to-right because some forms of slice are elaborated during typechecking (see \TypingRuleRef{Slice}).
+\ASLListing{Left-to-right evaluation}{left-to-right}{\definitiontests/LeftToRight.asl}
+% CONSOLE_BEGIN aslref \definitiontests/LeftToRight.asl
+\begin{Verbatim}[fontsize=\footnotesize, frame=single]
+Function calls:
+1234
+Tuples:
+12
+Non-short-circuiting binary operations:
+123
+Array-indexing:
+1
+2
+Slicing:
+132345677
+Record construction:
+12
+Print statements:
+12341234
+For-loop start/end expressions:
+1234
+\end{Verbatim}
+% CONSOLE_END

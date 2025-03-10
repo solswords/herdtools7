@@ -9,7 +9,7 @@ including when these errors must be detected and reported to users.
 
 \section{How Implementations Should Handle Errors}
 
-\RequirementDef{StaticErrorCheck} Implementations should detect and report \staticerrorsterm.
+\RequirementDef{StaticErrorCheck} Implementations should detect and report \staticerrorsterm. \\
 Specifically, \staticerrorsterm{} must never cause a \dynamicerrorterm{} or
 cause an exception to be raised.
 %
@@ -156,6 +156,8 @@ The following table summarises all error codes.
   $\BadDeclaration$              & Bad declaration                & "             \\
   $\BadCall$                     & Bad call                       & "             \\
   $\SideEffectViolation$         & Side effect violation          & "             \\
+  $\OverridingError$             & Overriding error               & "             \\
+  $\PrecisionLostDefining$       & Declaration with an imprecise type & "         \\
   \hline
   $\UnreachableError$            & Unreachable error              & Dynamic       \\
   $\DynamicTypeAssertionFailure$ & Dynamic type assertion failure & "             \\
@@ -282,6 +284,7 @@ The following table summarises all error codes.
     \item Expected a printable type (\TypingRuleRef{SPrint}).
     \item Encountered a forbidden \pendingconstrainedintegertype{} (\TypingRuleRef{TInt}).
     \item An anonymous enumeration or \structuredtype{} was used as a type annotation outside of a type declaration (\TypingRuleRef{TNonDecl}).
+    \item A collection type was used as a type annotation outside of a global variable declaration (\TypingRuleRef{CheckIsNotCollection}).
   \end{itemize}
 
 \hypertarget{def-badtupleindex}{}
@@ -358,9 +361,23 @@ The following table summarises all error codes.
     \item An impure expression was provided where a pure one was required \\
       (\TypingRuleRef{SAssert}).
     \item A non-constant-time initialization expression was provided for a constant declaration (\TypingRuleRef{SDecl}.\textsc{constant}).
-    \item A \sideeffectconflictterm{} was found during an attempt to combine two sets of \sideeffectdescriptorsterm{} (\TypingRuleRef{NonConflictingUnion}).
   \end{itemize}
 
+\hypertarget{def-overridingerror}{}
+\item[$\OverridingError$]
+  \textit{Overriding error.}
+  An error was encountered during overriding.
+  For example:
+  \begin{itemize}
+    \item Two \texttt{implementation} subprograms had clashing signatures \\ (\TypingRuleRef{CheckImplementationsUnique}).
+    \item An \texttt{implementation} subprogram did not have exactly one corresponding \texttt{impdef} subprogram (\TypingRuleRef{ProcessOverrides}).
+  \end{itemize}
+
+\item[$\PrecisionLostDefining$]%
+  \hypertarget{def-precisionlostdefining}{}
+  \textit{Declaration with an imprecise type.}
+  An attempt to declare a storage element with an implicit and imprecise type.
+  See \TypingRuleRef{LDVar}.
 \end{description}
 
 \section{Dynamic Errors\label{sec:DynamicErrors}}

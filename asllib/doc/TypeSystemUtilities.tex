@@ -115,8 +115,8 @@ is $\True$ and otherwise the result is a type error.
 }
 \end{mathpar}
 
-\hypertarget{def-filteroptionlist}{}
 \TypingRuleDef{FilterOptionList}
+\hypertarget{def-filteroptionlist}{}
 The parametric function
 \[
   \filteroptionlist(\overname{\langle T \rangle^*}{\vvopts}) \aslto \overname{T^*}{\vvs}
@@ -312,7 +312,7 @@ returns the type for the array length $\size$ in $\vt$.
 \end{mathpar}
 \CodeSubsection{\TypeOfArrayLengthBegin}{\TypeOfArrayLengthEnd}{../types.ml}
 
-\subsection{AssocOpt}
+\TypingRuleDef{AssocOpt}
 \hypertarget{def-assocopt}{}
 The function
 \[
@@ -495,18 +495,22 @@ The function
 \[
 \isglobalundefined(\overname{\globalstaticenvs}{\genv} \aslsep \overname{\identifier}{\vx}) \aslto \overname{\Bool}{\vb}
 \]
-checks whether the identifier $\vx$ is defined in the global static environment $\genv$, yielding the result in $\vb$.
+checks whether the identifier $\vx$ is defined in the global static environment $\genv$ when subprogram definitions are ignored (see \RequirementRef{GlobalNamespace}), yielding the result in $\vb$.
+
+\ExampleDef{Global Undefined}
+\listingref{isglobalundefined} shows a specification which defines a variable \verb|X| and a subprogram \verb|Y|.
+In the typing environment obtained by typechecking this specification, $\isglobalundefined$ will yield $\False$ for \verb|X| and $\True$ for \verb|Y|.
+\ASLListing{IsGlobalUndefined}{isglobalundefined}{\typingtests/TypingRule.IsGlobalUndefined.asl}
 
 \ProseParagraph
 Define $\vb$ as $\True$ if and only if $\vx$ is not bound in any of the following maps of $\genv$:
-$\globalstoragetypes$, $\subprograms$, and $\declaredtypes$.
+$\globalstoragetypes$, and $\declaredtypes$.
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
   {
   \begin{array}{llcl}
     \vb \eqdef & \genv.\globalstoragetypes(\vx) &=& \bot\ \land\\
-              & \genv.\subprograms(\vx) &=& \bot\ \land\\
               & \genv.\declaredtypes(\vx) &=& \bot
   \end{array}
   }
@@ -782,7 +786,7 @@ The helper function
   \shouldrememberimmutableexpression(\overname{\TSideEffectSet}{\vses}) \typearrow \overname{\Bool}{\vb}
 \]
 tests whether the \sideeffectsetterm\ $\vses$
-allows an expression with those \sideeffectconflictsterm\ to be
+allows an expression with those \sideeffectdescriptorsterm\ to be
 recorded as an immutable expression in the appropriate $\exprequiv$ map component
 of the static environment, so that it can later be used to
 reason about type satisfaction, yielding the result in $\vb$.

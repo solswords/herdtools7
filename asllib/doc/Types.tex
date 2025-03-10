@@ -16,6 +16,7 @@ how it is represented in the syntax and AST, and how it is typechecked:
   \item \Enumerationtypesterm{} (see \secref{EnumerationTypes})
   \item Array types (see \secref{ArrayTypes})
   \item Record types (see \secref{RecordTypes})
+  \item Collection types (see \secref{CollectionTypes})
   \item Exception types (see \secref{ExceptionTypes})
   \item Named types (see \secref{NamedTypes})
 \end{itemize}
@@ -106,6 +107,7 @@ use the term \integertypeterm{} to refer to them collectively:
 \emph{pending constrained}, and \emph{parameterized}.
 
 \subsection{Unconstrained Integer Types}
+\hypertarget{def-unconstrainedintegertype}{}
 The type \verb|integer| represents all integer values.
 \identi{HJBH}%
 There is no bound on the minimum and maximum integer value that can be represented.
@@ -124,20 +126,23 @@ A constraint can either be an \emph{\exactconstraintterm}, consisting of a singl
 or a \emph{\rangeconstraintterm}, consisting of a pair of expressions like \texttt{1..10}.
 
 \ExampleDef{Well-constrained Integer Types}
+\hypertarget{def-wellconstrainedintegertype}{}
 \listingref{typing-wellconstrained} shows examples of well-constrained integer types.
 \ASLListing{Well-typed well-constrained integer types}{typing-wellconstrained}{\typingtests/TypingRule.TIntWellConstrained.asl}
 
 \subsection{Pending-constrained Integer Types}
+\hypertarget{def-pendingconstrainedintegertype}{}
 The type \verb|integer{-}| represents a well-constrained integer type whose
 constraints have yet to be determined.
 These constraints are inferred by the type system based on the expression used to initialize
 the storage element (see \TypingRuleRef{InheritIntegerConstraints}).
 
-\RequirementDef{PendingConstrainedLocal}
+\RequirementDef{PendingConstrainedLHS}
 Pending-constrained integer types may only appear on the left-hand-side
-of local storage element declarations.
+of local and global storage element declarations.
+They may not appear in \texttt{config} declarations.
 %
-\listingref{global-pending-constrained} shows an ill-typed specification.
+\listingref{config-pending-constrained} shows an ill-typed specification.
 
 \ExampleDef{Well-typed pending-constrained types}
 \listingref{typing-pendingconstrained} shows examples of well-typed pending-constrained
@@ -145,6 +150,7 @@ integer types.
 \ASLListing{Well-typed pending-constrained integer types}{typing-pendingconstrained}{\typingtests/TypingRule.InheritIntegerConstraints.asl}
 
 \subsection{Parameterized Integer Types}
+\hypertarget{def-parameterizedintegertype}{}
 Subprogram parameters are implicitly \emph{parameterized integer types},
 which represent a singleton set for the integer passed to the parameter
 at the call site.
@@ -298,13 +304,21 @@ Those are defined as follows:
 We use the shorthand notation $\unconstrainedinteger \triangleq \TInt(\unconstrained)$
 for unconstrained integers.
 
+\RequirementDef{ConstraintSymbolicallyConstrained}
+The expressions appearing in integer constraints must be both
+\symbolicallyevaluable{} and \constrainedinteger{} types.
+%
+In \listingref{annotate-constraint-unconstrained}, the constraint
+\verb|x..x+1| is ill-typed, since the type of \texttt{x} is not constrained.
+\ASLListing{Ill-typed constraint}{annotate-constraint-unconstrained}{\typingtests/TypingRule.AnnotateConstraint.bad.asl}
+
 \TypingRuleDef{TInt}
 \ExampleDef{Ill-typed pending-constrained integer type}
-\listingref{global-pending-constrained}
+\listingref{config-pending-constrained}
 and \listingref{rhs-pending-constrained}
 correspond to \CaseName{pending\_constrained}.
-\ASLListing{Ill-typed pending-constrained integer type}{global-pending-constrained}
-{\typingtests/TypingRule.TInt.global_pending_constrained.bad.asl}
+\ASLListing{Ill-typed pending-constrained integer type}{config-pending-constrained}
+{\typingtests/TypingRule.TInt.config_pending_constrained.bad.asl}
 
 \ASLListing{Ill-typed pending-constrained integer type}{rhs-pending-constrained}
 {\typingtests/TypingRule.TInt.rhs_pending_constrained.bad.asl}
@@ -326,7 +340,7 @@ correspond to \CaseName{pending\_constrained}.
       \item $\newconstraints$ is the list of annotated constraints $\newc_i$,
       for $i=1..k$;
       \item $\newty$ is the well-constrained integer type constrained
-        by $\newconstraints$;
+        by $\newconstraints$ with $\PrecisionFull$;
       \item define $\vses$ as the union of all $\vxs_i$, for $i=1..k$.
     \end{itemize}
 
@@ -368,7 +382,7 @@ correspond to \CaseName{pending\_constrained}.
   {
     \begin{array}{r}
   \annotatetype{\overname{\Ignore}{\vdecl}, \tenv, \overname{\TInt(\wellconstrained(\constraints))}{\tty}} \typearrow \\
-  (\overname{\TInt(\wellconstrained(\newconstraints))}{\newty}, \vses)
+  (\overname{\TInt(\wellconstrained(\newconstraints, \PrecisionFull))}{\newty}, \vses)
     \end{array}
   }
 }
@@ -390,7 +404,6 @@ correspond to \CaseName{pending\_constrained}.
   \annotatetype{\overname{\Ignore}{\vdecl}, \tenv, \tty} \typearrow (\overname{\tty}{\newty}, \overname{\emptyset}{\vses})
 }
 \end{mathpar}
-
 \CodeSubsection{\TIntBegin}{\TIntEnd}{../Typing.ml}
 
 \TypingRuleDef{AnnotateConstraint}
@@ -412,14 +425,6 @@ and the resulting annotated constraints in comments.
 The annotated constraints inline the constant \texttt{N} and the right-hand-side
 expressions of \texttt{let} storage elements.
 \ASLListing{Annotated constraints}{annotate-constraint}{\typingtests/TypingRule.AnnotateConstraint.asl}
-
-\RequirementDef{ConstraintSymbolicallyConstrained}
-The expressions appearing in integer constraints must be both
-\symbolicallyevaluable{} and \constrainedinteger{} types.
-%
-In \listingref{annotate-constraint-unconstrained}, the constraint
-\verb|x..x+1| is ill-typed, since the type of \texttt{x} is not constrained.
-\ASLListing{Ill-typed constraint}{annotate-constraint-unconstrained}{\typingtests/TypingRule.AnnotateConstraint.bad.asl}
 
 \ProseParagraph
 \OneApplies
@@ -449,18 +454,25 @@ In \listingref{annotate-constraint-unconstrained}, the constraint
 }{
   \annotateconstraint(\tenv, \overname{\ConstraintExact(\ve)}{\vc}) \typearrow (\overname{\ConstraintExact(\vep)}{\newc}, \vses)
 }
-\and
+\end{mathpar}
+
+\begin{mathpar}
 \inferrule[range]{
   \annotatesymbolicconstrainedinteger(\tenv, \veone) \typearrow (\veonep, \vsesone) \OrTypeError\\\\
   \annotatesymbolicconstrainedinteger(\tenv, \vetwo) \typearrow (\vetwop, \vsestwo) \OrTypeError\\\\
   \vses \eqdef \vsesone \cup \vsestwo
 }{
-  \annotateconstraint(\tenv, \overname{\ConstraintRange(\veone, \vetwo)}{\vc}) \typearrow \overname{\ConstraintRange(\veonep, \vetwop)}{\newc}
+  {
+  \begin{array}{r}
+    \annotateconstraint(\tenv, \overname{\ConstraintRange(\veone, \vetwo)}{\vc}) \typearrow \\
+    (\overname{\ConstraintRange(\veonep, \vetwop)}{\newc}, \vses)
+  \end{array}
+  }
 }
 \end{mathpar}
 
-\hypertarget{realtypeterm}{}
 \section{The Real Type\label{sec:RealType}}
+\hypertarget{realtypeterm}{}
 The \emph{\realtypeterm{}} represents mathematical rational number values.
 There is no bound on the minimum and maximum rational value that can be represented,
 and there is no bound on their precision.
@@ -497,6 +509,8 @@ In \listingref{typing-treal}, all the uses of the \realtypeterm{} are well-typed
 
 \subsection{Typing the Real Type\label{sec:TypingRealType}}
 \TypingRuleDef{TReal}
+See \ExampleRef{Well-typed Real Types} for examples of well-typed \realtypeterm{}.
+
 \ProseParagraph
 \AllApply
 \begin{itemize}
@@ -514,8 +528,9 @@ In \listingref{typing-treal}, all the uses of the \realtypeterm{} are well-typed
 \end{mathpar}
 \CodeSubsection{\TRealBegin}{\TRealEnd}{../Typing.ml}
 
-\hypertarget{stringtypeterm}{}
 \section{The String Type\label{sec:StringType}}
+\hypertarget{stringtypeterm}{}
+\hypertarget{stringtypesterm}{}
 The \emph{\stringtypeterm{}} represents strings of characters.
 
 Strings play relatively little role in specifications and the only operations
@@ -547,6 +562,8 @@ In \listingref{typing-tstring}, all the uses of the \stringtypeterm{} are well-t
 
 \subsection{Typing the String Type\label{sec:TypingStringType}}
 \TypingRuleDef{TString}
+See \ExampleRef{Well-typed String Types} for examples of well-typed \stringtypesterm.
+
 \ProseParagraph
 \AllApply
 \begin{itemize}
@@ -568,8 +585,8 @@ In \listingref{typing-tstring}, all the uses of the \stringtypeterm{} are well-t
 \hypertarget{booleantypeterm}{}
 The \emph{\booleantypeterm{}} represents Booleans.
 
-\ExampleDef{Boolean Type}
-In \listingref{typing-tbool}, all the uses of \booleantypeterm{} are well-typed.
+\ExampleDef{Well-typed Boolean Types}
+In \listingref{typing-tbool}, all the uses of the \booleantypeterm{} are well-typed.
 \ASLListing{Well-typed Boolean types}{typing-tbool}{\typingtests/TypingRule.TBool.asl}
 
 \subsection{Syntax}
@@ -591,8 +608,9 @@ In \listingref{typing-tbool}, all the uses of \booleantypeterm{} are well-typed.
 \end{mathpar}
 
 \subsection{Typing the Boolean Type\label{sec:TypingBooleanType}}
-See \ExampleRef{Boolean Type}.
 \TypingRuleDef{TBool}
+See \ExampleRef{Well-typed Boolean Types} for examples of well-typed \booleantypesterm.
+
 \ProseParagraph
 \AllApply
 \begin{itemize}
@@ -692,14 +710,14 @@ bv=0x14, rotated twice=0x05
 }
 \end{mathpar}
 
-\subsection{Typing}
-\ExampleDef{Bitvector examples}
+\subsection{Typing Bitvector Types}
+\TypingRuleDef{TBits}
+\ExampleDef{Well-typed Bitvector Types}
 In \listingref{typing-tbits}, all the uses of bitvector types are well-typed.
 \ASLListing{Well-typed Bitevector types}{typing-tbits}{\typingtests/TypingRule.TBits.asl}
 
-\ExampleRef{A bitvector type with bitfields} shows a \bitvectortypeterm{} with bitfields.
+\ExampleRef{A bitvector type with bitfields} shows a well-typed \bitvectortypeterm{} with bitfields.
 
-\TypingRuleDef{TBits}
 \ProseParagraph
 \AllApply
 \begin{itemize}
@@ -713,6 +731,8 @@ In \listingref{typing-tbits}, all the uses of bitvector types are well-typed.
     \item \AllApplyCase{with\_bitfields}
     \begin{itemize}
       \item $\bitfields$ is not empty;
+      \item checking whether all \timeframesterm{} in $\seswidth$ are less than or equal to $\timeframeconstant$
+            yields $\True$\ProseTerminateAs{\SideEffectViolation};
       \item annotating the bitfields $\bitfields$ yields \\
             $(\bitfieldsp, \vsesbitfields)$\ProseOrTypeError;
       \item \Prosestaticeval{$\tenv$}{$\ewidthp$}{$\lint(\vwidth)$};
@@ -742,6 +762,7 @@ In \listingref{typing-tbits}, all the uses of bitvector types are well-typed.
   \checkconstrainedinteger(\tenv, \twidth) \typearrow \True \OrTypeError\\\\
   \commonprefixline\\\\
   \bitfields \neq \emptylist\\\\
+  \checktrans{\sesisbefore(\seswidth, \timeframeconstant)}{\SideEffectViolation} \typearrow \True \OrTypeError\\\\
   {
   \begin{array}{r}
     \annotatebitfields(\tenv, \ewidthp, \bitfields) \typearrow \\
@@ -822,6 +843,8 @@ as long as $0 \leq k < n$.
 
 \subsection{Typing Tuple Types\label{sec:TypingTupleTypes}}
 \TypingRuleDef{TTuple}
+See \ExampleRef{Well-typed Tuples} for examples of well-typed \tupletypesterm.
+
 \ProseParagraph
 \AllApply
 \begin{itemize}
@@ -867,8 +890,8 @@ and therefore enumeration types do not support ordering comparisons such as \ver
 
 \identr{DWSP} \identr{QMWT} \identi{MZXL}%
 \RequirementDef{LabelNamespace}
-Enumeration literals exist in the same namespace as all other declared objects,
-including storage elements and subprograms, so no other declared object
+Enumeration literals exist in the same namespace as all other declared identifiers except subprograms (see \RequirementRef{GlobalNamespace}),
+including storage elements and named types, so no other declared identifier
 may have the same name in the same scope.
 In particular, this means that an enumeration literal can be declared in
 at most one \enumerationtypeterm{} declaration.
@@ -901,11 +924,14 @@ Enumeration types are only allowed in declarations.
 \end{mathpar}
 
 \subsection{Typing Enumeration Types\label{sec:TypingEnumerationTypes}}
-\ExampleDef{Ill-typed enumeration type declarations}
+\TypingRuleDef{TEnumDecl}
+See \ExampleRef{Well-typed Enumeration Types} for examples of well-typed \enumerationtypesterm{}
+declarations.
+
+\ExampleDef{Ill-typed Enumeration Type Declarations}
 \listingref{typing-tenum-bad} shows examples of ill-typed enumeration type declarations.
 \ASLListing{Ill-typed enumeration types}{typing-tenum-bad}{\typingtests/TypingRule.TEnumDecl.bad.asl}
 
-\TypingRuleDef{TEnumDecl}
 \ProseParagraph
 \AllApply
 \begin{itemize}
@@ -984,13 +1010,16 @@ In \listingref{typing-tarray}, all the uses of array types are well-typed.
 }
 \end{mathpar}
 \subsection{Typing Array Types\label{sec:TypingArrayTypes}}
+\TypingRuleDef{TArray}
+See \ExampleRef{Well-typed Array Types} for examples of well-typed
+array types.
+
 \ExampleDef{Ill-typed Array Types}
 In \listingref{typing-tarray-bad}, the array type for \verb|illegal_array|
 is ill-typed, since the expression \verb|non_symbolically_evaluable|
 is not \symbolicallyevaluable{}.
 \ASLListing{Ill-typed array types}{typing-tarray-bad}{\typingtests/TypingRule.TArray.bad.asl}
 
-\TypingRuleDef{TArray}
 \ProseParagraph
 \AllApply
 \begin{itemize}
@@ -1135,6 +1164,11 @@ enumeration labels from variable expressions.
 }
 \end{mathpar}
 
+\identi{PKXK} \identd{YYDW}%
+\RequirementDef{SymbolicallyEvaluable}
+An expression is \symbolicallyevaluable{} if its evaluation only involves
+the use of immutable values.
+
 \TypingRuleDef{AnnotateSymbolicallyEvaluableExpr}
 \hypertarget{def-annotatesymbolicallyevaluableexpr}{}
 The function
@@ -1147,11 +1181,6 @@ The function
 annotates the expression $\ve$ in the static environment $\tenv$ and checks that it is \symbolicallyevaluable,
 yielding the type in $\vt$, the annotated expression $\vep$ and the \sideeffectsetterm{} $\vses$.
 \ProseOtherwiseTypeError
-
-\identi{PKXK} \identd{YYDW}%
-\RequirementDef{SymbolicallyEvaluable}
-An expression is \symbolicallyevaluable{} if its evaluation only involves
-the use of immutable values.
 
 \ExampleDef{Annotating Symbolically Evaluable Expressions}
 \listingref{typing-annotatesymbolicallyevaluableexpr} shows examples of
@@ -1188,6 +1217,17 @@ annotates a \symbolicallyevaluable\ integer expression $\ve$ in the static envir
 and returns the annotated expression $\vepp$ as a \normalizedexpressionterm{} and \sideeffectsetterm\ $\vses$.
 \ProseOtherwiseTypeError
 
+\ExampleDef{Annotating Symbolically Evaluable Integer Expressions}
+The expression \verb|(pure_func(5, 6) + 9) + I| in \listingref{typing-annotatesymbolicallyevaluableexpr}
+is both \symbolicallyevaluable{} and its \underlyingtype{} is an \integertypeterm{},
+and annotating and normalizing it yields the same expression.
+%
+Annotating the expression \verb|(3*I + 9) - 2*I|, which is also \symbolicallyevaluable{} and has an
+\underlyingtype{} is an \integertypeterm{}, yields the expression \verb|I + 9| after normalization.
+%
+Annotating the expression \verb|i - 3|, which is also \symbolicallyevaluable{} and has an
+\underlyingtype{} is an \integertypeterm{}, yields the expression \verb|6| after normalization.
+
 \ProseParagraph
 \AllApply
 \begin{itemize}
@@ -1214,42 +1254,31 @@ The function
   \checkunderlyinginteger(\overname{\staticenvs}{\tenv} \aslsep \overname{\ty}{\vt}) \aslto
   \{\True\} \cup \TTypeError
 \]
-returns $\True$ is $\vt$ is has the \structure\ an integer type and a type error otherwise.
+returns $\True$ is $\vt$ is has the \underlyingtype{} of an \integertypeterm{}.
+\ProseOtherwiseTypeError
+
+\ExampleDef{Checking for an Underlying Integer Type}
+All of the expressions appearing on the right-hand-side of the assignments in
+\listingref{typing-annotatesymbolicallyevaluableexpr}
+have an \integertypeterm{} as their \underlyingtype{}.
+This includes the expression \verb|i - 3|, since the \underlyingtype{}
+of \verb|i| is the \unconstrainedintegertype.
 
 \ProseParagraph
-\OneApplies
+\AllApply
 \begin{itemize}
-  \item \AllApplyCase{okay}
-  \begin{itemize}
-    \item determining the \structure\ of $\vt$ yields $\vtp$\ProseOrTypeError;
-    \item $\vtp$ is an integer type;
-    \item the result is $\True$;
-  \end{itemize}
-
-  \item \AllApplyCase{error}
-  \begin{itemize}
-    \item determining the \structure\ of $\vt$ yields $\vtp$\ProseOrTypeError;
-    \item $\vtp$ is not an integer type;
-    \item the result is a type error indicating that $\vt$ was expected to have the \structure\ of an integer.
-  \end{itemize}
+  \item determining the \underlyingtype{} of $\vt$ yields $\vtp$\ProseOrTypeError;
+  \item checking that $\vtp$ is an \integertypeterm{} yields $\True$\ProseTerminateAs{\UnexpectedType};
+  \item the result is $\True$;
 \end{itemize}
 
 \FormallyParagraph
 \begin{mathpar}
-\inferrule[okay]{
-  \tstruct(\vt) \typearrow \vtp \OrTypeError\\\\
-  \astlabel(\vtp) = \TInt
+\inferrule{
+  \makeanonymous(\tenv, \vt) \typearrow \vtp \OrTypeError\\\\
+  \checktrans{\astlabel(\vtp) = \TInt}{\UnexpectedType} \typearrow \True \OrTypeError
 }{
   \checkunderlyinginteger(\tenv, \vt) \typearrow \True
-}
-\end{mathpar}
-
-\begin{mathpar}
-\inferrule[error]{
-  \tstruct(\vt) \typearrow \vtp\\
-  \astlabel(\vtp) \neq \TInt
-}{
-  \checkunderlyinginteger(\tenv, \vt) \typearrow \TypeErrorVal{\UnexpectedType}
 }
 \end{mathpar}
 \CodeSubsection{\CheckUnderlyingIntegerBegin}{\CheckUnderlyingIntegerEnd}{../Typing.ml}
@@ -1265,7 +1294,7 @@ A record type is described by specifying for each field identifier its type.
 The syntax \verb|record| (with no field list) is syntactic sugar for \verb|record {}|.
 
 \ExampleDef{Well-typed Record Types}
-In \listingref{typing-trecord}, all the uses of record or exception types are well-typed.
+In \listingref{typing-trecord}, all the uses of record types are well-typed.
 \ASLListing{Well-typed structured types}{typing-trecord}{\typingtests/TypingRule.TRecordDecl.asl}
 
 \subsection{Syntax}
@@ -1288,6 +1317,8 @@ In \listingref{typing-trecord}, all the uses of record or exception types are we
 
 \subsection{Typing Record Types\label{sec:TypingRecordTypes}}
 \TypingRuleDef{TStructuredDecl}
+\ExampleRef{Well-typed Record Types} shows examples of well-typed \recordtypesterm.
+
 \ProseParagraph
 \AllApply
 \begin{itemize}
@@ -1320,11 +1351,45 @@ In \listingref{typing-trecord}, all the uses of record or exception types are we
 \end{mathpar}
 \CodeSubsection{\TStructuredDeclBegin}{\TStructuredDeclEnd}{../Typing.ml}
 
+\section{Collection Types\label{sec:CollectionTypes}}%
+\hypertarget{collectiontypeterm}{}
+
+A collection is a \structuredtype{} consisting of a list of field identifiers
+which denote individual storage elements.
+
+\RequirementDef{CollectionsGlobal}
+Collections can only be used for global storage elements.
+See \listingref{checkisnotcollection} for an ill-typed specification.
+
+\subsection{Syntax}
+\begin{flalign*}
+  \Ntydecl \derives\ & \Tcollection \parsesep \Nfieldsopt &
+\end{flalign*}
+
+\subsection{Abstract Syntax}
+\begin{flalign*}
+  \ty \derives\ & \TCollection(\Field^{*}) &
+\end{flalign*}
+
+\ASTRuleDef{TyDecl.TCollection}
+\begin{mathpar}
+\inferrule{}{%
+  \buildtydecl(\Ntydecl(\Tcollection, \punnode{\Nfieldsopt})) \astarrow
+  \overname{\TCollection(\astof{\vfieldsopt})}{\vastnode}
+}
+\end{mathpar}
+
 \section{Exception Types\label{sec:ExceptionTypes}}
 \hypertarget{exceptiontypeterm}{}
+An exception is a \structuredtype{} consisting of a list of field identifiers
+which denote individual storage elements.
+
+\identr{KGXL}
+The syntax \verb|exception| (with no field list) is syntactic sugar for \verb|exception {}|.
+
 \ExampleDef{Well-typed Exception Types}
-In \listingref{typing-texception}, all the uses of record or exception types are well-typed.
-\ASLListing{Well-typed structured types}{typing-texception}{\typingtests/TypingRule.TExceptionDecl.asl}
+In \listingref{typing-texception}, all the uses of exception types are well-typed.
+\ASLListing{Well-typed exception types}{typing-texception}{\typingtests/TypingRule.TExceptionDecl.asl}
 
 \subsection{Syntax}
 \begin{flalign*}
@@ -1368,12 +1433,11 @@ The rule for typing exception types is \TypingRuleRef{TStructuredDecl}.
 \end{mathpar}
 
 \subsection{Typing Named Types\label{sec:TypingNamedTypes}}
+\TypingRuleDef{TNamed}
 \ExampleDef{Well-typed Named Types}
 In \listingref{typing-tnamed}, all the uses of \texttt{MyType} are well-typed.
 \ASLListing{Well-typed named types}{typing-tnamed}{\typingtests/TypingRule.TNamed.asl}
 
-\TypingRuleDef{TNamed}
-See \ExampleRef{Well-typed Named Types}.
 \ProseParagraph
 \AllApply
 \begin{itemize}

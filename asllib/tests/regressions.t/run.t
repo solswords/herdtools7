@@ -370,6 +370,14 @@ Required tests:
   $ aslref declaration-primitive-local.asl
   $ aslref --no-type-check -0 typing-assign-v0.asl
   $ aslref constant-functions.asl
+  $ aslref alt-mask-syntax.asl
+  $ aslref subprogram-global-name-clash.asl
+  $ aslref subprogram-local-name-clash.asl
+
+  $ aslref --no-type-check throw-local-env.asl
+  File throw-local-env.asl, line 10, characters 13 to 14:
+  ASL Error: Undefined identifier: 'y'
+  [1]
 
   $ aslref undeclared-variable.asl
   File undeclared-variable.asl, line 3, characters 2 to 5:

@@ -88,12 +88,12 @@ let make_ty_decl_subtype (x, s) =
 let prec =
   let open AST in
   function
-  | BOR | BAND | IMPL | BEQ -> 1
-  | EQ_OP | NEQ -> 2
-  | PLUS | MINUS | OR | EOR | AND | BV_CONCAT -> 3
-  | MUL | DIV | DIVRM | RDIV | MOD | SHL | SHR -> 4
-  | POW -> 5
-  | GT | GEQ | LT | LEQ -> 0 (* Non assoc *)
+  | `BOR | `BAND | `IMPL | `BEQ -> 1
+  | `EQ_OP | `NEQ -> 2
+  | `PLUS | `MINUS | `OR | `XOR | `AND | `BV_CONCAT -> 3
+  | `MUL | `DIV | `DIVRM | `RDIV | `MOD | `SHL | `SHR -> 4
+  | `POW -> 5
+  | `GT | `GEQ | `LT | `LEQ -> 0 (* Non assoc *)
 
 let check_not_same_prec loc op op' =
   if prec op = prec op' then Error.(fatal_from loc CannotParse)
@@ -215,30 +215,30 @@ let unop ==
   | NOT   ; { NOT }
 
 let binop ==
-  | AND         ; { AND    }
-  | BAND        ; { BAND   }
-  | BOR         ; { BOR    }
-  | BEQ         ; { BEQ    }
-  | DIV         ; { DIV    }
-  | DIVRM       ; { DIVRM  }
-  | EOR         ; { EOR    }
-  | EQ_OP       ; { EQ_OP  }
-  | NEQ         ; { NEQ    }
-  | GT          ; { GT     }
-  | GEQ         ; { GEQ    }
-  | IMPL        ; { IMPL   }
-  | LT          ; { LT     }
-  | LEQ         ; { LEQ    }
-  | PLUS        ; { PLUS   }
-  | MINUS       ; { MINUS  }
-  | MOD         ; { MOD    }
-  | MUL         ; { MUL    }
-  | OR          ; { OR     }
-  | RDIV        ; { RDIV   }
-  | SHL         ; { SHL    }
-  | SHR         ; { SHR    }
-  | POW         ; { POW    }
-  | COLON_COLON ; { BV_CONCAT }
+  | AND         ; { `AND    }
+  | BAND        ; { `BAND   }
+  | BOR         ; { `BOR    }
+  | BEQ         ; { `BEQ    }
+  | DIV         ; { `DIV    }
+  | DIVRM       ; { `DIVRM  }
+  | XOR         ; { `XOR    }
+  | EQ_OP       ; { `EQ_OP  }
+  | NEQ         ; { `NEQ    }
+  | GT          ; { `GT     }
+  | GEQ         ; { `GEQ    }
+  | IMPL        ; { `IMPL   }
+  | LT          ; { `LT     }
+  | LEQ         ; { `LEQ    }
+  | PLUS        ; { `PLUS   }
+  | MINUS       ; { `MINUS  }
+  | MOD         ; { `MOD    }
+  | MUL         ; { `MUL    }
+  | OR          ; { `OR     }
+  | RDIV        ; { `RDIV   }
+  | SHL         ; { `SHL    }
+  | SHR         ; { `SHR    }
+  | POW         ; { `POW    }
+  | COLON_COLON ; { `BV_CONCAT }
 
 (* ------------------------------------------------------------------------
 
@@ -295,7 +295,7 @@ let expr :=
 
 let constraint_kind_opt := constraint_kind | { UnConstrained }
 let constraint_kind :=
-  | ~=braced(clist1(int_constraint)); < WellConstrained >
+  | cs=braced(clist1(int_constraint)); { WellConstrained (cs, Precision_Full) }
   | braced(MINUS); { PendingConstrained }
 
 let int_constraint :=
@@ -379,22 +379,23 @@ let bitfield :=
 (* Also called ty in grammar.bnf *)
 let ty :=
   annotated (
-    | INTEGER; c = constraint_kind_opt;                 < T_Int       >
-    | REAL;                                             { T_Real      }
-    | BOOLEAN;                                          { T_Bool      }
-    | STRING;                                           { T_String    }
-    | BIT;                                              { t_bit       }
-    | BITS; ~=pared(expr); ~=bitfields_opt;             < T_Bits      >
-    | l=plist0(ty);                                      < T_Tuple     >
-    | name=IDENTIFIER;                                  < T_Named     >
+    | INTEGER; c = constraint_kind_opt;                 < T_Int        >
+    | REAL;                                             { T_Real       }
+    | BOOLEAN;                                          { T_Bool       }
+    | STRING;                                           { T_String     }
+    | BIT;                                              { t_bit        }
+    | BITS; ~=pared(expr); ~=bitfields_opt;             < T_Bits       >
+    | l=plist0(ty);                                     < T_Tuple      >
+    | name=IDENTIFIER;                                  < T_Named      >
     | ARRAY; LLBRACKET; e=expr; RRBRACKET; OF; t=ty;    { T_Array (ArrayLength_Expr e, t) }
   )
 
 let ty_decl := ty |
   annotated (
-    | ENUMERATION; l=braced(tclist1(IDENTIFIER));       < T_Enum      >
-    | RECORD; l=fields_opt;                             < T_Record    >
-    | EXCEPTION; l=fields_opt;                          < T_Exception >
+    | ENUMERATION; l=braced(tclist1(IDENTIFIER));       < T_Enum       >
+    | RECORD; l=fields_opt;                             < T_Record     >
+    | EXCEPTION; l=fields_opt;                          < T_Exception  >
+    | COLLECTION; l=fields_opt;                         < T_Collection >
   )
 
 (* Constructs on ty *)
@@ -585,6 +586,10 @@ let recurse_limit := ioption(RECURSELIMIT; expr)
 let ignored_or_identifier :=
   | MINUS; { global_ignored () }
   | IDENTIFIER
+let override ==
+  ioption(
+    | IMPDEF; { Impdef }
+    | IMPLEMENTATION; { Implementation })
 
 let accessors :=
   | GETTER; getter=func_body;
@@ -597,7 +602,7 @@ let accessors :=
 let decl :=
   | d=annotated (
     (* Begin func_decl *)
-    | FUNC; name=IDENTIFIER; ~=params_opt; ~=func_args; ~=return_type; ~=recurse_limit; body=func_body;
+    | ~=override; FUNC; name=IDENTIFIER; ~=params_opt; ~=func_args; ~=return_type; ~=recurse_limit; body=func_body;
         {
           D_Func {
             name;
@@ -607,12 +612,13 @@ let decl :=
             return_type = Some return_type;
             subprogram_type = ST_Function;
             recurse_limit;
+            override;
             builtin = false;
           }
         }
     (* End *)
     (* Begin procedure_decl *)
-    | FUNC; name=IDENTIFIER; ~=params_opt; ~=func_args; body=func_body;
+    | ~=override; FUNC; name=IDENTIFIER; ~=params_opt; ~=func_args; body=func_body;
         {
           D_Func {
             name;
@@ -622,6 +628,7 @@ let decl :=
             return_type = None;
             subprogram_type = ST_Procedure;
             recurse_limit = None;
+            override;
             builtin = false;
           }
         }
@@ -653,9 +660,9 @@ let decl :=
       (* End *)
     )
   ); { [d] }
-  | ACCESSOR; name=IDENTIFIER; ~=params_opt; ~=func_args; BIARROW; ~=ty;
+  | ~=override; ACCESSOR; name=IDENTIFIER; ~=params_opt; ~=func_args; BIARROW; ~=ty;
     BEGIN; ~=accessors; end_semicolon;
-    { desugar_accessor_pair name params_opt func_args ty accessors }
+    { desugar_accessor_pair override name params_opt func_args ty accessors }
 
 (* Begin AST *)
 let spec := ~=terminated(list(decl), EOF); < List.concat >
@@ -673,6 +680,7 @@ let opn [@internal true] := body=stmt; EOF;
             return_type = None;
             subprogram_type = ST_Procedure;
             recurse_limit = None;
+            override = None;
             builtin = false;
           }
         |> ASTUtils.add_pos_from body
