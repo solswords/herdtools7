@@ -23,6 +23,9 @@ Ensure the following environment variables are set and exported:
     ACL2_PROJECTS=${ACL2ASL_DIR}/PROJECT_DIRS
     PATH=${ACL2_SYSTEM_BOOKS}/build:${ACL2ASL_DIR}/bin:$PATH
 
+The `env.sh` script in this directory can be sourced to set up the latter
+variables once the first two (ACL2_DIR and ACL2ASL_DIR) are set.
+
 Once these are set, an ACL2 executable with the ASL interpreter code
 pre-loaded can be built using (Gnu) `make` in this directory. Using
 Make's parallel build capability is very useful to speed this up;
