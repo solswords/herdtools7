@@ -32,3 +32,35 @@
 (include-book "sint")
 (include-book "sqrtrounded")
 (include-book "uint")
+(include-book "shift")
+
+
+;; Hackish attempt to make sure there's a theorem for every stdlib function.
+
+(local (include-book "centaur/misc/rewrite-rule" :dir :system))
+
+(local
+ (progn
+   (std::deflist weak-rewrite-rule-listp (x) (acl2::weak-rewrite-rule-p x))
+
+   (define collect-stdlib-fns-with-rules ((rules weak-rewrite-rule-listp))
+     (b* (((when (atom rules)) nil)
+          (first (b* (((acl2::rewrite-rule rule) (car rules))
+                      ((unless (and (eq rule.equiv 'equal)
+                                    (not (eq rule.subclass 'acl2::meta))))
+                       nil))
+                   (case-match rule.lhs
+                     (('mv-nth ''0 ('eval_subprogram-fn 'env ('quote fn) & & 'clk 'orac))
+                      (and (stringp fn) fn))
+                     (& nil)))))
+       (if first
+           (cons first (collect-stdlib-fns-with-rules (cdr rules)))
+         (collect-stdlib-fns-with-rules (cdr rules)))))
+
+   (assert-event
+    (equal (mergesort
+            (collect-stdlib-fns-with-rules
+             (fgetprop 'mv-nth 'acl2::lemmas nil (w state))))
+           (mergesort
+            (acl2::alist-keys
+             (static_env_global->subprograms (stdlib-static-env))))))))

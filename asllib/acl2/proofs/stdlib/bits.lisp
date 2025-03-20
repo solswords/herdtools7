@@ -1048,23 +1048,29 @@
            
   
   (defthm SignExtend-1-correct
-    (implies (and (subprograms-match '("SignExtend-1" "Replicate-1" "Zeros-1" "Ones-1")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (posp m)
-                  (integerp n)
-                  (<= m n)
-                  (<= 3 (nfix clk))
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "SignExtend-1"
-                                               (list (v_int n) (v_int m))
-                                               (list (v_bitvector m x)) :clk clk))
-                    (ev_normal (func_result (list (v_bitvector n (loghead n (logext m (nfix x)))))
-                                            (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram env "SignExtend-1"
-                                                   (list (v_int n) (v_int m))
-                                                   (list (v_bitvector m x)) :clk clk))
+    (b* (((v_bitvector xb))
+         (m (v_int->val mi)))
+      (implies (and (subprograms-match '("SignExtend-1" "Replicate-1" "Zeros-1" "Ones-1")
+                                       (global-env->static (env->global env))
+                                       (stdlib-static-env))
+                    (posp m)
+                    (integerp n)
+                    (<= m n)
+                    (<= 3 (nfix clk))
+                    (val-case mi :v_int)
+                    (val-case xb :v_bitvector)
+                    (equal xb.len m)
+                    (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
+                                                             (env->global env)))))
+               (equal (mv-nth 0 (eval_subprogram env "SignExtend-1"
+                                                 (list (v_int n) mi)
+                                                 (list xb) :clk clk))
+                      (ev_normal (func_result (list (v_bitvector n (loghead n (logext m xb.val))))
+                                              (env->global env))))))
+    :hints (("goal" :expand ((:free (m)
+                              (eval_subprogram env "SignExtend-1"
+                                               (list (v_int n) mi)
+                                               (list xb) :clk clk)))
              :rw-cache-state nil
              :in-theory (e/d (check_recurse_limit
                                 declare_local_identifiers

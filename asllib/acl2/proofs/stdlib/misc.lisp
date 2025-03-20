@@ -141,13 +141,15 @@
          :hints(("Goal" :in-theory (enable nfix ifix)))))
 
 (defthm zeros-1-correct
-  (implies (and (subprograms-match '("Zeros-1") 
-                                   (global-env->static (env->global env))
-                                   (stdlib-static-env))
-                (<= 0 (ifix n)))
-           (equal (mv-nth 0 (eval_subprogram env "Zeros-1" (list (v_int n)) nil :clk clk))
-                  (ev_normal (func_result (list (v_bitvector n 0)) (env->global env)))))
-  :hints (("goal" :expand ((eval_subprogram env "Zeros-1" (list (v_int n)) nil :clk clk))
+  (b* ((n (v_int->val ni)))
+    (implies (and (subprograms-match '("Zeros-1") 
+                                     (global-env->static (env->global env))
+                                     (stdlib-static-env))
+                  (<= 0 (ifix n))
+                  (val-case ni :v_int))
+             (equal (mv-nth 0 (eval_subprogram env "Zeros-1" (list ni) nil :clk clk))
+                    (ev_normal (func_result (list (v_bitvector n 0)) (env->global env))))))
+  :hints (("goal" :expand ((eval_subprogram env "Zeros-1" (list ni) nil :clk clk))
            :in-theory (enable check_recurse_limit
                               declare_local_identifiers
                               env-find
