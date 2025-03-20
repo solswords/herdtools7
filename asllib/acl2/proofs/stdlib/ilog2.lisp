@@ -308,8 +308,6 @@
                   (integerp clk)
                   (<= (ilog2-safe-clock val) clk)
                   (<= (ilog2-safe-clock val) (expt 2 128))
-                  (< (stack_size-lookup "Abs" (global-env->stack_size (env->global env)))
-                     (expt 2 40))
                   (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
                                                            (env->global env)))))
              (equal (mv-nth 0 (eval_subprogram env "ILog2" nil (list (v_real val)) :clk clk))

@@ -270,28 +270,6 @@
 (def-eval_result vallist_result-p vallist-p)
 
 
-(defconst *recursion-limit-upper-bound* (expt 2 40))
-
-
-(define env-clk-sum-stack-size ((subs func-ses-imap-p)
-                                (stk pos-imap-p))
-  :returns (clk natp :rule-classes :type-prescription)
-  (b* (((when (atom subs)) 0)
-       ((unless (mbt (and (consp (car subs))
-                          (identifier-p (caar subs)))))
-        (env-clk-sum-stack-size (cdr subs) stk))
-       (fn (caar subs))
-       (look (assoc-equal fn stk))
-       (val (nfix (- *recursion-limit-upper-bound* (if look (cdr look) 0)))))
-    (+ val (env-clk-sum-stack-size (cdr subs) stk))))
-
-(define env-clk ((env env-p))
-  :returns (clk natp :rule-classes :type-prescription)
-  (b* (((env env))
-       ((global-env g) env.global)
-       ((static_env_global s) g.static))
-    (env-clk-sum-stack-size s.subprograms g.stack_size)))
-
 
 (def-eval_result env_eval_result-p env-p)
 
@@ -307,27 +285,18 @@
 
 (define increment-stack ((name identifier-p)
                          (stack_size pos-imap-p))
-  :returns (res (and (eval_result-p res)
-                     (implies (eval_result-case res :ev_normal)
-                              (pos-imap-p (ev_normal->res res)))))
+  :returns (res pos-imap-p)
   (b* ((name (identifier-fix name))
        (stack_size (pos-imap-fix stack_size))
-       (val (stack_size-lookup name stack_size))
-       ((when (<= *recursion-limit-upper-bound* val))
-        (ev_error "Recursion limit overflowed" name)))
-    (ev_normal
-     (put-assoc-equal name (+ 1 val) stack_size)))
+       (val (stack_size-lookup name stack_size)))
+    (put-assoc-equal name (+ 1 val) stack_size))
   ///
-  (defret increment-stack-normal
-    (iff (equal (eval_result-kind res) :ev_normal)
-         (< (stack_size-lookup name stack_size) (expt 2 40))))
   
   (defret stack_size-lookup-of-increment-stack
-    (implies (equal (eval_result-kind res) :ev_normal)
-             (equal (stack_size-lookup name2 (ev_normal->res res))
-                    (if (identifier-equiv name name2)
-                        (+ 1 (stack_size-lookup name stack_size))
-                      (stack_size-lookup name2 stack_size))))
+    (equal (stack_size-lookup name2 res)
+           (if (identifier-equiv name name2)
+               (+ 1 (stack_size-lookup name stack_size))
+             (stack_size-lookup name2 stack_size)))
     :hints(("Goal" :in-theory (enable stack_size-lookup))))
 
   (local (include-book "std/lists/sets" :dir :system))
@@ -346,9 +315,8 @@
            :hints(("Goal" :in-theory (enable intersectp-equal)))))
   
   (defret no-duplicate-keys-of-<fn>
-    (implies (and (equal (eval_result-kind res) :ev_normal)
-                  (no-duplicatesp-equal (acl2::alist-keys (pos-imap-fix stack_size))))
-             (no-duplicatesp-equal (acl2::alist-keys (ev_normal->res res))))
+    (implies (no-duplicatesp-equal (acl2::alist-keys (pos-imap-fix stack_size)))
+             (no-duplicatesp-equal (acl2::alist-keys res)))
     :hints(("Goal" :in-theory (enable acl2::alist-keys-member-hons-assoc-equal)))))
 
 (define decrement-stack ((name identifier-p)
@@ -361,13 +329,16 @@
         (put-assoc-equal name val stack_size)
       (remove-assoc-equal name stack_size)))
   ///
+  (local (defthm posp-lookup-when-pos-impa-p
+           (implies (and (pos-imap-p x)
+                         (hons-assoc-equal k x))
+                    (posp (cdr (hons-assoc-equal k x))))
+           :rule-classes :type-prescription))
+  
   (defthm decrement-stack-of-increment-stack
-    (b* ((incr-result (increment-stack name stack_size))
-         ((ev_normal incr-result)))
-      (implies (and (eval_result-case incr-result :ev_normal)
-                    ;; (no-duplicatesp-equal (acl2::alist-keys stack-size))
-                    (pos-imap-p stack_size))
-               (equal (decrement-stack name incr-result.res)
+    (b* ((incr-result (increment-stack name stack_size)))
+      (implies (pos-imap-p stack_size)
+               (equal (decrement-stack name incr-result)
                       stack_size)))
     :hints(("Goal" :in-theory (enable increment-stack stack_size-lookup)))))
              
@@ -383,7 +354,7 @@
        (look (assoc-equal name s.subprograms))
        ((unless look)
         (ev_error "Unrecognized subprogram" name))
-       ((ev stack_size) (increment-stack name g.stack_size))
+       (stack_size (increment-stack name g.stack_size))
        (new-g (change-global-env g :stack_size stack_size)))
     (ev_normal (make-env :global new-g :local (empty-local-env)))))
 

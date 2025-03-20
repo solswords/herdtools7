@@ -166,10 +166,6 @@
                   (integerp clk)
                   (<= (sqrtrounded-safe-clock val) clk)
                   (<= (sqrtrounded-safe-clock val) (expt 2 128))
-                  (< (stack_size-lookup "Abs" (global-env->stack_size (env->global env)))
-                     (expt 2 40))
-                  (< (stack_size-lookup "ILog2" (global-env->stack_size (env->global env)))
-                     (expt 2 40))
                   (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
                                                            (env->global env)))))
              (equal (mv-nth 0 (eval_subprogram env "SqrtRounded" nil (list (v_real val)
