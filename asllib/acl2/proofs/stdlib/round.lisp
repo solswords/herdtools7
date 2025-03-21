@@ -65,138 +65,69 @@
 
 
 
-(defsection roundtowardszero-loop
+(defloop roundtowardszero-loop
+  :function "RoundTowardsZero"
+  :looptype :s_for
+  :index-var i
+  :local-vars (((v_int acc) "__stdlib_local_acc" (v_int (floor x_pos.val 1)))
+               ((v_real x_pos) "__stdlib_local_x_pos"))
+  :invariants (and (subprograms-match '("Real")
+                                      (global-env->static (env->global env))
+                                      (stdlib-static-env))
+                   (<= 1 x_pos.val)
+                   (not (hons-assoc-equal "__stdlib_local_next" env.local.storage))
+                   (equal acc.val (* (expt 2 (+ 1 start))
+                                     (floor x_pos.val (expt 2 (+ 1 start)))))
+                   (equal end 0)
+                   (posp clk))
+  :hints ((and stable-under-simplificationp
+               '(:expand ((:with floor-in-terms-of-*-2
+                           (:free (x i) (floor (v_real->val x) (expt 2 (v_int->val i)))))))))
   
-  (defconst *roundtowardszero-loop*
-    (find-nth-form 0 :s_for (assoc-equal "RoundTowardsZero" (static_env_global->subprograms
-                                                 (stdlib-static-env)))))
-
-  (defconst *roundtowardszero-loop-body*
-    (s_for->body *roundtowardszero-loop*))
-
-  (local (defund same (x y)
-           (equal x y)))
+  :prepwork
+  ((local (defund same (x y)
+            (equal x y)))
   
-  (local (defthm acc-equal-to-same
-           (b* ((storage (local-env->storage
-                          (env->local env)))
-                (acc-look (hons-assoc-equal "__stdlib_local_acc" storage))
-                (acc (cdr acc-look))
-                ((v_int acc)))
-             (equal (equal acc.val (* 2 (expt 2 x) y))
-                    (same  acc.val (* 2 (expt 2 x) y))))
-           :hints(("Goal" :in-theory (enable same)))))
+   (local (defthm acc-equal-to-same
+            (b* ((storage (local-env->storage
+                           (env->local env)))
+                 (acc-look (hons-assoc-equal "__stdlib_local_acc" storage))
+                 (acc (cdr acc-look))
+                 ((v_int acc)))
+              (equal (equal acc.val (* 2 (expt 2 x) y))
+                     (same  acc.val (* 2 (expt 2 x) y))))
+            :hints(("Goal" :in-theory (enable same)))))
 
-  (local (defthm acc-when-same
-           (b* ((storage (local-env->storage
-                          (env->local env)))
-                (acc-look (hons-assoc-equal "__stdlib_local_acc" storage))
-                (acc (cdr acc-look))
-                ((v_int acc)))
-             (implies (same  acc.val (* 2 (expt 2 x) y))
-                      (equal acc.val (* 2 (expt 2 x) y))))
-           :hints(("Goal" :in-theory (e/d (same)
-                                          (acc-equal-to-same))))))
+   (local (defthm acc-when-same
+            (b* ((storage (local-env->storage
+                           (env->local env)))
+                 (acc-look (hons-assoc-equal "__stdlib_local_acc" storage))
+                 (acc (cdr acc-look))
+                 ((v_int acc)))
+              (implies (same  acc.val (* 2 (expt 2 x) y))
+                       (equal acc.val (* 2 (expt 2 x) y))))
+            :hints(("Goal" :in-theory (e/d (same)
+                                           (acc-equal-to-same))))))
            
 
-  (local (in-theory (disable default-*-2 default-*-1 default-+-2 default-+-1
-                             acl2::hons-assoc-equal-when-atom
-                             acl2::expt-with-violated-guards
-                             acl2::floor-=-x/y
-                             acl2::floor-type-3
-                             acl2::mod-minus
-                             default-cdr
-                             acl2::floor-type-4
-                             acl2::floor-type-1
-                             not)))
+   (local (in-theory (disable default-*-2 default-*-1 default-+-2 default-+-1
+                              acl2::hons-assoc-equal-when-atom
+                              acl2::expt-with-violated-guards
+                              acl2::floor-=-x/y
+                              acl2::floor-type-3
+                              acl2::mod-minus
+                              default-cdr
+                              acl2::floor-type-4
+                              acl2::floor-type-1
+                              not)))
 
-  (local (defthm v_int->val-equal-quote
-           (implies (and (syntaxp (quotep v))
-                         (val-case x :v_int)
-                         (val-p x))
-                    (equal (equal (v_int->val x) v)
-                           (and (integerp v)
-                                (equal x (v_int v)))))))
-  
-  (defthm roundtowardszero-loop-correct
-    (b* ((storage (local-env->storage
-                   (env->local env)))
-         (i-look (assoc-equal "__stdlib_local_i" storage))
-         (i (cdr i-look))
-         ((v_int i))
-         (acc-look (assoc-equal "__stdlib_local_acc" storage))
-         (acc (cdr acc-look))
-         ((v_int acc))
-         (x_pos-look (assoc-equal "__stdlib_local_x_pos" storage))
-         (x_pos (cdr x_pos-look))
-         ((v_real x_pos))
-         (next-look (assoc-equal "__stdlib_local_next" storage)))
-      (implies (and (subprograms-match '("Real")
-                                       (global-env->static (env->global env))
-                                       (stdlib-static-env))
-                    i-look
-                    (val-case i :v_int)
-                    (equal i.val start)
-                    acc-look
-                    (val-case acc :v_int)
-                    x_pos-look
-                    (val-case x_pos :v_real)
-                    (<= 1 x_pos.val)
-                    (not next-look)
-                    (equal acc.val (* (expt 2 (+ 1 start))
-                                      (floor x_pos.val (expt 2 (+ 1 start)))))
-                    (posp clk)
-                    (integerp start)
-                    (<= -1 start)
-                    (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                             (env->global env))))
-                    (no-duplicatesp-equal (acl2::alist-keys storage)))
-               (b* (((mv (ev_normal res) &) (eval_for env "__stdlib_local_i" nil start :down 0 *roundtowardszero-loop-body*))
-                    ((continuing res.res))
-                    (acc-spec (floor x_pos.val 1))
-                    ((env env))
-                    ((local-env env.local)))
-                 (and (equal (eval_result-kind res) :ev_normal)
-                      (equal (control_flow_state-kind res.res) :continuing)
-                      (equal res.res.env
-                             (change-env env
-                                         :local (change-local-env
-                                                 env.local
-                                                 :storage (put-assoc-equal "__stdlib_local_i"
-                                                                           (v_int -1)
-                                                                           (put-assoc-equal "__stdlib_local_acc"
-                                                                                            (v_int acc-spec)
-                                                                                            env.local.storage)))))))))
-    :hints (("goal" :induct (for-induct env "__stdlib_local_i" start :down 0 *roundtowardszero-loop-body* clk nil orac)
-             :in-theory (enable check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                eval_for_step
-                                for_loop-step
-                                FOR_LOOP-TEST
-                                pop_scope
-                                check-bad-slices
-                                slices_sub)
-             :do-not-induct t)
-            (and stable-under-simplificationp
-                 '(:expand ((:free (clk)
-                             (eval_for env "__stdlib_local_i"
-                                       nil
-                                       (V_INT->VAL
-                                        (CDR (HONS-ASSOC-EQUAL "__stdlib_local_i"
-                                                               (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
-                                       :down 0 *roundtowardszero-loop-body*))
-                            (:free (clk) (eval_for env "__stdlib_local_i" nil -1 :down 0 *roundtowardszero-loop-body*))
-                            (:free (clk) (eval_for env "__stdlib_local_i" nil 0 :down 0 *roundtowardszero-loop-body*))
-                            (:with floor-in-terms-of-*-2
-                             (:free (x i) (floor (v_real->val x) (expt 2 (v_int->val i)))))))))))
-
+   (local (defthm v_int->val-equal-quote
+            (implies (and (syntaxp (quotep v))
+                          (val-case x :v_int)
+                          (val-p x))
+                     (equal (equal (v_int->val x) v)
+                            (and (integerp v)
+                                 (equal x (v_int v)))))))))
 
 
 (defsection roundtowardszero-correct

@@ -73,265 +73,132 @@
                   :in-theory (disable v_int-of-fields
                                       equal-of-v_int)))))
 
-(defsection replicate-1-loop
+(defloop replicate-1-loop
+  :function "Replicate-1"
+  :looptype :s_for
+  :index-var i
+  :local-vars (((v_int m)            "__stdlib_local_M")
+               ((v_int items)        "__stdlib_local_items")
+               ((v_bitvector result) "__stdlib_local_result"
+                (v_bitvector (* items.val m.val)
+                             (logrepeat items.val m.val x.val)))
+               ((v_bitvector x)      "__stdlib_local_x"))
+  :invariants (and (<= 0 start)
+                   (equal end (+ -1 items.val))
+                   (equal x.len m.val)
+                   (equal result.len (* items.val m.val))
+                   (equal result.val (logrepeat start m.val x.val)))
+  :hints ((and stable-under-simplificationp
+               '(:in-theory (enable equal-of-v_int))))
 
-  ;; (local (defthm v_int-elim
-  ;;          (implies (val-case x :v_int)
-  ;;                   (val-equiv (v_int (v_int->val x)) x))
-  ;;          :rule-classes :elim))
+  :prepwork
+  ((local (defthm cons-under-iff
+            (iff (cons x y) t)))
 
-  ;; (local (defthm v_bitvector-elim
-  ;;          (implies (val-case x :v_bitvector)
-  ;;                   (val-equiv (v_bitvector (v_bitvector->len x)
-  ;;                                           (v_bitvector->val x))
-  ;;                              x))
-  ;;          :rule-classes :elim))
 
-  (local (defthm cons-under-iff
-           (iff (cons x y) t)))
+   (local (defthm bound-lemma
+            (implies (and (equal r (* x items))
+                          (rationalp x)
+                          (integerp i)
+                          (integerp items)
+                          (< i items)
+                          (<= 0 x))
+                     (>= r (+ x (* x i))))
+            :hints ((and stable-under-simplificationp
+                         '(:nonlinearp t)))))
+
+   (local (defthm bound-lemma2
+            (implies (and (equal r (* x items))
+                          (rationalp x)
+                          (integerp i)
+                          (integerp items)
+                          (< i items)
+                          (<= 0 x))
+                     (>= r (* x i)))
+            :hints ((and stable-under-simplificationp
+                         '(:nonlinearp t)))))
+
+   (local (defthm bound-lemma3
+            (implies (and (equal r (* x items))
+                          (rationalp x)
+                          (integerp i)
+                          (integerp items)
+                          (< i items)
+                          (<= 0 x))
+                     (>= (+ r (- (* x i))) x))
+            :hints ((and stable-under-simplificationp
+                         '(:nonlinearp t)))))
+
+   (local (defthm expt-minus-1-to-logmask
+            (implies (not (negp n))
+                     (equal (+ -1 (expt 2 n))
+                            (bitops::logmask n)))
+            :hints(("Goal" :in-theory (enable bitops::logmask)))))
+
+
+   (local (defun bits-ind1 (rl xl rv xv)
+            (if (zp xl)
+                (list rl rv xv)
+              (bits-ind1 (1- rl) (1- xl) (logcdr rv) (logcdr xv)))))
+
+   (local (defthm logand-loghead-neg1
+            (equal (logand x (loghead n -1))
+                   (loghead n x))
+            :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-inductions
+                                                     bitops::ihsext-recursive-redefs)))))
+   (local (defthm bits-lemma-lemma
+            (implies (unsigned-byte-p xl xv)
+                     (EQUAL (LOGIOR (LOGHEAD RL XV)
+                                    (LOGAND RV (LOGHEAD RL (LOGNOT (LOGMASK XL)))))
+                            (LOGHEAD RL (LOGAPP XL XV (LOGTAIL XL RV)))))
+            :hints (("goal" :in-theory (acl2::e/d* (bitops::ihsext-recursive-redefs))
+                     :induct (bits-ind1 rl xl rv xv)))))
+   (local (defun bits-ind (rl sh rv xv)
+            (if (zp sh)
+                (list rl rv xv)
+              (bits-ind (1- rl) (1- sh) (logcdr rv) xv))))
+   (local (defthm bits-lemma
+            (implies (and (not (negp sh))
+                          (unsigned-byte-p xl xv))
+                     (equal (logior (loghead rl (ash xv sh))
+                                    (logand rv (loghead rl (lognot (ash (logmask xl) sh)))))
+                            (loghead rl (logapp sh rv (logapp xl xv (logtail (+ (nfix sh) (nfix xl)) rv))))))
+            :hints(("Goal" :in-theory (acl2::e/d* (bitops::ihsext-recursive-redefs))
+                    :induct (bits-ind rl sh rv xv)))))
+
   
-  
-  (defconst *replicate-1-loop*
-    (find-nth-form 0 :s_for (assoc-equal "Replicate-1" (static_env_global->subprograms
-                                                 (stdlib-static-env)))))
-
-  (defconst *replicate-1-loop-body*
-    (s_for->body *replicate-1-loop*))
-
-
-  (local (defthm bound-lemma
-           (implies (and (equal r (* x items))
-                         (rationalp x)
-                         (integerp i)
-                         (integerp items)
-                         (< i items)
-                         (<= 0 x))
-                    (>= r (+ x (* x i))))
-           :hints ((and stable-under-simplificationp
+   (local (defthm logtail-of-logrepeat
+            (implies (>= (nfix m) (* (nfix n) (nfix w)))
+                     (equal (logtail m (logrepeat n w x))
+                            0))
+            :hints(("Goal" :in-theory (enable logrepeat
+                                              bitops::logtail-of-logapp-split))
+                   (and stable-under-simplificationp
                         '(:nonlinearp t)))))
 
-  (local (defthm bound-lemma2
-           (implies (and (equal r (* x items))
-                         (rationalp x)
-                         (integerp i)
-                         (integerp items)
-                         (< i items)
-                         (<= 0 x))
-                    (>= r (* x i)))
-           :hints ((and stable-under-simplificationp
-                        '(:nonlinearp t)))))
+   (local (defthm logtail-of-equal-logrepeat
+            (implies (and (equal y (logrepeat n w x))
+                          (>= (nfix m) (* (nfix n) (nfix w))))
+                     (equal (logtail m y)
+                            0))))
 
-  (local (defthm bound-lemma3
-           (implies (and (equal r (* x items))
-                         (rationalp x)
-                         (integerp i)
-                         (integerp items)
-                         (< i items)
-                         (<= 0 x))
-                    (>= (+ r (- (* x i))) x))
-           :hints ((and stable-under-simplificationp
-                        '(:nonlinearp t)))))
-
-  (local (defthm expt-minus-1-to-logmask
-           (implies (not (negp n))
-                    (equal (+ -1 (expt 2 n))
-                           (bitops::logmask n)))
-           :hints(("Goal" :in-theory (enable bitops::logmask)))))
-
-
-  (local (defun bits-ind1 (rl xl rv xv)
-           (if (zp xl)
-               (list rl rv xv)
-             (bits-ind1 (1- rl) (1- xl) (logcdr rv) (logcdr xv)))))
-
-  (local (defthm logand-loghead-neg1
-           (equal (logand x (loghead n -1))
-                  (loghead n x))
-           :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-inductions
-                                                    bitops::ihsext-recursive-redefs)))))
-  (local (defthm bits-lemma-lemma
-           (implies (unsigned-byte-p xl xv)
-                    (EQUAL (LOGIOR (LOGHEAD RL XV)
-                                   (LOGAND RV (LOGHEAD RL (LOGNOT (LOGMASK XL)))))
-                           (LOGHEAD RL (LOGAPP XL XV (LOGTAIL XL RV)))))
-           :hints (("goal" :in-theory (acl2::e/d* (bitops::ihsext-recursive-redefs))
-                    :induct (bits-ind1 rl xl rv xv)))))
-  (local (defun bits-ind (rl sh rv xv)
-           (if (zp sh)
-               (list rl rv xv)
-             (bits-ind (1- rl) (1- sh) (logcdr rv) xv))))
-  (local (defthm bits-lemma
-           (implies (and (not (negp sh))
-                         (unsigned-byte-p xl xv))
-                    (equal (logior (loghead rl (ash xv sh))
-                                   (logand rv (loghead rl (lognot (ash (logmask xl) sh)))))
-                           (loghead rl (logapp sh rv (logapp xl xv (logtail (+ (nfix sh) (nfix xl)) rv))))))
-           :hints(("Goal" :in-theory (acl2::e/d* (bitops::ihsext-recursive-redefs))
-                   :induct (bits-ind rl sh rv xv)))))
-
+   (local (defthm logapp-of-logrepeat
+            (implies (and (natp n) (natp w))
+                     (equal (logapp (* n w) (logrepeat n w x) (logrepeat m w x))
+                            (logrepeat (+ n (nfix m)) w x)))
+            :hints (("goal" :induct (logrepeat n w x)
+                     :in-theory (enable logrepeat bitops::logapp-right-assoc)))))
   
-  (local (defthm logtail-of-logrepeat
-           (implies (>= (nfix m) (* (nfix n) (nfix w)))
-                    (equal (logtail m (logrepeat n w x))
-                           0))
-           :hints(("Goal" :in-theory (enable logrepeat
-                                             bitops::logtail-of-logapp-split))
-                  (and stable-under-simplificationp
-                       '(:nonlinearp t)))))
+   (local (defthm logapp-of-equal-to-logrepeat
+            (implies (and (natp n) (natp w)
+                          (equal y (logrepeat n w x))
+                          (unsigned-byte-p w x))
+                     (equal (logapp (* w n) y x)
+                            (logrepeat (+ 1 n) w x)))
+            :hints(("Goal" :use ((:instance logapp-of-logrepeat
+                                  (n n) (m 1)))
+                    :expand ((logrepeat 1 w x))))))))
 
-  (local (defthm logtail-of-equal-logrepeat
-           (implies (and (equal y (logrepeat n w x))
-                         (>= (nfix m) (* (nfix n) (nfix w))))
-                    (equal (logtail m y)
-                           0))))
-
-  ;; (local (defthm logapp-of-equal-logapp
-  ;;          (implies (equal x (logapp w2 a b))
-  ;;                   (equal (logapp w1 x c)
-  ;;                          (let ((w1 (nfix w1))
-  ;;                                (w2 (nfix w2)))
-  ;;                            (logapp (min w1 w2)
-  ;;                                    a
-  ;;                                    (if (<= w1 w2) c (logapp (- w1 w2) b c))))))
-  ;;          :hints(("Goal" :in-theory (enable bitops::logapp-right-assoc)))))
-
-  (local (defthm logapp-of-logrepeat
-           (implies (and (natp n) (natp w))
-                    (equal (logapp (* n w) (logrepeat n w x) (logrepeat m w x))
-                           (logrepeat (+ n (nfix m)) w x)))
-           :hints (("goal" :induct (logrepeat n w x)
-                    :in-theory (enable logrepeat bitops::logapp-right-assoc)))))
-
-  ;; (local (defthm logrepeat-when-zp-w
-  ;;          (implies (and (syntaxp (not (equal w ''0)))
-  ;;                        (zp w))
-  ;;                   (equal (logrepeat n w x)
-  ;;                          0))
-  ;;          :hints(("Goal" :in-theory (enable logrepeat)))))
-           
-  
-
-  ;; (local (defthmd logrepeat-rev
-  ;;          (equal (logrepeat n w x)
-  ;;                 (if (zp n)
-  ;;                     0
-  ;;                   (logapp (* (1- n) (nfix w))
-  ;;                           (logrepeat (1- n) w x)
-  ;;                           (loghead w x))))
-  ;;          :hints(("Goal" :use ((:instance logapp-of-logrepeat
-  ;;                                (n (1- (nfix n))) (m 1) (w (nfix w))))
-  ;;                  :expand ((logrepeat 1 w x)
-  ;;                           (:free (w) (logrepeat 0 w x)))))))
-  
-  (local (defthm logapp-of-equal-to-logrepeat
-           (implies (and (natp n) (natp w)
-                         (equal y (logrepeat n w x))
-                         (unsigned-byte-p w x))
-                    (equal (logapp (* w n) y x)
-                           (logrepeat (+ 1 n) w x)))
-           :hints(("Goal" :use ((:instance logapp-of-logrepeat
-                                 (n n) (m 1)))
-                   :expand ((logrepeat 1 w x))))))
-  
-  (defthm replicate-1-loop-correct
-    (b* ((storage (local-env->storage
-                   (env->local env)))
-         (i-look (assoc-equal "__stdlib_local_i" storage))
-         (i (cdr i-look))
-         ((v_int i))
-         (m-look (assoc-equal "__stdlib_local_M" storage))
-         (m (cdr m-look))
-         ((v_int m))
-         (items-look (assoc-equal "__stdlib_local_items" storage))
-         (items (cdr items-look))
-         ((v_int items))
-         (result-look (assoc-equal "__stdlib_local_result" storage))
-         (result (cdr result-look))
-         ((v_bitvector result))
-         (x-look (assoc-equal "__stdlib_local_x" storage))
-         (x (cdr x-look))
-         ((v_bitvector x)))
-      (implies (and i-look
-                    (val-case i :v_int)
-                    (equal i.val start)
-                    m-look
-                    (val-case m :v_int)
-                    items-look
-                    (val-case items :v_int)
-                    result-look
-                    (val-case result :v_bitvector)
-                    x-look
-                    (val-case x :v_bitvector)
-                    (equal x.len m.val)
-                    (equal result.len (* items.val m.val))
-                    (equal result.val (logrepeat start m.val x.val))
-                    
-                    (natp clk)
-                    (natp start)
-                    (integerp end)
-                    (<= start (+ 1 end))
-                    (equal end (+ -1 items.val))
-                    (no-duplicatesp-equal (acl2::alist-keys storage)))
-               (b* (((mv (ev_normal res) &) (eval_for env "__stdlib_local_i" nil start :up end *replicate-1-loop-body*))
-                    ((continuing res.res))
-                    (result-spec (logrepeat items.val m.val x.val))
-                    ((env env))
-                    ((local-env env.local)))
-                 (and (equal res.res.env
-                             (change-env env
-                                         :local (change-local-env
-                                                 env.local
-                                                 :storage (put-assoc-equal "__stdlib_local_i"
-                                                                           (v_int (+ 1 end))
-                                                                           ;; (if (equal start (+ 1 end))
-                                                                           ;;     env.local.storage
-                                                                             (put-assoc-equal "__stdlib_local_result"
-                                                                                              (v_bitvector
-                                                                                               (* items.val m.val)
-                                                                                               result-spec)
-                                                                                              env.local.storage)))))
-                      (equal (eval_result-kind res) :ev_normal)
-                      (equal (control_flow_state-kind res.res) :continuing)))))
-    :hints (("goal" :induct (for-induct env "__stdlib_local_i" start :up end *replicate-1-loop-body* clk nil orac)
-             :in-theory (enable check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                eval_for_step
-                                for_loop-step
-                                FOR_LOOP-TEST
-                                pop_scope
-                                check-bad-slices
-                                check_non_overlapping_slices
-                                check_non_overlapping_slices-1
-                                slices_sub
-                                slices-width
-                                write_to_bitvector
-                                write_to_bitvector-aux
-                                vbv-to-int)
-             :do-not-induct t)
-            (and stable-under-simplificationp
-                 '(:expand ((:free (end)
-                             (eval_for env "__stdlib_local_i"
-                                       nil
-                                       (V_INT->VAL
-                                        (CDR (HONS-ASSOC-EQUAL "__stdlib_local_i"
-                                                               (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
-                                       :up end *replicate-1-loop-body*))
-                            (:free (end)
-                             (eval_for env "__stdlib_local_i" nil end :up end *replicate-1-loop-body*))
-                            (:free (env end)
-                             (eval_for env "__stdlib_local_i" nil (+ 1 end) :up end *replicate-1-loop-body*))
-                            (:free (env end)
-                             (eval_for env "__stdlib_local_i" nil end :up (+ -1 end) *replicate-1-loop-body*)))))
-            (and stable-under-simplificationp
-                 '(:in-theory (enable equal-when-v_int)))
-            )))
 
 
 
@@ -440,117 +307,34 @@
                   (equal (loghead 1 x) x))
          :hints(("Goal" :in-theory (enable bitops::loghead**)))))
 
-(defsection BitCount-loop
-  
-  
-  (defconst *BitCount-loop*
-    (find-nth-form 0 :s_for (assoc-equal "BitCount" (static_env_global->subprograms
-                                                 (stdlib-static-env)))))
+(defloop BitCount-loop
+  :function "BitCount"
+  :looptype :s_for
+  :index-var i
+  :local-vars (((v_int result) "__stdlib_local_result"
+                (v_int (logcount (loghead x.len x.val))))
+               ((v_bitvector x) "__stdlib_local_x"))
+  :invariants (and (equal result.val (logcount (loghead start x.val)))
+                   (<= 0 start)
+                   (equal end (+ -1 x.len)))
+  :hints ((and stable-under-simplificationp
+               '(:in-theory (enable equal-when-v_int))))
+  :prepwork
+  ((local (defthm logcount-loghead-when-logbitp
+            (implies (and (logbitp n x)
+                          (natp n))
+                     (equal (logcount (loghead (+ 1 n) x))
+                            (+ 1 (logcount (loghead n x)))))
+            :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-inductions
+                                                     bitops::ihsext-recursive-redefs)))))
 
-  (defconst *BitCount-loop-body*
-    (s_for->body *BitCount-loop*))
-
-  (local (defthm logcount-loghead-when-logbitp
-           (implies (and (logbitp n x)
-                         (natp n))
-                    (equal (logcount (loghead (+ 1 n) x))
-                           (+ 1 (logcount (loghead n x)))))
-           :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-inductions
-                                                    bitops::ihsext-recursive-redefs)))))
-
-  (local (defthm logcount-loghead-when-not-logbitp
-           (implies (and (not (logbitp n x))
-                         (natp n))
-                    (equal (logcount (loghead (+ 1 n) x))
-                           (logcount (loghead n x))))
-           :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-inductions
-                                                    bitops::ihsext-recursive-redefs)))))
-
-  (defthm BitCount-loop-correct
-    (b* ((storage (local-env->storage
-                   (env->local env)))
-         (i-look (assoc-equal "__stdlib_local_i" storage))
-         (i (cdr i-look))
-         ((v_int i))
-         (result-look (assoc-equal "__stdlib_local_result" storage))
-         (result (cdr result-look))
-         ((v_int result))
-         (x-look (assoc-equal "__stdlib_local_x" storage))
-         (x (cdr x-look))
-         ((v_bitvector x)))
-      (implies (and i-look
-                    (val-case i :v_int)
-                    (equal i.val start)
-                    result-look
-                    (val-case result :v_int)
-                    x-look
-                    (val-case x :v_bitvector)
-                    (equal result.val (logcount (loghead start x.val)))
-                    
-                    (natp clk)
-                    (natp start)
-                    (integerp end)
-                    (<= start (+ 1 end))
-                    (equal end (+ -1 x.len))
-                    (no-duplicatesp-equal (acl2::alist-keys storage)))
-               (b* (((mv (ev_normal res) &) (eval_for env "__stdlib_local_i" nil start :up end *BitCount-loop-body*))
-                    ((continuing res.res))
-                    (result-spec (v_int (logcount (loghead x.len x.val))))
-                    ((env env))
-                    ((local-env env.local)))
-                 (and (equal res.res.env
-                             (change-env env
-                                         :local (change-local-env
-                                                 env.local
-                                                 :storage (put-assoc-equal "__stdlib_local_i"
-                                                                           (v_int (+ 1 end))
-                                                                           ;; (if (equal start (+ 1 end))
-                                                                           ;;     env.local.storage
-                                                                             (put-assoc-equal "__stdlib_local_result"
-                                                                                              result-spec
-                                                                                              env.local.storage)))))
-                      (equal (eval_result-kind res) :ev_normal)
-                      (equal (control_flow_state-kind res.res) :continuing)))))
-    :hints (("goal" :induct (for-induct env "__stdlib_local_i" start :up end *BitCount-loop-body* clk nil orac)
-             :in-theory (enable check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                eval_for_step
-                                for_loop-step
-                                FOR_LOOP-TEST
-                                pop_scope
-                                check-bad-slices
-                                check_non_overlapping_slices
-                                check_non_overlapping_slices-1
-                                slices_sub
-                                slices-width
-                                write_to_bitvector
-                                write_to_bitvector-aux
-                                vbv-to-int)
-             :do-not-induct t)
-            (and stable-under-simplificationp
-                 '(:expand ((:free (end)
-                             (eval_for env "__stdlib_local_i"
-                                       nil
-                                       (V_INT->VAL
-                                        (CDR (HONS-ASSOC-EQUAL "__stdlib_local_i"
-                                                               (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
-                                       :up end *BitCount-loop-body*))
-                            (:free (end)
-                             (eval_for env "__stdlib_local_i" nil end :up end *BitCount-loop-body*))
-                            (:free (env end)
-                             (eval_for env "__stdlib_local_i" nil (+ 1 end) :up end *BitCount-loop-body*))
-                            (:free (env end)
-                             (eval_for env "__stdlib_local_i" nil end :up (+ -1 end) *BitCount-loop-body*)))))
-            (and stable-under-simplificationp
-                 '(:in-theory (enable equal-when-v_int)))
-            )))
+   (local (defthm logcount-loghead-when-not-logbitp
+            (implies (and (not (logbitp n x))
+                          (natp n))
+                     (equal (logcount (loghead (+ 1 n) x))
+                            (logcount (loghead n x))))
+            :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-inductions
+                                                     bitops::ihsext-recursive-redefs)))))))
 
 
 (defsection BitCount-correct
@@ -593,118 +377,36 @@
 
 
 
-(defsection LowestSetBit-loop
-  
-  (defconst *LowestSetBit-loop*
-    (find-nth-form 0 :s_for (assoc-equal "LowestSetBit" (static_env_global->subprograms
-                                                         (stdlib-static-env)))))
+(defloop LowestSetBit-loop
+  :function "LowestSetBit"
+  :looptype :s_for
+  :index-var i
+  :local-vars (((v_bitvector x) "__stdlib_local_x")
+               ((v_int n) "__stdlib_local_N"))
+  :invariants (and (equal (loghead start x.val) 0)
+                   (equal n.val x.len)
+                   (<= 0 start)
+                   (equal end (+ -1 x.len)))
+  :return-cond (not (equal x.val 0))
+  :return-values (list (v_int (bitops::trailing-0-count x.val)))
+  :hints ((and stable-under-simplificationp
+               '(:in-theory (enable equal-when-v_int))))
+  :prepwork
+  ((local (defthm loghead-equal-0-when-not-logbitp
+            (implies (and (not (logbitp n x))
+                          (not (negp n)))
+                     (equal (equal (loghead (+ 1 n) x) 0)
+                            (equal (loghead n x) 0)))
+            :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-recursive-redefs
+                                                     bitops::ihsext-inductions)))))
 
-  (defconst *LowestSetBit-loop-body*
-    (s_for->body *LowestSetBit-loop*))
-
-  (local (defthm loghead-equal-0-when-not-logbitp
-           (implies (and (not (logbitp n x))
-                         (not (negp n)))
-                    (equal (equal (loghead (+ 1 n) x) 0)
-                           (equal (loghead n x) 0)))
-           :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-recursive-redefs
-                                                    bitops::ihsext-inductions)))))
-
-  (local (defthm trailing-0-count-when-logbitp
-           (implies (and (logbitp n x)
-                         (equal (loghead n x) 0))
-                    (equal (bitops::trailing-0-count x) (nfix n)))
-           :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-recursive-redefs
-                                                    bitops::trailing-0-count
-                                                    bitops::ihsext-inductions)))))
-  (defthm LowestSetBit-loop-correct
-    (b* ((storage (local-env->storage
-                   (env->local env)))
-         (i-look (assoc-equal "__stdlib_local_i" storage))
-         (i (cdr i-look))
-         ((v_int i))
-         (x-look (assoc-equal "__stdlib_local_x" storage))
-         (x (cdr x-look))
-         ((v_bitvector x))
-         (n-look (assoc-equal "__stdlib_local_N" storage))
-         (n (cdr n-look))
-         ((v_int n)))
-      (implies (and i-look
-                    (val-case i :v_int)
-                    (equal i.val start)
-                    x-look
-                    (val-case x :v_bitvector)
-                    (equal (loghead i.val x.val) 0)
-                    n-look
-                    (val-case n :v_int)
-                    (equal n.val x.len)
-                    
-                    (natp clk)
-                    (natp start)
-                    (integerp end)
-                    (<= start (+ 1 end))
-                    (equal end (+ -1 x.len))
-                    (no-duplicatesp-equal (acl2::alist-keys storage)))
-               (b* (((mv (ev_normal res) &) (eval_for env "__stdlib_local_i" nil start :up end *LowestSetBit-loop-body*))
-                    ((env env))
-                    ((local-env env.local)))
-                 (and (equal (eval_result-kind res) :ev_normal)
-                      (implies (equal 0 x.val)
-                               (and (equal (control_flow_state-kind res.res) :continuing)
-                                    (b* (((continuing res.res)))
-                                      (equal res.res.env
-                                             (change-env env
-                                                         :local (change-local-env
-                                                                 env.local
-                                                                 :storage (put-assoc-equal "__stdlib_local_i"
-                                                                                           (v_int (+ 1 end))
-                                                                                           env.local.storage)))))))
-                      (implies (not (equal 0 x.val))
-                               (and (equal (control_flow_state-kind res.res) :returning)
-                                    (b* (((returning res.res))
-                                         (result-spec (v_int (bitops::trailing-0-count x.val))))
-                                      (and (equal res.res.vals (list result-spec))
-                                           (equal res.res.env env.global)))))))))
-    :hints (("goal" :induct (for-induct env "__stdlib_local_i" start :up end *LowestSetBit-loop-body* clk nil orac)
-             :in-theory (enable check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                eval_for_step
-                                for_loop-step
-                                FOR_LOOP-TEST
-                                pop_scope
-                                check-bad-slices
-                                check_non_overlapping_slices
-                                check_non_overlapping_slices-1
-                                slices_sub
-                                slices-width
-                                write_to_bitvector
-                                write_to_bitvector-aux
-                                vbv-to-int)
-             :do-not-induct t)
-            (and stable-under-simplificationp
-                 '(:expand ((:free (end)
-                             (eval_for env "__stdlib_local_i"
-                                       nil
-                                       (V_INT->VAL
-                                        (CDR (HONS-ASSOC-EQUAL "__stdlib_local_i"
-                                                               (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
-                                       :up end *LowestSetBit-loop-body*))
-                            (:free (end)
-                             (eval_for env "__stdlib_local_i" nil end :up end *LowestSetBit-loop-body*))
-                            (:free (env end)
-                             (eval_for env "__stdlib_local_i" nil (+ 1 end) :up end *LowestSetBit-loop-body*))
-                            (:free (env end)
-                             (eval_for env "__stdlib_local_i" nil end :up (+ -1 end) *LowestSetBit-loop-body*)))))
-            (and stable-under-simplificationp
-                 '(:in-theory (enable equal-when-v_int)))
-            )))
+   (local (defthm trailing-0-count-when-logbitp
+            (implies (and (logbitp n x)
+                          (equal (loghead n x) 0))
+                     (equal (bitops::trailing-0-count x) (nfix n)))
+            :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-recursive-redefs
+                                                     bitops::trailing-0-count
+                                                     bitops::ihsext-inductions)))))))
 
 
 
@@ -808,116 +510,35 @@
 
 
 
-(defsection HighestSetBit-loop
-  
-  (defconst *HighestSetBit-loop*
-    (find-nth-form 0 :s_for (assoc-equal "HighestSetBit" (static_env_global->subprograms
-                                                         (stdlib-static-env)))))
+(defloop HighestSetBit-loop
+  :function "HighestSetBit"
+  :looptype :s_for
+  :index-var i
+  :local-vars (((v_bitvector x) "__stdlib_local_x")
+               ((v_int n) "__stdlib_local_N"))
+  :invariants (and (equal (logtail (+ 1 start) x.val) 0)
+                   (equal n.val x.len)
+                   (< start n.val)
+                   (equal end 0))
+  :return-cond (not (equal x.val 0))
+  :return-values (list (v_int (1- (integer-length x.val))))
+  :hints ((and stable-under-simplificationp
+               '(:in-theory (enable equal-when-v_int))))
+  :prepwork
+  ((local (defthm logtail-n-in-terms-of-logbitp
+            (implies (equal (logtail (+ 1 n) x) 0)
+                     (equal (equal (logtail n x) 0)
+                            (not (logbitp n x))))
+            :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-inductions
+                                                     bitops::ihsext-recursive-redefs)))))
 
-  (defconst *HighestSetBit-loop-body*
-    (s_for->body *HighestSetBit-loop*))
-
-
-  (local (defthm logtail-n-in-terms-of-logbitp
-           (implies (equal (logtail (+ 1 n) x) 0)
-                    (equal (equal (logtail n x) 0)
-                           (not (logbitp n x))))
-           :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-inductions
-                                                    bitops::ihsext-recursive-redefs)))))
-
-  (local (defthm integer-length-when-logtail-logbitp
-           (implies (and (equal (logtail (+ 1 n) x) 0)
-                         (logbitp n x)
-                         (natp n))
-                    (equal (integer-length x) (+ 1 n)))
-           :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-inductions
-                                                    bitops::ihsext-recursive-redefs)))))
-           
-
-  (defthm HighestSetBit-loop-correct
-    (b* ((storage (local-env->storage
-                   (env->local env)))
-         (i-look (assoc-equal "__stdlib_local_i" storage))
-         (i (cdr i-look))
-         ((v_int i))
-         (x-look (assoc-equal "__stdlib_local_x" storage))
-         (x (cdr x-look))
-         ((v_bitvector x))
-         (n-look (assoc-equal "__stdlib_local_N" storage))
-         (n (cdr n-look))
-         ((v_int n)))
-      (implies (and i-look
-                    (val-case i :v_int)
-                    (equal i.val start)
-                    x-look
-                    (val-case x :v_bitvector)
-                    (equal (logtail (+ 1 i.val) x.val) 0)
-                    n-look
-                    (val-case n :v_int)
-                    (equal n.val x.len)
-                    
-                    (natp clk)
-                    (integerp start)
-                    (equal end 0)
-                    (>= start (+ -1 end))
-                    (< start n.val)
-                    (no-duplicatesp-equal (acl2::alist-keys storage)))
-               (b* (((mv (ev_normal res) &) (eval_for env "__stdlib_local_i" nil start :down end *HighestSetBit-loop-body*))
-                    ((env env))
-                    ((local-env env.local)))
-                 (and (equal (eval_result-kind res) :ev_normal)
-                      (implies (equal 0 x.val)
-                               (and (equal (control_flow_state-kind res.res) :continuing)
-                                    (b* (((continuing res.res)))
-                                      (equal res.res.env
-                                             (change-env env
-                                                         :local (change-local-env
-                                                                 env.local
-                                                                 :storage (put-assoc-equal "__stdlib_local_i"
-                                                                                           (v_int (+ -1 end))
-                                                                                           env.local.storage)))))))
-                      (implies (not (equal 0 x.val))
-                               (and (equal (control_flow_state-kind res.res) :returning)
-                                    (b* (((returning res.res))
-                                         (result-spec (v_int (1- (integer-length x.val)))))
-                                      (and (equal res.res.vals (list result-spec))
-                                           (equal res.res.env env.global)))))))))
-    :hints (("goal" :induct (for-induct env "__stdlib_local_i" start :down end *HighestSetBit-loop-body* clk nil orac)
-             :in-theory (enable check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                eval_for_step
-                                for_loop-step
-                                FOR_LOOP-TEST
-                                pop_scope
-                                check-bad-slices
-                                check_non_overlapping_slices
-                                check_non_overlapping_slices-1
-                                slices_sub
-                                slices-width
-                                write_to_bitvector
-                                write_to_bitvector-aux
-                                vbv-to-int)
-             :do-not-induct t)
-            (and stable-under-simplificationp
-                 '(:expand ((:free (end)
-                             (eval_for env "__stdlib_local_i"
-                                       nil
-                                       (V_INT->VAL
-                                        (CDR (HONS-ASSOC-EQUAL "__stdlib_local_i"
-                                                               (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
-                                       :down 0 *HighestSetBit-loop-body*)) 
-                            (:free (env end)
-                             (eval_for env "__stdlib_local_i" nil -1 :down 0 *HighestSetBit-loop-body*)))))
-            (and stable-under-simplificationp
-                 '(:in-theory (enable equal-when-v_int)))
-            )))
+   (local (defthm integer-length-when-logtail-logbitp
+            (implies (and (equal (logtail (+ 1 n) x) 0)
+                          (logbitp n x)
+                          (natp n))
+                     (equal (integer-length x) (+ 1 n)))
+            :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-inductions
+                                                     bitops::ihsext-recursive-redefs)))))))
 
 
 (defsection HighestSetBit-correct
@@ -1317,4 +938,5 @@
                                 slices_sub
                                 check-bad-slices))
              :do-not-induct t))))
+
 

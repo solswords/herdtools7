@@ -31,244 +31,79 @@
                            floor mod)))
 
 
-(defsection ilog2-loop-1
-
-  (defconst *ilog2-loop-1*
-    (find-nth-form 0 :s_while (assoc-equal "ILog2" (static_env_global->subprograms
-                                                    (stdlib-static-env)))))
-
-  (defconst *ilog2-loop-1-test*
-    (s_while->test *ilog2-loop-1*))
-
-  (defconst *ilog2-loop-1-body*
-    (s_while->body *ilog2-loop-1*))
-
-  (defthm ilog2-loop-1-correct
-    (b* ((storage (local-env->storage
-                   (env->local env)))
-         (val-look (assoc-equal "__stdlib_local_val" storage))
-         (val (cdr val-look))
-         ((v_real val))
-         (high-look (assoc-equal "__stdlib_local_high" storage))
-         (high (cdr high-look))
-         ((v_int high))
-         (low-look (assoc-equal "__stdlib_local_low" storage))
-         (low (cdr low-look))
-         ((v_int low)))
-      (implies (and val-look
-                    (val-case val :v_real)
-                    (<= 1 val.val)
-                    high-look
-                    (val-case high :v_int)
-                    (<= 1 high.val)
-                    low-look
-                    (val-case low :v_int)
-                    (natp clk)
-                    (< (- (+ 1 (acl2::rational-exponent val.val)) high.val) clk)
-                    (integerp limit)
-                    (< (- (+ 1 (acl2::rational-exponent val.val)) high.val) limit)
-                    (no-duplicatesp-equal (acl2::alist-keys storage)))
-               (b* (((mv (ev_normal res) &) (eval_loop env t limit *ilog2-loop-1-test* *ilog2-loop-1-body*))
-                    ((continuing res.res))
-                    ((mv low-spec high-spec) (acl2::ilog2-search-up val.val low.val high.val))
-                    ((env env))
-                    ((local-env env.local)))
-                 (and (equal res.res.env
-                             (change-env env
-                                         :local (change-local-env
-                                                 env.local
-                                                 :storage (put-assoc-equal "__stdlib_local_low"
-                                                                           (v_int low-spec)
-                                                                           (put-assoc-equal "__stdlib_local_high"
-                                                                                            (v_int high-spec)
-                                                                                            env.local.storage)))))
-                      (equal (eval_result-kind res) :ev_normal)
-                      (equal (control_flow_state-kind res.res) :continuing)))))
-    :hints (("goal" :induct (loop-induct env clk *ilog2-loop-1-test* *ilog2-loop-1-body* t limit orac)
-             :in-theory (enable check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                pop_scope
-                                tick_loop_limit)
-             :expand ((ACL2::ILOG2-SEARCH-UP
-                       (V_REAL->VAL (CDR (HONS-ASSOC-EQUAL "__stdlib_local_val"
-                                                           (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
-                       (V_INT->VAL (CDR (HONS-ASSOC-EQUAL "__stdlib_local_low"
-                                                          (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
-                       (V_INT->VAL
-                        (CDR (HONS-ASSOC-EQUAL "__stdlib_local_high"
-                                               (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))))
-             :do-not-induct t)
-            (and stable-under-simplificationp
-                 '(:expand ((eval_loop env t limit *ilog2-loop-1-test* *ilog2-loop-1-body*)))))))
 
 
-(defsection ilog2-loop-2
-  
-  (defconst *ilog2-loop-2*
-    (find-nth-form 1 :s_while (assoc-equal "ILog2" (static_env_global->subprograms
-                                                    (stdlib-static-env)))))
-
-  (defconst *ilog2-loop-2-test*
-    (s_while->test *ilog2-loop-2*))
-
-  (defconst *ilog2-loop-2-body*
-    (s_while->body *ilog2-loop-2*))
-                    
-  
-  (defthm ilog2-loop-2-correct
-    (b* ((storage (local-env->storage
-                   (env->local env)))
-         (val-look (assoc-equal "__stdlib_local_val" storage))
-         (val (cdr val-look))
-         ((v_real val))
-         (high-look (assoc-equal "__stdlib_local_high" storage))
-         (high (cdr high-look))
-         ((v_int high))
-         (low-look (assoc-equal "__stdlib_local_low" storage))
-         (low (cdr low-look))
-         ((v_int low)))
-      (implies (and val-look
-                    (val-case val :v_real)
-                    (< 0 val.val)
-                    (< val.val 1)
-                    high-look
-                    (val-case high :v_int)
-                    low-look
-                    (val-case low :v_int)
-                    (<= low.val -1)
-                    (natp clk)
-                    (< (- (+ 1 (- (acl2::rational-exponent val.val))) (- low.val)) clk)
-                    (integerp limit)
-                    (< (- (+ 1 (- (acl2::rational-exponent val.val))) (- low.val)) limit)
-                    (no-duplicatesp-equal (acl2::alist-keys storage)))
-               (b* (((mv (ev_normal res) &) (eval_loop env t limit *ilog2-loop-2-test* *ilog2-loop-2-body*))
-                    ((continuing res.res))
-                    ((mv low-spec high-spec) (acl2::ilog2-search-down val.val low.val high.val))
-                    ((env env))
-                    ((local-env env.local)))
-                 (and (equal res.res.env
-                             (change-env env
-                                         :local (change-local-env
-                                                 env.local
-                                                 :storage (put-assoc-equal "__stdlib_local_low"
-                                                                           (v_int low-spec)
-                                                                           (put-assoc-equal "__stdlib_local_high"
-                                                                                            (v_int high-spec)
-                                                                                            env.local.storage)))))
-                      (equal (eval_result-kind res) :ev_normal)
-                      (equal (control_flow_state-kind res.res) :continuing)))))
-    :hints (("goal" :induct (loop-induct env clk *ilog2-loop-2-test* *ilog2-loop-2-body* t limit orac)
-             :in-theory (enable check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                pop_scope
-                                v_to_bool
-                                tick_loop_limit)
-             :expand ((ACL2::ILOG2-SEARCH-down
-                       (V_REAL->VAL (CDR (HONS-ASSOC-EQUAL "__stdlib_local_val"
-                                                      (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
-                       (V_INT->VAL (CDR (HONS-ASSOC-EQUAL "__stdlib_local_low"
-                                                     (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
-                       (V_INT->VAL
-                        (CDR (HONS-ASSOC-EQUAL "__stdlib_local_high"
-                                          (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))))
-             :do-not-induct t)
-            (and stable-under-simplificationp
-                 '(:expand ((eval_loop env t limit *ilog2-loop-2-test* *ilog2-loop-2-body*)))))))
-
-(defsection ilog2-loop-3
-  
-  (defconst *ilog2-loop-3*
-    (find-nth-form 2 :s_while (assoc-equal "ILog2" (static_env_global->subprograms
-                                                    (stdlib-static-env)))))
-
-  (defconst *ilog2-loop-3-test*
-    (s_while->test *ilog2-loop-3*))
-
-  (defconst *ilog2-loop-3-body*
-    (s_while->body *ilog2-loop-3*))
+(defloop ilog2-loop-1
+  :function "ILog2"
+  :looptype :s_while
+  :nth 0
+  :local-vars (((v_real val) "__stdlib_local_val")
+               ((v_int high) "__stdlib_local_high" (v_int high-spec))
+               ((v_int low)  "__stdlib_local_low"  (v_int low-spec)))
+  :bindings (((mv low-spec high-spec) (acl2::ilog2-search-up val.val low.val high.val)))
+  :invariants (and (<= 1 val.val)
+                   (<= 1 high.val)
+                   (< (- (+ 1 (acl2::rational-exponent val.val)) high.val) (nfix clk))
+                   (integerp limit)
+                   (< (- (+ 1 (acl2::rational-exponent val.val)) high.val) limit))
+  :hints ((and stable-under-simplificationp
+               '(:expand ((ACL2::ILOG2-SEARCH-UP
+                           (V_REAL->VAL (CDR (HONS-ASSOC-EQUAL "__stdlib_local_val"
+                                                               (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
+                           (V_INT->VAL (CDR (HONS-ASSOC-EQUAL "__stdlib_local_low"
+                                                              (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
+                           (V_INT->VAL
+                            (CDR (HONS-ASSOC-EQUAL "__stdlib_local_high"
+                                                   (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))))))))
 
 
-  
-  (defthm ilog2-loop-3-correct
-    (b* ((storage (local-env->storage
-                   (env->local env)))
-         (val-look (assoc-equal "__stdlib_local_val" storage))
-         (val (cdr val-look))
-         ((v_real val))
-         (high-look (assoc-equal "__stdlib_local_high" storage))
-         (high (cdr high-look))
-         ((v_int high))
-         (low-look (assoc-equal "__stdlib_local_low" storage))
-         (low (cdr low-look))
-         ((v_int low))
-         (mid-look (assoc-equal "__stdlib_local_mid" storage)))
-      (implies (and val-look
-                    (val-case val :v_real)
-                    (< 0 val.val)
-                    high-look
-                    (val-case high :v_int)
-                    low-look
-                    (val-case low :v_int)
-                    (not mid-look)
-                    (natp clk)
-                    (< (- high.val low.val) clk)
-                    (integerp limit)
-                    (< (- high.val low.val) limit)
-                    (no-duplicatesp-equal (acl2::alist-keys storage)))
-               (b* (((mv (ev_normal res) &) (eval_loop env t limit *ilog2-loop-3-test* *ilog2-loop-3-body*))
-                    ((continuing res.res))
-                    ((mv low-spec high-spec) (acl2::ilog2-binary-search val.val low.val high.val))
-                    ((env env))
-                    ((local-env env.local)))
-                 (and (equal res.res.env
-                             (change-env env
-                                         :local (change-local-env
-                                                 env.local
-                                                 :storage (put-assoc-equal "__stdlib_local_low"
-                                                                           (v_int low-spec)
-                                                                           (put-assoc-equal "__stdlib_local_high"
-                                                                                            (v_int high-spec)
-                                                                                            env.local.storage)))))
-                      (equal (eval_result-kind res) :ev_normal)
-                      (equal (control_flow_state-kind res.res) :continuing)))))
-    :hints (("goal" :induct (loop-induct env clk *ilog2-loop-3-test* *ilog2-loop-3-body* t limit orac)
-             :in-theory (enable check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                pop_scope
-                                v_to_bool
-                                tick_loop_limit)
-             :expand ((acl2::ilog2-binary-search
-                       (V_REAL->VAL (CDR (HONS-ASSOC-EQUAL "__stdlib_local_val"
-                                                      (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
-                       (V_INT->VAL (CDR (HONS-ASSOC-EQUAL "__stdlib_local_low"
-                                                     (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
-                       (V_INT->VAL
-                        (CDR (HONS-ASSOC-EQUAL "__stdlib_local_high"
-                                          (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))))
-             :do-not-induct t)
-            (and stable-under-simplificationp
-                 '(:expand ((eval_loop env t limit *ilog2-loop-3-test* *ilog2-loop-3-body*)))))))
+(defloop ilog2-loop-2
+  :function "ILog2"
+  :looptype :s_while
+  :nth 1
+  :local-vars (((v_real val) "__stdlib_local_val")
+               ((v_int high) "__stdlib_local_high" (v_int high-spec))
+               ((v_int low)  "__stdlib_local_low"  (v_int low-spec)))
+  :bindings (((mv low-spec high-spec) (acl2::ilog2-search-down val.val low.val high.val)))
+  :invariants (and (< 0 val.val)
+                   (< val.val 1)
+                   (<= low.val -1)
+                   (< (- (+ 1 (- (acl2::rational-exponent val.val))) (- low.val)) (nfix clk))
+                   (integerp limit)
+                   (< (- (+ 1 (- (acl2::rational-exponent val.val))) (- low.val)) limit))
+  :hints ((and stable-under-simplificationp
+               '(:expand ((ACL2::ILOG2-SEARCH-DOWN
+                           (V_REAL->VAL (CDR (HONS-ASSOC-EQUAL "__stdlib_local_val"
+                                                               (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
+                           (V_INT->VAL (CDR (HONS-ASSOC-EQUAL "__stdlib_local_low"
+                                                              (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
+                           (V_INT->VAL
+                            (CDR (HONS-ASSOC-EQUAL "__stdlib_local_high"
+                                                   (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))))))))
+
+
+(defloop ilog2-loop-3
+  :function "ILog2"
+  :looptype :s_while
+  :nth 2
+  :local-vars (((v_real val) "__stdlib_local_val")
+               ((v_int high) "__stdlib_local_high" (v_int high-spec))
+               ((v_int low)  "__stdlib_local_low"  (v_int low-spec)))
+  :bindings (((mv low-spec high-spec) (acl2::ilog2-binary-search val.val low.val high.val)))
+  :invariants (and (not (hons-assoc-equal "__stdlib_local_mid" env.local.storage))
+                   (< 0 val.val)
+                   (< (- high.val low.val) (nfix clk))
+                   (integerp limit)
+                   (< (- high.val low.val) limit))
+  :hints ((and stable-under-simplificationp
+               '(:expand ((acl2::ilog2-binary-search
+                           (V_REAL->VAL (CDR (HONS-ASSOC-EQUAL "__stdlib_local_val"
+                                                               (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
+                           (V_INT->VAL (CDR (HONS-ASSOC-EQUAL "__stdlib_local_low"
+                                                              (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
+                           (V_INT->VAL
+                            (CDR (HONS-ASSOC-EQUAL "__stdlib_local_high"
+                                                   (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))))))))
 
 
 (defsection ilog2-correct
@@ -313,8 +148,7 @@
              (equal (mv-nth 0 (eval_subprogram env "ILog2" nil (list (v_real val)) :clk clk))
                     (ev_normal (func_result (list (v_int (acl2::ilog2 val))) (env->global env)))))
     :hints (("goal" :expand ((eval_subprogram  env "ILog2" nil (list (v_real val)) :clk clk))
-             :in-theory (enable (stdlib-static-env)
-                                check_recurse_limit
+             :in-theory (enable check_recurse_limit
                                 declare_local_identifiers
                                 declare_local_identifier
                                 env-find
@@ -325,4 +159,5 @@
                                 env-pop-stack
                                 acl2::ilog2)
              :do-not-induct t))))
+
 

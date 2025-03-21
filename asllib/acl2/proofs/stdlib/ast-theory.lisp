@@ -24,6 +24,7 @@
 
 (include-book "../../interp")
 (include-book "basic-theory")
+(include-book "clause-processors/just-expand" :dir :system)
 
 (defthm alistp-when-val-imap-p-rw
   (implies (val-imap-p x)

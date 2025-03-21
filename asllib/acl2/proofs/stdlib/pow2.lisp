@@ -36,107 +36,56 @@
                            hons-assoc-equal)))
 
 
-(defsection floorpow2-loop
 
-  (defconst *floorpow2-loop*
-    (find-nth-form 0 :s_while (assoc-equal "FloorPow2" (static_env_global->subprograms
-                                                        (stdlib-static-env)))))
+(defloop floorpow2-loop
+  :function "FloorPow2"
+  :looptype :s_while
+  :local-vars (((v_int x) "__stdlib_local_x")
+               ((v_int p2) "__stdlib_local_p2"
+                (v_int (acl2::floor-pow-2-loop x.val p2.val))))
+  :invariants (and (< 0 x.val)
+                   (<= 2 p2.val)
+                   (<= p2.val (* 2 x.val))
+                   (< (- (+ 1 (acl2::rational-exponent x.val))
+                         (acl2::rational-exponent p2.val))
+                      (ifix clk))
+                   (integerp limit)
+                   (< (- (+ 1 (acl2::rational-exponent x.val))
+                         (acl2::rational-exponent p2.val))
+                      limit))
+  :hints ((and stable-under-simplificationp
+               '(:expand ((:free (x) (acl2::floor-pow-2-loop
+                                      x
+                                      (v_int->val (cdr (hons-assoc-equal "__stdlib_local_p2"
+                                                                         (local-env->storage
+                                                                          (env->local env)))))))))))
+  :prepwork
+  ((local (defthm rational-exponent-plus1-by-compare
+            (implies (and (<= p2 (* 2 x))
+                          (equal p2 (expt 2 p2e))
+                          (< x p2)
+                          (rationalp x))
+                     (equal (acl2::rational-exponent x)
+                            (+ -1 (ifix p2e))))
+            :hints (("goal" :use ((:instance acl2::rational-exponent-less-than-power-of-2
+                                   (n (ifix p2e)) (x x))
+                                  (:instance acl2::rational-exponent-gte-power-of-2
+                                   (n (1- (ifix p2e))) (x x)))
+                     :do-not-induct t
+                     :in-theory (e/d (acl2::exponents-add-unrestricted)
+                                     (acl2::rational-exponent-gte-power-of-2
+                                      acl2::rational-exponent-less-than-power-of-2))))))
 
-  (defconst *floorpow2-loop-test*
-    (s_while->test *floorpow2-loop*))
+   (local (in-theory (disable not expt)))
 
-  (defconst *floorpow2-loop-body*
-    (s_while->body *floorpow2-loop*))
-
-
-  (local (defthm rational-exponent-plus1-by-compare
-           (implies (and (<= p2 (* 2 x))
-                         (equal p2 (expt 2 p2e))
-                         (< x p2)
-                         (rationalp x))
-                    (equal (acl2::rational-exponent x)
-                           (+ -1 (ifix p2e))))
-           :hints (("goal" :use ((:instance acl2::rational-exponent-less-than-power-of-2
-                                  (n (ifix p2e)) (x x))
-                                 (:instance acl2::rational-exponent-gte-power-of-2
-                                  (n (1- (ifix p2e))) (x x)))
-                    :do-not-induct t
-                    :in-theory (e/d (acl2::exponents-add-unrestricted)
-                                    (acl2::rational-exponent-gte-power-of-2
-                                     acl2::rational-exponent-less-than-power-of-2))))))
-
-  (local (in-theory (disable not expt)))
-
-  (local (defthm my-rational-exponent-monotonic
-           (implies (and (<= x y)
-                         (rationalp x)
-                         (rationalp y)
-                         (< 0 x))
-                    (<= (acl2::rational-exponent x) (acl2::rational-exponent y)))
-           :hints (("goal" :use ((:instance acl2::rational-exponent-monotonic (x x) (y y)))))
-           :rule-classes :linear))
-           
-  
-  (defthm floorpow2-loop-correct
-    (b* ((storage (local-env->storage
-                   (env->local env)))
-         (x-look (assoc-equal "__stdlib_local_x" storage))
-         (x (cdr x-look))
-         ((v_int x))
-         (p2-look (assoc-equal "__stdlib_local_p2" storage))
-         (p2 (cdr p2-look))
-         ((v_int p2)))
-      (implies (and x-look
-                    (val-case x :v_int)
-                    p2-look
-                    (val-case p2 :v_int)
-                    (< 0 x.val)
-                    (<= 2 p2.val)
-                    (<= p2.val (* 2 x.val))
-                    ;; (equal p2.val (expt 2 (acl2::rational-exponent p2.val)))
-                    (natp clk)
-                    (< (- (+ 1 (acl2::rational-exponent x.val))
-                          (acl2::rational-exponent p2.val))
-                       clk)
-                    (integerp limit)
-                    (< (- (+ 1 (acl2::rational-exponent x.val))
-                          (acl2::rational-exponent p2.val)) limit)
-                    (no-duplicatesp-equal (acl2::alist-keys storage)))
-               (b* (((mv (ev_normal res) &) (eval_loop env t limit *floorpow2-loop-test* *floorpow2-loop-body*))
-                    ((continuing res.res))
-                    (p2-spec ;; (expt 2 (+ 1 (acl2::rational-exponent x.val)))
-                     (acl2::floor-pow-2-loop x.val p2.val))
-                    ((env env))
-                    ((local-env env.local)))
-                 (and (equal (eval_result-kind res) :ev_normal)
-                      (equal (control_flow_state-kind res.res) :continuing)
-                      (equal res.res.env
-                             (change-env env
-                                         :local (change-local-env
-                                                 env.local
-                                                 :storage (put-assoc-equal "__stdlib_local_p2"
-                                                                           (v_int p2-spec)
-                                                                           env.local.storage))))))))
-    :hints (("goal" :induct (loop-induct env clk *floorpow2-loop-test* *floorpow2-loop-body* t limit orac)
-             :in-theory (enable check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                pop_scope
-                                tick_loop_limit
-                                v_to_bool)
-             :do-not-induct t)
-            (and stable-under-simplificationp
-                 '(:expand ((eval_loop env t limit *floorpow2-loop-test* *floorpow2-loop-body*)
-                            (:free (x) (acl2::floor-pow-2-loop x
-                                                        (v_int->val (cdr (hons-assoc-equal "__stdlib_local_p2"
-                                                                                           (local-env->storage
-                                                                                            (env->local env)))))))))))))
+   (local (defthm my-rational-exponent-monotonic
+            (implies (and (<= x y)
+                          (rationalp x)
+                          (rationalp y)
+                          (< 0 x))
+                     (<= (acl2::rational-exponent x) (acl2::rational-exponent y)))
+            :hints (("goal" :use ((:instance acl2::rational-exponent-monotonic (x x) (y y)))))
+            :rule-classes :linear))))
 
 
 (defsection floorpow2-correct
