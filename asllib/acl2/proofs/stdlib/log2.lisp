@@ -155,31 +155,14 @@
 
 
 
-(defsection log2-correct
+(def-asl-subprogram log2-correct
+  :function "Log2"
+  :args (x)
+  :hyps (and (equal x.val (expt 2 i))
+             (<= (+ 2 (acl2::rational-exponent x.val)) (expt 2 128)))
+  :safe-clock (+ 2 (acl2::rational-exponent x.val))
+  :return-values ((v_int i)))
 
-  (defthm log2-correct
-    (implies (and (subprograms-match '("Log2")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (natp i)
-                  (integerp clk)
-                  (< (+ 1 i) clk)
-                  (< (+ 1 i) (expt 2 128))
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "Log2" nil (list (v_int (expt 2 i))) :clk clk))
-                    (ev_normal (func_result (list (v_int i)) (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram  env "Log2" nil (list (v_int (expt 2 i))) :clk clk))
-             :in-theory (enable check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack)
-             :do-not-induct t))))
 
 
 

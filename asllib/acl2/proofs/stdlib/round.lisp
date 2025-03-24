@@ -130,136 +130,76 @@
                                  (equal x (v_int v)))))))))
 
 
-(defsection roundtowardszero-correct
 
-  (local (in-theory (disable acl2::ilog2-is-ilog2-spec)))
-  (local (defthm ilog2-is-rational-exponent
-         (implies (and (rationalp x)
-                       (< 0 x))
-                  (equal (acl2::ilog2 x)
-                         (acl2::rational-exponent x)))
-         :hints (("goal" :use ((:instance acl2::rational-exponent-unique
-                                (n (acl2::ilog2 x)))
-                               (:instance acl2::ilog2-correct (value x)))
-                  :in-theory (disable acl2::exponents-add expt)))))
 
-  (local (defthm rational-exponent-nonneg
-           (implies (and (rationalp val)
-                         (<= 1 (abs val)))
-                    (<= 0 (acl2::rational-exponent val)))
-           :hints (("goal" :use ((:instance acl2::rational-exponent-gte-power-of-2
-                                  (n 0) (x val)))))
-           :rule-classes :linear))
+(def-asl-subprogram roundtowardszero-correct
+  :function "RoundTowardsZero"
+  :args (val)
+  :safe-clock (+ 1 (ilog2-safe-clock (abs val.val)))
+  :hyps (<= (ilog2-safe-clock (abs val.val)) (expt 2 128))
+  :return-values ((v_int (truncate val.val 1)))
+  :enable (abs)
+  :disable (truncate)
+  :prepwork
+  (
+   (local (in-theory (disable acl2::ilog2-is-ilog2-spec)))
+   (local (defthm ilog2-is-rational-exponent
+            (implies (and (rationalp x)
+                          (< 0 x))
+                     (equal (acl2::ilog2 x)
+                            (acl2::rational-exponent x)))
+            :hints (("goal" :use ((:instance acl2::rational-exponent-unique
+                                   (n (acl2::ilog2 x)))
+                                  (:instance acl2::ilog2-correct (value x)))
+                     :in-theory (disable acl2::exponents-add expt)))))
 
-  (local (defthm floor-of-rational-exponent
-           (implies (and (rationalp val)
-                         (< 0 val))
-                    (equal (floor val (expt 2 (acl2::rational-exponent val)))
-                           1))
-           :hints (("goal" 
-                    :in-theory (enable acl2::rational-exponent-in-terms-of-rational-significand-abs))
-                   )))
+   (local (defthm rational-exponent-nonneg
+            (implies (and (rationalp val)
+                          (<= 1 (abs val)))
+                     (<= 0 (acl2::rational-exponent val)))
+            :hints (("goal" :use ((:instance acl2::rational-exponent-gte-power-of-2
+                                   (n 0) (x val)))))
+            :rule-classes :linear))
 
-  (local (in-theory (disable acl2::floor-minus)))
+   (local (defthm floor-of-rational-exponent
+            (implies (and (rationalp val)
+                          (< 0 val))
+                     (equal (floor val (expt 2 (acl2::rational-exponent val)))
+                            1))
+            :hints (("goal" 
+                     :in-theory (enable acl2::rational-exponent-in-terms-of-rational-significand-abs))
+                    )))
+
+   (local (in-theory (disable acl2::floor-minus)))
   
-  (local (defthm floor-neg-of-rational-exponent
-           (implies (and (rationalp val)
-                         (< val 0))
-                    (equal (floor (- val) (expt 2 (acl2::rational-exponent val)))
-                           1))
-           :hints (("goal" 
-                    :in-theory (enable acl2::rational-exponent-in-terms-of-rational-significand-abs))
-                   )))
-  
-  
-  (defthm roundtowardszero-correct
-    (implies (and (subprograms-match '("Real" "RoundTowardsZero" "Abs" "ILog2")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (rationalp val)
-                  (integerp clk)
-                  (< (ilog2-safe-clock (abs val)) clk)
-                  (<= (ilog2-safe-clock (abs val)) (expt 2 128))
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "RoundTowardsZero" nil (list (v_real val)) :clk clk))
-                    (ev_normal (func_result (list (v_int (truncate val 1))) (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram  env "RoundTowardsZero" nil (list (v_real val)) :clk clk))
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int)
-                             (truncate))
-             :do-not-induct t))))
+   (local (defthm floor-neg-of-rational-exponent
+            (implies (and (rationalp val)
+                          (< val 0))
+                     (equal (floor (- val) (expt 2 (acl2::rational-exponent val)))
+                            1))
+            :hints (("goal" 
+                     :in-theory (enable acl2::rational-exponent-in-terms-of-rational-significand-abs))
+                    )))
+   (local (in-theory (disable abs)))))
 
 
-(defsection roundup-correct
-
-  
-  (defthm roundup-correct
-    (implies (and (subprograms-match '("Real" "RoundUp" "Abs" "ILog2" "RoundTowardsZero")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (rationalp val)
-                  (< 0 val)
-                  (integerp clk)
-                  (< (+ 1 (ilog2-safe-clock (abs val))) clk)
-                  (<= (ilog2-safe-clock (abs val)) (expt 2 128))
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "RoundUp" nil (list (v_real val)) :clk clk))
-                    (ev_normal (func_result (list (v_int (ceiling val 1))) (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram  env "RoundUp" nil (list (v_real val)) :clk clk))
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int)
-                             (truncate))
-             :do-not-induct t))))
+(def-asl-subprogram roundup-correct
+  :function "RoundUp"
+  :args (val)
+  :safe-clock (+ 2 (ilog2-safe-clock (abs val.val)))
+  :hyps (<= (ilog2-safe-clock (abs val.val)) (expt 2 128))
+  :return-values ((v_int (ceiling val.val 1)))
+  :enable (abs)
+  :prepwork ((local (in-theory (disable abs)))))
 
 
-(defsection rounddown-correct
+(def-asl-subprogram rounddown-correct
+  :function "RoundDown"
+  :args (val)
+  :safe-clock (+ 2 (ilog2-safe-clock (abs val.val)))
+  :hyps (<= (ilog2-safe-clock (abs val.val)) (expt 2 128))
+  :return-values ((v_int (floor val.val 1)))
+  :enable (abs)
+  :prepwork ((local (in-theory (disable abs)))))
 
-  
-  (defthm rounddown-correct
-    (implies (and (subprograms-match '("Real" "RoundDown" "Abs" "ILog2" "RoundTowardsZero")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (rationalp val)
-                  (< 0 val)
-                  (integerp clk)
-                  (< (+ 1 (ilog2-safe-clock (abs val))) clk)
-                  (<= (ilog2-safe-clock (abs val)) (expt 2 128))
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "RoundDown" nil (list (v_real val)) :clk clk))
-                    (ev_normal (func_result (list (v_int (floor val 1))) (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram  env "RoundDown" nil (list (v_real val)) :clk clk))
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int)
-                             (truncate))
-             :do-not-induct t))))
 

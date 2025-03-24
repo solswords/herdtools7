@@ -62,3 +62,44 @@
 (defopener open-is_val_of_type is_val_of_type :hyp (syntaxp (quotep ty)))
 (defopener open-check_int_constraints check_int_constraints :hyp (syntaxp (quotep constrs)))
 
+
+(defopener open-resolve-ty resolve-ty :hyp (syntaxp (quotep x)))
+(defopener open-resolve-tylist resolve-tylist :hyp (syntaxp (quotep x)))
+(defopener open-resolve-typed_identifierlist resolve-typed_identifierlist :hyp (syntaxp (quotep x)))
+(defopener open-resolve-constraint_kind resolve-constraint_kind :hyp (syntaxp (quotep x)))
+(defopener open-resolve-int_constraints resolve-int_constraints :hyp (syntaxp (quotep x)))
+
+
+
+
+(defopener open-ty-satisfied ty-satisfied
+  :hyp (syntaxp (or (quotep ty)
+                    (case-match ty
+                      (('ty (ctor . &))
+                       (member-eq ctor
+                                  '(t_int t_bits t_real t_string t_bool t_enum
+                                          t_tuple t_array t_record t_exception
+                                          t_collection t_named)))
+                      (& nil)))))
+(defopener open-tuple-type-satisfied tuple-type-satisfied :hyp (syntaxp (or (quotep types)
+                                                                            (case-match types
+                                                                              (('cons . &) t) (& nil)))))
+(defopener open-array-type-satisfied array-type-satisfied)
+(defopener open-record-type-satisfied record-type-satisfied :hyp (syntaxp (or (quotep fields)
+                                                                              (case-match fields
+                                                                                (('cons . &) t) (& nil)))))
+(defopener open-constraint_kind-satisfied constraint_kind-satisfied
+  :hyp (syntaxp (or (quotep c)
+                    (and (consp c)
+                         (member-eq (car c)
+                                    '(unconstrained wellconstrained pendingconstrained parametrized))))))
+(defopener open-int_constraintlist-satisfied int_constraintlist-satisfied
+  :hyp (syntaxp (or (quotep c)
+                    (case-match c
+                      (('cons . &) t) (& nil)))))
+(defopener open-int_constraint-satisfied int_constraint-satisfied
+  :hyp (syntaxp (or (quotep c)
+                    (and (consp c)
+                         (member-eq (car c) '(constraint_exact constraint_range))))))
+
+(defopener open-int-literal-expr->val int-literal-expr->val)

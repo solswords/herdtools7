@@ -202,102 +202,44 @@
 
 
 
-(defsection replicate-1-correct
+(def-asl-subprogram replicate-1-correct
+  :function "Replicate-1"
+  :params (n m)
+  :args (x)
+  :hyps (and (<= 0 n.val)
+             (< 0 m.val)
+             (integerp (/ n.val m.val)))
+  :return-values ((v_bitvector n.val
+                               (logrepeat (/ n.val m.val) m.val x.val)))
+  :prepwork
+  ((local (defthm logrepeat-is-logmask
+            (implies (equal (loghead 1 x) 1)
+                     (equal (logrepeat n 1 x) (logmask n)))
+            :hints(("Goal" :in-theory (enable bitops::loghead**
+                                              logrepeat
+                                              bitops::logapp**
+                                              bitops::logmask**)))))
 
-  
-  (local (defthm logrepeat-is-logmask
-           (implies (equal (loghead 1 x) 1)
-                    (equal (logrepeat n 1 x) (logmask n)))
-           :hints(("Goal" :in-theory (enable bitops::loghead**
-                                             logrepeat
-                                             bitops::logapp**
-                                             bitops::logmask**)))))
+   (local (defthm logrepeat-is-zero
+            (implies (equal (loghead 1 x) 0)
+                     (equal (logrepeat n 1 x) 0))
+            :hints(("Goal" :in-theory (enable bitops::loghead**
+                                              logrepeat
+                                              bitops::logapp**)))))
 
-  (local (defthm logrepeat-is-zero
-           (implies (equal (loghead 1 x) 0)
-                    (equal (logrepeat n 1 x) 0))
-           :hints(("Goal" :in-theory (enable bitops::loghead**
-                                             logrepeat
-                                             bitops::logapp**)))))
-
-  (local (defthm logrepeat-0
-           (equal (logrepeat 0 m x) 0)
-           :hints(("Goal" :in-theory (enable logrepeat)))))
-  
-  (defthm replicate-1-correct
-    (b* ((m (v_int->val mi))
-         ((v_bitvector xv)))
-      (implies (and (subprograms-match '("Replicate-1" "Zeros-1" "Ones-1")
-                                       (global-env->static (env->global env))
-                                       (stdlib-static-env))
-                    (integerp n)
-                    (integerp m)
-                    (<= 0 n)
-                    (<= 1 m)
-                    (integerp (/ n m))
-                    (<= 2 (nfix clk))
-                    (val-case mi :v_int)
-                    (val-case xv :v_bitvector)
-                    (equal xv.len m)
-                    (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                             (env->global env)))))
-               (equal (mv-nth 0 (eval_subprogram env "Replicate-1"
-                                                 (list (v_int n) mi)
-                                                 (list xv) :clk clk))
-                      (ev_normal (func_result (list (v_bitvector n (logrepeat (/ n m) m xv.val))) (env->global env))))))
-    :hints (("goal" :expand ((eval_subprogram env "Replicate-1"
-                                              (list (v_int n) mi)
-                                              (list xv) :clk clk))
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int
-                                slices_sub))
-             :do-not-induct t))))
+   (local (defthm logrepeat-0
+            (equal (logrepeat 0 m x) 0)
+            :hints(("Goal" :in-theory (enable logrepeat)))))))
 
 
-(defsection replicate-correct
-
-  
-  (defthm replicate-correct
-    (implies (and (subprograms-match '("Replicate" "Replicate-1" "Zeros-1" "Ones-1")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (integerp n)
-                  (integerp m)
-                  (<= 0 n)
-                  (<= 1 m)
-                  (integerp (/ n m))
-                  (<= 3 (nfix clk))
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "Replicate"
-                                               (list (v_int m) (v_int n))
-                                               (list (v_bitvector m x) (v_int n)) :clk clk))
-                    (ev_normal (func_result (list (v_bitvector (* n m) (logrepeat n m (nfix x)))) (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram env "Replicate"
-                                              (list (v_int m) (v_int n))
-                                               (list (v_bitvector m x) (v_int n)) :clk clk))
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int
-                                slices_sub))
-             :do-not-induct t))))
+(def-asl-subprogram replicate-correct
+  :function "Replicate"
+  :params (m n)
+  :args (x n)
+  :hyps (and (<= 0 n.val)
+            (< 0 m.val))
+  :return-values ((v_bitvector (* n.val m.val)
+                               (logrepeat n.val m.val x.val))))
 
 
 
@@ -337,43 +279,24 @@
                                                      bitops::ihsext-recursive-redefs)))))))
 
 
-(defsection BitCount-correct
-
-  (local (defthm logcount-loghead-bound
-           (<= (logcount (loghead n x)) (nfix n))
-           :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-inductions
-                                                    bitops::ihsext-recursive-redefs)))
-           :rule-classes :linear))
-  
-  (defthm BitCount-correct
-    (implies (and (subprograms-match '("BitCount")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (not (negp n))
-                  (natp clk)
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "BitCount"
-                                               (list (v_int n))
-                                               (list (v_bitvector n x)) :clk clk))
-                    (ev_normal (func_result (list (v_int (logcount (loghead n (nfix x)))))
-                                            (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram env "BitCount"
-                                               (list (v_int n))
-                                               (list (v_bitvector n x)) :clk clk))
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int
-                                slices_sub))
-             :do-not-induct t))))
+(def-asl-subprogram BitCount-correct
+  :function "BitCount"
+  :params (n)
+  :args (x)
+  :return-values ((v_int (logcount x.val)))
+  :prepwork
+  ((local (defthm logcount-loghead-bound
+            (<= (logcount (loghead n x)) (nfix n))
+            :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-inductions
+                                                     bitops::ihsext-recursive-redefs)))
+            :rule-classes :linear))
+   (local (defthm v_bitvector->val-logcount-bound
+            (<= (logcount (v_bitvector->val x)) (v_bitvector->len x))
+            :hints (("goal" :use ((:instance logcount-loghead-bound
+                                   (n (v_bitvector->len x))
+                                   (x (v_bitvector->val x))))
+                     :in-theory (disable logcount-loghead-bound)))
+            :rule-classes :linear))))
 
 
 
@@ -411,102 +334,49 @@
 
 
 
-(defsection LowestSetBit-correct
+(def-asl-subprogram LowestSetBit-correct
+  :function "LowestSetBit"
+  :params (n)
+  :args (x)
+  :return-values ((v_int (if (equal x.val 0)
+                             n.val
+                           (bitops::trailing-0-count x.val))))
+  :hints ((and stable-under-simplificationp
+               '(:cases ((eql (v_bitvector->val x) 0)))))
+  :prepwork
+  ((local (defthm loghead-of-ifix-n
+            (equal (loghead (ifix n) x)
+                   (loghead n x))
+            :hints(("Goal" :in-theory (enable ifix)))))
 
-  (local (defthm loghead-of-ifix-n
-           (equal (loghead (ifix n) x)
-                  (loghead n x))
-           :hints(("Goal" :in-theory (enable ifix)))))
+   (local (defthm trailing-0-count-of-loghead
+            (implies (not (equal (loghead n x) 0))
+                     (Equal (bitops::trailing-0-count (loghead n x))
+                            (bitops::trailing-0-count x)))
+            :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-recursive-redefs
+                                                     bitops::trailing-0-count
+                                                     bitops::ihsext-inductions)))))))
 
-  (local (defthm trailing-0-count-of-loghead
-           (implies (not (equal (loghead n x) 0))
-                    (Equal (bitops::trailing-0-count (loghead n x))
-                           (bitops::trailing-0-count x)))
-           :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-recursive-redefs
-                                                    bitops::trailing-0-count
-                                                    bitops::ihsext-inductions)))))
-
-  
-  (defthm LowestSetBit-correct
-    (implies (and (subprograms-match '("LowestSetBit")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (not (negp n))
-                  (natp clk)
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "LowestSetBit"
-                                               (list (v_int n))
-                                               (list (v_bitvector n x)) :clk clk))
-                    (ev_normal (func_result (list (v_int (if (eql (loghead n (nfix x)) 0)
-                                                             (nfix n)
-                                                           (bitops::trailing-0-count (nfix x)))))
-                                            (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram env "LowestSetBit"
-                                               (list (v_int n))
-                                               (list (v_bitvector n x)) :clk clk))
-             :rw-cache-state nil
-             :cases ((eql (loghead n (nfix x)) 0))
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int
-                                slices_sub))
-             :do-not-induct t))))
-
-(defsection LowestSetBitNZ-correct
-  
-
-  (local (defthm trailing-0-count-bound
-           (implies (not (equal (loghead n x) 0))
-                    (< (bitops::trailing-0-count x) (nfix n)))
-           :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-recursive-redefs
-                                                    bitops::trailing-0-count
-                                                    bitops::ihsext-inductions)))
-           :rule-classes :linear))
-  
-  (defthm LowestSetBitNZ-correct
-    (implies (and (subprograms-match '("LowestSetBitNZ" "LowestSetBit" "IsZero" "Zeros-1")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (natp n)
-                  (<= 2 (nfix clk))
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (let ((res (mv-nth 0 (eval_subprogram env "LowestSetBitNZ"
-                                                   (list (v_int n))
-                                                   (list (v_bitvector n x)) :clk clk))))
-               (and (implies (equal (loghead n (nfix x)) 0)
-                             (equal (eval_result-kind res) :ev_error))
-                    (implies (not (equal (loghead n (nfix x)) 0))
-                             (equal res
-                                    (ev_normal (func_result (list (v_int (bitops::trailing-0-count (nfix x))))
-                                                            (env->global env))))))))
-    :hints (("goal" :expand ((eval_subprogram env "LowestSetBitNZ"
-                                               (list (v_int n))
-                                               (list (v_bitvector n x)) :clk clk))
-             :rw-cache-state nil
-             :cases ((eql (loghead n (nfix x)) 0))
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int
-                                slices_sub))
-             :do-not-induct t))))
+(def-asl-subprogram LowestSetBitNZ-correct
+  :function "LowestSetBitNZ"
+  :params (n)
+  :args (x)
+  :error-cond (equal x.val 0)
+  :return-values ((v_int (bitops::trailing-0-count x.val)))
+  :prepwork
+  ((local (defthm trailing-0-count-bound
+            (implies (not (equal (loghead n x) 0))
+                     (< (bitops::trailing-0-count x) (nfix n)))
+            :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-recursive-redefs
+                                                     bitops::trailing-0-count
+                                                     bitops::ihsext-inductions)))
+            :rule-classes :linear))
+   (local (defthm v_bitvector->val-trailing-0-count-bound
+            (implies (not (equal (v_bitvector->val x) 0))
+                     (< (bitops::trailing-0-count (v_bitvector->val x)) (v_bitvector->len x)))
+            :hints(("Goal" :use ((:instance trailing-0-count-bound
+                                  (x (v_bitvector->val x)) (n (v_bitvector->len x))))))
+            :rule-classes :linear))))
 
 
 
@@ -540,403 +410,171 @@
             :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-inductions
                                                      bitops::ihsext-recursive-redefs)))))))
 
-
-(defsection HighestSetBit-correct
-
-
-  (local (defthm loghead-of-ifix-n
-           (equal (loghead (ifix n) x)
-                  (loghead n x))
-           :hints(("Goal" :in-theory (enable ifix)))))
-  
-  (defthm HighestSetBit-correct
-    (implies (and (subprograms-match '("HighestSetBit")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (not (negp n))
-                  (natp clk)
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "HighestSetBit"
-                                               (list (v_int n))
-                                               (list (v_bitvector n x)) :clk clk))
-                    (ev_normal (func_result (list (v_int (+ -1 (integer-length (loghead n (nfix x))))))
-                                            (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram env "HighestSetBit"
-                                               (list (v_int n))
-                                               (list (v_bitvector n x)) :clk clk))
-             :rw-cache-state nil
-             :cases ((eql (loghead n (nfix x)) 0))
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int
-                                slices_sub))
-             :do-not-induct t))))
+(def-asl-subprogram HighestSetBit-correct
+  :function "HighestSetBit"
+  :params (n)
+  :args (x)
+  :return-values ((v_int (+ -1 (integer-length x.val))))
+  :hints ((and stable-under-simplificationp
+               '(:cases ((equal (v_bitvector->val x) 0))))))
 
 
-(defsection HighestSetBitNZ-correct
-
+(def-asl-subprogram HighestSetBitNZ-correct
+  :function "HighestSetBitNZ"
+  :params (n)
+  :args (x)
+  :error-cond (equal x.val 0)
+  :return-values ((v_int (+ -1 (integer-length x.val))))
+  :prepwork
+  ((local (defthm v_bitvector-integer-length-bound
+            (<= (integer-length (v_bitvector->val x))
+                (v_bitvector->len x))
+            :hints (("goal" :use ((:instance bitops::integer-length-of-loghead-bound
+                                   (n (v_bitvector->len x)) (i (v_bitvector->val x))))
+                     :in-theory (disable bitops::integer-length-of-loghead-bound)))
+            :rule-classes :linear))
   (local (defthm integer-length-equal-0
            (implies (natp x)
                     (equal (equal (integer-length x) 0)
                            (equal x 0)))
            :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-recursive-redefs
-                                                    bitops::ihsext-inductions)))))
-  
-  (defthm HighestSetBitNZ-correct
-    (implies (and (subprograms-match '("HighestSetBitNZ" "HighestSetBit" "IsZero" "Zeros-1")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (natp n)
-                  (<= 2 (nfix clk))
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (let ((res (mv-nth 0 (eval_subprogram env "HighestSetBitNZ"
-                                                   (list (v_int n))
-                                                   (list (v_bitvector n x)) :clk clk))))
-               (and (implies (equal (loghead n (nfix x)) 0)
-                             (equal (eval_result-kind res) :ev_error))
-                    (implies (not (equal (loghead n (nfix x)) 0))
-                             (equal res
-                                    (ev_normal (func_result (list (v_int (1- (integer-length (loghead n (nfix x))))))
-                                                            (env->global env))))))))
-    :hints (("goal" :expand ((eval_subprogram env "HighestSetBitNZ"
-                                               (list (v_int n))
-                                               (list (v_bitvector n x)) :clk clk))
-             :rw-cache-state nil
-             :cases ((eql (loghead n (nfix x)) 0))
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int
-                                slices_sub))
-             :do-not-induct t))))
+                                                    bitops::ihsext-inductions)))))))
 
 
-(defsection SignExtend-1-correct
+(def-asl-subprogram SignExtend-1-correct
+  :function "SignExtend-1"
+  :params (n m)
+  :args (x)
+  :hyps (and (< 0 m.val)
+             (<= m.val n.val))
+  :return-values ((v_bitvector n.val (loghead n.val (logext m.val x.val))))
+  :enable (logext)
+  :prepwork
+  ((local (defthm integer-length-equal-0
+            (implies (natp x)
+                     (equal (equal (integer-length x) 0)
+                            (equal x 0)))
+            :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-recursive-redefs
+                                                     bitops::ihsext-inductions)))))
 
-  (local (defthm integer-length-equal-0
-           (implies (natp x)
-                    (equal (equal (integer-length x) 0)
-                           (equal x 0)))
-           :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-recursive-redefs
-                                                    bitops::ihsext-inductions)))))
+   (local (defthm logrepeat-1
+            (equal (logrepeat n 1 1)
+                   (loghead n -1))
+            :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-recursive-redefs
+                                                     bitops::ihsext-inductions
+                                                     logrepeat)))))
 
-  (local (defthm logrepeat-1
-           (equal (logrepeat n 1 1)
-                  (loghead n -1))
-           :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-recursive-redefs
-                                                    bitops::ihsext-inductions
-                                                    logrepeat)))))
+   (local (defthm logapp-when-logbitp
+            (implies (and (logbitp m x)
+                          (natp m)
+                          (posp n))
+                     (equal (logapp m x (loghead n -1))
+                            (logapp (+ 1 m) x (loghead (+ -1 n) -1))))
+            :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-recursive-redefs
+                                                     bitops::ihsext-inductions)))))
 
-  (local (defthm logapp-when-logbitp
-           (implies (and (logbitp m x)
-                         (natp m)
-                         (posp n))
-                    (equal (logapp m x (loghead n -1))
-                           (logapp (+ 1 m) x (loghead (+ -1 n) -1))))
-           :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-recursive-redefs
-                                                    bitops::ihsext-inductions)))))
+   (local (defthm logrepeat-0
+            (equal (logrepeat m n 0) 0)
+            :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-recursive-redefs
+                                                     bitops::ihsext-inductions
+                                                     logrepeat)))))
 
-  (local (defthm logrepeat-0
-           (equal (logrepeat m n 0) 0)
-           :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-recursive-redefs
-                                                    bitops::ihsext-inductions
-                                                    logrepeat)))))
+   (local (defthm loghead-when-not-logbitp
+            (implies (and (not (logbitp (+ -1 m) x))
+                          (natp m))
+                     (equal (loghead (+ -1 m) x)
+                            (loghead m x)))
+            :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-recursive-redefs
+                                                     bitops::ihsext-inductions)))))
 
-  (local (defthm loghead-when-not-logbitp
-           (implies (and (not (logbitp (+ -1 m) x))
-                         (natp m))
-                    (equal (loghead (+ -1 m) x)
-                           (loghead m x)))
-           :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-recursive-redefs
-                                                    bitops::ihsext-inductions)))))
-           
-  
-  (defthm SignExtend-1-correct
-    (b* (((v_bitvector xb))
-         (m (v_int->val mi)))
-      (implies (and (subprograms-match '("SignExtend-1" "Replicate-1" "Zeros-1" "Ones-1")
-                                       (global-env->static (env->global env))
-                                       (stdlib-static-env))
-                    (posp m)
-                    (integerp n)
-                    (<= m n)
-                    (<= 3 (nfix clk))
-                    (val-case mi :v_int)
-                    (val-case xb :v_bitvector)
-                    (equal xb.len m)
-                    (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                             (env->global env)))))
-               (equal (mv-nth 0 (eval_subprogram env "SignExtend-1"
-                                                 (list (v_int n) mi)
-                                                 (list xb) :clk clk))
-                      (ev_normal (func_result (list (v_bitvector n (loghead n (logext m xb.val))))
-                                              (env->global env))))))
-    :hints (("goal" :expand ((:free (m)
-                              (eval_subprogram env "SignExtend-1"
-                                               (list (v_int n) mi)
-                                               (list xb) :clk clk)))
-             :rw-cache-state nil
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int
-                                slices_sub
-                                check-bad-slices
-                                logext))
-             :do-not-induct t))))
+   (local (defthm loghead-of-v_bitvector->val
+            (implies (>= (nfix n) (v_bitvector->len x))
+                     (equal (loghead n (v_bitvector->val x))
+                            (v_bitvector->val x)))
+            :hints (("goal" :use ((:instance v_bitvector-requirements))
+                     :in-theory (e/d (nfix)
+                                     (v_bitvector-requirements))))))))
 
 
-(defsection SignExtend-correct
-           
-  
-  (defthm SignExtend-correct
-    (implies (and (subprograms-match '("SignExtend" "SignExtend-1" "Replicate-1" "Zeros-1" "Ones-1")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (posp m)
-                  (integerp n)
-                  (<= m n)
-                  (<= 4 (nfix clk))
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "SignExtend"
-                                               (list (v_int n) (v_int m))
-                                               (list (v_bitvector m x) (v_int n)) :clk clk))
-                    (ev_normal (func_result (list (v_bitvector n (loghead n (logext m (nfix x)))))
-                                            (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram env "SignExtend"
-                                                   (list (v_int n) (v_int m))
-                                                   (list (v_bitvector m x) (v_int n))
-                                                   :clk clk))
-             :rw-cache-state nil
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int
-                                slices_sub
-                                check-bad-slices
-                                logext))
-             :do-not-induct t))))
+(def-asl-subprogram SignExtend-correct
+  :function "SignExtend"
+  :params (n m)
+  :args (x n)
+  :hyps (and (< 0 m.val)
+             (<= m.val n.val))
+  :return-values ((v_bitvector n.val (loghead n.val (logext m.val x.val))))
+  :enable (logext))
 
 
-(defsection Extend-1-correct
-           
-  
-  (defthm Extend-1-correct
-    (implies (and (subprograms-match '("Extend-1" "SignExtend-1" "ZeroExtend-1" "Replicate-1" "Zeros-1" "Ones-1")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (posp m)
-                  (integerp n)
-                  (<= m n)
-                  (<= 5 (nfix clk))
-                  (val-case ub :v_bool)
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "Extend-1"
-                                               (list (v_int n) (v_int m))
-                                               (list (v_bitvector m x) ub) :clk clk))
-                    (ev_normal (func_result (list (v_bitvector n
-                                                               (if (v_bool->val ub)
-                                                                   (loghead m (nfix x))
-                                                                 (loghead n (logext m (nfix x))))))
-                                            (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram env "Extend-1"
-                                                   (list (v_int n) (v_int m))
-                                                   (list (v_bitvector m x) ub)
-                                                   :clk clk))
-             :rw-cache-state nil
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int
-                                slices_sub
-                                check-bad-slices
-                                logext))
-             :do-not-induct t))))
+(def-asl-subprogram Extend-1-correct
+  :function "Extend-1"
+  :params (n m)
+  :args (x unsigned)
+  :hyps (and (or unsigned.val
+                 (< 0 m.val))
+             (<= m.val n.val))
+  :return-values ((v_bitvector n.val
+                               (if unsigned.val
+                                   x.val
+                                 (loghead n.val (logext m.val x.val))))))
 
 
-(defsection Extend-correct
-           
-  
-  (defthm Extend-correct
-    (implies (and (subprograms-match '("Extend" "Extend-1" "SignExtend-1" "ZeroExtend-1" "Replicate-1" "Zeros-1" "Ones-1")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (posp m)
-                  (integerp n)
-                  (<= m n)
-                  (<= 6 (nfix clk))
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "Extend"
-                                               (list (v_int n) (v_int m))
-                                               (list (v_bitvector m x) (v_int n) (v_bool unsigned)) :clk clk))
-                    (ev_normal (func_result (list (v_bitvector n
-                                                               (if unsigned
-                                                                   (loghead m (nfix x))
-                                                                 (loghead n (logext m (nfix x))))))
-                                            (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram env "Extend"
-                                                   (list (v_int n) (v_int m))
-                                                   (list (v_bitvector m x) (v_int n) (v_bool unsigned))
-                                                   :clk clk))
-             :rw-cache-state nil
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int
-                                slices_sub
-                                check-bad-slices
-                                logext))
-             :do-not-induct t))))
+(def-asl-subprogram Extend-correct
+  :function "Extend"
+  :params (n m)
+  :args (x n unsigned)
+  :hyps (and (or unsigned.val
+                 (< 0 m.val))
+             (<= m.val n.val))
+  :return-values ((v_bitvector n.val
+                               (if unsigned.val
+                                   x.val
+                                 (loghead n.val (logext m.val x.val))))))
 
 
 
 
 
-
-
-(defsection CountLeadingZeroBits-correct
-  
-  (defthm CountLeadingZeroBits-correct
-    (implies (and (subprograms-match '("CountLeadingZeroBits" "HighestSetBit")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (not (negp n))
-                  (posp clk)
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "CountLeadingZeroBits"
-                                               (list (v_int n))
-                                               (list (v_bitvector n x)) :clk clk))
-                    (ev_normal (func_result (list (v_int (- (ifix n) (integer-length (loghead n (nfix x))))))
-                                            (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram env "CountLeadingZeroBits"
-                                               (list (v_int n))
-                                               (list (v_bitvector n x)) :clk clk))
-             :rw-cache-state nil
-             :cases ((eql (loghead n (nfix x)) 0))
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int
-                                slices_sub))
-             :do-not-induct t))))
+(def-asl-subprogram CountLeadingZeroBits-correct
+  :function "CountLeadingZeroBits"
+  :params (n)
+  :args (x)
+  :return-values ((v_int (- n.val (integer-length x.val)))))
 
 
 ;; NOTE: This seems intentional, but note the difference between the specs of
 ;; CountLeadingZeroBits and CountLeadingSignBits: the former counts all the
 ;; zeros leading up to the most significant 1 bit, whereas the latter counts
 ;; the leading 0s/1s except for the sign bit.
-(defsection CountLeadingSignBits-correct
+(def-asl-subprogram CountLeadingSignBits-correct
+  :function "CountLeadingSignBits"
+  :params (n)
+  :args (x)
+  :hyps (< 0 n.val)
+  :return-values ((v_int (- n.val (+ 1 (integer-length (logext n.val x.val))))))
+  :prepwork
+  ((local (defthm integer-length-equal-0
+            (implies (natp x)
+                     (equal (equal (integer-length x) 0)
+                            (equal x 0)))
+            :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-recursive-redefs
+                                                     bitops::ihsext-inductions)))))
 
-  (local (defthm integer-length-equal-0
-           (implies (natp x)
-                    (equal (equal (integer-length x) 0)
-                           (equal x 0)))
-           :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-recursive-redefs
-                                                    bitops::ihsext-inductions)))))
 
+   (local (defthm integer-length-logxor
+            (implies (and (posp n)
+                          (unsigned-byte-p n x))
+                     (equal (integer-length (logxor (logtail 1 x)
+                                                    (loghead (+ -1 n) x)))
+                            (integer-length (logext n x))))
+            :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-inductions
+                                                     bitops::ihsext-recursive-redefs)))))
 
-  (local (defthm integer-length-logxor
-           (implies (posp n)
-                    (equal (integer-length (logxor (loghead (+ -1 n) x)
-                                                   (loghead (+ -1 n) (logtail 1 x))))
-                           (integer-length (logext n x))))
-           :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-inductions
-                                                    bitops::ihsext-recursive-redefs)))))
-
-  (local (defthm logext-when-loghead-0
-           (implies (and (equal (loghead n x) 0)
-                         (posp n))
-                    (Equal (logext n x) 0))
-           :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-inductions
-                                                    bitops::ihsext-recursive-redefs)))))
-  
-  (defthm CountLeadingSignBits-correct
-    (implies (and (subprograms-match '("CountLeadingSignBits" "CountLeadingZeroBits" "HighestSetBit")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (posp n)
-                  (<= 2 (nfix clk))
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "CountLeadingSignBits"
-                                               (list (v_int n))
-                                               (list (v_bitvector n x)) :clk clk))
-                    (ev_normal (func_result (list (v_int (- (ifix n) (+ 1 (integer-length (logext n (nfix x)))))))
-                                            (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram env "CountLeadingSignBits"
-                                               (list (v_int n))
-                                               (list (v_bitvector n x)) :clk clk))
-             :rw-cache-state nil
-             :cases ((eql (loghead n (nfix x)) 0))
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int
-                                slices_sub
-                                check-bad-slices))
-             :do-not-induct t))))
+   (local (defthm logext-when-loghead-0
+            (implies (and (equal (loghead n x) 0)
+                          (posp n))
+                     (Equal (logext n x) 0))
+            :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-inductions
+                                                     bitops::ihsext-recursive-redefs)))))))
 
 

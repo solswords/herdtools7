@@ -88,117 +88,48 @@
             :rule-classes :linear))))
 
 
-(defsection floorpow2-correct
+(local (defthm rational-exponent-type-when-posp
+         (implies (posp x)
+                  (natp (acl2::rational-exponent x)))
+         :hints(("Goal" :in-theory (enable acl2::rational-exponent-induct
+                                           acl2::rational-exponent-recursive)))
+         :rule-classes :type-prescription))
 
-  (local (defthm rational-exponent-type-when-posp
-           (implies (posp x)
-                    (natp (acl2::rational-exponent x)))
-           :hints(("Goal" :in-theory (enable acl2::rational-exponent-induct
-                                             acl2::rational-exponent-recursive)))
-           :rule-classes :type-prescription))
-  
-  (defthm floorpow2-correct
-    (implies (and (subprograms-match '("FloorPow2")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (posp x)
-                  (integerp clk)
-                  (< (acl2::rational-exponent x) clk)
-                  (< (acl2::rational-exponent x) (expt 2 128))
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "FloorPow2" nil (list (v_int x)) :clk clk))
-                    (ev_normal (func_result (list (v_int (acl2::floor-pow-2 x))) (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram env "FloorPow2" nil (list (v_int x)) :clk clk))
-             :in-theory (enable check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                acl2::floor-pow-2)
-             :do-not-induct t))))
+(def-asl-subprogram floorpow2-correct
+  :function "FloorPow2"
+  :args (x)
+  :safe-clock (+ 1 (acl2::rational-exponent x.val))
+  :hyps (and (< 0 x.val)
+             (<= (+ 1 (acl2::rational-exponent x.val)) (expt 2 128)))
+  :return-values ((v_int (acl2::floor-pow-2 x.val)))
+  :enable (acl2::floor-pow-2))
 
 
 
-(defsection ceilpow2-correct
-
-  (local (defthm rational-exponent-type-when-posp
-           (implies (posp x)
-                    (natp (acl2::rational-exponent x)))
-           :hints(("Goal" :in-theory (enable acl2::rational-exponent-induct
-                                             acl2::rational-exponent-recursive)))
-           :rule-classes :type-prescription))
-  
-  (defthm ceilpow2-correct
-    (implies (and (subprograms-match '("CeilPow2" "FloorPow2")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (posp x)
-                  (integerp clk)
-                  (< (+ 1 (acl2::rational-exponent (1- x))) clk)
-                  (< (+ 1 (acl2::rational-exponent (1- x))) (expt 2 128))
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "CeilPow2" nil (list (v_int x)) :clk clk))
-                    (ev_normal (func_result (list (v_int (acl2::ceil-pow-2 x))) (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram env "CeilPow2" nil (list (v_int x)) :clk clk))
-             :in-theory (enable check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                acl2::ceil-pow-2)
-             :do-not-induct t))))
+(def-asl-subprogram ceilpow2-correct
+  :function "CeilPow2"
+  :args (x)
+  :safe-clock (+ 2 (acl2::rational-exponent (1- x.val)))
+  :hyps (and (< 0 x.val)
+             (<= (+ 2 (acl2::rational-exponent (1- x.val))) (expt 2 128)))
+  :return-values ((v_int (acl2::ceil-pow-2 x.val)))
+  :enable (acl2::ceil-pow-2))
 
 
-(defsection ispow2-correct
-
-  (local (defthm rational-exponent-type-when-posp
-           (implies (posp x)
-                    (natp (acl2::rational-exponent x)))
-           :hints(("Goal" :in-theory (enable acl2::rational-exponent-induct
-                                             acl2::rational-exponent-recursive)))
-           :rule-classes :type-prescription))
-
-  (local (defthm rational-exponent-of-xminus1
+(def-asl-subprogram ispow2-correct
+  :function "IsPow2"
+  :args (x)
+  :safe-clock (+ 3 (acl2::rational-exponent x.val))
+  :hyps (<= (+ 3 (acl2::rational-exponent x.val)) (expt 2 128))
+  :return-values ((v_bool (acl2::is-pow-2 x.val)))
+  :enable (acl2::is-pow-2)
+  :prepwork
+  ((local (defthm rational-exponent-of-xminus1
            (implies (posp x)
                     (<= (acl2::rational-exponent (+ -1 x)) (acl2::rational-exponent x)))
            :hints (("goal" :use ((:instance acl2::rational-exponent-monotonic
                                   (x (1- x)) (y x)))
                     :in-theory (disable acl2::rational-exponent-monotonic)))
-           :rule-classes :linear))
-  
-  (defthm ispow2-correct
-    (implies (and (subprograms-match '("IsPow2" "FloorPow2" "CeilPow2")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (integerp x)
-                  (integerp clk)
-                  (< (+ 2 (acl2::rational-exponent x)) clk)
-                  (< (+ 2 (acl2::rational-exponent x)) (expt 2 128))
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "IsPow2" nil (list (v_int x)) :clk clk))
-                    (ev_normal (func_result (list (v_bool (acl2::is-pow-2 x))) (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram env "IsPow2" nil (list (v_int x)) :clk clk))
-             :in-theory (enable check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                acl2::is-pow-2)
-             :do-not-induct t))))
+           :rule-classes :linear))))
 
 

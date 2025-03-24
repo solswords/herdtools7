@@ -61,59 +61,35 @@
                             (+ 1 END))))))))
 
 
-(defsection sqrtrounded-correct
+(def-asl-subprogram sqrtrounded-correct
+  :function "SqrtRounded"
+  :args (val fracbits)
+  :safe-clock (sqrtrounded-safe-clock val.val)
+  :hyps (and (< 0 val.val)
+             (< 0 fracbits.val)
+             (<= (sqrtrounded-safe-clock val.val) (expt 2 128)))
+  :return-values ((v_real (acl2::sqrtrounded val.val fracbits.val)))
+  :enable (acl2::sqrtrounded)
+  :prepwork
+  ((define sqrtrounded-safe-clock ((val rationalp))
+     :guard (< 0 val)
+     :returns (clock posp :rule-classes :type-prescription)
+     (+ 1 (ilog2-safe-clock val))
+     ///
+     (defthm sqrtrounded-safe-clock-linear
+       (< (ilog2-safe-clock val) (sqrtrounded-safe-clock val))
+       :rule-classes :linear))
 
-
-  (define sqrtrounded-safe-clock ((val rationalp))
-    :guard (< 0 val)
-    :returns (clock posp :rule-classes :type-prescription)
-    (+ 1 (ilog2-safe-clock val))
-    ///
-    (defthm sqrtrounded-safe-clock-linear
-      (< (ilog2-safe-clock val) (sqrtrounded-safe-clock val))
-      :rule-classes :linear))
-
-  (local (in-theory (disable acl2::ilog2-is-ilog2-spec)))
+   (local (in-theory (disable acl2::ilog2-is-ilog2-spec)))
   
-  (local (defthm integerp-of-plus-half
-           (implies (and (integerp x)
-                         (not (integerp (* 1/2 x))))
-                    (integerp (+ -1/2 (* 1/2 x))))
-           :hints (("goal" :use ((:instance acl2::mod-=-0
-                                  (x x) (y 2))
-                                 (:instance acl2::mod-=-0
-                                  (x (- x 1)) (y 2)))
-                    :in-theory (disable acl2::mod-=-0)))))
-
-  (defthm sqrtrounded-correct
-    (implies (and (subprograms-match '("Abs" "SqrtRounded" "ILog2" "Real" "Log2")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (rationalp val)
-                  (< 0 val)
-                  (posp fracbits)
-                  (integerp clk)
-                  (<= (sqrtrounded-safe-clock val) clk)
-                  (<= (sqrtrounded-safe-clock val) (expt 2 128))
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "SqrtRounded" nil (list (v_real val)
-                                                                           (v_int fracbits)) :clk clk))
-                    (ev_normal (func_result (list (v_real (acl2::sqrtrounded val fracbits))) (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram  env "SqrtRounded" nil (list (v_real val)
-                                                                           (v_int fracbits)) :clk clk))
-             :in-theory (enable check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int
-                                acl2::sqrtrounded)
-             :do-not-induct t))))
+   (local (defthm integerp-of-plus-half
+            (implies (and (integerp x)
+                          (not (integerp (* 1/2 x))))
+                     (integerp (+ -1/2 (* 1/2 x))))
+            :hints (("goal" :use ((:instance acl2::mod-=-0
+                                   (x x) (y 2))
+                                  (:instance acl2::mod-=-0
+                                   (x (- x 1)) (y 2)))
+                     :in-theory (disable acl2::mod-=-0)))))))
 
 

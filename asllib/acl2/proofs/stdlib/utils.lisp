@@ -24,6 +24,7 @@
 
 (include-book "../../interp")
 (include-book "centaur/meta/variable-free" :dir :system)
+(include-book "tools/easy-simplify" :dir :system)
 
 (define find-nth-form-aux ((n natp)
                            (tag symbolp)
@@ -367,8 +368,8 @@
                   (<static-env> . ,static-env)
                   (<invariants> . ,invariants)
                   (<concl> . ,normal-concl))
-         :splices `((<defloop-enables> . (defloop-enables))
-                    (<defloop-disables> . (defloop-disables))
+         :splices `((<defloop-enables> . (asl-code-proof-enables))
+                    (<defloop-disables> . (asl-code-proof-disables))
                     (<user-enables> . ,enable)
                     (<user-disables> . ,disable)
                     (<local-var-bindings> . ,local-var-bindings)
@@ -422,29 +423,474 @@
 
 
 
+(table asl-subprogram-table)
 
-(acl2::def-ruleset! defloop-enables '(check_recurse_limit
-                                      declare_local_identifiers
-                                      declare_local_identifier
-                                      env-find
-                                      env-assign
-                                      env-assign-local
-                                      env-assign-global
-                                      env-push-stack
-                                      env-pop-stack
-                                      pop_scope
-                                      tick_loop_limit
-                                      v_to_bool
-                                      eval_for_step
-                                      for_loop-step
-                                      for_loop-test
-                                      check-bad-slices
-                                      slices_sub
-                                      check_non_overlapping_slices
-                                      check_non_overlapping_slices-1
-                                      slices-width
-                                      write_to_bitvector
-                                      write_to_bitvector-aux
-                                      vbv-to-int))
 
-(acl2::def-ruleset defloop-disables nil)
+(define subprogram-param-bindings ((params symbol-listp)
+                                   (fn-params maybe-typed_identifierlist-p))
+  :guard (equal (len params) (len fn-params))
+  (b* (((when (atom params)) nil)
+       ((maybe-typed_identifier p1) (car fn-params))
+       (ctor (if p1.type
+                 (b* ((ty (ty->val p1.type)))
+                   (type_desc-case ty
+                     (:t_int 'v_int)
+                     (:t_bits 'v_bitvector)
+                     (:t_real 'v_real)
+                     (:t_string 'v_string)
+                     (:t_bool 'v_bool)
+                     (:t_enum 'v_label)
+                     (:t_tuple 'v_array)
+                     (:t_array 'v_array)
+                     (:t_record 'v_record)
+                     (:t_exception 'v_record)
+                     (:t_collection 'v_record)
+                     (:otherwise nil)))
+               'v_int))
+       ((unless ctor)
+        (er hard? 'def-asl-subprogram "Couldn't understand parameter: ~x0" p1)))
+    (cons `((,ctor ,(car params)))
+          (subprogram-param-bindings (cdr params) (cdr fn-params)))))
+
+(define subprogram-arg-bindings ((args symbol-listp)
+                                   (fn-args typed_identifierlist-p))
+  :guard (equal (len args) (len fn-args))
+  (b* (((when (atom args)) nil)
+       ((typed_identifier p1) (car fn-args))
+       (ctor (b* ((ty (ty->val p1.type)))
+               (type_desc-case ty
+                 (:t_int 'v_int)
+                 (:t_bits 'v_bitvector)
+                 (:t_real 'v_real)
+                 (:t_string 'v_string)
+                 (:t_bool 'v_bool)
+                 (:t_enum 'v_label)
+                 (:t_tuple 'v_array)
+                 (:t_array 'v_array)
+                 (:t_record 'v_record)
+                 (:t_exception 'v_record)
+                 (:t_collection 'v_record)
+                 (:otherwise nil))))
+       ((unless ctor)
+        (er hard? 'def-asl-subprogram "Couldn't understand arg: ~x0" p1)))
+    (cons `((,ctor ,(car args)))
+          (subprogram-arg-bindings (cdr args) (cdr fn-args)))))
+
+
+
+
+(logic)
+(define constraint_kind-remove-parameters ((x constraint_kind-p))
+  :returns (new-x constraint_kind-p)
+  (constraint_kind-case x
+    :parametrized (unconstrained)
+    :otherwise (constraint_kind-fix x)))
+
+
+(defines ty-remove-parameters
+  :ruler-extenders :lambdas
+  :verify-guards nil
+  (define ty-remove-parameters ((x ty-p))
+    :measure (ty-count x)
+    :returns (new-x ty-p)
+    (b* ((?orig x)
+         (x (ty->val x)))
+      (change-ty orig
+                 :val
+                 (type_desc-case x
+                   :t_int (t_int (constraint_kind-remove-parameters x.constraint))
+                   :t_tuple (t_tuple (tylist-remove-parameters x.types))
+                   :t_array (change-t_array x :type (ty-remove-parameters x.type))
+                   :t_record (t_record (typed_identifierlist-remove-parameters x.fields))
+                   :t_exception (t_exception (typed_identifierlist-remove-parameters x.fields))
+                   :t_collection (t_collection (typed_identifierlist-remove-parameters x.fields))
+                   :otherwise x))))
+  (define tylist-remove-parameters ((x tylist-p))
+    :measure (tylist-count x)
+    :returns (new-x tylist-p)
+    (if (atom x)
+        nil
+      (cons (ty-remove-parameters (car x))
+            (tylist-remove-parameters (cdr x)))))
+
+  (define typed_identifierlist-remove-parameters ((x typed_identifierlist-p))
+    :measure (typed_identifierlist-count x)
+    :returns (new-x typed_identifierlist-p)
+    (if (atom x)
+        nil
+      (cons (b* (((typed_identifier x1) (car x)))
+              (change-typed_identifier x1 :type (ty-remove-parameters x1.type)))
+            (typed_identifierlist-remove-parameters (cdr x)))))
+  ///
+  (verify-guards ty-remove-parameters)
+  (fty::deffixequiv-mutual ty-remove-parameters))
+                          
+
+(program)
+
+(define simplify-for-def-asl-subprogram (term hyp state)
+  ;; NOTE: always simplifies under IFF
+  (acl2::easy-simplify-term-fn term hyp
+                               '(:expand (:lambdas)
+                                 :in-theory (acl2::e/d* (asl-code-proof-enables)
+                                                        (asl-code-proof-disables))) ;; hints
+                               'iff   ;; equiv
+                               t      ;; normalize
+                               t      ;; rewrite
+                               1000   ;; repeat
+                               1000   ;; backchain-limit
+                               t      ;; untrans-result
+                               state))
+
+
+(define subprogram-arg-hyp ((var symbolp)
+                            (type ty-p)
+                            hyps 
+                            (local-storage-term)
+                            state)
+  (b* ((env-term `(change-env
+                   env
+                   :local (change-local-env
+                           (empty-local-env)
+                           :storage ,local-storage-term)))
+       (type (ty-remove-parameters type))
+       (is-val-term `(mv-let (res orac) (resolve-ty ,env-term ',type :clk 10000)
+                       (declare (ignore orac))
+                       (and (eval_result-case res :ev_normal)
+                            (ty-satisfied ,var (ev_normal->res res))))))
+    (simplify-for-def-asl-subprogram is-val-term `(and . ,hyps) state)))
+
+(define subprogram-param-hyps ((params symbol-listp)
+                               (fn-params maybe-typed_identifierlist-p)
+                               hyps
+                               (local-storage-term)
+                               state)
+  :guard (equal (len params) (len fn-params))
+  (b* (((when (atom params)) (value (cons hyps local-storage-term)))
+       ((maybe-typed_identifier p1) (car fn-params))
+       (new-local-storage-term `(put-assoc-equal ,p1.name ,(car params) ,local-storage-term))
+       ((unless p1.type)
+        (subprogram-param-hyps (cdr params) (cdr fn-params) hyps new-local-storage-term state))
+       ((er first) (subprogram-arg-hyp (car params) p1.type hyps local-storage-term state))
+       ((when (eq first nil))
+        (er soft 'def-asl-subprogram "Unsatisfiable parameter type: ~x0" p1)))
+    (subprogram-param-hyps (cdr params) (cdr fn-params)
+                           (if (eq first t)
+                               hyps
+                             (cons first hyps))
+                           new-local-storage-term state)))
+
+
+(define subprogram-arg-hyps ((args symbol-listp)
+                               (fn-args maybe-typed_identifierlist-p)
+                               hyps
+                               (local-storage-term)
+                               state)
+  :guard (equal (len args) (len fn-args))
+  (b* (((when (atom args)) (value (cons hyps local-storage-term)))
+       ((maybe-typed_identifier p1) (car fn-args))
+       (new-local-storage-term `(put-assoc-equal ,p1.name ,(car args) ,local-storage-term))
+       ((er first) (subprogram-arg-hyp (car args) p1.type hyps local-storage-term state))
+       ((when (eq first nil))
+        (er soft 'def-asl-subprogram "Unsatisfiable parameter type: ~x0" p1)))
+    (subprogram-arg-hyps (cdr args) (cdr fn-args)
+                         (if (eq first t)
+                             hyps
+                           (cons first hyps))
+                         new-local-storage-term state)))
+    
+    
+
+
+
+(defconst *def-asl-subprogram-template*
+  '(progn
+
+     (local (in-theory (acl2::e/d* (<subprogram-enables>
+                                    <user-enables>)
+                                   (<subprogram-disables>
+                                    <user-disables>))))
+     (defthm <name>
+       (b* (<param-bindings>
+            <arg-bindings>
+            <user-bindings>)
+         (implies (and (subprograms-match '<subprograms>
+                                          (global-env->static (env->global env))
+                                          <static-env>)
+                       <hyps>
+                       <measure-reqs>)
+                  (let* ((res (mv-nth 0 (eval_subprogram
+                                         env <fn>
+                                         <params>
+                                         <args>)))
+                         (spec (ev_normal (func_result <retvals> (env->global env)))))
+                    <concl>)))
+       :hints (("goal" :expand ((:free (params args)
+                                 (eval_subprogram env <fn> params args :clk clk))))
+               <hints>))
+
+     (table asl-subprogram-table
+            <fn> (list '<subprograms>
+                       '<direct-subprograms>
+                       '<clk-expr>
+                       '<name>))))
+
+(define collect-direct-subprograms (body acc)
+  (if (atom body)
+      acc
+    (case (tag body)
+      (:e_call (collect-direct-subprograms
+                (cdr body)
+                (add-to-set-equal (call->name (ec-call (e_call->call body))) acc)))
+      (:s_call (collect-direct-subprograms
+                (cdr body)
+                (add-to-set-equal (call->name (ec-call (s_call->call body))) acc)))
+      (t (collect-direct-subprograms
+          (cdr body)
+          (collect-direct-subprograms (car body) acc))))))
+
+(define collect-transitive-subprograms (lst table acc)
+  (b* (((when (atom lst)) acc)
+       (first (car lst))
+       (acc (add-to-set-equal first acc))
+       (look (cdr (hons-assoc-equal first table)))
+       (acc (if look
+                (union-equal (car look) acc)
+              acc)))
+    (collect-transitive-subprograms (cdr lst) table acc)))
+    
+
+
+(define maximize-const-clocks (subprogram-lst table const-acc)
+  (b* (((when (atom subprogram-lst))
+        const-acc)
+       (first (car subprogram-lst))
+       (look (cdr (hons-assoc-equal first table)))
+       ((unless look)
+        (maximize-const-clocks (cdr subprogram-lst) table const-acc))
+       (look-clk (caddr look)))
+    (maximize-const-clocks (cdr subprogram-lst) table
+                           (if (integerp look-clk)
+                               (max look-clk const-acc)
+                             const-acc))))
+    
+
+
+(define cleanup-hyps (hyplist)
+  (b* (((when (atom hyplist)) nil)
+       (hyp (car hyplist))
+       (rest (cleanup-hyps (cdr hyplist))))
+    (case-match hyp
+      (('and  . hyps)
+       (append (cleanup-hyps hyps) rest))
+      (('not ('< x y))
+       (cons `(<= ,y ,x) rest))
+      (& (cons hyp rest)))))
+
+
+(define binding-alist-to-rev-subst (x var)
+  (b* (((when (atom x)) nil)
+       ((cons field acc) (car x)))
+    (cons (cons `(,acc ,var)
+                (intern-in-package-of-symbol
+                 (concatenate 'string (symbol-name var) "." (symbol-name field))
+                 'asl-pkg))
+          (binding-alist-to-rev-subst (cdr x) var))))
+
+(define val-bindings-rev-subst (x state) ;; list of bindings e.g. (((v_int n)) ((v_bitvector x)))
+  (b* (((when (atom x)) nil)
+       (binding (car x))
+       (rest (val-bindings-rev-subst (cdr x) state)))
+    (case-match binding
+      (((ctor var) . &)
+       (b* ((ctor-macro (intern-in-package-of-symbol
+                         (concatenate 'string "PATBIND-" (symbol-name ctor))
+                         ctor))
+            (body (fgetprop ctor-macro 'acl2::macro-body nil (w state))))
+         (case-match body
+           (('std::da-patbind-fn & ('quote alist) . &)
+            (append (binding-alist-to-rev-subst alist var) rest))
+           (& (er hard? 'val-bindings-rev-subst "Bad ctor patbind macro ~x0" ctor-macro)))))
+      (& (er hard? 'val-bindings-rev-subst "Bad binding body" binding)))))
+
+
+(define sublis-subtrees (subst tree)
+  (let ((pair (assoc-equal tree subst)))
+    (if pair
+        (cdr pair)
+      (if (atom tree)
+          tree
+        (cons (sublis-subtrees subst (car tree))
+              (sublis-subtrees subst (cdr tree)))))))
+    
+         
+
+
+(define def-asl-subprogram-fn (name args state)
+  (b* (((std::extract-keyword-args
+         :other-args bad-args
+         :allowed-keys '(:prepwork)
+         ;; :kwd-alist kwd-alist
+         function
+         params
+         args
+         safe-clock
+         
+         return-values
+         (hyps 't)
+         
+         enable
+         disable
+         hints
+         ;; prepwork
+
+         error-cond
+         throwing-cond
+         throwing-res
+         
+         bindings
+         (static-env '(stdlib-static-env)))
+        args)
+       
+       ((when bad-args)
+        (er soft 'def-asl-subprogram "Bad arguments: ~x0" bad-args))
+       ((unless (stringp function))
+        (er soft 'def-asl-subprogram "Function should be a string: ~x0" function))
+       ((acl2::er (cons & static-env-val))
+        (acl2::simple-translate-and-eval static-env nil nil
+                                         (msg "static env ~x0" static-env)
+                                         'def-asl-subprogram (w state) state t))
+       ((unless (static_env_global-p static-env-val))
+        (er soft 'def-asl-subprogram "Bad static env (evaluation of ~x0): doesn't satisfy static_env_global-p" static-env))
+       (fn-struct (cdr (hons-assoc-equal function
+                                         (static_env_global->subprograms static-env-val))))
+       ((unless fn-struct)
+        (er soft 'def-asl-subprogram "Bad function ~x0: not found in static env" function))
+       ((func-ses fn-struct))
+       ((func f) fn-struct.fn)
+
+       ((unless (symbol-listp params))
+        (er soft 'def-asl-subprogram "Params should be a symbol-list"))
+       ((unless (eql (len params) (len f.parameters)))
+        (er soft 'def-asl-subprogram "~x0 params were given but ~s1 has ~x2 parameters" (len params) function (len f.parameters)))
+       ((unless (symbol-listp args))
+        (er soft 'def-asl-subprogram "Args should be a symbol-list"))
+       ((unless (eql (len args) (len f.args)))
+        (er soft 'def-asl-subprogram "~x0 args were given but ~s1 has ~x2 args" (len args) function (len f.args)))
+
+       (param-bindings (subprogram-param-bindings params f.parameters))
+       (arg-bindings (set-difference-equal (subprogram-arg-bindings args f.args) param-bindings))
+       (binding-subst (val-bindings-rev-subst (append param-bindings arg-bindings) state))
+
+       ((er hyps) (simplify-for-def-asl-subprogram `(b* (,@param-bindings ,@arg-bindings) ,hyps) t state))
+       (hyp-list (reverse (cleanup-hyps (list hyps))))
+       ((er (cons hyp-list storage-term)) (subprogram-param-hyps params f.parameters hyp-list 'env.local.storage state))
+       ((er (cons hyp-list &)) (subprogram-arg-hyps args f.args hyp-list storage-term state))
+       (hyps (sublis-subtrees binding-subst (cleanup-hyps (reverse hyp-list))))
+
+       (direct-subprograms (collect-direct-subprograms f.body nil))
+       (table  (table-alist 'asl-subprogram-table (w state)))
+       (subprograms (cons function (collect-transitive-subprograms direct-subprograms table nil)))
+
+       (clk-val
+        (or safe-clock
+            (+ 1 (maximize-const-clocks direct-subprograms table -1))))
+
+       (measure-reqs (if (eql clk-val 0)
+                         t
+                       `(<= ,clk-val (ifix clk))))
+
+       (concl (if error-cond
+                  (let ((error-concl `(implies ,error-cond
+                                               (equal (eval_result-kind res) :ev_error))))
+                    (if throwing-cond
+                        `(and ,error-concl
+                              (implies ,throwing-cond
+                                       (equal res ,throwing-res))
+                              (implies (and (not ,error-cond)
+                                            (not ,throwing-cond))
+                                       (equal res spec)))
+                      `(and ,error-concl
+                            (implies (not ,error-cond)
+                                     (equal res spec)))))
+                (if throwing-cond
+                    `(and (implies ,throwing-cond
+                                   (equal res ,throwing-res))
+                          (implies (not ,throwing-cond)
+                                   (equal res spec)))
+                  '(equal res spec))))
+
+       (template (acl2::make-tmplsubst
+                  :atoms `((<name> . ,name)
+                           (<subprograms> . ,subprograms)
+                           (<direct-subprograms> . ,direct-subprograms)
+                           (<static-env> . ,static-env)
+                           (<measure-reqs> . ,measure-reqs)
+                           (<fn> . ,function)
+                           (<clk-expr> . ,clk-val)
+                           (<params> . (list . ,params))
+                           (<args>   . (list . ,args))
+                           (<retvals> . (list . ,return-values))
+                           (<concl> . ,concl))
+                  :splices `((<subprogram-enables> . (asl-code-proof-enables))
+                             (<subprogram-disables> . (asl-code-proof-disables))
+                             (<user-enables> . ,enable)
+                             (<user-disables> . ,disable)
+                             (<param-bindings> . ,param-bindings)
+                             (<arg-bindings> . ,arg-bindings)
+                             (<user-bindings> . ,bindings)
+                             (<hyps> . ,hyps)
+                             (<hints> . ,hints)))))
+
+    (value (acl2::template-subst-top *def-asl-subprogram-template* template))))
+
+(defmacro def-asl-subprogram (name &rest args)
+  (let* ((prepwork (cadr (assoc-keyword :prepwork args))))
+    `(defsection ,name
+       ,@prepwork
+       (make-event (def-asl-subprogram-fn ',name ',args state)))))
+
+
+                             
+                             
+                             
+
+       
+       
+       
+        
+
+
+
+
+
+
+
+(acl2::def-ruleset! asl-code-proof-enables
+  '(check_recurse_limit
+    declare_local_identifiers
+    declare_local_identifier
+    remove_local_identifier
+    env-find
+    env-assign
+    env-assign-local
+    env-assign-global
+    env-push-stack
+    env-pop-stack
+    pop_scope
+    tick_loop_limit
+    v_to_bool
+    eval_for_step
+    for_loop-step
+    for_loop-test
+    check-bad-slices
+    slices_sub
+    check_non_overlapping_slices
+    check_non_overlapping_slices-1
+    slices-width
+    write_to_bitvector
+    write_to_bitvector-aux
+    vbv-to-int
+    v_to_int))
+
+(acl2::def-ruleset asl-code-proof-disables nil)
