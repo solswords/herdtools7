@@ -233,32 +233,32 @@ let of_unop x =
        | NEG -> "NEG"
        | NOT -> "NOT")
 
-let of_binop x =
+let of_binop (x : binop) =
   key (match x with
-       | AND -> "AND"
-       | BAND -> "BAND"
-       | BEQ -> "BEQ"
-       | BOR -> "BOR"
-       | DIV -> "DIV"
-       | DIVRM -> "DIVRM"
-       | EOR -> "EOR"
-       | EQ_OP -> "EQ_OP"
-       | GT -> "GT"
-       | GEQ -> "GEQ"
-       | IMPL -> "IMPL"
-       | LT -> "LT"
-       | LEQ -> "LEQ"
-       | MOD -> "MOD"
-       | MINUS -> "MINUS"
-       | MUL -> "MUL"
-       | NEQ -> "NEQ"
-       | OR -> "OR"
-       | PLUS -> "PLUS"
-       | POW -> "POW"
-       | RDIV -> "RDIV"
-       | SHL -> "SHL"
-       | SHR -> "SHR"
-       | BV_CONCAT -> "BV_CONCAT")
+       | `AND -> "AND"
+       | `BAND -> "BAND"
+       | `BEQ -> "BEQ"
+       | `BOR -> "BOR"
+       | `DIV -> "DIV"
+       | `DIVRM -> "DIVRM"
+       | `XOR -> "XOR"
+       | `EQ_OP -> "EQ_OP"
+       | `GT -> "GT"
+       | `GEQ -> "GEQ"
+       | `IMPL -> "IMPL"
+       | `LT -> "LT"
+       | `LEQ -> "LEQ"
+       | `MOD -> "MOD"
+       | `MINUS -> "MINUS"
+       | `MUL -> "MUL"
+       | `NEQ -> "NEQ"
+       | `OR -> "OR"
+       | `PLUS -> "PLUS"
+       | `POW -> "POW"
+       | `RDIV -> "RDIV"
+       | `SHL -> "SHL"
+       | `SHR -> "SHR"
+       | `BV_CONCAT -> "BV_CONCAT")
 
 (* -------------------------------------------------------------------------
 
@@ -298,6 +298,12 @@ let of_bitvector_mask x =
                 ("UNSET", of_bigint(Bitvector.to_z_unsigned(Bitvector.mask_unset x)))])
 
 
+let of_precision_loss_flag x =
+  tagged_list_of_list
+    (match x with
+     | Precision_Full -> [key "PRECISION_FULL"]
+     | Precision_Lost _ -> [key "PRECISION_LOST"])
+
 
 let rec of_expr_desc x =
   tagged_list_of_list
@@ -314,6 +320,7 @@ let rec of_expr_desc x =
      | E_GetEnumArray (x, y) -> [key "E_GETENUMARRAY"; of_expr x; of_expr y]
      | E_GetField (x, i) -> [key "E_GETFIELD"; of_expr x; of_identifier i]
      | E_GetFields (x, i) -> [key "E_GETFIELDS"; of_expr x; of_list_map of_identifier i ]
+     | E_GetCollectionFields (i, ilst) -> [key "E_GETCOLLECTIONFIELDS"; of_identifier i; of_list_map of_identifier ilst ]
      | E_GetItem (x, i) -> [key "E_GETITEM"; of_expr x; of_int i]
      | E_Record (t, lst) -> [key "E_RECORD"; of_ty t; of_list_map (fun (i, e) -> Cons(of_identifier i, of_expr e)) lst]
      | E_Tuple lst -> [key "E_TUPLE"; of_list_map of_expr lst]
@@ -372,6 +379,7 @@ and of_type_desc x =
      | T_Array (i, t) -> [key "T_ARRAY"; of_array_index i; of_ty t]
      | T_Record f -> [key "T_RECORD"; of_list_map of_field f]
      | T_Exception f -> [key "T_EXCEPTION"; of_list_map of_field f]
+     | T_Collection f -> [key "T_COLLECTION"; of_list_map of_field f]
      | T_Named i -> [key "T_NAMED"; of_identifier i])
 
 and of_ty x = of_annotated of_type_desc x
@@ -386,7 +394,7 @@ and of_constraint_kind (x : constraint_kind) =
   tagged_list_of_list
     (match x with
      | UnConstrained -> [key "UNCONSTRAINED"]
-     | WellConstrained lst -> [key "WELLCONSTRAINED"; of_list_map of_int_constraint lst]
+     | WellConstrained (lst, flg) -> [key "WELLCONSTRAINED"; of_list_map of_int_constraint lst; of_precision_loss_flag flg]
      | PendingConstrained -> [key "PENDINGCONSTRAINED"]
      | Parameterized (u, i) -> [key "PARAMETRIZED"; of_uid u; of_identifier i])
 
@@ -424,6 +432,7 @@ let rec of_lexpr_desc x =
      | LE_SetEnumArray (lx, x) -> [key "LE_SETENUMARRAY"; of_lexpr lx; of_expr x]
      | LE_SetField (lx, i) -> [key "LE_SETFIELD"; of_lexpr lx; of_identifier i]
      | LE_SetFields (lx, i, pairs) -> [key "LE_SETFIELDS"; of_lexpr lx; of_list_map of_identifier i; of_list_map (fun (x, y) -> Cons(of_int x, of_int y)) pairs]
+     | LE_SetCollectionFields (i, ilst, pairs) -> [key "LE_SETCOLLECTIONFIELDS"; of_identifier i; of_list_map of_identifier ilst; of_list_map (fun (x, y) -> Cons(of_int x, of_int y)) pairs]
      | LE_Destructuring lx -> [key "LE_DESTRUCTURING"; of_list_map of_lexpr lx])
 
 and of_lexpr x = of_annotated of_lexpr_desc x

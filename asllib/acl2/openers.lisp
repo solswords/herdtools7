@@ -54,4 +54,11 @@
 (defopener open-eval_call eval_call :hyp (syntaxp (quotep name)))
 (defopener open-eval_expr_list eval_expr_list :hyp (syntaxp (quotep e)))
 (defopener open-eval_lexpr eval_lexpr :hyp (syntaxp (quotep lx)))
+(defopener open-eval_limit eval_limit :hyp (syntaxp (quotep x)))
+
+(defopener open-eval_slice_list eval_slice_list :hyp (syntaxp (quotep sl)))
+(defopener open-eval_slice eval_slice :hyp (syntaxp (quotep s)))
+
+(defopener open-is_val_of_type is_val_of_type :hyp (syntaxp (quotep ty)))
+(defopener open-check_int_constraints check_int_constraints :hyp (syntaxp (quotep constrs)))
 

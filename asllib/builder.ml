@@ -134,7 +134,8 @@ let from_file_multi_version ?ast_type ?parser_config = function
   | (`ASLv0 | `ASLv1) as version ->
       from_file_result ?ast_type ?parser_config version
 
-let from_string ~filename ~ast_string version ast_type parser_config =
+let from_string ?ast_type ?(parser_config = default_parser_config) ~filename
+    ~ast_string version =
   let lexbuf = Lexing.from_string ~with_positions:true ast_string in
   lexbuf_set_filename lexbuf filename;
   from_lexbuf ast_type parser_config version lexbuf
@@ -158,7 +159,7 @@ let make_builtin d =
 let stdlib =
   let filename = "ASL Standard Library" and ast_string = Asl_stdlib.stdlib in
   lazy
-    (from_string ~filename ~ast_string `ASLv1 (Some `Ast) default_parser_config
+    (from_string ~filename ~ast_string ~ast_type:`Ast `ASLv1
     |> obfuscate "__stdlib_local_"
     |> List.map make_builtin)
 
@@ -166,7 +167,7 @@ let stdlib0 =
   let filename = "ASL Standard Library (V0 compatibility)"
   and ast_string = Asl_stdlib.stdlib0 in
   lazy
-    (from_string ~filename ~ast_string `ASLv0 (Some `Ast) default_parser_config
+    (from_string ~filename ~ast_string ~ast_type:`Ast `ASLv0
     |> obfuscate "__stdlib_local_"
     |> List.map make_builtin)
 
@@ -200,11 +201,13 @@ let is_stdlib_name =
   in
   fun name -> ISet.mem name (Lazy.force set)
 
-let with_primitives ?(loc = ASTUtils.dummy_annotated) primitives =
-  List.map
-    AST.(
-      fun (f, _) ->
-        D_Func { f with builtin = true } |> ASTUtils.add_pos_from loc)
-    primitives
-  |> obfuscate "__primitive_local_"
-  |> List.rev_append
+let with_primitives ?(loc = ASTUtils.dummy_annotated) primitives ast =
+  let primitive_decls =
+    List.map
+      AST.(
+        fun (f, _) ->
+          D_Func { f with builtin = true } |> ASTUtils.add_pos_from loc)
+      primitives
+    |> obfuscate "__primitive_local_"
+  in
+  ASTUtils.patch ~src:ast ~patches:primitive_decls

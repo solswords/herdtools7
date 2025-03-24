@@ -28,11 +28,16 @@
 (local (include-book "centaur/bitops/ihsext-basics" :dir :system))
 (local (include-book "ihs/quotient-remainder-lemmas" :dir :system))
 (local (include-book "arithmetic/top" :dir :system))
-(local (in-theory (disable (tau-system))))
+(local (in-theory (disable (tau-system) unsigned-byte-p)))
 
 (def-eval_result val_result-p val-p)
 
 (fty::def-enumcase binop-case binop-p)
+
+(local (defthm unsigned-byte-p-of-v_bitvector->val-free
+         (b* (((v_bitvector x)))
+           (implies (equal n x.len)
+                    (unsigned-byte-p n x.val)))))
 
 
 (define eval_binop ((op binop-p)
@@ -59,7 +64,7 @@
      :when (<= 0 v2.val)         (ev_normal (v_int (expt v1.val v2.val))))
     ((:shl   :v_int :v_int)      
      :when (<= 0 v2.val)         (ev_normal (v_int (ash v1.val v2.val))))
-    ((:shl   :v_int :v_int)      
+    ((:shr   :v_int :v_int)      
      :when (<= 0 v2.val)         (ev_normal (v_int (ash v1.val (- v2.val)))))
     ;; int -> int -> bool        
     ((:eq_op :v_int :v_int)      (ev_normal (v_bool (eql v1.val v2.val))))
@@ -75,6 +80,9 @@
     ((:impl :v_bool :v_bool)     (ev_normal (v_bool (or (not v1.val) v2.val))))
     ((:eq_op :v_bool :v_bool)    (ev_normal (v_bool (iff v1.val v2.val))))
     ((:neq   :v_bool :v_bool)    (ev_normal (v_bool (xor v1.val v2.val))))
+    ;; int -> real -> real,  real -> int -> real
+    ((:mul :v_int :v_real)       (ev_normal (v_real (* v1.val v2.val))))
+    ((:mul :v_real :v_int)       (ev_normal (v_real (* v1.val v2.val))))
     ;; real -> real -> real      
     ((:plus :v_real :v_real)     (ev_normal (v_real (+ v1.val v2.val))))
     ((:mul  :v_real :v_real)     (ev_normal (v_real (* v1.val v2.val))))
@@ -102,7 +110,7 @@
      :when (eql v1.len v2.len)    (ev_normal (v_bitvector v1.len (logior v1.val v2.val))))
     ((:and :v_bitvector :v_bitvector)
      :when (eql v1.len v2.len)    (ev_normal (v_bitvector v1.len (logand v1.val v2.val))))
-    ((:eor :v_bitvector :v_bitvector)
+    ((:xor :v_bitvector :v_bitvector)
      :when (eql v1.len v2.len)    (ev_normal (v_bitvector v1.len (logxor v1.val v2.val))))
     ((:plus :v_bitvector :v_bitvector)
      :when (eql v1.len v2.len)    (ev_normal (v_bitvector v1.len
@@ -118,7 +126,7 @@
     ((:plus :v_bitvector :v_int)  (ev_normal (v_bitvector v1.len
                                                           (loghead v1.len (+ v1.val v2.val)))))
     ((:minus :v_bitvector :v_int) (ev_normal (v_bitvector v1.len
-                                                          (loghead v1.len (+ v1.val v2.val)))))
+                                                          (loghead v1.len (- v1.val v2.val)))))
     ;; string -> string -> bool
     ((:eq_op :v_string :v_string) (ev_normal (v_bool (equal v1.val v2.val))))
     ((:neq   :v_string :v_string) (ev_normal (v_bool (not (equal v1.val v2.val)))))

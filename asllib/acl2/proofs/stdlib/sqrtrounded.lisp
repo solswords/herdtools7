@@ -30,104 +30,35 @@
 (local (in-theory (disable (tau-system)
                            hons-assoc-equal
                            put-assoc-equal
-                           floor mod)))
+                           floor mod expt
+                           no-duplicatesp-equal
+                           member-equal)))
 
 
 
-(defsection sqrtrounded-loop
-
-  (defconst *sqrtrounded-loop*
-    (find-nth-form 0 :s_for (assoc-equal "SqrtRounded" (static_env_global->subprograms
-                                                        (stdlib-static-env)))))
-
-  (defconst *sqrtrounded-loop-body*
-    (s_for->body *sqrtrounded-loop*))
-
-  (defthm sqrtrounded-loop-correct
-    (b* ((storage (local-env->storage
-                   (env->local env)))
-         (n-look (assoc-equal "__stdlib_local_n" storage))
-         (n (cdr n-look))
-         ((v_int n))
-         (mant-look (assoc-equal "__stdlib_local_mant" storage))
-         (mant (cdr mant-look))
-         ((v_real mant))
-         (prec-look (assoc-equal "__stdlib_local_prec" storage))
-         (prec (cdr prec-look))
-         ((v_real prec))
-         (root-look (assoc-equal "__stdlib_local_root" storage))
-         (root (cdr root-look))
-         ((v_real root)))
-      (implies (and n-look
-                    (val-case n :v_int)
-                    (equal n.val start)
-                    mant-look
-                    (val-case mant :v_real)
-                    prec-look
-                    (val-case prec :v_real)
-                    root-look
-                    (val-case root :v_real)
-                    (natp clk)
-                    
-                    (integerp start)
-                    (integerp end)
-                    (<= start (+ 1 end))
-                    (no-duplicatesp-equal (acl2::alist-keys storage)))
-               (b* (((mv (ev_normal res) &) (eval_for env "__stdlib_local_n" start :up end *sqrtrounded-loop-body*))
-                    ((continuing res.res))
-                    ((mv root-spec prec-spec) (acl2::sqrtrounded-loop mant.val root.val prec.val start (+ 1 end)))
-                    ((env env))
-                    ((local-env env.local)))
-                 (and (equal res.res.env
-                             (change-env env
-                                         :local (change-local-env
-                                                 env.local
-                                                 :storage (put-assoc-equal "__stdlib_local_n"
-                                                                           (v_int (+ 1 end))
-                                                                           (put-assoc-equal "__stdlib_local_root"
-                                                                                            (v_real root-spec)
-                                                                                            (put-assoc-equal "__stdlib_local_prec"
-                                                                                                             (v_real prec-spec)
-                                                                                                             env.local.storage))))))
-                      (equal (eval_result-kind res) :ev_normal)
-                      (equal (control_flow_state-kind res.res) :continuing)))))
-    :hints (("goal" :induct (for-induct env "__stdlib_local_n" start :up end *sqrtrounded-loop-body* clk orac)
-             :in-theory (enable check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                eval_for_step
-                                for_loop-step
-                                FOR_LOOP-TEST
-                                pop_scope)
-             :expand ((ACL2::SQRTROUNDED-LOOP
-                       (V_REAL->VAL
-                        (CDR (HONS-ASSOC-EQUAL "__stdlib_local_mant"
-                                               (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
-                       (V_REAL->VAL
-                        (CDR (HONS-ASSOC-EQUAL "__stdlib_local_root"
-                                               (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
-                       (V_REAL->VAL
-                        (CDR (HONS-ASSOC-EQUAL "__stdlib_local_prec"
-                                               (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
-                       START (+ 1 END)))
-             :do-not-induct t)
-            (and stable-under-simplificationp
-                 '(:expand ((eval_for env "__stdlib_local_n" (V_INT->VAL
-                                                              (CDR (HONS-ASSOC-EQUAL "__stdlib_local_n"
-                                                                                     (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
-                                      :up end *sqrtrounded-loop-body*)
-                            (eval_for env "__stdlib_local_n" end :up end *sqrtrounded-loop-body*)
-                            (eval_for env "__stdlib_local_n" (+ 1 end) :up end *sqrtrounded-loop-body*)))))))
-
-
-(local (in-theory (disable (stdlib-static-env)
-                           stdlib-static-env)))
+(defloop sqrtrounded-loop
+  :function "SqrtRounded"
+  :looptype :s_for
+  :local-vars (((v_real mant) "__stdlib_local_mant")
+               ((v_real prec) "__stdlib_local_prec" (v_real prec-spec))
+               ((v_real root) "__stdlib_local_root" (v_real root-spec)))
+  :bindings (((mv root-spec prec-spec)
+              (acl2::sqrtrounded-loop mant.val root.val prec.val start (+ 1 end))))
+  :index-var n
+  :hints ((and stable-under-simplificationp
+               '(:expand ((:free (start)
+                           (ACL2::SQRTROUNDED-LOOP
+                            (V_REAL->VAL
+                             (CDR (HONS-ASSOC-EQUAL "__stdlib_local_mant"
+                                                    (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
+                            (V_REAL->VAL
+                             (CDR (HONS-ASSOC-EQUAL "__stdlib_local_root"
+                                                    (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
+                            (V_REAL->VAL
+                             (CDR (HONS-ASSOC-EQUAL "__stdlib_local_prec"
+                                                    (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))
+                            start
+                            (+ 1 END))))))))
 
 
 (defsection sqrtrounded-correct
@@ -163,10 +94,7 @@
                   (posp fracbits)
                   (integerp clk)
                   (<= (sqrtrounded-safe-clock val) clk)
-                  (< (stack_size-lookup "Abs" (global-env->stack_size (env->global env)))
-                     (expt 2 40))
-                  (< (stack_size-lookup "ILog2" (global-env->stack_size (env->global env)))
-                     (expt 2 40))
+                  (<= (sqrtrounded-safe-clock val) (expt 2 128))
                   (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
                                                            (env->global env)))))
              (equal (mv-nth 0 (eval_subprogram env "SqrtRounded" nil (list (v_real val)

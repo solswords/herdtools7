@@ -44,6 +44,8 @@
       func,
       getter,
       if,
+      impdef,
+      implementation,
       IN,
       integer,
       let,
@@ -387,6 +389,7 @@
 \newcommand\Tbor[0]{\verbatimterminal{BOR}{||}}
 \newcommand\Tcase[0]{\verbatimterminal{CASE}{case}}
 \newcommand\Tcatch[0]{\verbatimterminal{CATCH}{catch}}
+\newcommand\Tcollection[0]{\verbatimterminal{COLLECTION}{collection}}
 \newcommand\Tcolon[0]{\verbatimterminal{COLON}{:}}
 \newcommand\Tcoloncolon[0]{\verbatimterminal{COLON\_COLON}{::}}
 \newcommand\Tcomma[0]{\verbatimterminal{COMMA}{,}}
@@ -412,6 +415,8 @@
 \newcommand\Tgetter[0]{\verbatimterminal{GETTER}{getter}}
 \newcommand\Tgt[0]{\verbatimterminal{GT}{>}}
 \newcommand\Tif[0]{\verbatimterminal{IF}{if}}
+\newcommand\Timpdef[0]{\verbatimterminal{IMPDEF}{impdef}}
+\newcommand\Timplementation[0]{\verbatimterminal{IMPLEMENTATION}{implementation}}
 \newcommand\Timpl[0]{\verbatimterminal{IMPL}{-->}}
 \newcommand\Tin[0]{\verbatimterminal{IN}{IN}}
 \newcommand\Tinteger[0]{\verbatimterminal{INTEGER}{integer}}
@@ -490,6 +495,7 @@
 \newcommand\Nelidedparamcall[0]{\hyperlink{def-nelidedparamcall}{\nonterminal{elided\_param\_call}}}
 \newcommand\Nfuncargs[0]{\hyperlink{def-nfuncargs}{\nonterminal{func\_args}}}
 \newcommand\Naccessors[0]{\hyperlink{def-naccessors}{\nonterminal{accessors}}}
+\newcommand\Noverride[0]{\hyperlink{def-noverride}{\nonterminal{override}}}
 \newcommand\Nreturntype[0]{\hyperlink{def-nreturntype}{\nonterminal{return\_type}}}
 \newcommand\Nfuncbody[0]{\hyperlink{def-nfuncbody}{\nonterminal{func\_body}}}
 \newcommand\Ntypedidentifier[0]{\hyperlink{def-ntypedidentifier}{\nonterminal{typed\_identifier}}}
@@ -613,6 +619,8 @@
 
 \newcommand\ty[0]{\hyperlink{ast-ty}{\textsf{ty}}}
 \newcommand\pattern[0]{\hyperlink{ast-pattern}{\textsf{pattern}}}
+\newcommand\precisionlossindicator[0]{\hyperlink{ast-precisionlossindicator}{\textsf{precision\_loss\_indicator}}}
+\newcommand\Proseprecisionlossindicator[0]{\hyperlink{ast-precisionlossindicator}{precision loss indicator}}
 \newcommand\constraintkind[0]{\hyperlink{ast-constraintkind}{\textsf{constraint\_kind}}}
 \newcommand\intconstraint[0]{\hyperlink{ast-intconstraint}{\textsf{int\_constraint}}}
 \newcommand\unconstrained[0]{\hyperlink{ast-unconstrained}{\textsf{Unconstrained}}}
@@ -635,11 +643,13 @@
 \newcommand\casealt[0]{\hyperlink{ast-casealt}{\textsf{case\_alt}}}
 \newcommand\catcher[0]{\hyperlink{ast-catcher}{\textsf{catcher}}}
 \newcommand\subprogramtype[0]{\hyperlink{ast-subprogramtype}{\textsf{sub\_program\_type}}}
-\newcommand\subprogrambody[0]{\hyperlink{ast-subprogrambody}{\textsf{sub\_program\_body}}}
+\newcommand\overrideinfo[0]{\hyperlink{ast-overrideinfo}{\textsf{override\_info}}}
 \newcommand\func[0]{\hyperlink{ast-func}{\textsf{func}}}
 \newcommand\accessorpair[0]{\hyperlink{ast-accessorpair}{\textsf{accessor\_pair}}}
 \newcommand\Field[0]{\hyperlink{ast-field}{\textsf{field}}}
 \newcommand\call[0]{\hyperlink{ast-call}{\textsf{call}}}
+\newcommand\PrecisionFull[0]{\hyperlink{precision-full}{\textsf{Precision\_Full}}}
+\newcommand\PrecisionLost[0]{\hyperlink{precision-lost}{\textsf{Precision\_Lost}}}
 
 % Expression labels
 \newcommand\ELiteral[0]{\hyperlink{ast-eliteral}{\textsf{E\_Literal}}}
@@ -652,6 +662,7 @@
 \newcommand\ECond[0]{\hyperlink{ast-econd}{\textsf{E\_Cond}}}
 \newcommand\EGetArray[0]{\hyperlink{ast-egetarray}{\textsf{E\_GetArray}}}
 \newcommand\EGetEnumArray[0]{\hyperlink{ast-egetenumarray}{\textsf{E\_GetEnumArray}}}
+\newcommand\EGetCollectionFields[0]{\hyperlink{ast-egetcollectionfields}{\textsf{E\_GetCollectionFields}}}
 \newcommand\EGetField[0]{\hyperlink{ast-egetfield}{\textsf{E\_GetField}}}
 \newcommand\EGetItem[0]{\hyperlink{ast-egetitem}{\textsf{E\_GetItem}}}
 \newcommand\EGetFields[0]{\hyperlink{ast-egetfields}{\textsf{E\_GetFields}}}
@@ -669,6 +680,7 @@
 \newcommand\LESlice{\hyperlink{ast-leslice}{\textsf{LE\_Slice}}}
 \newcommand\LESetArray[0]{\hyperlink{ast-lesetarray}{\textsf{LE\_SetArray}}}
 \newcommand\LESetEnumArray[0]{\hyperlink{ast-lesetenumarray}{\textsf{LE\_SetEnumArray}}}
+\newcommand\LESetCollectionFields[0]{\hyperlink{ast-lesetcollectionfields}{\textsf{LE\_SetCollectionFields}}}
 \newcommand\LESetField[0]{\hyperlink{ast-lesetfield}{\textsf{LE\_SetField}}}
 \newcommand\LESetFields[0]{\hyperlink{ast-lesetfields}{\textsf{LE\_SetFields}}}
 \newcommand\LEDestructuring[0]{\hyperlink{ast-ledestructuring}{\textsf{LE\_Destructuring}}}
@@ -710,6 +722,7 @@
 \newcommand\TArray[0]{\hyperlink{ast-tarray}{\textsf{T\_Array}}}
 \newcommand\TRecord[0]{\hyperlink{ast-trecord}{\textsf{T\_Record}}}
 \newcommand\TException[0]{\hyperlink{ast-texception}{\textsf{T\_Exception}}}
+\newcommand\TCollection[0]{\hyperlink{ast-tcollection}{\textsf{T\_Collection}}}
 \newcommand\TNamed[0]{\hyperlink{ast-tnamed}{\textsf{T\_Named}}}
 
 \newcommand\BitFieldSimple[0]{\hyperlink{ast-bitfieldsimple}{\textsf{BitField\_Simple}}}
@@ -753,8 +766,12 @@
 \newcommand\GDKLet[0]{\hyperlink{ast-gdklet}{\textsf{GDK\_Let}}}
 \newcommand\GDKVar[0]{\hyperlink{ast-gdkvar}{\textsf{GDK\_Var}}}
 
-\newcommand\SBASL[0]{\hyperlink{ast-sbasl}{\textsf{SB\_ASL}}}
-\newcommand\SBPrimitive[0]{\hyperlink{ast-sbprimitive}{\textsf{SB\_Primitive}}}
+\newcommand\Impdef[0]{\hyperlink{ast-impdef}{\textsf{Impdef}}}
+\newcommand\Proseimpdefsubprogram[0]{implementation-defined subprogram}
+\newcommand\Proseimpdefsubprograms[0]{implementation-defined subprograms}
+\newcommand\Implementation[0]{\hyperlink{ast-implementation}{\textsf{Implementation}}}
+\newcommand\Proseimplementationsubprogram[0]{implementation subprogram}
+\newcommand\Proseimplementationsubprograms[0]{implementation subprograms}
 
 \newcommand\STFunction[0]{\hyperlink{ast-stfunction}{\texttt{ST\_Function}}}
 \newcommand\STGetter[0]{\hyperlink{ast-stgetter}{\texttt{ST\_Getter}}}
@@ -814,6 +831,7 @@
 \newcommand\buildreturntype[0]{\hyperlink{build-returntype}{\textfunc{build\_return\_type}}}
 \newcommand\buildfuncbody[0]{\hyperlink{build-funcbody}{\textfunc{build\_func\_body}}}
 \newcommand\buildaccessors[0]{\hyperlink{build-accessors}{\textfunc{build\_accessors}}}
+\newcommand\buildoverride[0]{\hyperlink{build-override}{\textfunc{build\_override}}}
 \newcommand\buildtypedidentifier[0]{\hyperlink{build-typedidentifier}{\textfunc{build\_typed\_identifier}}}
 \newcommand\buildopttypedidentifier[0]{\hyperlink{build-opttypedidentifier}{\textfunc{build\_opt\_typed\_identifier}}}
 \newcommand\buildtydecl[0]{\hyperlink{build-tydecl}{\textfunc{build\_ty\_decl}}}
@@ -871,6 +889,7 @@
 \newcommand\REreallit[0]{\hyperlink{def-reallit}{\texttt{<}\textsf{real\_lit}\texttt{>}}}
 \newcommand\REstrchar[0]{\hyperlink{def-restrchar}{\texttt{<}\textsf{str\_char}\texttt{>}}}
 \newcommand\REstringlit[0]{\hyperlink{def-restringlit}{\texttt{<}\textsf{string\_lit}\texttt{>}}}
+\newcommand\REbit[0]{\hyperlink{def-rebit}{\texttt{<}\textsf{bit}\texttt{>}}}
 \newcommand\REbitvectorlit[0]{\hyperlink{def-rebitvectorlit}{\texttt{<}\textsf{bitvector\_lit}\texttt{>}}}
 \newcommand\REbitmasklit[0]{\hyperlink{def-rebitmasklit}{\texttt{<}\textsf{bitmask\_lit}\texttt{>}}}
 \newcommand\REletter[0]{\hyperlink{def-reletter}{\texttt{<}\textsf{letter}\texttt{>}}}
@@ -936,6 +955,7 @@
 \newcommand\funcsubprogramtype[0]{\text{subprogram\_type}}
 \newcommand\funcrecurselimit[0]{\text{recurse\_limit}}
 \newcommand\funcbuiltin[0]{\text{builtin}}
+\newcommand\funcoverride[0]{\text{override}}
 \newcommand\GDkeyword[0]{\text{keyword}}
 \newcommand\GDname[0]{\text{name}}
 \newcommand\GDty[0]{\text{ty}}
@@ -963,6 +983,8 @@
 \newcommand\accessorpairgetter[0]{\text{getter}}
 \newcommand\accessorpairsetter[0]{\text{setter}}
 \newcommand\accessorpairsetterarg[0]{\text{setter\_arg}}
+
+\newcommand\itemprefix[0]{\texttt{item}}
 
 \newcommand\True[0]{\hyperlink{def-true}{\texttt{TRUE}}}
 \newcommand\False[0]{\hyperlink{def-false}{\texttt{FALSE}}}
@@ -1063,8 +1085,6 @@
 \newcommand\environof[1]{\hyperlink{def-environof}{\textfunc{environ}}({#1})}
 \newcommand\withenviron[2]{{#1}(\hyperlink{def-withenviron}{\textfunc{environ}}\mapsto{#2})}
 
-\newcommand\primitiverel[0]{\hyperlink{def-primitiverel}{\textsf{primitive}}}
-\newcommand\evalprimitivearrow[0]{\hyperlink{def-evalprimitivearrow}{\stackrel{\primitiverel}{\rightsquigarrow}}}
 \newcommand\ContinuingConfig[0]{\hyperlink{def-continuingconfig}{\texttt{\#C}}}
 \newcommand\ReturningConfig[0]{\hyperlink{def-returningconfig}{\texttt{\#R}}}
 \newcommand\ThrowingConfig[0]{\hyperlink{def-throwingconfig}{\texttt{\#T}}}
@@ -1097,6 +1117,8 @@
 \newcommand\evalslice[0]{\hyperlink{def-evalslice}{\textfunc{eval\_slice}}}
 \newcommand\evalstmt[1]{\hyperlink{def-evalstmt}{\textfunc{eval\_stmt}}(#1)}
 \newcommand\evalblock[1]{\hyperlink{def-evalblock}{\textfunc{eval\_block}}(#1)}
+\newcommand\poplocalscope[0]{\hyperlink{def-poplocalscope}{\textfunc{pop\_local\_scope}}}
+\newcommand\Prosepoplocalscope[2]{#2 after \hyperlink{def-poplocalscope}{restoring} the variable bindings of #1 with the updated values of #2}
 \newcommand\evalloop[1]{\hyperlink{def-evalloop}{\textfunc{eval\_loop}}(#1)}
 \newcommand\evalfor[0]{\hyperlink{def-evalfor}{\textfunc{eval\_for}}}
 \newcommand\evalforloop[0]{\hyperlink{def-evalforloop}{\textfunc{eval\_for\_loop}}}
@@ -1104,7 +1126,6 @@
 \newcommand\evalcatchers[1]{\hyperlink{def-evalcatchers}{\textfunc{eval\_catchers}}(#1)}
 \newcommand\evalsubprogram[1]{\hyperlink{def-evalsubprogram}{\textfunc{eval\_subprogram}}(#1)}
 \newcommand\evalcall[1]{\hyperlink{def-evalcall}{\textfunc{eval\_call}}(#1)}
-\newcommand\evalprimitive[1]{\hyperlink{def-evalprimitive}{\textfunc{eval\_primitive}}(#1)}
 \newcommand\evalmultiassignment[0]{\hyperlink{def-evalmultiassign}{\textfunc{multi\_assign}}}
 \newcommand\rethrowimplicit[0]{\hyperlink{def-rethrowimplicit}{\textfunc{rethrow\_implicit}}}
 \newcommand\assignargs[0]{\hyperlink{def-assignargs}{\textfunc{assign\_args}}}
@@ -1155,7 +1176,6 @@
 \newcommand\positioninrange[0]{\hyperlink{def-positioninrange}{\textfunc{position\_in\_range}}}
 \newcommand\isconstaintsat[0]{\hyperlink{def-isconstraintsat}{\textfunc{is\_constraint\_sat}}}
 \newcommand\readvaluefrom[0]{\hyperlink{def-readvaluefrom}{\textfunc{read\_value\_from}}}
-\newcommand\writeretvals[0]{\hyperlink{def-writeretvals}{\textfunc{write\_ret\_vals}}}
 \newcommand\outputtoconsole[0]{\hyperlink{def-outputtoconsole}{\textfunc{output\_to\_console}}}
 \newcommand\literaltostring[0]{\hyperlink{def-literaltostring}{\textfunc{literal\_to\_string}}}
 \newcommand\Proseoutputtoconsole[1]{\hyperlink{def-outputtoconsole}{outputs} #1 to the console, if one exists}
@@ -1217,12 +1237,20 @@
 \newcommand\subtypesat[0]{\hyperlink{def-subtypesat}{\textfunc{subtype\_satisfies}}}
 \newcommand\checktypesat[0]{\hyperlink{def-checktypesat}{\textfunc{checked\_typesat}}}
 \newcommand\typeclashes[0]{\hyperlink{def-typeclashes}{\textfunc{type\_clashes}}}
+\newcommand\Prosetypeclashes[0]{\hyperlink{def-typeclashes}{type-clashes}}
+\newcommand\Prosetypeclash[0]{\hyperlink{def-typeclashes}{type-clash}}
+\newcommand\Prosetypeclashing[0]{\hyperlink{def-typeclashes}{type-clashing}}
 \newcommand\lca[0]{\hyperlink{def-lowestcommonancestor}{\textfunc{lowest\_common\_ancestor}}}
+\newcommand\Proselca[0]{\hyperlink{def-lowestcommonancestor}{lowest common ancestor}}
 \newcommand\namedlca[0]{\hyperlink{def-namedlowestcommonancestor}{\textfunc{named\_lowest\_common\_ancestor}}}
 \newcommand\Supers{\textsf{Supers}}
+\newcommand\supers[0]{\hyperlink{def-supers}{\textfunc{supers}}}
 \newcommand\bitfieldsincluded[0]{\hyperlink{def-bitfieldsincluded}{\textfunc{bitfields\_included}}}
 \newcommand\membfs[0]{\hyperlink{def-membfs}{\textfunc{mem\_bfs}}}
 \newcommand\instantiate[0]{\textfunc{instantiate}}
+\newcommand\checkisnotcollection[0]{\hyperlink{def-checkisnotcollection}{\textfunc{check\_is\_not\_collection}}}
+\newcommand\Prosecheckisnotcollection[2]{\hyperlink{def-checkisnotcollection}{determining}
+  whether #2 is not a \collectiontypeterm{} in #1 yields $\True$\ProseOrTypeError}
 \newcommand\checkcanbeinitializedwith[0]{\hyperlink{def-checkcanbeinitializedwith}{\textfunc{check\_can\_be\_initialized\_with}}}
 \newcommand\getbitvectorwidth[0]{\hyperlink{def-getbitvectorwidth}{\textfunc{get\_bitvector\_width}}}
 \newcommand\getbitvectorconstwidth[0]{\hyperlink{def-getbitvectorconstwidth}{\textfunc{get\_bitvector\_const\_width}}}
@@ -1337,9 +1365,6 @@
 \newcommand\annotatesetarray[0]{\hyperlink{def-annotatesetarray}{\textfunc{annotate\_set\_array}}}
 
 % Macros related to side effects
-\newcommand\reversevals[0]{\hyperlink{def-reversevals}{\textsf{reverse\_vals}}}
-\newcommand\abstractdynerror[0]{\hyperlink{def-abstractdynerror}{\textsf{abstract\_dynerror}}}
-
 \newcommand\TTimeFrame[0]{\hyperlink{def-timeframetype}{\textsf{TimeFrame}}}
 \newcommand\timeframeconstant[0]{\hyperlink{def-timeframeconstant}{\textsf{Constant}}}
 \newcommand\timeframeexecution[0]{\hyperlink{def-timeframeexecution}{\textsf{Execution}}}
@@ -1366,11 +1391,6 @@
 \newcommand\timeframe[0]{\hyperlink{def-sideeffecttimeframe}{\textfunc{time\_frame}}}
 \newcommand\sideeffectispure[0]{\hyperlink{def-sideeffectispure}{\textfunc{side\_effect\_is\_pure}}}
 \newcommand\sideeffectissymbolicallyevaluable[0]{\hyperlink{def-sideeffectissymbolicallyevaluable}{\textfunc{side\_effect\_symbolically\_evaluable}}}
-\newcommand\sideeffectconflict[0]{\hyperlink{def-sideeffectconflict}{\textfunc{side\_effect\_conflict}}}
-\newcommand\arenonconflicting[0]{\hyperlink{def-arenonconflicting}{\textfunc{are\_non\_conflicting}}}
-\newcommand\nonconflictingunion[0]{\hyperlink{def-nonconflictingunion}{\textfunc{non\_conflicting\_union}}}
-\newcommand\Prosenonconflictingunion[2]{\hyperlink{def-nonconflictingunion}{taking} the non-conflicting union of the list of \sideeffectdescriptorsterm\ #1 yields
-  the set of \sideeffectdescriptorsterm\ #2\ProseOrTypeError}
 \newcommand\ldkisimmutable[0]{\hyperlink{def-ldkisimmutable}{\textfunc{ldk\_is\_immutable}}}
 \newcommand\gdkisimmutable[0]{\hyperlink{def-gdkisimmutable}{\textfunc{gdk\_is\_immutable}}}
 \newcommand\maxtimeframe[0]{\hyperlink{def-maxtimeframe}{\textfunc{max\_time\_frame}}}
@@ -1459,6 +1479,8 @@
 \newcommand\gtint[0]{\hyperlink{def-gtint}{\text{gt\_int}}}
 \newcommand\geint[0]{\hyperlink{def-geint}{\text{ge\_int}}}
 
+\newcommand\mulintreal[0]{\hyperlink{def-mulintreal}{\text{mul\_int\_real}}}
+\newcommand\mulrealint[0]{\hyperlink{def-mulrealint}{\text{mul\_real\_int}}}
 \newcommand\negatereal[0]{\hyperlink{def-negatereal}{\text{negate\_real}}}
 \newcommand\addreal[0]{\hyperlink{def-addreal}{\text{add\_real}}}
 \newcommand\subreal[0]{\hyperlink{def-subreal}{\text{sub\_real}}}
@@ -1592,7 +1614,9 @@
 \newcommand\bitslicesterm[0]{\hyperlink{bitsliceterm}{bitslices}}
 \newcommand\realtypeterm[0]{\hyperlink{realtypeterm}{real type}}
 \newcommand\stringtypeterm[0]{\hyperlink{stringtypeterm}{string type}}
+\newcommand\stringtypesterm[0]{\hyperlink{stringtypesterm}{string types}}
 \newcommand\booleantypeterm[0]{\hyperlink{booleantypeterm}{boolean type}}
+\newcommand\booleantypesterm[0]{\hyperlink{booleantypeterm}{boolean types}}
 \newcommand\enumerationtypeterm[0]{\hyperlink{enumerationtypeterm}{enumeration type}}
 \newcommand\enumerationtypesterm[0]{\hyperlink{enumerationtypeterm}{enumeration types}}
 \newcommand\Enumerationtypesterm[0]{\hyperlink{enumerationtypeterm}{Enumeration types}}
@@ -1607,7 +1631,10 @@
 \newcommand\enumarraytypeterm[0]{\hyperlink{enumarraytypeterm}{enumeration-indexed array type}}
 \newcommand\Enumarraytypeterm[0]{\hyperlink{enumarraytypeterm}{Enumeration-indexed array type}}
 \newcommand\namedtypeterm[0]{\hyperlink{namedtypeterm}{named type}}
+\newcommand\namedtypesterm[0]{\hyperlink{namedtypeterm}{named types}}
 \newcommand\recordtypeterm[0]{\hyperlink{recordtypeterm}{record type}}
+\newcommand\collectiontypeterm[0]{\hyperlink{collectiontypeterm}{collection type}}
+\newcommand\recordtypesterm[0]{\hyperlink{recordtypeterm}{record types}}
 \newcommand\exceptiontypeterm[0]{\hyperlink{exceptiontypeterm}{exception type}}
 \newcommand\unconstrainedintegertype[0]{\hyperlink{def-unconstrainedintegertype}{unconstrained integer type}}
 \newcommand\unconstrainedintegertypes[0]{\hyperlink{def-unconstrainedintegertype}{unconstrained integer types}}
@@ -1626,6 +1653,7 @@
 \newcommand\checkedtypesatisfies[0]{\hyperlink{def-checktypesat}{checked-type-satisfies}}
 \newcommand\typesatisft[0]{\hyperlink{def-typesatisfies}{type-satisft}}
 \newcommand\subtypesatisfies[0]{\hyperlink{def-subtypesat}{subtype-satisfies}}
+\newcommand\subtypesatisfy[0]{\hyperlink{def-subtypesat}{subtype-satisfy}}
 \newcommand\typeequivalent[0]{\hyperlink{def-typeequal}{type-equivalent}}
 \newcommand\bitwidthequivalent[0]{\hyperlink{def-bitwidthequal}{bitwidth-equivalent}}
 \newcommand\typeclash[0]{\hyperlink{def-typeclashes}{type-clash}}
@@ -1661,6 +1689,9 @@
 \newcommand\controlflowsymbolterm[0]{\hyperlink{def-controlflowsymbolterm}{control flow state}}
 \newcommand\controlflowsymbolsterm[0]{\hyperlink{def-controlflowsymbolterm}{control flow states}}
 
+\newcommand\defusename[0]{\hyperlink{ast-defusename}{\textsf{def\_use\_name}}}
+\newcommand\Subprogram[0]{\hyperlink{ast-subprogram}{\textsf{Subprogram}}}
+\newcommand\Other[0]{\hyperlink{ast-other}{\textsf{Other}}}
 \newcommand\defusedependencyterm[0]{\hyperlink{def-builddependencies}{def-use dependency}}
 \newcommand\defusedependenciesterm[0]{\hyperlink{def-builddependencies}{def-use dependencies}}
 \newcommand\dependencygraphterm[0]{\hyperlink{def-builddependencies}{def-use dependency graph}}
@@ -1766,16 +1797,20 @@
 \newcommand\whilestatement[3]{\hyperlink{def-whilestatementterm}
   {while statement} for the condition #1, optional limit expression #2, and body statement #2}
 \newcommand\repeatstatementterm[0]{\hyperlink{def-repeatstatementterm}{repeat statement}}
+\newcommand\repeatstatementsterm[0]{\hyperlink{def-repeatstatementterm}{repeat statements}}
 \newcommand\repeatstatement[3]{\hyperlink{def-repeatstatementterm}
   {repeat statement} for the body statement #1, condition expression #2, and optional limit expression #3}
 \newcommand\forstatementterm[0]{\hyperlink{def-forstatementterm}{for statement}}
 \newcommand\forstatement[6]{\hyperlink{def-forstatementterm}
   {for statement} for the index variable #1, start expression #2, direction #3, end expression #4, body statement #5, and optional limit expression #6}
 \newcommand\throwstatementterm[0]{\hyperlink{def-throwstatementterm}{throw statement}}
+\newcommand\throwstatementsterm[0]{\hyperlink{def-throwstatementterm}{throw statements}}
 \newcommand\throwstatement[1]{\hyperlink{def-throwstatementterm}{throw statement} for the optional exception expression #1}
 \newcommand\trystatementterm[0]{\hyperlink{def-trystatementterm}{try statement}}
+\newcommand\trystatementsterm[0]{\hyperlink{def-trystatementterm}{try statements}}
 \newcommand\trystatement[3]{\hyperlink{def-trystatementterm}{try statement} with body statement #1, list of \texttt{catch} clauses #2, and optional \texttt{otherwise} statement #3}
 \newcommand\returnstatementterm[0]{\hyperlink{def-returnstatementterm}{return statement}}
+\newcommand\returnstatementsterm[0]{\hyperlink{def-returnstatementterm}{return statements}}
 \newcommand\returnstatement[1]{\hyperlink{def-returnstatementterm}{return statement} for the optional expression #1}
 \newcommand\printstatementterm[0]{\hyperlink{def-printstatementterm}{print statement}}
 \newcommand\printstatementsterm[0]{\hyperlink{def-printstatementterm}{print statements}}
@@ -1809,8 +1844,6 @@
 \newcommand\sideeffectdescriptorsterm[0]{\hyperlink{def-sideeffectdescriptorterm}{side effect descriptors}}
 \newcommand\sideeffectsetterm[0]{\hyperlink{def-sideeffectdescriptorterm}{set of side effect descriptors}}
 \newcommand\sideeffectdescriptorsetsterm[0]{\hyperlink{def-sideeffectdescriptorterm}{sets of side effect descriptors}}
-\newcommand\sideeffectconflictterm[0]{\hyperlink{def-sideeffectconflictterm}{side effect conflict}}
-\newcommand\sideeffectconflictsterm[0]{\hyperlink{def-sideeffectconflictterm}{side effect conflicts}}
 
 \newcommand\approximationdirectionterm[0]{\hyperlink{def-approximationdirectionterm}{approximation direction}}
 
@@ -1871,6 +1904,9 @@
 \newcommand\annotatelocaldecltypeannot[0]{\hyperlink{def-annotatelocaldecltypeannot}{\textfunc{annotate\_local\_decl\_type\_annot}}}
 \newcommand\checkvarnotinenv[1]{\hyperlink{def-checkvarnotinenv}{\textfunc{check\_var\_not\_in\_env}}(#1)}
 \newcommand\checkvarnotingenv[1]{\hyperlink{def-checkvarnotingenv}{\textfunc{check\_var\_not\_in\_genv}}(#1)}
+\newcommand\checknoprecisionloss[1]{\hyperlink{def-checknoprecisionloss}{\textfunc{check\_no\_precision\_loss}}(#1)}
+\newcommand\precisionjoin[0]{\hyperlink{def-precisionjoin}{\textfunc{precision\_join}}}
+\newcommand\Prosenoprecisionloss[1]{determining whether #1 has been computed with no precision loss using $\checknoprecisionloss$ yields $\True$\ProseOrTypeError}
 \newcommand\annotatesubprogram[0]{\hyperlink{def-annotatesubprogram}{\textfunc{annotate\_subprogram}}}
 \newcommand\Proseannotatesubprogram[3]{\hyperlink{def-annotatesubprogram}{annotating} the subprogram definition #1 in the static environment #2 yields the subprogram definition #3}
 \newcommand\checkstmtreturnsorthrows[0]{\hyperlink{def-checkstmtreturnsorthrows}{\textfunc{check\_stmt\_returns\_or\_throws}}}
@@ -1886,6 +1922,14 @@
 
 \newcommand\Prosetypecheckast[4]{\hyperlink{def-typecheckast}{typechecking} #1 in #2 yields the typed AST #3 and static environment #4}
 \newcommand\typecheckast[0]{\hyperlink{def-typecheckast}{\textfunc{type\_check\_ast}}}
+\newcommand\Proseoverridesubprograms[0]{\hyperlink{def-overridesubprograms}{overriding subprograms}}
+\newcommand\overridesubprograms[0]{\hyperlink{def-overridesubprograms}{\textfunc{override\_subprograms}}}
+\newcommand\Proseprocessoverrides[2]{\hyperlink{def-processoverrides}{processing overrides} in #1 and #2}
+\newcommand\processoverrides[0]{\hyperlink{def-processoverrides}{\textfunc{process\_overrides}}}
+\newcommand\Prosecheckimplementationsunique[1]{\hyperlink{def-checkimplementationsunique}{checking} that implementations are unique in #1}
+\newcommand\checkimplementationsunique[0]{\hyperlink{def-checkimplementationsunique}{\textfunc{check\_implementations\_unique}}}
+\newcommand\Prosesignaturesmatch[2]{\hyperlink{def-signaturesmatch}{checking} that the signatures of #1 and #2 match}
+\newcommand\signaturesmatch[0]{\hyperlink{def-signaturesmatch}{\textfunc{signatures\_match}}}
 \newcommand\ProseSCC[3]{\hyperlink{def-scc}{partitioning} the set of declarations #1 with the set of edges #2 yields the list of strongly-connected components #3}
 \newcommand\SCC[0]{\hyperlink{def-scc}{\textfunc{SCC}}}
 \newcommand\topologicalorderingcomps[0]{\hyperlink{def-topologicalorderingcomps}{\textfunc{topological\_ordering\_comps}}}
@@ -2002,6 +2046,7 @@
 \newcommand\TypeErrorCode[1]{\texttt{\TypeErrorPrefix\_#1}}
 \newcommand\UndefinedIdentifier[0]{\hyperlink{def-undefinedidentifier}{\TypeErrorCode{UI}}}
 \newcommand\IdentifierAlreadyDeclared[0]{\hyperlink{def-identifieralreadydeclared}{\TypeErrorCode{IAD}}}
+\newcommand\PrecisionLostDefining[0]{\hyperlink{def-precisionlostdefining}{\TypeErrorCode{PLD}}}
 \newcommand\AssignmentToImmutable[0]{\hyperlink{def-aim}{\TypeErrorCode{AIM}}}
 \newcommand\TypeSatisfactionFailure[0]{\hyperlink{def-typesatisfactionfailure}{\TypeErrorCode{TSF}}}
 \newcommand\StaticEvaluationFailure[0]{\hyperlink{def-staticevaluationfailure}{\TypeErrorCode{SEF}}}
@@ -2017,6 +2062,7 @@
 \newcommand\BadDeclaration[0]{\hyperlink{def-baddeclaration}{\TypeErrorCode{BD}}}
 \newcommand\BadCall[0]{\hyperlink{def-badcall}{\TypeErrorCode{BC}}}
 \newcommand\SideEffectViolation[0]{\hyperlink{def-sideeffectviolation}{\TypeErrorCode{SEV}}}
+\newcommand\OverridingError[0]{\hyperlink{def-overridingerror}{\TypeErrorCode{OE}}}
 
 %% Dynamic Error Codes
 \newcommand\DynamicErrorPrefix[1]{\texttt{DE}}
@@ -2041,6 +2087,10 @@
 \newcommand\aslsep[0]{\mathbf{,}}
 
 \newcommand\env[0]{\texttt{env}}
+
+\newcommand\discardvar[0]{\texttt{-}}
+\newcommand\discardvarstr[0]{\texttt{"-"}}
+\newcommand\ttdotstr[0]{\texttt{"."}}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % LRM Ident info
@@ -2195,10 +2245,12 @@
 \newcommand\envandfs[0]{\texttt{env\_and\_fs}}
 \newcommand\envandfsone[0]{\texttt{env\_and\_fs1}}
 \newcommand\envandfstwo[0]{\texttt{env\_and\_fs2}}
+\newcommand\envcont[0]{\texttt{env\_cont}}
 \newcommand\envfour[0]{\texttt{env4}}
 \newcommand\envm[0]{\texttt{envm}}
 \newcommand\envone[0]{\texttt{env1}}
 \newcommand\envp[0]{\texttt{env'}}
+\newcommand\envret[0]{\texttt{env\_ret}}
 \newcommand\envthree[0]{\texttt{env3}}
 \newcommand\envthrow[0]{\texttt{env\_throw}}
 \newcommand\envthrowone[0]{\texttt{env\_throw1}}
@@ -2576,6 +2628,8 @@
 \newcommand\vcasealtlistast[0]{\texttt{case\_alt\_list\_ast}}
 \newcommand\vcaseotherwise[0]{\texttt{case\_otherwise}}
 \newcommand\votherwise[0]{\texttt{otherwise}}
+\newcommand\voverride[0]{\texttt{override}}
+\newcommand\voverridden[0]{\texttt{overridden}}
 \newcommand\vanons[0]{\texttt{anon\_s}}
 \newcommand\vanont[0]{\texttt{anon\_t}}
 \newcommand\vaoptfields[0]{\texttt{aopt\_fields}}
@@ -2603,6 +2657,7 @@
 \newcommand\vbits[0]{\texttt{bits}}
 \newcommand\vbp[0]{\texttt{b'}}
 \newcommand\vbase[0]{\texttt{base}}
+\newcommand\vbaseone[0]{\texttt{base1}}
 \newcommand\vbasefields[0]{\texttt{base\_fields}}
 \newcommand\vbasiclexpr[0]{\texttt{basic\_lexpr}}
 \newcommand\vbequal[0]{\texttt{b\_equal}}
@@ -2758,6 +2813,8 @@
 \newcommand\vfromexpr[0]{\texttt{from\_expr}}
 \newcommand\vftwo[0]{\texttt{f2}}
 \newcommand\vfunc[0]{\texttt{func}}
+\newcommand\vfuncone[0]{\texttt{func1}}
+\newcommand\vfunctwo[0]{\texttt{func2}}
 \newcommand\vfuncs[0]{\texttt{funcs}}
 \newcommand\vfuncsone[0]{\texttt{funcs1}}
 \newcommand\vfuncargs[0]{\texttt{func\_args}}
@@ -2765,6 +2822,7 @@
 \newcommand\vg[0]{\texttt{g}}
 \newcommand\vgfour[0]{\texttt{g4}}
 \newcommand\vgfive[0]{\texttt{g5}}
+\newcommand\vh[0]{\texttt{h}}
 \newcommand\vlhsaccess[0]{\texttt{lhs\_access}}
 \newcommand\vlhsaccesses[0]{\texttt{lhs\_accesses}}
 \newcommand\vlhsaccessopt[0]{\texttt{lhs\_access\_opt}}
@@ -2776,6 +2834,7 @@
 \newcommand\vgp[0]{\texttt{g'}}
 \newcommand\vgthree[0]{\texttt{g3}}
 \newcommand\vgtwo[0]{\texttt{g2}}
+\newcommand\vgzero[0]{\texttt{g0}}
 \newcommand\vi[0]{\texttt{i}}
 \newcommand\vip[0]{\texttt{i'}}
 \newcommand\annotatedcs[0]{\texttt{annotated\_cs}}
@@ -2786,9 +2845,13 @@
 \newcommand\vids[0]{\texttt{ids}}
 \newcommand\vidsone[0]{\texttt{ids1}}
 \newcommand\vignoredoridentifier[0]{\texttt{ignored\_or\_identifier}}
+\newcommand\vimpdefs[0]{\texttt{impdefs}}
+\newcommand\vimpdefsp[0]{\texttt{impdefs'}}
+\newcommand\vimpls[0]{\texttt{impls}}
 \newcommand\vindex[0]{\texttt{index}}
 \newcommand\vindexname[0]{\texttt{index\_name}}
 \newcommand\vinitialvalue[0]{\texttt{initial\_value}}
+\newcommand\vinnerenv[0]{\texttt{inner\_env}}
 \newcommand\vione[0]{\texttt{i1}}
 \newcommand\vis[0]{\texttt{vis}}
 \newcommand\visone[0]{\texttt{is1}}
@@ -2852,6 +2915,7 @@
 \newcommand\extpairscd[0]{\texttt{extpairs\_c\_d}}
 \newcommand\vmac[0]{\texttt{mac}}
 \newcommand\vmad[0]{\texttt{mad}}
+\newcommand\vmatching[0]{\texttt{matching}}
 \newcommand\vmaybeemptystmtlist[0]{\texttt{maybe\_empty\_stmt\_list}}
 \newcommand\vmlist[0]{\texttt{vm\_list}}
 \newcommand\vmlistone[0]{\texttt{vm\_list1}}
@@ -2871,6 +2935,8 @@
 \newcommand\vnestedfields[0]{\texttt{nested\_fields}}
 \newcommand\vnextlimitopt[0]{\texttt{next\_limit\_opt}}
 \newcommand\vnew[0]{\texttt{new}}
+\newcommand\vnonmatching[0]{\texttt{nonmatching}}
+\newcommand\vnormal[0]{\texttt{normal}}
 \newcommand\vds[0]{\texttt{ds}}
 \newcommand\vnewarg[0]{\texttt{new\_arg}}
 \newcommand\vnewargs[0]{\texttt{new\_args}}
@@ -2880,6 +2946,7 @@
 \newcommand\voptfields[0]{\texttt{opt\_fields}}
 \newcommand\voptlimit[0]{\texttt{opt\_limit}}
 \newcommand\votherwiseopt[0]{\texttt{otherwise\_opt}}
+\newcommand\vouterenv[0]{\texttt{outer\_env}}
 \newcommand\vp[0]{\texttt{p}}
 \newcommand\vprefixcases[0]{\texttt{prefix\_cases}}
 \newcommand\vprev[0]{\texttt{prev}}
@@ -2900,6 +2967,7 @@
 \newcommand\vpp[0]{\texttt{p'}}
 \newcommand\vps[0]{\texttt{ps}}
 \newcommand\vptwo[0]{\texttt{p2}}
+\newcommand\vpthree[0]{\texttt{p3}}
 \newcommand\vpzero[0]{\texttt{p0}}
 \newcommand\vq[0]{\texttt{q}}
 \newcommand\vqone[0]{\texttt{q1}}
@@ -3186,3 +3254,8 @@
 \newcommand\vsetter[0]{\texttt{setter}}
 \newcommand\vgetter[0]{\texttt{sgtter}}
 \newcommand\vcode[0]{\texttt{code}}
+\newcommand\vAbf[0]{\textbf{A}}
+\newcommand\vBbf[0]{\textbf{B}}
+\newcommand\vBIG[0]{\textbf{BIG}}
+\newcommand\vLITTLE[0]{\textbf{LITTLE}}
+\newcommand\vHALFWORDSIZE[0]{\texttt{HALF\_WORD\_SIZE}}

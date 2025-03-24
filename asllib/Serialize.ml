@@ -55,35 +55,36 @@ let pp_pair pp_left pp_right f (left, right) =
   bprintf f "(%a, %a)" pp_left left pp_right right
 
 let pp_pair_list pp_left pp_right = pp_list (pp_pair pp_left pp_right)
+let pp_int f = bprintf f "%d"
 let pp_string f = bprintf f "%S"
 let pp_id_assoc pp_elt = pp_pair_list pp_string pp_elt
 let pp_annotated f buf { desc; _ } = bprintf buf "annot (%a)" f desc
 
 let pp_binop : binop -> string = function
-  | AND -> "AND"
-  | BAND -> "BAND"
-  | BEQ -> "BEQ"
-  | BOR -> "BOR"
-  | DIV -> "DIV"
-  | DIVRM -> "DIVRM"
-  | EOR -> "EOR"
-  | EQ_OP -> "EQ_OP"
-  | GT -> "GT"
-  | GEQ -> "GEQ"
-  | IMPL -> "IMPL"
-  | LT -> "LT"
-  | LEQ -> "LEQ"
-  | MOD -> "MOD"
-  | MINUS -> "MINUS"
-  | MUL -> "MUL"
-  | NEQ -> "NEQ"
-  | OR -> "OR"
-  | PLUS -> "PLUS"
-  | RDIV -> "RDIV"
-  | SHL -> "SHL"
-  | SHR -> "SHR"
-  | POW -> "POW"
-  | BV_CONCAT -> "BV_CONCAT"
+  | `AND -> "AND"
+  | `BAND -> "BAND"
+  | `BEQ -> "BEQ"
+  | `BOR -> "BOR"
+  | `DIV -> "DIV"
+  | `DIVRM -> "DIVRM"
+  | `XOR -> "XOR"
+  | `EQ_OP -> "EQ_OP"
+  | `GT -> "GT"
+  | `GEQ -> "GEQ"
+  | `IMPL -> "IMPL"
+  | `LT -> "LT"
+  | `LEQ -> "LEQ"
+  | `MOD -> "MOD"
+  | `MINUS -> "MINUS"
+  | `MUL -> "MUL"
+  | `NEQ -> "NEQ"
+  | `OR -> "OR"
+  | `PLUS -> "PLUS"
+  | `RDIV -> "RDIV"
+  | `SHL -> "SHL"
+  | `SHR -> "SHR"
+  | `POW -> "POW"
+  | `BV_CONCAT -> "BV_CONCAT"
 
 let pp_unop = function BNOT -> "BNOT" | NOT -> "NOT" | NEG -> "NEG"
 
@@ -128,6 +129,8 @@ let rec pp_expr =
     | E_GetField (e, x) -> bprintf f "E_GetField (%a, %S)" pp_expr e x
     | E_GetFields (e, x) ->
         bprintf f "E_GetFields (%a, %a)" pp_expr e (pp_list pp_string) x
+    | E_GetCollectionFields (x, fs) ->
+        bprintf f "E_GetCollectionFields (%S, %a)" x (pp_list pp_string) fs
     | E_GetItem (e, i) -> bprintf f "E_GetItem (%a, %d)" pp_expr e i
     | E_Record (ty, li) ->
         bprintf f "E_Record (%a, %a)" pp_ty ty (pp_id_assoc pp_expr) li
@@ -193,6 +196,9 @@ and pp_ty =
         pp_list pp_ty f li
     | T_Array (length, elt_type) ->
         bprintf f "T_Array (%a, %a)" pp_array_length length pp_ty elt_type
+    | T_Collection li ->
+        addb f "T_Collection ";
+        pp_id_assoc pp_ty f li
     | T_Record li ->
         addb f "T_Record ";
         pp_id_assoc pp_ty f li
@@ -226,11 +232,16 @@ and pp_int_constraint f = function
 
 and pp_int_constraints f = function
   | UnConstrained -> addb f "UnConstrained"
-  | WellConstrained cs ->
-      addb f "WellConstrained ";
-      pp_list pp_int_constraint f cs
+  | WellConstrained (cs, precision_loss) ->
+      bprintf f "WellConstrained (%a, %a)"
+        (pp_list pp_int_constraint)
+        cs pp_precision_loss precision_loss
   | PendingConstrained -> addb f "PendingConstrained"
   | Parameterized (i, x) -> bprintf f "Parameterized (%d, %S)" i x
+
+and pp_precision_loss f = function
+  | Precision_Full -> addb f "PrecisionFull"
+  | Precision_Lost _ -> addb f "PrecisionLost []"
 
 let rec pp_lexpr =
   let pp_desc f = function
@@ -244,6 +255,11 @@ let rec pp_lexpr =
     | LE_SetField (le, x) -> bprintf f "LE_SetField (%a, %S)" pp_lexpr le x
     | LE_SetFields (le, x, _) ->
         bprintf f "LE_SetFields (%a, %a)" pp_lexpr le (pp_list pp_string) x
+    | LE_SetCollectionFields (le, fields, slices) ->
+        bprintf f "LE_SetCollectionFields (%S, %a, %a)" le (pp_list pp_string)
+          fields
+          (pp_pair_list pp_int pp_int)
+          slices
     | LE_Discard -> addb f "LE_Discard"
     | LE_Destructuring les ->
         addb f "LE_Destructuring ";
@@ -323,15 +339,24 @@ let pp_body f = function
   | SB_ASL s -> bprintf f "SB_ASL (%a)" pp_stmt s
   | SB_Primitive b -> bprintf f "SB_Primitive %B" b
 
+let pp_override_info f override =
+  addb f
+  @@
+  match override with Impdef -> "Impdef" | Implementation -> "Implementation"
+
 let pp_decl f d =
   match d.desc with
-  | D_Func { name; args; body; return_type; parameters; subprogram_type } ->
+  | D_Func
+      { name; args; body; return_type; parameters; subprogram_type; override }
+    ->
       bprintf f
         "D_Func { name=%S; args=%a; body=%a; return_type=%a; parameters=%a; \
-         subprogram_type=%a }"
+         subprogram_type=%a; override=%a }"
         name (pp_id_assoc pp_ty) args pp_body body (pp_option pp_ty) return_type
         (pp_list (pp_pair pp_string (pp_option pp_ty)))
         parameters pp_subprogram_type subprogram_type
+        (pp_option pp_override_info)
+        override
   | D_GlobalStorage { name; keyword; ty; initial_value } ->
       bprintf f "D_GlobalConst { name=%S; keyword=%a; ty=%a; initial_value=%a}"
         name pp_gdk keyword (pp_option pp_ty) ty (pp_option pp_expr)

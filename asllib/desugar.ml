@@ -139,7 +139,7 @@ let desugar_case_stmt e0 cases otherwise =
     let cond =
       match where with
       | None -> e_pattern
-      | Some e_where -> binop BAND e_pattern e_where
+      | Some e_where -> binop `BAND e_pattern e_where
     in
     S_Cond (cond, stmt, tail) |> add_pos_from case
     (* End *)
@@ -160,7 +160,7 @@ let desugar_case_stmt e0 cases otherwise =
 
 type accessor_pair = { getter : stmt; setter : stmt; setter_arg : identifier }
 
-let desugar_accessor_pair name parameters args ty accessor_pair =
+let desugar_accessor_pair override name parameters args ty accessor_pair =
   let getter_func =
     {
       name;
@@ -170,6 +170,7 @@ let desugar_accessor_pair name parameters args ty accessor_pair =
       body = SB_ASL accessor_pair.getter;
       subprogram_type = ST_Getter;
       recurse_limit = None;
+      override;
       builtin = false;
     }
   in
@@ -182,6 +183,7 @@ let desugar_accessor_pair name parameters args ty accessor_pair =
       body = SB_ASL accessor_pair.setter;
       subprogram_type = ST_Setter;
       recurse_limit = None;
+      override;
       builtin = false;
     }
   in

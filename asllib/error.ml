@@ -97,6 +97,11 @@ type error_desc =
   | UnexpectedInitialisationThrow of
       ty * identifier (* Exception type and global storage element name. *)
   | NegativeArrayLength of expr * int
+  | MultipleImplementations of func annotated * func annotated
+  | NoOverrideCandidate
+  | TooManyOverrideCandidates of func annotated list
+  | PrecisionLostDefining
+  | UnexpectedCollection
 
 type error = error_desc annotated
 
@@ -133,6 +138,8 @@ type warning_desc =
       after : int_constraint list;
     }
   | PragmaUse of identifier
+  | UnexpectedImplementation
+  | MissingOverride
 
 type warning = warning_desc annotated
 
@@ -200,6 +207,11 @@ let error_label = function
   | MultipleWrites _ -> "MultipleWrites"
   | UnexpectedInitialisationThrow _ -> "UnexpectedInitialisationThrow"
   | NegativeArrayLength _ -> "NegativeArrayLength"
+  | MultipleImplementations _ -> "ClashingImplementations"
+  | NoOverrideCandidate -> "NoOverrideCandidate"
+  | TooManyOverrideCandidates _ -> "TooManyOverrideCandidates"
+  | PrecisionLostDefining -> "PrecisionLostDefining"
+  | UnexpectedCollection -> "UnexpectedCollection"
 
 let warning_label = function
   | NoLoopLimit -> "NoLoopLimit"
@@ -208,6 +220,8 @@ let warning_label = function
   | RemovingValuesFromConstraints _ -> "RemovingValuesFromConstraints"
   | NoRecursionLimit _ -> "NoRecursionLimit"
   | PragmaUse _ -> "PragmaUse"
+  | UnexpectedImplementation -> "UnexpectedImplementation"
+  | MissingOverride -> "MissingOverride"
 
 module PPrint = struct
   open Format
@@ -477,13 +491,32 @@ module PPrint = struct
            the@ evaluation@ of@ the@ initialisation@ of@ the global@ storage@ \
            element@ %S."
           pp_ty exception_ty global_storage_element_name
+    | PrecisionLostDefining ->
+        fprintf f
+          "ASL Typing error:@ type@ used@ to@ define@ storage@ item@ is@ the@ \
+           result@ of@ precision@ loss."
     | NegativeArrayLength (e_length, length) ->
         fprintf f
           "ASL Execution error:@ array@ length@ expression@ %a@ has@ negative@ \
            length@a: %i."
           pp_expr e_length length
     | MultipleWrites id ->
-        fprintf f "ASL Typing error:@ multiple@ writes@ to@ %S." id);
+        fprintf f "ASL Typing error:@ multiple@ writes@ to@ %S." id
+    | MultipleImplementations (impl1, impl2) ->
+        fprintf f
+          "ASL Typing error:@ multiple@ overlapping@ `implementation`@ \
+           functions@ for@ %s:@ %a"
+          impl1.desc.name (pp_print_list pp_pos) [ impl1; impl2 ]
+    | NoOverrideCandidate ->
+        fprintf f "@[%a@]" pp_print_text
+          "ASL Typing error: no `impdef` for `implementation` function."
+    | UnexpectedCollection ->
+        pp_print_text f "ASL typing error: unexpected collection."
+    | TooManyOverrideCandidates impdefs ->
+        fprintf f
+          "ASL Typing error:@ multiple@ `impdef`@ candidates@ for@ \
+           `implementation`:@ %a"
+          (pp_print_list pp_pos) impdefs);
     pp_close_box f ()
 
   let pp_warning_desc f w =
@@ -520,6 +553,12 @@ module PPrint = struct
     | PragmaUse id ->
         fprintf f "@[ASL Warning:@ pragma %s%a@]" id pp_print_text
           " will be ignored."
+    | UnexpectedImplementation ->
+        fprintf f "@[%a@]" pp_print_text
+          "ASL Warning: Unexpected `implementation` function."
+    | MissingOverride ->
+        fprintf f "@[%a@]" pp_print_text
+          "ASL Warning: Missing `implementation` for `impdef` function."
 
   let pp_pos_begin f pos =
     if pos.pos_end != Lexing.dummy_pos && pos.pos_start != Lexing.dummy_pos then

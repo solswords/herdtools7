@@ -40,6 +40,9 @@ type args = {
   strictness : strictness;
   output_format : Error.output_format;
   use_field_getter_extension : bool;
+  use_conflicting_side_effects_extension : bool;
+  override_mode : override_mode;
+  no_primitives : bool;
 }
 
 let push thing ref = ref := thing :: !ref
@@ -62,6 +65,10 @@ let parse_args () =
   let push_file file_type s = target_files := (file_type, s) :: !target_files in
   let output_format = ref Error.HumanReadable in
   let use_field_getter_extension = ref false in
+  let override_mode = ref Permissive in
+  let set_override_mode m () = override_mode := m in
+  let no_primitives = ref false in
+  let use_side_effects_extension = ref false in
 
   let speclist =
     [
@@ -114,6 +121,10 @@ let parse_args () =
       ( "--use-field-getter-extension",
         Arg.Set use_field_getter_extension,
         " Instruct the type-checker to use the field getter extension." );
+      ( "--use-conflicting-side-effects-extension",
+        Arg.Set use_side_effects_extension,
+        " Instruct the type-checker to use the conflicting side-effects \
+         extension." );
       ( "--show-rules",
         Arg.Set show_rules,
         " Instrument the interpreter and log to std rules used." );
@@ -128,6 +139,19 @@ let parse_args () =
         Arg.String (push_file NormalV1),
         "Use ASLv1 parser for this file. (default)" );
       ("--version", Arg.Set show_version, " Print version and exit.");
+      ( "--overriding-permissive",
+        Arg.Unit (set_override_mode Permissive),
+        " Allow both `impdef` and `implementation` functions (default)." );
+      ( "--overriding-no-implementations",
+        Arg.Unit (set_override_mode NoImplementations),
+        " Warn if any `implementation` functions are defined." );
+      ( "--overriding-all-impdefs-overridden",
+        Arg.Unit (set_override_mode AllImpdefsOverridden),
+        " Warn if any `impdef` functions are not overridden by corresponding \
+         `implementation`s." );
+      ( "--no-primitives",
+        Arg.Set no_primitives,
+        " Do not use internal definitions for standard library subprograms." );
     ]
     |> Arg.align ?limit:None
   in
@@ -160,6 +184,9 @@ let parse_args () =
       show_rules = !show_rules;
       output_format = !output_format;
       use_field_getter_extension = !use_field_getter_extension;
+      use_conflicting_side_effects_extension = !use_side_effects_extension;
+      override_mode = !override_mode;
+      no_primitives = !no_primitives;
     }
   in
 
@@ -237,7 +264,9 @@ let () =
 
   let ast =
     let open Builder in
-    with_primitives Native.DeterministicBackend.primitives ast |> with_stdlib
+    let added_stdlib = with_stdlib ast in
+    if args.no_primitives then added_stdlib
+    else with_primitives Native.DeterministicBackend.primitives added_stdlib
   in
 
   let () = if false then Format.eprintf "%a@." PP.pp_t ast in
@@ -257,6 +286,10 @@ let () =
       let check = args.strictness
       let print_typed = args.print_typed || args.print_lisp
       let use_field_getter_extension = args.use_field_getter_extension
+      let override_mode = args.override_mode
+
+      let use_conflicting_side_effects_extension =
+        args.use_conflicting_side_effects_extension
     end in
     let module T = Annotate (C) in
     or_exit @@ fun () -> T.type_check_ast ast

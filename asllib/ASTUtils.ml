@@ -82,6 +82,11 @@ let add_pos_from pos desc = { pos with desc }
 let map_desc f thing = f thing |> add_pos_from thing
 let map_desc_st' thing f = f thing.desc |> add_pos_from thing
 
+let add_maybe_loc ?loc thing =
+  match loc with
+  | None -> add_dummy_annotation thing
+  | Some loc -> add_pos_from loc thing
+
 let add_pos_from_pos_of ((fname, lnum, cnum, enum), desc) =
   let open Lexing in
   let common =
@@ -207,12 +212,21 @@ let map2_desc f thing1 thing2 =
 let s_pass = add_dummy_annotation S_Pass
 let s_then = map2_desc (fun s1 s2 -> S_Seq (s1, s2))
 let boolean = T_Bool |> add_dummy_annotation
-let integer' = T_Int UnConstrained
-let integer = integer' |> add_dummy_annotation
-let integer_exact' e = T_Int (WellConstrained [ Constraint_Exact e ])
-let integer_exact e = integer_exact' e |> add_dummy_annotation
 let string = T_String |> add_dummy_annotation
 let real = T_Real |> add_dummy_annotation
+let integer' = T_Int UnConstrained
+let integer = integer' |> add_dummy_annotation
+
+let well_constrained' ?(precision = Precision_Full) cs =
+  T_Int (WellConstrained (cs, precision))
+
+let well_constrained ?loc ?precision cs =
+  well_constrained' ?precision cs |> add_maybe_loc ?loc
+
+let integer_exact' e = well_constrained' [ Constraint_Exact e ]
+let integer_exact ?loc e = integer_exact' e |> add_maybe_loc ?loc
+let integer_range' e1 e2 = well_constrained' [ Constraint_Range (e1, e2) ]
+let integer_range ?loc e1 e2 = integer_range' e1 e2 |> add_maybe_loc ?loc
 
 let stmt_from_list : stmt list -> stmt =
   let is_not_s_pass = function { desc = S_Pass; _ } -> false | _ -> true in
@@ -227,6 +241,18 @@ let stmt_from_list : stmt list -> stmt =
     | l -> aux @@ one_step [] l
   in
   fun l -> List.filter is_not_s_pass l |> aux
+
+let precision_join p1 p2 =
+  match (p1, p2) with
+  | Precision_Full, Precision_Full -> Precision_Full
+  | Precision_Lost _, Precision_Full -> p1
+  | Precision_Full, Precision_Lost _ -> p2
+  | Precision_Lost l1, Precision_Lost l2 ->
+      Precision_Lost (List.rev_append l1 l2)
+
+let register_precision_loss p w =
+  let ws = match p with Precision_Full -> [] | Precision_Lost l -> l in
+  Precision_Lost (w :: ws)
 
 let mask_from_set_bits_positions size pos =
   let buf = Bytes.make size '0' in
@@ -246,135 +272,6 @@ let slices_to_positions as_int =
     else raise (Invalid_argument "slices_to_positions")
   in
   fun positions -> List.map one_slice positions |> List.flatten
-
-let fold_named_list folder acc list =
-  List.fold_left (fun acc (_, v) -> folder acc v) acc list
-
-let ( $ ) f1 f2 acc = f1 acc |> f2
-let use_option use_elt = function None -> Fun.id | Some elt -> use_elt elt
-let use_list use_elt elts acc = List.fold_left (Fun.flip use_elt) acc elts
-
-let use_named_list use_elt named_elts acc =
-  fold_named_list (Fun.flip use_elt) acc named_elts
-
-let rec use_e e =
-  match e.desc with
-  | E_Literal _ -> Fun.id
-  | E_ATC (e, ty) -> use_ty ty $ use_e e
-  | E_Var x -> ISet.add x
-  | E_GetArray (e1, e2) | E_GetEnumArray (e1, e2) | E_Binop (_, e1, e2) ->
-      use_e e1 $ use_e e2
-  | E_Unop (_op, e) -> use_e e
-  | E_Call { name; args; params } -> ISet.add name $ use_es params $ use_es args
-  | E_Slice (e, slices) -> use_e e $ use_slices slices
-  | E_Cond (e1, e2, e3) -> use_e e1 $ use_e e2 $ use_e e3
-  | E_GetItem (e, _) -> use_e e
-  | E_GetField (e, _) -> use_e e
-  | E_GetFields (e, _) -> use_e e
-  | E_Record (ty, li) -> use_ty ty $ use_fields li
-  | E_Tuple es -> use_es es
-  | E_Array { length; value } -> use_e length $ use_e value
-  | E_EnumArray { labels; value } -> use_list ISet.add labels $ use_e value
-  | E_Arbitrary t -> use_ty t
-  | E_Pattern (e, p) -> use_e e $ use_pattern p
-
-and use_es es acc = use_list use_e es acc
-and use_fields fields acc = use_named_list use_e fields acc
-
-and use_pattern p =
-  match p.desc with
-  | Pattern_Mask _ | Pattern_All -> Fun.id
-  | Pattern_Tuple li | Pattern_Any li -> use_list use_pattern li
-  | Pattern_Single e | Pattern_Geq e | Pattern_Leq e -> use_e e
-  | Pattern_Not p -> use_pattern p
-  | Pattern_Range (e1, e2) -> use_e e1 $ use_e e2
-
-and use_slice = function
-  | Slice_Single e -> use_e e
-  | Slice_Star (e1, e2) | Slice_Length (e1, e2) | Slice_Range (e1, e2) ->
-      use_e e1 $ use_e e2
-
-and use_slices slices = use_list use_slice slices
-
-(** [use_ty t s] adds the identifiers that appear in [t] to the set of identifiers [s] *)
-and use_ty t =
-  match t.desc with
-  | T_Named s -> ISet.add s
-  | T_Int (UnConstrained | Parameterized _ | PendingConstrained)
-  | T_Enum _ | T_Bool | T_Real | T_String ->
-      Fun.id
-  | T_Int (WellConstrained cs) -> use_constraints cs
-  | T_Tuple li -> use_list use_ty li
-  | T_Record fields | T_Exception fields -> use_named_list use_ty fields
-  | T_Array (ArrayLength_Expr e, t') -> use_e e $ use_ty t'
-  | T_Array (ArrayLength_Enum (s, _), t') -> ISet.add s $ use_ty t'
-  | T_Bits (e, bit_fields) -> use_e e $ use_bitfields bit_fields
-
-and use_bitfields bitfields = use_list use_bitfield bitfields
-
-and use_bitfield = function
-  | BitField_Simple (_name, slices) -> use_slices slices
-  | BitField_Nested (_name, slices, bitfields) ->
-      use_bitfields bitfields $ use_slices slices
-  | BitField_Type (_name, slices, ty) -> use_ty ty $ use_slices slices
-
-and use_constraint = function
-  | Constraint_Exact e -> use_e e
-  | Constraint_Range (e1, e2) -> use_e e1 $ use_e e2
-
-and use_constraints cs = use_list use_constraint cs
-
-let rec use_s s =
-  match s.desc with
-  | S_Pass | S_Return None -> Fun.id
-  | S_Seq (s1, s2) -> use_s s1 $ use_s s2
-  | S_Assert e | S_Return (Some e) -> use_e e
-  | S_Assign (le, e) -> use_e e $ use_le le
-  | S_Call { name; args; params } -> ISet.add name $ use_es params $ use_es args
-  | S_Cond (e, s1, s2) -> use_s s1 $ use_s s2 $ use_e e
-  | S_For { start_e; end_e; body; index_name = _; dir = _; limit } ->
-      use_option use_e limit $ use_e start_e $ use_e end_e $ use_s body
-  | S_While (e, limit, s) | S_Repeat (s, e, limit) ->
-      use_option use_e limit $ use_s s $ use_e e
-  | S_Decl (_, _, ty, e) -> use_option use_e e $ use_option use_ty ty
-  | S_Throw (Some (e, _)) -> use_e e
-  | S_Throw None -> Fun.id
-  | S_Try (s, catchers, s') ->
-      use_s s $ use_option use_s s' $ use_catchers catchers
-  | S_Print { args; debug = _ } -> use_es args
-  | S_Pragma (name, args) -> ISet.add name $ use_es args
-  | S_Unreachable -> Fun.id
-
-and use_le le =
-  match le.desc with
-  | LE_Var x -> ISet.add x
-  | LE_Destructuring les -> List.fold_right use_le les
-  | LE_Discard -> Fun.id
-  | LE_SetArray (le, e) | LE_SetEnumArray (le, e) -> use_le le $ use_e e
-  | LE_SetField (le, _) | LE_SetFields (le, _, _) -> use_le le
-  | LE_Slice (le, slices) -> use_slices slices $ use_le le
-
-and use_catcher (_name, ty, s) = use_s s $ use_ty ty
-and use_catchers catchers = use_list use_catcher catchers
-
-and use_decl d =
-  match d.desc with
-  | D_TypeDecl (_name, ty, fields) -> use_ty ty $ use_option use_subtypes fields
-  | D_GlobalStorage { initial_value; ty; name = _; keyword = _ } ->
-      use_option use_e initial_value $ use_option use_ty ty
-  | D_Func
-      { body; name = _; args; return_type; parameters; subprogram_type = _ }
-    -> (
-      use_named_list use_ty args
-      $ use_option use_ty return_type
-      $ use_named_list (use_option use_ty) parameters
-      $ match body with SB_ASL s -> use_s s | SB_Primitive _ -> Fun.id)
-  | D_Pragma (name, args) -> ISet.add name $ use_es args
-
-and use_subtypes (x, subfields) = ISet.add x $ use_named_list use_ty subfields
-
-let used_identifiers ast = use_list use_decl ast ISet.empty
-let used_identifiers_stmt s = use_s s ISet.empty
 
 let canonical_fields li =
   let compare (x, _) (y, _) = String.compare x y in
@@ -432,6 +329,9 @@ let rec expr_equal eq e1 e2 =
   | E_GetFields (e1', f1s), E_GetFields (e2', f2s) ->
       list_equal String.equal f1s f2s && expr_equal eq e1' e2'
   | E_GetFields _, _ | _, E_GetFields _ -> false
+  | E_GetCollectionFields (x1, f1s), E_GetCollectionFields (x2, f2s) ->
+      String.equal x1 x2 && list_equal String.equal f1s f2s
+  | E_GetCollectionFields _, _ | _, E_GetCollectionFields _ -> false
   | E_GetItem (e1', i1), E_GetItem (e2', i2) ->
       Int.equal i1 i2 && expr_equal eq e1' e2'
   | E_GetItem _, _ | _, E_GetItem _ -> false
@@ -499,7 +399,7 @@ and type_equal eq t1 t2 =
   | T_Int UnConstrained, T_Int UnConstrained ->
       true
   | T_Int (Parameterized (i1, _)), T_Int (Parameterized (i2, _)) -> i1 == i2
-  | T_Int (WellConstrained c1), T_Int (WellConstrained c2) ->
+  | T_Int (WellConstrained (c1, _)), T_Int (WellConstrained (c2, _)) ->
       constraints_equal eq c1 c2
   | T_Bits (w1, bf1), T_Bits (w2, bf2) ->
       bitwidth_equal eq w1 w2 && bitfields_equal eq bf1 bf2
@@ -508,7 +408,9 @@ and type_equal eq t1 t2 =
   | T_Named s1, T_Named s2 -> String.equal s1 s2
   | T_Enum li1, T_Enum li2 ->
       (* TODO: order of fields? *) list_equal String.equal li1 li2
-  | T_Exception f1, T_Exception f2 | T_Record f1, T_Record f2 ->
+  | T_Exception f1, T_Exception f2
+  | T_Record f1, T_Record f2
+  | T_Collection f1, T_Collection f2 ->
       list_equal
         (pair_equal String.equal (type_equal eq))
         (canonical_fields f1) (canonical_fields f2)
@@ -555,29 +457,29 @@ let minus_one_expr = expr_of_z Z.minus_one
 
 let expr_of_rational q =
   if Z.equal (Q.den q) Z.one then expr_of_z (Q.num q)
-  else binop DIV (expr_of_z (Q.num q)) (expr_of_z (Q.den q))
+  else binop `DIV (expr_of_z (Q.num q)) (expr_of_z (Q.den q))
 
 let mul_expr e1 e2 =
   if expr_equal (fun _ _ -> false) e1 one_expr then e2
   else if expr_equal (fun _ _ -> false) e2 one_expr then e1
-  else binop MUL e1 e2
+  else binop `MUL e1 e2
 
 let pow_expr e = function
   | 0 -> one_expr
   | 1 -> e
   | 2 -> mul_expr e e
-  | p -> binop POW e (expr_of_int p)
+  | p -> binop `POW e (expr_of_int p)
 
-let div_expr e z = if Z.equal z Z.one then e else binop DIV e (expr_of_z z)
+let div_expr e z = if Z.equal z Z.one then e else binop `DIV e (expr_of_z z)
 
 let add_expr e1 (s, e2) =
-  if s = 0 then e1 else if s > 0 then binop PLUS e1 e2 else binop MINUS e1 e2
+  if s = 0 then e1 else if s > 0 then binop `PLUS e1 e2 else binop `MINUS e1 e2
 
 let conj_expr e1 e2 =
   let lit_true = literal (L_Bool true) in
   if expr_equal (fun _ _ -> false) e1 lit_true then e2
   else if expr_equal (fun _ _ -> false) e2 lit_true then e1
-  else binop BAND e1 e2
+  else binop `BAND e1 e2
 
 let cond_expr e1 e2 e3 = E_Cond (e1, e2, e3) |> add_pos_from dummy_annotated
 
@@ -612,6 +514,7 @@ let expr_of_lexpr : lexpr -> expr =
     | LE_SetEnumArray (le, e) -> E_GetEnumArray (map_desc aux le, e)
     | LE_SetField (le, x) -> E_GetField (map_desc aux le, x)
     | LE_SetFields (le, x, _) -> E_GetFields (map_desc aux le, x)
+    | LE_SetCollectionFields (x, fields, _) -> E_GetCollectionFields (x, fields)
     | LE_Discard -> E_Var "-"
     | LE_Destructuring les -> E_Tuple (List.map (map_desc aux) les)
   in
@@ -658,7 +561,11 @@ let patch ~src ~patches =
   let to_remove =
     patches |> List.to_seq |> Seq.map identifier_of_decl |> ISet.of_seq
   in
-  let filter d = not (ISet.mem (identifier_of_decl d) to_remove) in
+  let filter d =
+    match d.desc with
+    | D_Pragma _ -> true
+    | _ -> not (ISet.mem (identifier_of_decl d) to_remove)
+  in
   src |> List.filter filter |> List.rev_append patches
 
 let list_cross f li1 li2 =
@@ -697,6 +604,7 @@ let rec subst_expr substs e =
   | E_GetEnumArray (e1, e2) -> E_GetEnumArray (tr e1, tr e2)
   | E_GetField (e, x) -> E_GetField (tr e, x)
   | E_GetFields (e, fields) -> E_GetFields (tr e, fields)
+  | E_GetCollectionFields _ -> failwith "No collection should be used here"
   | E_GetItem (e, i) -> E_GetItem (tr e, i)
   | E_Literal _ -> e.desc
   | E_Pattern (e, ps) -> E_Pattern (tr e, ps)
@@ -715,7 +623,7 @@ let rec subst_expr substs e =
 
 let rec is_simple_expr e =
   match e.desc with
-  | E_Var _ | E_Literal _ | E_Arbitrary _ -> true
+  | E_Var _ | E_Literal _ | E_Arbitrary _ | E_GetCollectionFields _ -> true
   | E_Array { length = e1; value = e2 }
   | E_GetArray (e1, e2)
   | E_GetEnumArray (e1, e2)
@@ -789,6 +697,7 @@ let rename_locals map_name ast =
     | E_GetEnumArray (e1, e2) -> E_GetEnumArray (map_e e1, map_e e2)
     | E_GetField (e1, f) -> E_GetField (map_e e1, f)
     | E_GetFields (e1, li) -> E_GetFields (map_e e1, li)
+    | E_GetCollectionFields (x, li) -> E_GetCollectionFields (map_name x, li)
     | E_GetItem (e1, i) -> E_GetItem (map_e e1, i)
     | E_Record (t, li) -> E_Record (t, List.map (fun (f, e) -> (f, map_e e)) li)
     | E_Tuple li -> E_Tuple (map_es li)
@@ -815,10 +724,12 @@ let rename_locals map_name ast =
         t.desc
     | T_Int (Parameterized _) ->
         failwith "Not yet implemented: obfuscate parametrized types"
-    | T_Int (WellConstrained cs) -> T_Int (WellConstrained (map_cs cs))
+    | T_Int (WellConstrained (cs, p)) -> T_Int (WellConstrained (map_cs cs, p))
     | T_Bits (e, bitfields) -> T_Bits (map_e e, bitfields)
     | T_Tuple li -> T_Tuple (List.map map_t li)
     | T_Array (_, _) -> failwith "Not yet implemented: obfuscate array types"
+    | T_Collection _ ->
+        failwith "Not yet implemented: obfuscate collection types"
     | T_Record li -> T_Record (List.map (fun (f, t) -> (f, map_t t)) li)
     | T_Exception li -> T_Exception (List.map (fun (f, t) -> (f, map_t t)) li)
   (* End *)
@@ -872,6 +783,7 @@ let rename_locals map_name ast =
     | LE_SetEnumArray (le, i) -> LE_SetEnumArray (map_le le, map_e i)
     | LE_SetField (le1, f) -> LE_SetField (map_le le1, f)
     | LE_SetFields (le1, fl, annot) -> LE_SetFields (map_le le1, fl, annot)
+    | LE_SetCollectionFields _ as le -> le (* No collection is local *)
     | LE_Destructuring les -> LE_Destructuring (List.map map_le les)
   (* End *)
   (* Begin RenameLocalsLDI *)
