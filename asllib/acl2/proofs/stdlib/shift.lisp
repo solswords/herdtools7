@@ -129,7 +129,7 @@
   :args (x shift)
   :hyps (and (< 0 n.val)
              (<= 0 shift.val))
-  :return-values ((v_bitvector n.val (loghead n.val (logtail shift.val (logext n.val x.val)))))
+  :return-values ((v_bitvector n.val (logtail shift.val (logext n.val x.val))))
   :enable (bitops::loghead-of-loghead-split
            logext
            bitops::logtail-of-logapp-split))
@@ -140,7 +140,7 @@
   :args (x shift)
   :hyps (and (< 0 n.val)
              (< 0 shift.val))
-  :return-values ((v_bitvector n.val (loghead n.val (logtail shift.val (logext n.val x.val))))
+  :return-values ((v_bitvector n.val (logtail shift.val (logext n.val x.val)))
                   (v_bitvector 1 (logbit (1- shift.val) (logext n.val x.val))))
   :enable (bitops::loghead-of-ash))
 

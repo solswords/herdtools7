@@ -214,7 +214,7 @@
   :prepwork
   ((local (defthm logrepeat-is-logmask
             (implies (equal (loghead 1 x) 1)
-                     (equal (logrepeat n 1 x) (logmask n)))
+                     (equal (logrepeat n 1 x) (loghead n -1)))
             :hints(("Goal" :in-theory (enable bitops::loghead**
                                               logrepeat
                                               bitops::logapp**
@@ -447,7 +447,7 @@
   :args (x)
   :hyps (and (< 0 m.val)
              (<= m.val n.val))
-  :return-values ((v_bitvector n.val (loghead n.val (logext m.val x.val))))
+  :return-values ((v_bitvector n.val (logext m.val x.val)))
   :enable (logext)
   :prepwork
   ((local (defthm integer-length-equal-0
@@ -502,7 +502,7 @@
   :args (x n)
   :hyps (and (< 0 m.val)
              (<= m.val n.val))
-  :return-values ((v_bitvector n.val (loghead n.val (logext m.val x.val))))
+  :return-values ((v_bitvector n.val (logext m.val x.val)))
   :enable (logext))
 
 
@@ -516,7 +516,7 @@
   :return-values ((v_bitvector n.val
                                (if unsigned.val
                                    x.val
-                                 (loghead n.val (logext m.val x.val))))))
+                                 (logext m.val x.val)))))
 
 
 (def-asl-subprogram Extend-correct
@@ -529,7 +529,7 @@
   :return-values ((v_bitvector n.val
                                (if unsigned.val
                                    x.val
-                                 (loghead n.val (logext m.val x.val))))))
+                                 (logext m.val x.val)))))
 
 
 

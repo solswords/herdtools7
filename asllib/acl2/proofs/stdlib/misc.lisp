@@ -114,28 +114,28 @@
   :function "Ones-1"
   :params (n)
   :hyps (<= 0 n.val)
-  :return-values ((v_bitvector n.val (logmask n.val))))
+  :return-values ((v_bitvector n.val -1)))
 
 (def-asl-subprogram ones-correct
   :function "Ones"
   :params (n)
   :args (n)
   :hyps (<= 0 n.val)
-  :return-values ((v_bitvector n.val (logmask n.val))))
+  :return-values ((v_bitvector n.val -1)))
 
 (def-asl-subprogram replicatebit-1-correct
   :function "ReplicateBit-1"
   :params (n)
   :args (b)
   :hyps (<= 0 n.val)
-  :return-values ((v_bitvector n.val (if b.val 0 (logmask n.val)))))
+  :return-values ((v_bitvector n.val (if b.val 0 -1))))
 
 (def-asl-subprogram replicatebit-correct
   :function "ReplicateBit"
   :params (n)
   :args (b n)
   :hyps (<= 0 n.val)
-  :return-values ((v_bitvector n.val (if b.val 0 (logmask n.val)))))
+  :return-values ((v_bitvector n.val (if b.val 0 -1))))
 
 (def-asl-subprogram len-correct
   :function "Len"
