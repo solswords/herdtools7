@@ -24,7 +24,7 @@
 
 (include-book "../../openers")
 (include-book "stdlib")
-(include-book "utils")
+(include-book "../../proof-utils")
 (include-book "centaur/bitops/rational-exponent" :dir :system)
 (include-book "pow2-alg")
 (local (include-book "ast-theory"))

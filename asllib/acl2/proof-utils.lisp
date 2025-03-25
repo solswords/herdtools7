@@ -22,7 +22,7 @@
 
 (in-package "ASL")
 
-(include-book "../../interp")
+(include-book "interp")
 (include-book "centaur/meta/variable-free" :dir :system)
 (include-book "tools/easy-simplify" :dir :system)
 

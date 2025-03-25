@@ -24,7 +24,7 @@
 
 (include-book "../../openers")
 (include-book "stdlib")
-(include-book "utils")
+(include-book "../../proof-utils")
 (local (include-book "ast-theory"))
 
 (local (in-theory (disable (tau-system))))

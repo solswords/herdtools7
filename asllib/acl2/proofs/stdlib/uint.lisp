@@ -24,7 +24,7 @@
 
 (include-book "../../openers")
 (include-book "stdlib")
-(include-book "utils")
+(include-book "../../proof-utils")
 (local (include-book "ast-theory"))
 (local (include-book "centaur/bitops/ihsext-basics" :dir :System))
 
