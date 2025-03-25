@@ -27,6 +27,7 @@
 (include-book "misc")
 (include-book "uint")
 (local (include-book "ast-theory"))
+(local (include-book "centaur/bitops/ihsext-basics" :dir :System))
 
 (local (in-theory (disable (tau-system))))
 
@@ -36,33 +37,12 @@
 
 
 
-(defsection aligndownsize-1-correct
-
-  
-  (defthm aligndownsize-1-correct
-    (implies (and (subprograms-match '("AlignDownSize-1")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (<= 0 (ifix x))
-                  (< 0 (ifix size))
-                  (natp clk)
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "AlignDownSize-1" nil (list (v_int x) (v_int size)) :clk clk))
-                    (ev_normal (func_result (list (v_int (* size (floor (ifix x) size)))) (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram  env "AlignDownSize-1" nil (list (v_int x) (v_int size)) :clk clk))
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int))
-             :do-not-induct t))))
+(def-asl-subprogram aligndownsize-1-correct
+  :function "AlignDownSize-1"
+  :args (x size)
+  :hyps (and (<= 0 x.val)
+             (< 0 size.val))
+  :return-values ((v_int (* size.val (floor x.val size.val)))))
 
 (local (defthm ceiling-in-terms-of-floor
          (implies (and (<= 0 x)
@@ -76,51 +56,29 @@
          :hints(("Goal" :in-theory (enable floor ceiling)))))
 
 
-(defsection alignupsize-1-correct
+(def-asl-subprogram alignupsize-1-correct
+  :function "AlignUpSize-1"
+  :args (x size)
+  :hyps (and (<= 0 x.val) (< 0 size.val))
+  :return-values ((v_int (* size.val (ceiling x.val size.val))))
+  :prepwork ((local (defthm integerp-recip-when-posp
+                      (implies (posp x)
+                               (equal (integerp (/ x))
+                                      (equal x 1)))))
 
-  (local (defthm integerp-recip-when-posp
-           (implies (posp x)
-                    (equal (integerp (/ x))
-                           (equal x 1)))))
-
-  (local (in-theory (disable ceiling)))
+             (local (in-theory (disable ceiling)))
   
   
   
 
-  (local (defthm floor-of-x+size-1
-           (implies (and (<= 0 x)
-                         (< 0 size)
-                         (integerp x)
-                         (integerp size)
-                         (not (integerp (/ x size))))
-                    (equal (floor (+ -1 size x) size)
-                           (+ 1 (floor x size))))))
-  
-  (defthm alignupsize-1-correct
-    (implies (and (subprograms-match '("AlignUpSize-1" "AlignDownSize-1")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (<= 0 (ifix x))
-                  (< 0 (ifix size))
-                  (posp clk)
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "AlignUpSize-1" nil (list (v_int x) (v_int size)) :clk clk))
-                    (ev_normal (func_result (list (v_int (* size (ceiling (ifix x) size)))) (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram  env "AlignUpSize-1" nil (list (v_int x) (v_int size)) :clk clk))
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int))
-             :do-not-induct t))))
+             (local (defthm floor-of-x+size-1
+                      (implies (and (<= 0 x)
+                                    (< 0 size)
+                                    (integerp x)
+                                    (integerp size)
+                                    (not (integerp (/ x size))))
+                               (equal (floor (+ -1 size x) size)
+                                      (+ 1 (floor x size))))))))
 
 
 (local (defthm posp-expt
@@ -129,71 +87,23 @@
          :hints(("Goal" :in-theory (enable expt)))
          :rule-classes :type-prescription))
 
-(defsection aligndownp2-1-correct
+(def-asl-subprogram aligndownp2-1-correct
+  :function "AlignDownP2-1"
+  :args (x p2)
+  :hyps (and (<= 0 x.val) (<= 0 p2.val))
+  :return-values ((v_int (* (expt 2 p2.val)
+                            (floor x.val (expt 2 p2.val))))))
+
+
+(def-asl-subprogram alignupp2-1-correct
+  :function "AlignUpP2-1"
+  :args (x p2)
+  :hyps (and (<= 0 x.val) (<= 0 p2.val))
+  :return-values ((v_int (* (expt 2 p2.val)
+                            (ceiling x.val (expt 2 p2.val))))))
 
 
 
-  (defthm aligndownp2-1-correct
-    (implies (and (subprograms-match '("AlignDownP2-1" "AlignDownSize-1")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (<= 0 (ifix x))
-                  (<= 0 (ifix p2))
-                  (posp clk)
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "AlignDownP2-1" nil (list (v_int x) (v_int p2)) :clk clk))
-                    (ev_normal (func_result (list (v_int (* (expt 2 (ifix p2))
-                                                            (floor (ifix x) (expt 2 (ifix p2))))))
-                                            (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram  env "AlignDownP2-1" nil (list (v_int x) (v_int p2)) :clk clk))
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int))
-             :do-not-induct t))))
-
-
-(defsection alignupp2-1-correct
-
-
-  (defthm alignupp2-1-correct
-    (implies (and (subprograms-match '("AlignUpP2-1" "AlignUpSize-1" "AlignDownSize-1")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (<= 0 (ifix x))
-                  (<= 0 (ifix p2))
-                  (integerp clk)
-                  (<= 2 clk)
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "AlignUpP2-1" nil (list (v_int x) (v_int p2)) :clk clk))
-                    (ev_normal (func_result (list (v_int (* (expt 2 (ifix p2))
-                                                            (ceiling (ifix x) (expt 2 (ifix p2))))))
-                                            (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram  env "AlignUpP2-1" nil (list (v_int x) (v_int p2)) :clk clk))
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int))
-             :do-not-induct t))))
-
-
-(local (include-book "centaur/bitops/ihsext-basics" :dir :System))
 
 
 
@@ -210,44 +120,14 @@
                                (x (ifix x))))))
          :rule-classes :type-prescription))
 
-(defsection aligndown-correct
-  
-  (defthm aligndown-correct
-    (implies (and (subprograms-match '("AlignDown" "Zeros-1")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (<= 0 (ifix x))
-                  (< 0 (ifix y))
-                  (<= (ifix y) (nfix n))
-                  (posp clk)
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "AlignDown" (list (v_int n))
-                                               (list (v_bitvector n x)
-                                                     (v_int y))
-                                               :clk clk))
-                    (ev_normal (func_result (list (v_bitvector n (ash (logtail y x) y)))
-                                            (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram env "AlignDown" (list (v_int n))
-                                               (list (v_bitvector n x)
-                                                     (v_int y))
-                                               :clk clk))
-             :in-theory (e/d (check_recurse_limit
-                              declare_local_identifiers
-                              declare_local_identifier
-                              remove_local_identifier
-                              env-find
-                              env-assign
-                              env-assign-local
-                              env-assign-global
-                              env-push-stack
-                              env-pop-stack
-                              v_to_int
-                              slices_sub
-                              check-bad-slices
-                              bitops::loghead-of-ash
-                              ))
-             :do-not-induct t))))
+(def-asl-subprogram aligndown-correct
+  :function "AlignDown"
+  :params (n)
+  :args (x y)
+  ;; :hyps (and (< 0 y.val)
+  ;;            (<= y.val n.val))
+  :return-values ((v_bitvector n.val (ash (logtail y.val x.val) y.val)))
+  :enable (bitops::loghead-of-ash))
 
 (local
  (defsection loghead-of-plus-loghead
@@ -279,129 +159,32 @@
     :hints (("goal" :use ((:instance loghead-of-plus-loghead-lemma (c 0))))))))
 
 
-(defsection alignup-correct
-  
-  (defthm alignup-correct
-    (implies (and (subprograms-match '("AlignUp" "Zeros-1" "IsZero")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (<= 0 (ifix x))
-                  (< 0 (ifix y))
-                  (<= (ifix y) (nfix n))
-                  (integerp clk)
-                  (<= 2 clk)
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "AlignUp" (list (v_int n))
-                                               (list (v_bitvector n x)
-                                                     (v_int y))
-                                               :clk clk))
-                    (ev_normal (func_result (list (v_bitvector n
-                                                               (if (equal (loghead y x) 0)
-                                                                   x
-                                                                 (ash (+ 1 (logtail y x)) y))))
-                                            (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram env "AlignUp" (list (v_int n))
-                                              (list (v_bitvector n x)
-                                                    (v_int y))
-                                              :clk clk))
-             :in-theory (e/d (check_recurse_limit
-                              declare_local_identifiers
-                              declare_local_identifier
-                              remove_local_identifier
-                              env-find
-                              env-assign
-                              env-assign-local
-                              env-assign-global
-                              env-push-stack
-                              env-pop-stack
-                              v_to_int
-                              slices_sub
-                              check-bad-slices
-                              bitops::loghead-of-ash
-                              ))
-             :do-not-induct t))))
+(def-asl-subprogram alignup-correct
+  :function "AlignUp"
+  :params (n)
+  :args (x y)
+  :return-values ((v_bitvector n.val
+                               (if (equal (loghead y.val x.val) 0)
+                                   x.val
+                                 (ash (+ 1 (logtail y.val x.val)) y.val))))
+  :enable (bitops::loghead-of-ash))
 
-(defsection aligndownsize-correct
-
-  
-  (defthm aligndownsize-correct
-    (implies (and (subprograms-match '("AlignDownSize" "AlignDownSize-1" "UInt")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (natp n)
-                  (< 0 (ifix size))
-                  (<= size (expt 2 n))
-                  (posp clk)
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "AlignDownSize" (list (v_int n))
-                                               (list (v_bitvector n x)
-                                                     (v_int size))
-                                               :clk clk))
-                    (ev_normal (func_result (list (v_bitvector n (* (ifix size)
-                                                                    (floor (loghead n (nfix x))
-                                                                           (ifix size)))))
-                                            (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram env "AlignDownSize" (list (v_int n))
-                                              (list (v_bitvector n x)
-                                                    (v_int size))
-                                              :clk clk))
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                slices_sub
-                                check-bad-slices
-                                v_to_int))
-             :do-not-induct t))))
+(def-asl-subprogram aligndownsize-correct
+  :function "AlignDownSize"
+  :params (n)
+  :args (x size)
+  :return-values ((v_bitvector n.val
+                               (* size.val
+                                  (floor x.val size.val)))))
 
 
-(defsection alignupsize-correct
-
-  
-  (defthm alignupsize-correct
-    (implies (and (subprograms-match '("AlignUpSize" "AlignUpSize-1" "AlignDownSize-1" "UInt")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (natp n)
-                  (< 0 (ifix size))
-                  (<= size (expt 2 n))
-                  (<= 2 (ifix clk))
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "AlignUpSize" (list (v_int n))
-                                               (list (v_bitvector n x)
-                                                     (v_int size))
-                                               :clk clk))
-                    (ev_normal (func_result (list (v_bitvector n (* (ifix size)
-                                                                    (ceiling (loghead n (nfix x))
-                                                                             (ifix size)))))
-                                            (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram env "AlignUpSize" (list (v_int n))
-                                              (list (v_bitvector n x)
-                                                    (v_int size))
-                                              :clk clk))
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                slices_sub
-                                check-bad-slices
-                                v_to_int))
-             :do-not-induct t))))
+(def-asl-subprogram alignupsize-correct
+  :function "AlignUpSize"
+  :params (n)
+  :args (x size)
+  :return-values ((v_bitvector n.val
+                               (* size.val
+                                  (ceiling x.val size.val)))))
 
 
 
@@ -423,191 +206,137 @@
                          (logtail n x)))
          :hints(("Goal" :in-theory (enable logtail)))))
 
-(defsection aligndownp2-correct
+(def-asl-subprogram aligndownp2-correct
+  :function "AlignDownP2"
+  :params (n)
+  :args (x p2)
+  :hyps (< 0 n.val)
+  :return-values ((v_bitvector n.val
+                               (* (expt 2 p2.val)
+                                  (floor x.val (expt 2 p2.val)))))
+  :prepwork ((local (defthm loghead-of-expt-product
+                      (implies (and (integerp i)
+                                    (not (negp p2))
+                                    (<= (ifix p2) (nfix n)))
+                               (equal (loghead n (* (expt 2 p2) i))
+                                      (ash (loghead (- (nfix n) (ifix p2)) i) p2)))
+                      :hints (("goal" :use ((:instance bitops::loghead-of-ash
+                                             (n n) (m p2) (x i)))
+                               :in-theory (enable ash-is-expt)))))))
 
+
+
+(def-asl-subprogram alignupp2-correct
+  :function "AlignUpP2"
+  :params (n)
+  :args (x p2)
+  :hyps (< 0 n.val)
+  :return-values ((v_bitvector n.val
+                               (* (expt 2 p2.val)
+                                  (ceiling x.val (expt 2 p2.val)))))
+
+  :prepwork
+  ((defthm loghead-of-plus-loghead3
+     (implies (and (integerp a)
+                   (integerp b)
+                   (integerp c))
+              (equal (loghead n (+ a b (loghead n c)))
+                     (loghead n (+ a b c))))
+     :hints (("goal" :use ((:instance loghead-of-plus-loghead
+                            (a (+ a b)) (b c))))))
+
+   (local (defun ind (n x y)
+            (if (zp n)
+                (list x y)
+              (ind (1- n) (logcdr x) (logcdr y)))))
   
-  (local (defthm loghead-of-expt-product
-           (implies (and (integerp i)
-                         (not (negp p2))
-                         (<= (ifix p2) (nfix n)))
-                    (equal (loghead n (* (expt 2 p2) i))
-                           (ash (loghead (- (nfix n) (ifix p2)) i) p2)))
-           :hints (("goal" :use ((:instance bitops::loghead-of-ash
-                                  (n n) (m p2) (x i)))
-                    :in-theory (enable ash-is-expt)))))
+   (local (defthm logtail-small-when-loghead-0
+            (implies (and (equal (loghead n x) 0)
+                          (integerp x)
+                          (unsigned-byte-p n y))
+                     (equal (logtail n (+ x y))
+                            (logtail n x)))
+            :hints (("goal" :in-theory (bitops::e/d* (bitops::ihsext-recursive-redefs))
+                     :induct (ind n x y)))))
 
-  (defthm aligndownp2-correct
-    (implies (and (subprograms-match '("AlignDownP2" "Zeros-1")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (< 0 (ifix n))
-                  (<= 0 (ifix p2))
-                  (<= (ifix p2) (ifix n))
-                  (posp clk)
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "AlignDownP2" (list (v_int n))
-                                               (list (v_bitvector n x) (v_int p2)) :clk clk))
-                    (ev_normal (func_result (list (v_bitvector n
-                                                               (* (expt 2 (ifix p2))
-                                                                  (floor (loghead n (nfix x))
-                                                                         (expt 2 (ifix p2))))))
-                                            (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram env "AlignDownP2" (list (v_int n))
-                                               (list (v_bitvector n x) (v_int p2)) :clk clk))
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                check-bad-slices
-                                slices_sub
-                                v_to_int))
-             :do-not-induct t))))
+   (local (defthm loghead-0-when-integerp-div
+            (implies (and (integerp x)
+                          (not (negp n)))
+                     (equal (integerp (* x (/ (expt 2 n))))
+                            (equal 0 (loghead n x))))
+            :hints(("Goal" :in-theory (enable loghead)))))
 
+   (local (defthm logtail-lemma
+            (implies (and (equal (loghead n x) 0)
+                          (integerp x)
+                          (not (negp n)))
+                     (equal (logtail n (+ -1 x (expt 2 n)))
+                            (logtail n x)))
+            :hints (("goal" :use ((:instance logtail-small-when-loghead-0
+                                   (y (+ -1 (expt 2 n)))))))))
 
-
-(defsection alignupp2-correct
-
-
-  (defthm loghead-of-plus-loghead3
-    (implies (and (integerp a)
-                  (integerp b)
-                  (integerp c))
-             (equal (loghead n (+ a b (loghead n c)))
-                    (loghead n (+ a b c))))
-    :hints (("goal" :use ((:instance loghead-of-plus-loghead
-                           (a (+ a b)) (b c))))))
-
-  (local (defun ind (n x y)
-           (if (zp n)
-               (list x y)
-             (ind (1- n) (logcdr x) (logcdr y)))))
+   (local (defthm logtail-of-plus-ash
+            (implies (and (integerp x)
+                          (not (negp n)))
+                     (equal (logtail n (+ x (ash 1 n)))
+                            (+ 1 (logtail n x))))
+            :hints (("goal" :in-theory (bitops::e/d* (bitops::ihsext-inductions
+                                                      bitops::ihsext-recursive-redefs))
+                     :induct (logtail n x)
+                     :expand ((:free (x y) (logtail n (+ x y)))))
+                    (and stable-under-simplificationp
+                         '(:in-theory (enable ash-is-expt))))))
   
-  (local (defthm logtail-small-when-loghead-0
-           (implies (and (equal (loghead n x) 0)
-                         (integerp x)
-                         (unsigned-byte-p n y))
-                    (equal (logtail n (+ x y))
-                           (logtail n x)))
-           :hints (("goal" :in-theory (bitops::e/d* (bitops::ihsext-recursive-redefs))
-                    :induct (ind n x y)))))
+   (local (defthm logtail-lemma2-aux
+            (implies (and (not (equal (loghead n x) 0))
+                          (integerp x)
+                          (not (negp n)))
+                     (equal (logtail n (+ -1 x (ash 1 n)))
+                            (+ 1 (logtail n x))))
+            :hints (("goal" :in-theory (bitops::e/d* (bitops::ihsext-inductions
+                                                      bitops::ihsext-recursive-redefs))
+                     :induct (logtail n x)
+                     :expand ((:free (x y) (logtail n (+ x y))))))))
 
-  (local (defthm loghead-0-when-integerp-div
-           (implies (and (integerp x)
-                         (not (negp n)))
-                    (equal (integerp (* (/ (expt 2 n)) x))
-                           (equal 0 (loghead n x))))
-           :hints(("Goal" :in-theory (enable loghead)))))
-
-  (local (defthm logtail-lemma
-           (implies (and (equal (loghead n x) 0)
-                         (integerp x)
-                         (not (negp n)))
-                    (equal (logtail n (+ -1 x (expt 2 n)))
-                           (logtail n x)))
-           :hints (("goal" :use ((:instance logtail-small-when-loghead-0
-                                  (y (+ -1 (expt 2 n)))))))))
-
-  (local (defthm logtail-of-plus-ash
-           (implies (and (integerp x)
-                         (not (negp n)))
-                    (equal (logtail n (+ x (ash 1 n)))
-                           (+ 1 (logtail n x))))
-           :hints (("goal" :in-theory (bitops::e/d* (bitops::ihsext-inductions
-                                                     bitops::ihsext-recursive-redefs))
-                    :induct (logtail n x)
-                    :expand ((:free (x y) (logtail n (+ x y)))))
-                   (and stable-under-simplificationp
-                        '(:in-theory (enable ash-is-expt))))))
-  
-  (local (defthm logtail-lemma2-aux
-           (implies (and (not (equal (loghead n x) 0))
-                         (integerp x)
-                         (not (negp n)))
-                    (equal (logtail n (+ -1 x (ash 1 n)))
-                           (+ 1 (logtail n x))))
-           :hints (("goal" :in-theory (bitops::e/d* (bitops::ihsext-inductions
-                                                     bitops::ihsext-recursive-redefs))
-                    :induct (logtail n x)
-                    :expand ((:free (x y) (logtail n (+ x y))))))))
-
-  (local (defthm logtail-lemma2
-           (implies (and (not (equal (loghead n x) 0))
-                         (integerp x)
-                         (not (negp n)))
-                    (equal (logtail n (+ -1 x (expt 2 n)))
-                           (+ 1 (logtail n x))))
-           :hints (("goal" :use ((:instance logtail-lemma2-aux))
-                    :in-theory (e/d (ash-is-expt) (logtail-lemma2-aux))))))
+   (local (defthm logtail-lemma2
+            (implies (and (not (equal (loghead n x) 0))
+                          (integerp x)
+                          (not (negp n)))
+                     (equal (logtail n (+ -1 x (expt 2 n)))
+                            (+ 1 (logtail n x))))
+            :hints (("goal" :use ((:instance logtail-lemma2-aux))
+                     :in-theory (e/d (ash-is-expt) (logtail-lemma2-aux))))))
   
 
-  (local (defthm loghead-of-plus-mult-expt
-           (implies (and (integerp x)
-                         (natp n)
-                         (not (negp m))
-                         (<= (ifix m) n))
-                    (equal (loghead n (+ x (* (expt 2 m) (loghead (+ n (- (ifix m))) y))))
-                           (loghead n (+ x (* (expt 2 m) (ifix y))))))
-           :hints (("goal" :use ((:instance loghead-of-plus-loghead
-                                  (a x)
-                                  (b (ash y m))))
-                    :in-theory (e/d (bitops::loghead-of-ash)
-                                    (loghead-of-plus-loghead)))
-                   (and stable-under-simplificationp
-                        '(:in-theory (enable ash-is-expt))))))
+   (local (defthm loghead-of-plus-mult-expt
+            (implies (and (integerp x)
+                          (natp n)
+                          (not (negp m))
+                          (<= (ifix m) n))
+                     (equal (loghead n (+ x (* (expt 2 m) (loghead (+ n (- (ifix m))) y))))
+                            (loghead n (+ x (* (expt 2 m) (ifix y))))))
+            :hints (("goal" :use ((:instance loghead-of-plus-loghead
+                                   (a x)
+                                   (b (ash y m))))
+                     :in-theory (e/d (bitops::loghead-of-ash)
+                                     (loghead-of-plus-loghead)))
+                    (and stable-under-simplificationp
+                         '(:in-theory (enable ash-is-expt))))))
 
-  (local (defthm loghead-of-mult-expt
-           (implies (and (integerp x)
-                         (natp n)
-                         (not (negp m))
-                         (<= (ifix m) n))
-                    (equal (loghead n (* (expt 2 m) (loghead (+ n (- (ifix m))) y)))
-                           (loghead n (* (expt 2 m) (ifix y)))))
-           :hints (("goal" :use ((:instance loghead-of-plus-mult-expt
-                                  (x 0)))))))
+   (local (defthm loghead-of-mult-expt
+            (implies (and (integerp x)
+                          (natp n)
+                          (natp m)
+                          (<= m n))
+                     (equal (loghead n (* (expt 2 m) (loghead (+ n (- m)) y)))
+                            (loghead n (* (expt 2 m) (ifix y)))))
+            :hints (("goal" :use ((:instance loghead-of-plus-mult-expt
+                                   (x 0)))))))
   
 
-  (local (in-theory (disable ceiling)))
-  
-  (defthm alignupp2-correct
-    (implies (and (subprograms-match '("AlignUpP2" "AlignDownP2" "Zeros-1")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (< 0 (ifix n))
-                  (<= 0 (ifix p2))
-                  (<= (ifix p2) (ifix n))
-                  (<= 2 (ifix clk))
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "AlignUpP2" (list (v_int n))
-                                               (list (v_bitvector n x) (v_int p2)) :clk clk))
-                    (ev_normal (func_result (list (v_bitvector n
-                                                               (* (expt 2 (ifix p2))
-                                                                  (ceiling (loghead n (nfix x))
-                                                                           (expt 2 (ifix p2))))))
-                                            (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram env "AlignUpP2" (list (v_int n))
-                                              (list (v_bitvector n x) (v_int p2)) :clk clk))
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                check-bad-slices
-                                slices_sub
-                                v_to_int))
-             :do-not-induct t))))
+   (local (in-theory (disable ceiling)))))
+
+
 
 
 

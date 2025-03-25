@@ -35,11 +35,12 @@
 
 (deftypes val
   (deftagsum val
-    (:v_int ((val integerp)))
+    (:v_int ((val integerp :rule-classes :type-prescription)))
     (:v_bool ((val booleanp)))
-    (:v_real ((val rationalp)))
-    (:v_string ((val stringp)))
-    (:v_bitvector ((len natp) (val natp :reqfix (loghead len val)))
+    (:v_real ((val rationalp :rule-classes :type-prescription)))
+    (:v_string ((val stringp :rule-classes :type-prescription)))
+    (:v_bitvector ((len natp :rule-classes :type-prescription)
+                   (val integerp :reqfix (loghead len val)))
      :require (unsigned-byte-p len val))
     (:v_label ((val identifier-p)))
     (:v_record ((rec val-imap)))
@@ -47,6 +48,7 @@
   (fty::deflist vallist :elt-type val :true-listp t)
   (fty::defmap val-imap :key-type identifier :val-type val :true-listp t)
   ///
+  
   (defthm val-imap-p-of-pairlis$
     (implies (and (identifierlist-p keys)
                   (vallist-p vals)

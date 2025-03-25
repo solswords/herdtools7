@@ -106,58 +106,39 @@
                                                    (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))))))))
 
 
-(defsection ilog2-correct
 
 
-  (define ilog2-safe-clock ((val rationalp))
-    :guard (< 0 val)
-    :returns (clock posp :rule-classes :type-prescription)
-    (+ 1 (max (max (acl2::rational-exponent val)
-                   (- (acl2::rational-exponent val)))
-              (if (<= 1 val)
-                  (b* (((mv low high) (acl2::ilog2-search-up val 0 1)))
-                    (- high low))
-                (b* (((mv low high) (acl2::ilog2-search-down val -1 0)))
-                  (- high low)))))
-    ///
-    (defthm ilog2-safe-clock-implies
-      (implies (<= (ilog2-safe-clock val) clk)
-               (and (< (acl2::Rational-exponent val) clk)
-                    (< (- (acl2::rational-exponent val)) clk)
-                    (implies (<= 1 val)
-                             (< (b* (((mv low high) (acl2::ilog2-search-up val 0 1)))
-                                  (+ (- low) high))
-                                clk))
-                    (implies (< val 1)
-                             (< (b* (((mv low high) (acl2::ilog2-search-down val -1 0)))
-                                  (+ (- low) high))
-                                clk))))))
-         
+
+(def-asl-subprogram ilog2-correct
+  :function "ILog2"
+  :args (val)
+  :safe-clock (ilog2-safe-clock val.val)
+  :hyps (and (< 0 val.val)
+             (<= (ilog2-safe-clock val.val) (expt 2 128)))
+  :return-values ((v_int (acl2::ilog2 val.val)))
+  :enable (acl2::ilog2)
   
-  (defthm ilog2-correct
-    (implies (and (subprograms-match '("Abs" "ILog2")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (rationalp val)
-                  (< 0 val)
-                  (integerp clk)
-                  (<= (ilog2-safe-clock val) clk)
-                  (<= (ilog2-safe-clock val) (expt 2 128))
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "ILog2" nil (list (v_real val)) :clk clk))
-                    (ev_normal (func_result (list (v_int (acl2::ilog2 val))) (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram  env "ILog2" nil (list (v_real val)) :clk clk))
-             :in-theory (enable check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                acl2::ilog2)
-             :do-not-induct t))))
-
-
+  :prepwork
+  ((define ilog2-safe-clock ((val rationalp))
+     :guard (< 0 val)
+     :returns (clock posp :rule-classes :type-prescription)
+     (+ 1 (max (max (acl2::rational-exponent val)
+                    (- (acl2::rational-exponent val)))
+               (if (<= 1 val)
+                   (b* (((mv low high) (acl2::ilog2-search-up val 0 1)))
+                     (- high low))
+                 (b* (((mv low high) (acl2::ilog2-search-down val -1 0)))
+                   (- high low)))))
+     ///
+     (defthm ilog2-safe-clock-implies
+       (implies (<= (ilog2-safe-clock val) clk)
+                (and (< (acl2::Rational-exponent val) clk)
+                     (< (- (acl2::rational-exponent val)) clk)
+                     (implies (<= 1 val)
+                              (< (b* (((mv low high) (acl2::ilog2-search-up val 0 1)))
+                                   (+ (- low) high))
+                                 clk))
+                     (implies (< val 1)
+                              (< (b* (((mv low high) (acl2::ilog2-search-down val -1 0)))
+                                   (+ (- low) high))
+                                 clk))))))))

@@ -70,49 +70,29 @@
             :hints(("Goal" :in-theory (enable bitops::part-select-width-low)))))))
 
 
+(def-asl-subprogram uint-correct
+  :function "UInt"
+  :params (n)
+  :args (val)
+  :return-values ((v_int val.val))
+  :enable (bitops::part-select-width-low)
+  :prepwork
+  ((local (defthm nfix-when-not-negp
+            (implies (not (negp n))
+                     (equal (nfix n) (ifix n)))
+            :hints(("Goal" :in-theory (enable nfix)))))
 
+   (local (defthm expt-when-not-negp
+            (implies (not (negp n))
+                     (posp (expt 2 n)))
+            :hints(("Goal" :in-theory (enable expt)))
+            :rule-classes :type-prescription))
 
-
-(defsection uint-correct
-
-  (local (defthm nfix-when-not-negp
-           (implies (not (negp n))
-                    (equal (nfix n) (ifix n)))
-           :hints(("Goal" :in-theory (enable nfix)))))
-
-  (local (defthm expt-when-not-negp
-           (implies (not (negp n))
-                    (posp (expt 2 n)))
-           :hints(("Goal" :in-theory (enable expt)))
-           :rule-classes :type-prescription))
-  
-  (defthm uint-correct
-    (implies (and (subprograms-match '("UInt")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (<= 0 (ifix n))
-                  (natp clk))
-             (equal (mv-nth 0 (eval_subprogram env "UInt"
-                                               (list (v_int n))
-                                               (list (v_bitvector n val))
-                                               :clk clk))
-                    (ev_normal (func_result (list (v_int (loghead n (nfix val)))) (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram env "UInt"
-                                              (list (v_int n))
-                                              (list (v_bitvector n val))
-                                              :clk clk))
-             :in-theory (enable bitops::part-select-width-low
-                                check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int)
-             :do-not-induct t))))
+   (local (defthm v_bitvector-val-upper-bound
+            (<= (v_bitvector->val x) (+ -1 (expt 2 (v_bitvector->len x))))
+            :hints (("goal" :use ((:instance v_bitvector-requirements))
+                     :in-theory (e/d (unsigned-byte-p)
+                                     (v_bitvector-requirements))))
+            :rule-classes :linear))))
 
 

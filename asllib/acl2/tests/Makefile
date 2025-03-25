@@ -62,7 +62,6 @@ ASLSemanticsReference.t/SemanticsRule.LDDiscard.asl \
 ASLSemanticsReference.t/SemanticsRule.EConcat2.asl \
 ASLSemanticsReference.t/SemanticsRule.LEGlobalVar.asl \
 ASLSemanticsReference.t/SemanticsRule.SCond2.asl \
-ASLSemanticsReference.t/SemanticsRule.SCond3.asl \
 ASLSemanticsReference.t/SemanticsRule.SCond4.asl \
 ASLSemanticsReference.t/SemanticsRule.EGetEnumArray.asl \
 ASLSemanticsReference.t/SemanticsRule.EBinopAndFalse.asl \
@@ -235,6 +234,7 @@ ASLSemanticsReference.t/SemanticsRule.EArbitraryInteger3.asl \
 ASLSemanticsReference.t/SemanticsRule.EArbitraryIntegerRange3-42-42.asl \
 ASLSemanticsReference.t/SemanticsRule.SAssertNo.asl \
 ASLSemanticsReference.t/SemanticsRule.ATCVariousErrors.asl \
+ASLSemanticsReference.t/SemanticsRule.SCond3.asl \
 
 
 PASSING_TARGETS := $(patsubst %.asl,%.pass,$(PASSING_TESTS))
@@ -263,3 +263,5 @@ export PATH := $(BINDIR):$(PATH)
 .PHONY: clean
 clean :
 	@rm -f $(PASSING_TARGETS) $(FAILING_TARGETS)
+	@find . -name '*.t' | xargs rm -rf
+

@@ -62,358 +62,134 @@
                   (equal (loghead n x) 0))
          :hints(("Goal" :in-theory (enable bitops::loghead**)))))
 
-(defsection LSL-correct
-  
-  (defthm LSL-correct
-    (implies (and (subprograms-match '("LSL" "Zeros-1")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (<= 0 (ifix n))
-                  (posp clk)
-                  (<= 0 (ifix shift))
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "LSL"
-                                               (list (v_int n))
-                                               (list (v_bitvector n x)
-                                                     (v_int shift))
-                                               :clk clk))
-                    (ev_normal (func_result (list (v_bitvector n (loghead n (ash (nfix x) shift))))
-                                            (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram env "LSL"
-                                               (list (v_int n))
-                                               (list (v_bitvector n x)
-                                                     (v_int shift))
-                                               :clk clk))
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int
-                                slices_sub
-                                check-bad-slices
-                                bitops::loghead-of-ash))
-             :do-not-induct t))))
+(def-asl-subprogram LSL-correct
+  :function "LSL"
+  :params (n)
+  :args (x shift)
+  :hyps (<= 0 shift.val)
+  :return-values ((v_bitvector n.val (ash x.val shift.val)))
+  :enable (bitops::loghead-of-ash))
 
-(defsection LSL_C-correct
-  
-  (defthm LSL_C-correct
-    (implies (and (subprograms-match '("LSL_C" "LSL" "Zeros-1")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (<= 0 (ifix n))
-                  (<= 2 (nfix clk))
-                  (posp shift)
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "LSL_C"
-                                               (list (v_int n))
-                                               (list (v_bitvector n x)
-                                                     (v_int shift))
-                                               :clk clk))
-                    (ev_normal (func_result (list (v_bitvector n (loghead n (ash (nfix x) shift)))
-                                                  (v_bitvector 1 (logbit n (ash (nfix x) shift))))
-                                            (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram env "LSL_C"
-                                               (list (v_int n))
-                                               (list (v_bitvector n x)
-                                                     (v_int shift))
-                                               :clk clk))
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int
-                                slices_sub
-                                check-bad-slices
-                                bitops::loghead-of-ash))
-             :do-not-induct t))))
+(def-asl-subprogram LSL_C-correct
+  :function "LSL_C"
+  :params (n)
+  :args (x shift)
+  :hyps (< 0 shift.val)
+  :return-values ((v_bitvector n.val (ash x.val shift.val))
+                  (v_bitvector 1 (logbit n.val (ash x.val shift.val))))
+  :enable (bitops::loghead-of-ash))
+
+(local (defthm bitvector-logtail-0
+         (implies (<= (v_bitvector->len x) (nfix n))
+                  (equal (logtail n (v_bitvector->val x)) 0))
+         :hints (("goal" :use ((:instance v_bitvector-requirements)
+                               (:instance acl2::logtail-identity
+                                (size (nfix n)) (i (v_bitvector->val x))))
+                  :in-theory (disable v_bitvector-requirements
+                                      acl2::logtail-identity)))))
+
+(def-asl-subprogram LSR-correct
+  :function "LSR"
+  :params (n)
+  :args (x shift)
+  :hyps (<= 0 shift.val)
+  :return-values ((v_bitvector n.val (ash x.val (- shift.val))))
+  :enable (bitops::loghead-of-loghead-split))
 
 
-(defsection LSR-correct
-  
-  (defthm LSR-correct
-    (implies (and (subprograms-match '("LSR" "Zeros-1" "ZeroExtend-1")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (natp n)
-                  (<= 2 (nfix clk))
-                  (<= 0 (ifix shift))
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "LSR"
-                                               (list (v_int n))
-                                               (list (v_bitvector n x)
-                                                     (v_int shift))
-                                               :clk clk))
-                    (ev_normal (func_result (list (v_bitvector n (ash (loghead n (nfix x)) (- shift))))
-                                            (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram env "LSR"
-                                               (list (v_int n))
-                                               (list (v_bitvector n x)
-                                                     (v_int shift))
-                                               :clk clk))
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int
-                                slices_sub
-                                check-bad-slices
-                                bitops::loghead-of-loghead-split))
-             :do-not-induct t))))
+(local (defthm loghead-1-of-bit
+         (implies (bitp x)
+                  (equal (loghead 1 x) x))
+         :hints(("Goal" :in-theory (enable bitops::loghead**)))))
 
+(local (defthm bitvector-logbitp-out-of-range
+         (implies (<= (v_bitvector->len x) (nfix n))
+                  (not (logbitp n (v_bitvector->val x))))
+         :hints (("goal" :use ((:instance v_bitvector-requirements)
+                               (:instance bitops::logbitp-of-loghead-out-of-bounds
+                                (size (v_bitvector->len x)) (i (v_bitvector->val x))
+                                (pos n)))
+                  :in-theory (disable v_bitvector-requirements
+                                      bitops::logbitp-of-loghead-out-of-bounds)))))
 
-(defsection LSR_C-correct
-  
-  (defthm LSR_C-correct
-    (implies (and (subprograms-match '("LSR_C" "LSR" "Zeros-1" "ZeroExtend-1")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (natp n)
-                  (<= 3 (nfix clk))
-                  (posp shift)
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "LSR_C"
-                                               (list (v_int n))
-                                               (list (v_bitvector n x)
-                                                     (v_int shift))
-                                               :clk clk))
-                    (ev_normal (func_result (list (v_bitvector n (logtail shift (loghead n (nfix x))))
-                                                  (v_bitvector 1 (logbit (1- shift) (loghead n (nfix x)))))
-                                            (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram env "LSR_C"
-                                               (list (v_int n))
-                                               (list (v_bitvector n x)
-                                                     (v_int shift))
-                                               :clk clk))
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int
-                                slices_sub
-                                check-bad-slices
-                                bitops::loghead-of-ash))
-             :do-not-induct t))))
+(def-asl-subprogram LSR_C-correct
+  :function "LSR_C"
+  :params (n)
+  :args (x shift)
+  :hyps (< 0 shift.val)
+  :return-values ((v_bitvector n.val (ash x.val (- shift.val)))
+                  (v_bitvector 1 (logbit (1- shift.val) x.val)))
+  :enable (bitops::loghead-of-ash))
 
 
 
-(defsection ASR-correct
-  
-  (defthm ASR-correct
-    (implies (and (subprograms-match '("ASR" "Min-1" "SignExtend-1" "Replicate-1" "Zeros-1" "Ones-1")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (posp n)
-                  (<= 4 (nfix clk))
-                  (<= 0 (ifix shift))
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "ASR"
-                                               (list (v_int n))
-                                               (list (v_bitvector n x)
-                                                     (v_int shift))
-                                               :clk clk))
-                    (ev_normal (func_result (list (v_bitvector n (loghead n (logtail shift (logext n (nfix x))))))
-                                            (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram env "ASR"
-                                               (list (v_int n))
-                                               (list (v_bitvector n x)
-                                                     (v_int shift))
-                                               :clk clk))
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int
-                                slices_sub
-                                check-bad-slices
-                                bitops::loghead-of-loghead-split
-                                logext
-                                bitops::logtail-of-logapp-split))
-             :do-not-induct t))))
+(def-asl-subprogram ASR-correct
+  :function "ASR"
+  :params (n)
+  :args (x shift)
+  :hyps (and (< 0 n.val)
+             (<= 0 shift.val))
+  :return-values ((v_bitvector n.val (logtail shift.val (logext n.val x.val))))
+  :enable (bitops::loghead-of-loghead-split
+           logext
+           bitops::logtail-of-logapp-split))
 
-(defsection ASR_C-correct
-  
-  (defthm ASR_C-correct
-    (implies (and (subprograms-match '("ASR_C" "ASR" "Min-1" "SignExtend-1" "Replicate-1" "Zeros-1" "Ones-1")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (posp n)
-                  (<= 5 (nfix clk))
-                  (posp shift)
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "ASR_C"
-                                               (list (v_int n))
-                                               (list (v_bitvector n x)
-                                                     (v_int shift))
-                                               :clk clk))
-                    (ev_normal (func_result (list (v_bitvector n (loghead n (logtail shift (logext n (nfix x)))))
-                                                  (v_bitvector 1 (logbit (1- shift) (logext n (nfix x)))))
-                                            (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram env "ASR_C"
-                                               (list (v_int n))
-                                               (list (v_bitvector n x)
-                                                     (v_int shift))
-                                               :clk clk))
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int
-                                slices_sub
-                                check-bad-slices
-                                bitops::loghead-of-ash))
-             :do-not-induct t))))
+(def-asl-subprogram ASR_C-correct
+  :function "ASR_C"
+  :params (n)
+  :args (x shift)
+  :hyps (and (< 0 n.val)
+             (< 0 shift.val))
+  :return-values ((v_bitvector n.val (logtail shift.val (logext n.val x.val)))
+                  (v_bitvector 1 (logbit (1- shift.val) (logext n.val x.val))))
+  :enable (bitops::loghead-of-ash))
 
 
 
-(defsection ROR-correct
+(def-asl-subprogram ROR-correct
+  :function "ROR"
+  :params (n)
+  :args (x shift)
+  :hyps (and (< 0 n.val)
+             (<= 0 shift.val))
+  :return-values ((v_bitvector n.val (bitops::rotate-right x.val n.val shift.val)))
+  :prepwork
+  (
 
-  (local (defthm logand-with-ash-minus-1
-           (implies (not (negp n))
-                    (equal (logand x (+ -1 (ash 1 n)))
-                           (loghead n x)))
-           :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-inductions
-                                                    bitops::ihsext-recursive-redefs
-                                                    bitops::equal-logcons-strong)))))
+   (local (defthm logand-with-ash-minus-1
+            (implies (not (negp n))
+                     (equal (logand x (+ -1 (ash 1 n)))
+                            (loghead n x)))
+            :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-inductions
+                                                     bitops::ihsext-recursive-redefs
+                                                     bitops::equal-logcons-strong)))))
 
     
   
-  (local (defthm logior-loghead-ash
-           (implies (not (negp w))
-                    (equal (logior (ash x w)
-                                   (loghead w y))
-                           (logapp w y x)))
-           :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-inductions
-                                                    bitops::ihsext-recursive-redefs
-                                                    bitops::equal-logcons-strong)))))
-  (local (defthm rotate-right-in-terms-of-logapp
-           (implies (posp n)
-                    (equal (rotate-right x n shift)
-                           (b* ((shift-mod-n (mod (nfix shift) n)))
-                             (logapp (- n shift-mod-n)
-                                     (logtail shift-mod-n x)
-                                     (loghead shift-mod-n x)))))
-           :hints(("Goal" :in-theory (enable rotate-right)))))
-  
-  (defthm ROR-correct
-    (implies (and (subprograms-match '("ROR")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (posp n)
-                  (<= 0 (ifix shift))
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "ROR"
-                                               (list (v_int n))
-                                               (list (v_bitvector n x)
-                                                     (v_int shift))
-                                               :clk clk))
-                    (ev_normal (func_result (list (v_bitvector n (bitops::rotate-right (loghead n (nfix x))
-                                                                                       n shift)))
-                                            (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram env "ROR"
-                                               (list (v_int n))
-                                               (list (v_bitvector n x)
-                                                     (v_int shift))
-                                               :clk clk))
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int
-                                slices_sub
-                                check-bad-slices
-                                bitops::loghead-of-loghead-split
-                                logext
-                                bitops::logtail-of-logapp-split))
-             :do-not-induct t))))
+   (local (defthm logior-loghead-ash
+            (implies (not (negp w))
+                     (equal (logior (ash x w)
+                                    (loghead w y))
+                            (logapp w y x)))
+            :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-inductions
+                                                     bitops::ihsext-recursive-redefs
+                                                     bitops::equal-logcons-strong)))))
+   (local (defthm rotate-right-in-terms-of-logapp
+            (implies (posp n)
+                     (equal (rotate-right x n shift)
+                            (b* ((shift-mod-n (mod (nfix shift) n)))
+                              (logapp (- n shift-mod-n)
+                                      (logtail shift-mod-n x)
+                                      (loghead shift-mod-n x)))))
+            :hints(("Goal" :in-theory (enable rotate-right)))))))
 
-(defsection ROR_C-correct
-  
-  (defthm ROR_C-correct
-    (implies (and (subprograms-match '("ROR_C" "ROR")
-                                     (global-env->static (env->global env))
-                                     (stdlib-static-env))
-                  (posp n)
-                  (posp clk)
-                  (posp shift)
-                  (no-duplicatesp-equal (acl2::alist-keys (global-env->stack_size
-                                                           (env->global env)))))
-             (equal (mv-nth 0 (eval_subprogram env "ROR_C"
-                                               (list (v_int n))
-                                               (list (v_bitvector n x)
-                                                     (v_int shift))
-                                               :clk clk))
-                    (ev_normal (func_result (list (v_bitvector n (bitops::rotate-right (loghead n (nfix x))
-                                                                                       n shift))
-                                                  (v_bitvector 1 (logbit (mod (1- shift) n)
-                                                                         (nfix x))))
-                                            (env->global env)))))
-    :hints (("goal" :expand ((eval_subprogram env "ROR_C"
-                                               (list (v_int n))
-                                               (list (v_bitvector n x)
-                                                     (v_int shift))
-                                               :clk clk))
-             :in-theory (e/d (check_recurse_limit
-                                declare_local_identifiers
-                                declare_local_identifier
-                                remove_local_identifier
-                                env-find
-                                env-assign
-                                env-assign-local
-                                env-assign-global
-                                env-push-stack
-                                env-pop-stack
-                                v_to_int
-                                slices_sub
-                                check-bad-slices
-                                bitops::loghead-of-ash))
-             :do-not-induct t))))
+(def-asl-subprogram ROR_C-correct
+  :function "ROR_C"
+  :params (n)
+  :args (x shift)
+  :hyps (and (< 0 n.val)
+             (< 0 shift.val))
+  :return-values ((v_bitvector n.val (bitops::rotate-right x.val n.val shift.val))
+                  (v_bitvector 1 (logbit (mod (1- shift.val) n.val) x.val)))
+  :enable (bitops::loghead-of-ash))
 
