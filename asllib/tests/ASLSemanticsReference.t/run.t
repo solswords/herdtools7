@@ -223,3 +223,6 @@ ASL Semantics Tests:
   $ aslref SemanticsRule.CheckNonOverlappingSlices.bad.asl
   ASL Dynamic error: overlapping slices (N - 2)+:2, 0+:1.
   [1]
+  $ aslref SemanticsRule.DeclareGlobal.asl
+  $ aslref SemanticsRule.EvalGlobals.asl
+  $ aslref SemanticsRule.MatchFuncRes.asl

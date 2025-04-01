@@ -207,33 +207,133 @@ Note that this function relies on all standard library functions with input para
   func stdlibB{M,N}(arg1: bits(N), ...) => bits(...M...)
 \end{lstlisting}
 
+\ExampleDef{Inserting Parameters in Calls to Standard Library Subprograms}
+The specification in \listingref{InsertStdlibParam}
+shows examples of calls to standard library functions with some or all of their
+parameters elided, and the equivalent calls with all parameters included.
+\ASLListing{Inserting parameters in calls to standard library subprograms}{InsertStdlibParam}{\typingtests/TypingRule.InsertStdlibParam.asl}
+
+\ProseParagraph
+\OneApplies
+\begin{itemize}
+  \item \Proseeqdef{$\caninsertstdlibparam$}{the conjunction of the following conditions:
+    \begin{itemize}
+      \item $\canommitstdlibparam$ holds for $\funcsig$;
+      \item the number of parameters $\params$ is less than the number of parameters in $\funcsig$;
+      \item $\argtypes$ is not the empty list.
+    \end{itemize}
+  }
+  \item \OneApplies
+  \begin{itemize}
+    \item \AllApplyCase{can\_insert}
+    \begin{itemize}
+      \item \Proseeqdef{$\vt$}{the \head{} of $\argtypes$};
+      \item applying $\getbitvectorwidth$ to $\tenv$ and $\vt$ yields $\vwidth$\ProseOrTypeError;
+      \item \Proseeqdef{$paramtype$}{the \wellconstrainedintegertype{} for the single
+            constraint consisting of the \exactconstraintterm{} for $\vwidth$};
+      \item \Proseeqdef{$\paramsone$}{the list whose \head{} is $\params$ and \tail{} is
+            the tuple consisting of $\paramtype$, $\vwidth$, and the empty list of \sideeffectdescriptorsetsterm}.
+    \end{itemize}
+  \end{itemize}
+
+  \begin{itemize}
+    \item \AllApplyCase{cannot\_insert}
+    \begin{itemize}
+      \item $\caninsertstdlibparam$ is $\False$;
+      \item \Proseeqdef{$\paramsone$}{$\params$}.
+    \end{itemize}
+  \end{itemize}
+\end{itemize}
+
+\FormallyParagraph
+\begin{mathpar}
+\inferrule[can\_insert]{
+  {
+    \caninsertstdlibparam \eqdef \left(\begin{array}{ll}
+      \canommitstdlibparam(\funcsig) & \land\\
+      \listlen{\params} < \listlen{\funcsig.\funcparameters} & \land\\
+      \argtypes \neq \emptylist &
+    \end{array}\right)
+  }\\
+  \caninsertstdlibparam = \True\\\\
+  \argtypes \eqname [\vt] \concat \Ignore\\
+  \getbitvectorwidth(\tenv, \vt) \typearrow \vwidth \OrTypeError\\\\
+  \paramtype \eqdef \TInt(\wellconstrained([\AbbrevConstraintExact{\vwidth}]))\\
+  \paramsone \eqdef \params \concat [(\paramtype, \vwidth, \emptyset)]
+}{
+  \insertstdlibparam(\funcsig, \params, \argtypes) \aslto \paramsone
+}
+\end{mathpar}
+
+\begin{mathpar}
+\inferrule[cannot\_insert]{
+  {
+    \caninsertstdlibparam \eqdef \left(\begin{array}{ll}
+      \canommitstdlibparam(\funcsig) & \land\\
+      \listlen{\params} < \listlen{\funcsig.\funcparameters} & \land\\
+      \argtypes \neq \emptylist &
+    \end{array}\right)
+  }\\
+  \caninsertstdlibparam = \False
+}{
+  \insertstdlibparam(\funcsig, \params, \argtypes) \aslto \overname{\params}{\paramsone}
+}
+\end{mathpar}
+
+\TypingRuleDef{CanOmmitStdlibParam}
+\hypertarget{def-canommitstdlibparam}{}
+The function
+\[
+  \canommitstdlibparam(\overname{\func}{\funcsig}) \aslto \overname{\Bool}{\vb}
+\]
+tests whether the first parameter of the subprogram defined by
+$\funcsig$ can be omitted (and thus automatically inserted), yielding the result in $\vb$.
+
+\ExampleDef{Determining Whether a Parameter Can be Omitted}
+The following are examples of subprogram signatures
+where the first parameter can be omitted:
+\begin{lstlisting}
+func UInt{N: integer{1..128}} (x: bits(N)) => integer{0..2^N-1}
+func Len{N}(x: bits(N)) => integer {N}
+func ZeroExtend {N,M} (x: bits(M)) => bits(N)
+\end{lstlisting}
+
+The following are examples of subprogram signatures
+where the first parameter cannot be omitted:
+\begin{lstlisting}
+func ReplicateBit{N}(isZero: boolean) => bits(N)
+func Ones{N}() => bits(N)
+\end{lstlisting}
 
 \ProseParagraph
 \AllApply
 \begin{itemize}
-  \item $\funcsig.\funcparameters$ is either
-    a list with one parameter with a name $\vx$,
-    or a list with two parameters, the second of which has a name $\vx$\ProseTerminateAs{\params};
-  \item $\funcsig.\funcargs$ has a \head{} formal argument whose type is $\TBits(\EVar(\vx))$\ProseTerminateAs{\params};
-  \item $\argtypes$ has a \head{} actual argument type of $\TBits(\ve)$\ProseTerminateAs{\params};
-  \item $\funcsig.\funcbuiltin$ is $\True$\ProseTerminateAs{\params};
-  \item the length of $\params$ is less than the length of $\funcsig.\funcparameters$\ProseTerminateAs{\params};
-  \item $\paramsone$ is the \constrainedinteger{} for $\ve$ with an empty set of \sideeffectdescriptorsterm,
-        appended to $\params$\ProseTerminateAs{\params}.
+  \item $\funcsig$ is in the standard library;
+  \item \Proseeqdef{$\declaredparam$}{
+    $\Some{\vn}$ if the list of parameters in $\funcsig$ contains a single parameter whose name is $\vn$
+    or the list contains two parameters and the second parameter name is $\vn$;
+    and $\None$ otherwise
+  };
+  \item \Proseeqdef{$\vb$}{$\True$ if and only if
+        $\declaredparam$ is $\Some{\vn}$ and the first argument of $\funcsig$
+        has a \bitvectortypeterm{} where the width is defined as the variable expression for $\vn$}.
 \end{itemize}
 
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
-  \funcsig.\funcparameters \eqname [(\vx, \Ignore)] \;\lor\;
-  \funcsig.\funcparameters \eqname [\Ignore, (\vx, \Ignore)] \; \terminateas \params \\\\
-  \funcsig.\funcargs \eqname [(\Ignore, \TBits(\EVar(\vx)))] \concat \Ignore \; \terminateas \params \\\\
-  \argtypes \eqname [\TBits(\ve)] \concat \Ignore \; \terminateas \params \\\\
-  \funcsig.\funcbuiltin = \True \; \terminateas \params \\\\
-  \listlen{\params} < \listlen{\funcsig.\funcparameters} \; \terminateas \params \\\\
-  \paramsone \eqdef \params \concat [(\TInt(\wellconstrained(\AbbrevConstraintExact{\ve})), \ve, \emptyset)] \; \terminateas \params
+  \funcsig.\funcbuiltin\\\\
+  {
+    \declaredparam \eqdef \begin{cases}
+      \Some{\vn} & \text{if }\funcsig.\funcparameters = [(\vn, \Ignore)]\\
+      \Some{\vn} & \text{if }\funcsig.\funcparameters = [\Ignore, (\vn, \Ignore)]\\
+      \None      & \text{else}
+    \end{cases}
+  }\\
+  \vb \eqdef \declaredparam = \Some{\vn} \land
+  \funcsig.\funcargs = (\Ignore, \TBits(\EVar(\vn), \Ignore))
 }{
-  \insertstdlibparam(\funcsig, \params, \argtypes) \aslto \paramsone
+  \canommitstdlibparam(\funcsig) \typearrow \vb
 }
 \end{mathpar}
 
@@ -253,6 +353,22 @@ The function
 checks that annotated parameters $\params$ are correct with respect to the declared parameters $\funcsigparams$.
 \ProseOtherwiseTypeError\
 It assumes that $\funcsigparams$ and $\params$ have the same length.
+
+\ExampleDef{Checking that Expression Types Type-satisfy Parameters}
+In \listingref{CheckParamsTypeSat},
+annotating the call expression \verb|FlipSlice{FOUR, EIGHT}(bv)|
+requires checking that both expression \verb|FOUR| and \verb|EIGHT| are \symbolicallyevaluable{}
+and constrained, which they are.
+Since the parameter \verb|M| is annotated with the type \\
+\verb|integer{0..64}|,
+the typechecker checks that the type of \verb|FOUR|, which is \verb|integer{4}| \typesatisfies{}
+\verb|integer{0..64}|.
+The parameter \verb|N| is not annotated with a type --- its type is
+determined to be \\
+$\TInt(\parameterized(\texttt{N}))$ --- and there is no need to check that
+the type of \verb|EIGHT|, which is \verb|integer{8}|, \typesatisfies{} $\TInt(\parameterized(\texttt{N}))$.
+
+\ASLListing{Checking that expression types type-satisfy parameters}{CheckParamsTypeSat}{\typingtests/TypingRule.CheckParamsTypeSat.asl}
 
 \ProseParagraph
 \OneApplies
@@ -341,6 +457,13 @@ transforms the type $\tty$ in the static environment $\tenv$,
 by substituting parameter names with their corresponding expressions in
 $\eqs$, yielding the type $\newty$.
 \ProseOtherwiseTypeError
+
+\ExampleDef{Transforming Parameterized Types Based on Actual Arguments}
+In \listingref{RenameTyEqs}, annotating the call expression \verb|FlipPrefix{8}(bv, 4)|
+requires substituting \verb|8| for \verb|N| in the types
+\verb|bits(N)| and \verb|integer{0..N}|, yielding the types
+\verb|bits(8)| and \verb|integer{0..8}|.
+\ASLListing{Transforming parameterized types based on actual arguments}{RenameTyEqs}{\typingtests/TypingRule.RenameTyEqs.asl}
 
 \ProseParagraph
 \OneApplies
@@ -474,6 +597,9 @@ transforms the expression $\ve$ in the static environment $\tenv$,
 by substituting parameter names with their corresponding expressions in
 $\substs$, yielding the expression $\newe$.
 \ProseOtherwiseTypeError
+
+The function assumes that $\ve$ appears in the declaration of a parameter,
+which means it is in the subset allowed by $\extractparameters$.
 
 \ProseParagraph
 \OneApplies
@@ -891,7 +1017,19 @@ The function
 \]
 checks that the types $\argtypes$ \typesatisfy\ the types of the corresponding
 formal arguments $\funcsigargs$ with the parameters substituted with their corresponding
-arguments as per $\eqs$ and results in a type error otherwise.
+arguments as per $\eqs$ and results in a \typingerrorterm{} otherwise.
+
+\ExampleDef{Checking that Actual Arguments Type-satisfy the Formal Arguments}
+In \listingref{RenameTyEqs}, checking that the call \verb|FlipPrefix{8}(bv, 4)| is well-typed
+requires checking that the types of the arguments --- \verb|bits(8)| and \verb|integer{4}| ---
+\typesatisfy{} the corresponding types of the formal arguments --- \verb|bits(N)| and \verb|integer{0..N}| ---
+once the parameter \verb|N| is substituted for \verb|8|.
+That is, that \verb|bits(8)| \typesatisfies{} \verb|bits(8)| and that
+\verb|integer{4}| \typesatisfies{} \verb|integer{0..8}|.
+Since both these checks hold, the call is indeed well-typed.
+
+In contrast, a call \verb|FlipPrefix{8}(bv, 9)| is ill-typed since
+\verb|integer{9}| does not \typesatisfy{} \verb|integer{0..8}|.
 
 \ProseParagraph
 \OneApplies
@@ -980,7 +1118,7 @@ yielding the \optional\ annotated type $\rettyopt$.
   \begin{itemize}
     \item the condition that $\calltype$ is one of $\STProcedure$ or $\STSetter$
           if and only if $\funcsigrettyopt$ is $\None$ does not hold;
-    \item the result is a type error indicating the mismatch.
+    \item the result is a \typingerrorterm{} indicating the mismatch.
   \end{itemize}
 \end{itemize}
 
@@ -1028,28 +1166,33 @@ The function
     \overname{\staticenvs}{\tenv} \aslsep
     \overname{\Strings}{\name} \aslsep
     \overname{\ty^*}{\callerargtypes}
-  )
-  \aslto &
-  \begin{array}{l}
-    (
-    \overname{\Strings}{\namep} \aslsep
-    \overname{\func}{\callee} \aslsep
-    \overname{\TSideEffectSet}{\vses}
-    )\
-  \cup\\
-   \overname{\TTypeError}{\TypeErrorConfig}
-  \end{array}
+    )
+    \aslto &
+    \begin{array}{l}
+      (
+      \overname{\Strings}{\namep} \aslsep
+      \overname{\func}{\callee} \aslsep
+      \overname{\TSideEffectSet}{\vses}
+      )\
+    \\
+    \cup\ \overname{\TTypeError}{\TypeErrorConfig}
+    \end{array}
   \end{array}
 \]
 looks up the static environment $\tenv$ for a subprogram associated with $\name$
 and the list of argument types $\calleeargtypes$ and determines which one of the following
 cases holds:
-\begin{itemize}
+\begin{enumerate}
   \item there is no declared subprogram that matches $\name$ and $\calleeargtypes$;
   \item there is exactly one subprogram that matches $\name$ and $\calleeargtypes$;
-  \item there is more than one subprogram that matches $\name$ and $\calleeargtypes$;
-\end{itemize}
-The first and last cases result in a type error.
+\end{enumerate}
+If more than one subprogram that matches $\name$ and $\calleeargtypes$,
+this is detected by the rule \TypingRuleRef{DeclareSubprograms},
+which invokes the rule \\ \TypingRuleRef{DeclareOneFunc},
+which invokes the rule \TypingRuleRef{AddNewFunc},
+which results in a \typingerrorterm{}.
+
+The first case results in a \typingerrorterm{}.
 If the second case holds, the function returns a tuple which comprises:
 \begin{itemize}
 \item $\namep$ --- the string that uniquely identifies this subprogram;
@@ -1058,6 +1201,23 @@ If the second case holds, the function returns a tuple which comprises:
 \end{itemize}
 \ProseOtherwiseTypeError
 
+\ExampleDef{Matching a Subprogram to an Identifier}
+
+\listingref{SubprogramForName} shows an example where all subprogram calls
+match subprogram declarations.
+\ASLListing{Successfully matching subprogram names to definitions}{SubprogramForName}{\typingtests/TypingRule.SubprogramForName.asl}
+
+\listingref{SubprogramForName-undefined} shows an example where
+the subprogram call \verb|add_10(5)| is illegal, since no subprogram named \verb|add_10|
+is declared.
+\ASLListing{Subprogram name undefined}{SubprogramForName-undefined}{\typingtests/TypingRule.SubprogramForName.bad.undefined.asl}
+
+\listingref{SubprogramForName} shows an example where
+the subprogram call \verb|add_10(5.0)| is illegal, since, although a subprogram named \verb|add_10|
+is declared, it does not match the required signature (the type of the first argument is
+the \integertypeterm{} rather than the \realtypeterm).
+\ASLListing{Subprogram name does not match signature}{SubprogramForName-no-candidates}{\typingtests/TypingRule.SubprogramForName.bad.no_candidates.asl}
+
 \ProseParagraph
 \OneApplies
 \begin{itemize}
@@ -1065,7 +1225,7 @@ If the second case holds, the function returns a tuple which comprises:
   \begin{itemize}
     \item $\tenv$ does not contain a binding for $\name$ in the $\overloadedsubprograms$ map
           ($G^\tenv.\overloadedsubprograms$);
-    \item the result is a type error indicating that the identifier has not been declared (as a subprogram).
+    \item the result is a \typingerrorterm{} indicating that the identifier has not been declared (as a subprogram).
   \end{itemize}
 
   \item \AllApplyCase{no\_candidates}
@@ -1073,25 +1233,16 @@ If the second case holds, the function returns a tuple which comprises:
     \item $\tenv$ binds $\name$ via $\overloadedsubprograms$ map to $\renamingset$ and $\vses$;
     \item filtering the subprograms in $\renamingset$ with the caller argument types $\callerargtypes$
           in $\tenv$ (see \TypingRuleRef{FilterCallCandidates}) yields an empty set\ProseOrTypeError;
-    \item the result is a type error indicating that the call given by $\name$ and \\ $\callerargtypes$
+    \item the result is a \typingerrorterm{} indicating that the call given by $\name$ and \\ $\callerargtypes$
           does not match any defined subprogram.
-  \end{itemize}
-
-  \item \AllApplyCase{too\_many\_candidates}
-  \begin{itemize}
-    \item $\tenv$ binds $\name$ via $\overloadedsubprograms$ map to $\renamingset$ and $\vses$;
-    \item filtering the subprograms in $\renamingset$ with the caller argument types $\callerargtypes$
-          in $\tenv$ (see \TypingRuleRef{FilterCallCandidates}) yields $\matchingrenamings$\ProseOrTypeError;
-    \item $\matchingrenamings$ contains at least two elements;
-    \item the result is a type error indicating that the call given by $\name$ and \\
-          $\callerargtypes$ matches more than one defined subprogram.
   \end{itemize}
 
   \item \AllApplyCase{one\_candidate}
   \begin{itemize}
     \item $\tenv$ binds $\name$ via $\overloadedsubprograms$ map to $\renamingset$ and $\vses$;
     \item filtering the subprograms in $\renamingset$ with the caller argument types $\callerargtypes$
-          in $\tenv$ (see \TypingRuleRef{FilterCallCandidates}) yields $\matchingrenamings$\ProseOrTypeError;
+          in $\tenv$ (see \TypingRuleRef{FilterCallCandidates}) yields \\
+          $\matchingrenamings$\ProseOrTypeError;
     \item $\matchingrenamings$ contains a single element --- $(\namep, \callee)$\ProseOrTypeError;
   \end{itemize}
 \end{itemize}
@@ -1113,20 +1264,6 @@ If the second case holds, the function returns a tuple which comprises:
       \filtercallcandidates(\tenv, \callerargtypes, \renamingset) \typearrow \emptyset \OrTypeError
     \end{array}
   }
-}{
-  \subprogramforname(\tenv, \name, \callerargtypes) \typearrow \TypeErrorVal{\BadCall}
-}
-\end{mathpar}
-
-\begin{mathpar}
-\inferrule[too\_many\_candidates]{
-  G^\tenv.\overloadedsubprograms(\name) = (\renamingset, \vses)\\
-  {
-    \begin{array}{r}
-      \filtercallcandidates(\tenv, \callerargtypes, \renamingset) \typearrow \\ \matchingrenamings \OrTypeError
-    \end{array}
-  }\\\\
-  \cardinality{\matchingrenamings} \geq 2
 }{
   \subprogramforname(\tenv, \name, \callerargtypes) \typearrow \TypeErrorVal{\BadCall}
 }
@@ -1170,6 +1307,15 @@ subprograms whose arguments clash in $\candidates$.
 
 The names $\candidates$ are assumed to exist in $G^\tenv.\subprograms$.
 
+\ExampleDef{Filtering Subprograms Matching a Call}
+In \listingref{SubprogramForName}, filtering the
+set of declared subprograms for the call expression \verb|add_10(5)| yields
+the (singleton list containing the) subprogram \\
+\verb|func add_10(x: integer) => integer|.
+In contrast, filtering the set of declared subprograms for the call expression
+\verb|add_10(5.0)| in \listingref{SubprogramForName-no-candidates},
+yields an empty list.
+
 \ProseParagraph
 \OneApplies
 \begin{itemize}
@@ -1197,7 +1343,9 @@ The names $\candidates$ are assumed to exist in $G^\tenv.\subprograms$.
 {}{
   \filtercallcandidates(\tenv, \formaltypes, \overname{\emptylist}{\candidates}) \typearrow \overname{\emptylist}{\matches}
 }
-\and
+\end{mathpar}
+
+\begin{mathpar}
 \inferrule[candidates\_exist]
 {
   \funcdef \eqdef G^\tenv.\subprograms(\name) \\
@@ -1224,6 +1372,12 @@ checks whether a list of types $\formaltys$ clashes with the list of types appea
 in the list of arguments $\vargs$ in $\tenv$, yielding the result in $\vb$.
 \ProseOtherwiseTypeError
 
+\ExampleDef{Argument Clashing}
+\listingref{type-clashes} shows examples of types ---
+the arguments of procedures -- that do not clash and types that do clash
+(shown in comments).
+\ASLListing{Examples of Argument clashing}{type-clashes}{\typingtests/TypingRule.TypeClashes.asl}
+
 \ProseParagraph
 \AllApply
 \begin{itemize}
@@ -1232,21 +1386,191 @@ in the list of arguments $\vargs$ in $\tenv$, yielding the result in $\vb$.
   \item $\argtys$ is the list of types appearing in $\vargs$, in the same order;
   \item for each $\vi$ in the list of indices of $\formaltys$, applying $\typeclashes$ to
         $\formaltys[\vi]$ and $\argtys[\vi]$ in $\tenv$ yields $\True$\ProseTerminateAs{\False, \TypeErrorConfig};
-  \item $\vb$ is $\True$ (unless the rule short-circuited with $\False$ or a type error).
+  \item $\vb$ is $\True$ (unless the rule short-circuited with $\False$ or a \typingerrorterm{}).
 \end{itemize}
-
-\CodeSubsection{\HasArgClashBegin}{\HasArgClashEnd}{../Typing.ml}
 
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
-  \equallength(\formaltypes, \vargs) \typearrow \True \terminateas \False\\
+  \equallength(\formaltypes, \vargs) \typearrow \True \terminateas \False\\\\
   \argtys \eqdef [(\Ignore, \vt) \in \vargs: \vt]\\
   \vi\in\listrange(\formaltys): \typeclashes(\tenv, \formaltys[\vi], \argtys[\vi]) \typearrow \True \terminateas \False,\TypeErrorConfig
 }{
   \hasargclash(\tenv, \formaltys, \vargs) \typearrow \overname{\True}{\vb}
 }
 \end{mathpar}
+\CodeSubsection{\HasArgClashBegin}{\HasArgClashEnd}{../Typing.ml}
+
+\TypingRuleDef{TypeClash}
+\hypertarget{def-typeclashes}{}
+The helper function
+\[
+  \typeclashes(\overname{\staticenvs}{\tenv} \aslsep \overname{\ty}{\vt} \aslsep \overname{\ty}{\vs})
+  \aslto \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
+\]
+determines whether a type $\vt$ \emph{\Prosetypeclashes} with a type $\vs$ in environment $\tenv$,
+returning the result $\vb$.
+\ProseOtherwiseTypeError
+
+\identd{VPZZ} \identi{PQCT} \identi{WZKM} \identi{WZKM}
+Note that \Prosetypeclashing{} is an equivalence relation.
+In particular note that if $T$ \Prosetypeclashes{} with $A$ and $B$ then $A$ and
+$B$ \Prosetypeclash{}.
+
+See \ExampleRef{Argument Clashing}
+
+\ProseParagraph
+\OneApplies
+\begin{itemize}
+  \item \AllApplyCase{subtype}
+  \begin{itemize}
+    \item either $\vs$ subtypes $\vt$ or $\vt$ subtypes $\vs$;
+    \item $\vb$ is $\True$.
+  \end{itemize}
+
+  \item \AllApplyCase{simple}
+  \begin{itemize}
+    \item neither $\vs$ subtypes $\vt$ nor $\vt$ subtypes $\vs$;
+    \item obtaining the \structure\ of $\vt$ in $\tenv$ yields $\vtstruct$\ProseOrTypeError;
+    \item obtaining the \structure\ of $\vs$ in $\tenv$ yields $\vsstruct$\ProseOrTypeError;
+    \item both $\vtstruct$ and $\vsstruct$ are one of the following types: \\
+          \booleantypesterm{}, \integertypeterm{}, \realtypeterm{}, or \stringtypeterm{};
+    \item $\vb$ is $\True$.
+  \end{itemize}
+
+  \item \AllApplyCase{t\_enum}
+  \begin{itemize}
+    \item neither $\vs$ subtypes $\vt$ nor $\vt$ subtypes $\vs$;
+    \item obtaining the \structure\ of $\vt$ in $\tenv$ yields an \enumerationtypeterm{} with labels $\vlit$;
+    \item obtaining the \structure\ of $\vs$ in $\tenv$ yields an \enumerationtypeterm{} with labels $\vlis$;
+    \item $\vb$ is $\True$ if and only if $\vlis$ and $\vlit$ are equal.
+  \end{itemize}
+
+  \item \AllApplyCase{t\_array}
+  \begin{itemize}
+    \item neither $\vs$ subtypes $\vt$ nor $\vt$ subtypes $\vs$;
+    \item obtaining the \structure\ of $\vt$ in $\tenv$ yields an array type with element type $\vtyt$;
+    \item obtaining the \structure\ of $\vs$ in $\tenv$ yields an array type with element type $\vtys$;
+    \item $\vb$ is $\True$ if and only if $\vtyt$ and $\vtys$ type-clash.
+  \end{itemize}
+
+  \item \AllApplyCase{t\_tuple}
+  \begin{itemize}
+    \item neither $\vs$ subtypes $\vt$ nor $\vt$ subtypes $\vs$;
+    \item obtaining the \structure\ of $\vt$ in $\tenv$ yields a \tupletypeterm{} with element types $\vt_{1..k}$;
+    \item obtaining the \structure\ of $\vs$ in $\tenv$ yields a \tupletypeterm{} with element types $\vs_{1..n}$;
+    \item if $n \neq k$ the rule short-circuits with $\vb=\False$;
+    \item $\vb$ is $\True$ if and only if $\vt_i$ type-clashes with $\vs_i$, for all $i=1..k$.
+  \end{itemize}
+
+  \item \AllApplyCase{otherwise\_different\_labels}
+  \begin{itemize}
+    \item neither $\vs$ subtypes $\vt$ nor $\vt$ subtypes $\vs$;
+    \item obtaining the \structure\ of $\vt$ in $\tenv$ yields $\vtstruct$;
+    \item obtaining the \structure\ of $\vs$ in $\tenv$ yields $\vsstruct$;
+    \item $\vsstruct$ and $\vtstruct$ have different AST labels;
+    \item $\vb$ is $\False$;
+  \end{itemize}
+
+  \item \AllApplyCase{otherwise\_structured}
+  \begin{itemize}
+    \item neither $\vs$ subtypes $\vt$ nor $\vt$ subtypes $\vs$;
+    \item obtaining the \structure\ of $\vt$ in $\tenv$ yields $\vtstruct$;
+    \item obtaining the \structure\ of $\vs$ in $\tenv$ yields $\vsstruct$;
+    \item $\vsstruct$ and $\vtstruct$ have the same AST label;
+    \item $\vtstruct$ (and thus $\vsstruct$) is a \structuredtype;
+    \item $\vb$ is $\False$;
+  \end{itemize}
+\end{itemize}
+
+\FormallyParagraph
+\begin{mathpar}
+\inferrule[subtype]{
+  (\subtypesrel(\tenv, \vs, \vt) \typearrow \True) \lor (\subtypesrel(\tenv, \vt, \vs) \typearrow \True)
+}{
+  \typeclashes(\tenv, \vt, \vs) \typearrow \overname{\True}{\vb}
+}
+\end{mathpar}
+
+\begin{mathpar}
+\inferrule[simple]{
+  \subtypesrel(\tenv, \vs, \vt) \typearrow \False\\
+  \subtypesrel(\tenv, \vt, \vs) \typearrow \False\\\\
+  \tstruct(\tenv, \vt) \typearrow \vtstruct \OrTypeError \\
+  \tstruct(\tenv, \vs) \typearrow \vsstruct \OrTypeError \\
+  \astlabel(\vtstruct)=\astlabel(\vsstruct)\\
+  \astlabel(\vtstruct) \in \{\TBool, \TInt, \TReal, \TString, \TBits\}
+}{
+  \typeclashes(\tenv, \vt, \vs) \typearrow \overname{\True}{\vb}
+}
+\end{mathpar}
+
+\begin{mathpar}
+\inferrule[t\_enum]{
+  \subtypesrel(\tenv, \vs, \vt) \typearrow \False\\
+  \subtypesrel(\tenv, \vt, \vs) \typearrow \False\\\\
+  \tstruct(\tenv, \vt) \typearrow \TEnum(\Ignore, \vlis) \\
+  \tstruct(\tenv, \vs) \typearrow \TEnum(\Ignore, \vlit)
+}{
+  \typeclashes(\tenv, \vt, \vs) \typearrow \overname{\vlis = \vlit}{\vb}
+}
+\end{mathpar}
+
+\begin{mathpar}
+\inferrule[t\_array]{
+  \subtypesrel(\tenv, \vs, \vt) \typearrow \False\\
+  \subtypesrel(\tenv, \vt, \vs) \typearrow \False\\\\
+  \tstruct(\tenv, \vt) \typearrow \TArray(\Ignore, \vtyt) \\
+  \tstruct(\tenv, \vs) \typearrow \TArray(\Ignore, \vtys) \\
+  \typeclashes(\tenv, \vtyt, \vtys) \typearrow \vb
+}{
+  \typeclashes(\tenv, \vt, \vs) \typearrow \vb
+}
+\end{mathpar}
+
+\begin{mathpar}
+\inferrule[t\_tuple]{
+  \subtypesrel(\tenv, \vs, \vt) \typearrow \False\\
+  \subtypesrel(\tenv, \vt, \vs) \typearrow \False\\\\
+  \tstruct(\tenv, \vt) \typearrow \TTuple(\vt_{1..k}) \\
+  \tstruct(\tenv, \vs) \typearrow \TTuple(\vs_{1..n}) \\
+  \booltrans{n = k} \booltransarrow \True \terminateas \False\\
+  i=1..k: \typeclashes(\tenv, \vt_i, \vs_i) \typearrow \vb_i\\
+  \vb \eqdef \bigwedge_{\vi=1}^k \vb_i
+}{
+  \typeclashes(\tenv, \vt, \vs) \typearrow \vb
+}
+\end{mathpar}
+
+\begin{mathpar}
+\inferrule[otherwise\_different\_labels]{
+  \subtypesrel(\tenv, \vs, \vt) \typearrow \False\\
+  \subtypesrel(\tenv, \vt, \vs) \typearrow \False\\\\
+  \tstruct(\tenv, \vt) \typearrow \vtstruct \\
+  \tstruct(\tenv, \vs) \typearrow \vsstruct \\
+  \astlabel(\vtstruct) \neq \astlabel(\vsstruct)
+}{
+  \typeclashes(\tenv, \vt, \vs) \typearrow \overname{\False}{\vb}
+}
+\end{mathpar}
+
+\begin{mathpar}
+\inferrule[otherwise\_structured]{
+  \subtypesrel(\tenv, \vs, \vt) \typearrow \False\\
+  \subtypesrel(\tenv, \vt, \vs) \typearrow \False\\\\
+  \tstruct(\tenv, \vt) \typearrow \vtstruct \\
+  \tstruct(\tenv, \vs) \typearrow \vsstruct \\
+  \astlabel(\vtstruct) = \astlabel(\vsstruct)\\
+  \vb \eqdef \astlabel(\vtstruct) \in \{\TRecord, \TException, \TCollection\}\\
+}{
+  \typeclashes(\tenv, \vt, \vs) \typearrow \overname{\False}{\vb}
+}
+\end{mathpar}
+\CodeSubsection{\TypeClashBegin}{\TypeClashEnd}{../types.ml}
+
+\subsubsection{Comment}
+Note that if $\vt$ \subtypesatisfies{} $\vs$ then $\vt$ and $\vs$ \Prosetypeclash, but not the other
+way around.
 
 \TypingRuleDef{ExpressionList}
 \hypertarget{def-annotateexprs}{}
@@ -1256,9 +1580,23 @@ The helper function
   \aslto \overname{(\ty \times \expr \times \TSideEffectSet)^*}{\typedexprs}
   \cup \overname{\TTypeError}{\TypeErrorConfig}
 \]
-annotates a list of expressions $\exprs$ from left to right, yielding a list of tuples $\typedexprs$,
+annotates a list of expressions $\exprs$ from left to right, yielding a list of tuples \\
+$\typedexprs$,
 each consisting of a type, an annotated expression, and a \sideeffectsetterm.
 \ProseOtherwiseTypeError
+
+\ExampleDef{Annotating a List of Expressions}
+In \listingref{ExpressionList}, the list of expressions \verb|10, 20.0|
+is annotated as
+\[
+\left[
+\begin{array}{lll}
+(\TInt(\wellconstrained([\AbbrevConstraintExact{\ELInt{10}}])),& \eliteral{\lint(10)},& \emptyset),\\
+(\TReal,& \eliteral{\lreal(20)},& \emptyset)
+\end{array}
+\right]
+\]
+\ASLListing{Annotating a list of expressions}{ExpressionList}{\typingtests/TypingRule.ExpressionList.asl}
 
 \ProseParagraph
 \OneApplies
@@ -1272,11 +1610,11 @@ each consisting of a type, an annotated expression, and a \sideeffectsetterm.
   \item \AllApplyCase{non\_empty}
   \begin{itemize}
     \item $\exprs$ has $\ve$ as its \head\ expression and $\exprsone$ as its \tail;
-    \item annotating $\ve$ in $\tenv$ yields the pair $\typedexpr$ consisting of a type and an expression
-    \ProseOrTypeError;
+    \item annotating $\ve$ in $\tenv$ yields the pair $\typedexpr$ consisting of a type
+          and an expression\ProseOrTypeError;
     \item annotating the expression list $\exprsone$ in $\tenv$ yields
-    $\typedexprs$\ProseOrTypeError;
-    \item $\typedexprs$ is the list with $\typedexpr$ as its \head\ and $\typedexprs$ as its \tail.
+          $\typedexprs$\ProseOrTypeError;
+    \item \Proseeqdef{$\typedexprs$}{the \Proselist{$\typedexpr$}{$\typedexprs$}}.
   \end{itemize}
 \end{itemize}
 
@@ -1391,6 +1729,8 @@ We also define the following helper rules:
     \begin{itemize}
       \item evaluating the subprogram named $\name$ with arguments $\vvargs$ and parameters $\vvparams$ in
             $\denvtwo'$ is $\Throwing(\vv, \envthrow)$\ProseOrError;
+      \item view $\envthrow$ as the environment consisting of the static environment $\tenv$,
+            and the dynamic environment whose global component is $\vglobal$;
       \item applying the helper relation $\readvaluefrom$ to $\vms$ yields $\vmstwo$;
       \item applying $\decrstacksize$ to $\vglobal$ and $\name$ yields $\genvtwo$;
       \item define $\newenv$ as the environment where the static environment is $\tenv$ and the dynamic environment consists
@@ -1413,7 +1753,7 @@ We also define the following helper rules:
   \evalsubprogram{\envtwo', \name, \vvparams, \vvargs} \evalarrow \Normal(\vms, (\vglobal, \Ignore)) \OrDynError\\\\
   \readvaluefrom(\vms) \evalarrow \vmstwo\\
   \decrstacksize(\vglobal, \name) \evalarrow \genvtwo\\
-  \newenv \eqdef (\tenv, (\vglobal, L^{\denvtwo}))
+  \newenv \eqdef (\tenv, (\genvtwo, L^{\denvtwo}))
 }{
   \evalcall{\env, \name, \params, \args} \evalarrow \Normal(\vmstwo, \newenv)
 }
@@ -1428,7 +1768,7 @@ We also define the following helper rules:
   \envtwo' \eqdef (\tenv, (\genv, \emptyfunc))\\\\
   \commonprefixline\\\\
   \evalsubprogram{\envtwo', \name, \vvparams, \vvargs} \evalarrow \Throwing(\vv, \envthrow) \OrDynError\\\\
-  \envthrow \eqname (\tenv, \denvthrow)\\
+  \envthrow \eqname (\tenv, (\vglobal, \Ignore))\\
   \decrstacksize(\vglobal, \name) \evalarrow \genvtwo\\
   \newenv \eqdef (\tenv, (\genvtwo, L^{\denvtwo}))
 }{
@@ -1532,7 +1872,7 @@ Otherwise, the result is a dynamic error indicating that the recursion limit has
     \item applying $\evallimit$ to $\velimitopt$ in $\env$ yields $(\langle\vlimit\rangle, \vg)$\ProseOrError;
     \item view $\env$ as $(\tenv, \denv)$;
     \item applying $\getstacksize$ to $\name$ in $\denv$ yields $\vstacksize$;
-    \item $\vlimit$ is less than $\vstacksize$.
+    \item $\vstacksize$ is less than $\vlimit$.
   \end{itemize}
 
   \item \AllApplyCase{some\_error}
@@ -1540,7 +1880,7 @@ Otherwise, the result is a dynamic error indicating that the recursion limit has
     \item applying $\evallimit$ to $\velimitopt$ in $\env$ yields $(\langle\vlimit\rangle, \vg)$\ProseOrError;
     \item view $\env$ as $(\tenv, \denv)$;
     \item applying $\getstacksize$ to $\name$ in $\denv$ yields $\vstacksize$;
-    \item $\vlimit$ is greater or equal to $\vstacksize$;
+    \item $\vstacksize$ is greater or equal to $\vlimit$;
     \item the result is a dynamic
   \end{itemize}
 \end{itemize}
@@ -1559,7 +1899,7 @@ Otherwise, the result is a dynamic error indicating that the recursion limit has
   \evallimit(\env, \velimitopt) \evalarrow (\langle\vlimit\rangle, \vg) \OrDynError\\\\
   \env \eqname (\tenv, \denv)\\
   \getstacksize(\denv, \name) \evalarrow \vstacksize\\
-  \vlimit < \vstacksize
+  \vstacksize < \vlimit
 }{
   \checkrecurselimit(\env, \name, \velimitopt) \evalarrow \vg
 }
@@ -1570,7 +1910,7 @@ Otherwise, the result is a dynamic error indicating that the recursion limit has
   \evallimit(\env, \velimitopt) \evalarrow (\langle\vlimit\rangle, \vg) \OrDynError\\\\
   \env \eqname (\tenv, \denv)\\
   \getstacksize(\denv, \name) \evalarrow \vstacksize\\
-  \vlimit \geq \vstacksize
+  \vstacksize \geq \vlimit
 }{
   \checkrecurselimit(\env, \name, \velimitopt) \evalarrow \DynamicErrorVal{\LimitExceeded}
 }
@@ -1666,6 +2006,18 @@ The helper relation
 \]
 converts continuing configurations and returning configurations
 into corresponding normal configurations that can be returned by a subprogram evaluation.
+
+\ExampleDef{Converting Configurations Upon Subprogram Return}
+In \listingref{MatchFuncRes},
+the final configuration resulting from evaluating the call \verb|proc()|
+is a \Prosecontinuingconfiguration{}, which is converted into
+a \Prosenormalconfiguration{} with no return value.
+On the other hand, the configuration resulting from evaluating the
+call \verb|returns_values()| is a \Prosereturningconfiguration{} with the value
+$\nvint(5)$, which is converted into a \Prosenormalconfiguration{}
+with the same value and a fresh identifier for it.
+
+\ASLListing{Converting configurations upon subprogram return}{MatchFuncRes}{\semanticstests/SemanticsRule.MatchFuncRes.asl}
 
 \ProseParagraph
 \OneApplies

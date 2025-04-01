@@ -1,10 +1,10 @@
 \section{Relations Over Types\label{sec:RelationsOnTypes}}
+
 This section defines the following relations over types and operators:
 \begin{itemize}
   \item Subtype (\TypingRuleRef{Subtype})
   \item Subtype Satisfaction (\TypingRuleRef{SubtypeSatisfaction})
   \item Type Satisfaction (\TypingRuleRef{TypeSatisfaction})
-  \item Type Clash (\TypingRuleRef{TypeClash})
   \item The Lowest Common Ancestor of two types (\TypingRuleRef{LowestCommonAncestor})
   \item Applying a unary operator to a type (\TypingRuleRef{ApplyUnopType})
   \item Applying a binary operator to a pair of types (\TypingRuleRef{ApplyBinopTypes})
@@ -147,15 +147,15 @@ subtyping.
 \begin{itemize}
 \item \AllApplyCase{error1}
   \begin{itemize}
-  \item obtaining the \underlyingtype\ of $\vt$ gives a type error;
-  \item the rule results in a type error.
+  \item obtaining the \underlyingtype\ of $\vt$ gives a \typingerrorterm{};
+  \item the rule results in a \typingerrorterm{}.
   \end{itemize}
 
 \item \AllApplyCase{error2}
   \begin{itemize}
     \item obtaining the \underlyingtype\ of $\vt$ gives a type $\vttwo$;
-    \item obtaining the \underlyingtype\ of $\vs$ gives a type error;
-    \item the rule results in a type error.
+    \item obtaining the \underlyingtype\ of $\vs$ gives a \typingerrorterm{};
+    \item the rule results in a \typingerrorterm{}.
     \end{itemize}
 
 \item \AllApplyCase{different\_labels}
@@ -284,7 +284,7 @@ subtyping.
   \makeanonymous(\tenv, \vt) \typearrow \vttwo\\
   \makeanonymous(\tenv, \vs) \typearrow \vstwo\\
   \astlabel(\vttwo) = \astlabel(\vstwo) = \TInt\\
-  \symsubsumes(\tenv, \vs, \vt) \typearrow \vb
+  \symdomainsubset(\tenv, \vs, \vt) \typearrow \vb
 }{
   \subtypesat(\tenv, \vt, \vs) \typearrow \vb
 }
@@ -548,7 +548,7 @@ We also define
   \checktypesat(\overname{\staticenvs}{\tenv} \aslsep \overname{\ty}{\vt} \aslsep \overname{\ty}{\vs})
   \aslto \{\True\} \cup \overname{\TTypeError}{\TypeErrorConfig}
 \]
-which is the same as $\typesat$, but yields a type error when \\ $\typesat(\tenv, \vt, \vs)$ is $\False$.
+which is the same as $\typesat$, but yields a \typingerrorterm{} when \\ $\typesat(\tenv, \vt, \vs)$ is $\False$.
 
 The function assumes that both $\vt$ and $\vs$ are well-typed according to \secref{Types}.
 
@@ -594,184 +594,6 @@ yields a \typingerrorterm.
 }
 \end{mathpar}
 
-\TypingRuleDef{TypeClash}
-\hypertarget{def-typeclashes}{}
-The predicate
-\[
-  \typeclashes(\overname{\staticenvs}{\tenv} \aslsep \overname{\ty}{\vt} \aslsep \overname{\ty}{\vs})
-  \aslto \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
-\]
-determines whether a type $\vt$ \emph{\Prosetypeclashes} with a type $\vs$ in environment $\tenv$,
-returning the result $\vb$.
-\ProseOtherwiseTypeError
-
-This is used in \TypingRuleRef{HasArgClash} to determine whether the signatures
-of two subprograms allow them to be declared simultaneously.
-
-\identd{VPZZ} \identi{PQCT} \identi{WZKM} \identi{WZKM}
-Note that \Prosetypeclashing{} is an equivalence relation.
-In particular note that if $T$ \Prosetypeclashes{} with $A$ and $B$ then $A$ and
-$B$ \Prosetypeclash{}.
-
-\ExampleDef{Type Clash}
-\listingref{type-clashes} shows examples of types ---
-the arguments of procedures -- that do not clash and types that do clash
-(shown in comments).
-\ASLListing{Examples of Type Clashing}{type-clashes}{\typingtests/TypingRule.TypeClashes.asl}
-
-\ProseParagraph
-\OneApplies
-\begin{itemize}
-  \item \AllApplyCase{subtype}
-  \begin{itemize}
-    \item either $\vs$ subtypes $\vt$ or $\vt$ subtypes $\vs$;
-    \item $\vb$ is $\True$.
-  \end{itemize}
-
-  \item \AllApplyCase{simple}
-  \begin{itemize}
-    \item neither $\vs$ subtypes $\vt$ nor $\vt$ subtypes $\vs$;
-    \item obtaining the \structure\ of $\vt$ in $\tenv$ yields $\vtstruct$\ProseOrTypeError;
-    \item obtaining the \structure\ of $\vs$ in $\tenv$ yields $\vsstruct$\ProseOrTypeError;
-    \item both $\vtstruct$ and $\vsstruct$ are one of the following types: \\
-          \booleantypesterm{}, \integertypeterm{}, \realtypeterm{}, or \stringtypeterm{};
-    \item $\vb$ is $\True$.
-  \end{itemize}
-
-  \item \AllApplyCase{t\_enum}
-  \begin{itemize}
-    \item neither $\vs$ subtypes $\vt$ nor $\vt$ subtypes $\vs$;
-    \item obtaining the \structure\ of $\vt$ in $\tenv$ yields an \enumerationtypeterm{} with labels $\vlit$;
-    \item obtaining the \structure\ of $\vs$ in $\tenv$ yields an \enumerationtypeterm{} with labels $\vlis$;
-    \item $\vb$ is $\True$ if and only if $\vlis$ and $\vlit$ are equal.
-  \end{itemize}
-
-  \item \AllApplyCase{t\_array}
-  \begin{itemize}
-    \item neither $\vs$ subtypes $\vt$ nor $\vt$ subtypes $\vs$;
-    \item obtaining the \structure\ of $\vt$ in $\tenv$ yields an array type with element type $\vtyt$;
-    \item obtaining the \structure\ of $\vs$ in $\tenv$ yields an array type with element type $\vtys$;
-    \item $\vb$ is $\True$ if and only if $\vtyt$ and $\vtys$ type-clash.
-  \end{itemize}
-
-  \item \AllApplyCase{t\_tuple}
-  \begin{itemize}
-    \item neither $\vs$ subtypes $\vt$ nor $\vt$ subtypes $\vs$;
-    \item obtaining the \structure\ of $\vt$ in $\tenv$ yields a \tupletypeterm{} with element types $\vt_{1..k}$;
-    \item obtaining the \structure\ of $\vs$ in $\tenv$ yields a \tupletypeterm{} with element types $\vs_{1..n}$;
-    \item if $n \neq k$ the rule short-circuits with $\vb=\False$;
-    \item $\vb$ is $\True$ if and only if $\vt_i$ type-clashes with $\vs_i$, for all $i=1..k$.
-  \end{itemize}
-
-  \item \AllApplyCase{otherwise\_different\_labels}
-  \begin{itemize}
-    \item neither $\vs$ subtypes $\vt$ nor $\vt$ subtypes $\vs$;
-    \item obtaining the \structure\ of $\vt$ in $\tenv$ yields $\vtstruct$;
-    \item obtaining the \structure\ of $\vs$ in $\tenv$ yields $\vsstruct$;
-    \item $\vsstruct$ and $\vtstruct$ have different AST labels;
-    \item $\vb$ is $\False$;
-  \end{itemize}
-
-  \item \AllApplyCase{otherwise\_structured}
-  \begin{itemize}
-    \item neither $\vs$ subtypes $\vt$ nor $\vt$ subtypes $\vs$;
-    \item obtaining the \structure\ of $\vt$ in $\tenv$ yields $\vtstruct$;
-    \item obtaining the \structure\ of $\vs$ in $\tenv$ yields $\vsstruct$;
-    \item $\vsstruct$ and $\vtstruct$ have the same AST label;
-    \item $\vtstruct$ (and thus $\vsstruct$) is a \structuredtype;
-    \item $\vb$ is $\False$;
-  \end{itemize}
-\end{itemize}
-
-\FormallyParagraph
-\begin{mathpar}
-\inferrule[subtype]{
-  (\subtypesrel(\tenv, \vs, \vt) \typearrow \True) \lor (\subtypesrel(\tenv, \vt, \vs) \typearrow \True)
-}{
-  \typeclashes(\tenv, \vt, \vs) \typearrow \overname{\True}{\vb}
-}
-\end{mathpar}
-
-\begin{mathpar}
-\inferrule[simple]{
-  \subtypesrel(\tenv, \vs, \vt) \typearrow \False\\
-  \subtypesrel(\tenv, \vt, \vs) \typearrow \False\\\\
-  \tstruct(\tenv, \vt) \typearrow \vtstruct \OrTypeError \\
-  \tstruct(\tenv, \vs) \typearrow \vsstruct \OrTypeError \\
-  \astlabel(\vtstruct)=\astlabel(\vsstruct)\\
-  \astlabel(\vtstruct) \in \{\TBool, \TInt, \TReal, \TString, \TBits\}
-}{
-  \typeclashes(\tenv, \vt, \vs) \typearrow \overname{\True}{\vb}
-}
-\end{mathpar}
-
-\begin{mathpar}
-\inferrule[t\_enum]{
-  \subtypesrel(\tenv, \vs, \vt) \typearrow \False\\
-  \subtypesrel(\tenv, \vt, \vs) \typearrow \False\\\\
-  \tstruct(\tenv, \vt) \typearrow \TEnum(\Ignore, \vlis) \\
-  \tstruct(\tenv, \vs) \typearrow \TEnum(\Ignore, \vlit)
-}{
-  \typeclashes(\tenv, \vt, \vs) \typearrow \overname{\vlis = \vlit}{\vb}
-}
-\end{mathpar}
-
-\begin{mathpar}
-\inferrule[t\_array]{
-  \subtypesrel(\tenv, \vs, \vt) \typearrow \False\\
-  \subtypesrel(\tenv, \vt, \vs) \typearrow \False\\\\
-  \tstruct(\tenv, \vt) \typearrow \TArray(\Ignore, \vtyt) \\
-  \tstruct(\tenv, \vs) \typearrow \TArray(\Ignore, \vtys) \\
-  \typeclashes(\tenv, \vtyt, \vtys) \typearrow \vb
-}{
-  \typeclashes(\tenv, \vt, \vs) \typearrow \vb
-}
-\end{mathpar}
-
-\begin{mathpar}
-\inferrule[t\_tuple]{
-  \subtypesrel(\tenv, \vs, \vt) \typearrow \False\\
-  \subtypesrel(\tenv, \vt, \vs) \typearrow \False\\\\
-  \tstruct(\tenv, \vt) \typearrow \TTuple(\vt_{1..k}) \\
-  \tstruct(\tenv, \vs) \typearrow \TTuple(\vs_{1..n}) \\
-  \booltrans{n = k} \booltransarrow \True \terminateas \False\\
-  i=1..k: \typeclashes(\tenv, \vt_i, \vs_i) \typearrow \vb_i\\
-  \vb \eqdef \bigwedge_{\vi=1}^k \vb_i
-}{
-  \typeclashes(\tenv, \vt, \vs) \typearrow \vb
-}
-\end{mathpar}
-
-\begin{mathpar}
-\inferrule[otherwise\_different\_labels]{
-  \subtypesrel(\tenv, \vs, \vt) \typearrow \False\\
-  \subtypesrel(\tenv, \vt, \vs) \typearrow \False\\\\
-  \tstruct(\tenv, \vt) \typearrow \vtstruct \\
-  \tstruct(\tenv, \vs) \typearrow \vsstruct \\
-  \astlabel(\vtstruct) \neq \astlabel(\vsstruct)
-}{
-  \typeclashes(\tenv, \vt, \vs) \typearrow \overname{\False}{\vb}
-}
-\end{mathpar}
-
-\begin{mathpar}
-\inferrule[otherwise\_structured]{
-  \subtypesrel(\tenv, \vs, \vt) \typearrow \False\\
-  \subtypesrel(\tenv, \vt, \vs) \typearrow \False\\\\
-  \tstruct(\tenv, \vt) \typearrow \vtstruct \\
-  \tstruct(\tenv, \vs) \typearrow \vsstruct \\
-  \astlabel(\vtstruct) = \astlabel(\vsstruct)\\
-  \vb \eqdef \astlabel(\vtstruct) \in \{\TRecord, \TException, \TCollection\}\\
-}{
-  \typeclashes(\tenv, \vt, \vs) \typearrow \overname{\False}{\vb}
-}
-\end{mathpar}
-\CodeSubsection{\TypeClashBegin}{\TypeClashEnd}{../types.ml}
-
-\subsubsection{Comment}
-Note that if $\vt$ \subtypesatisfies{} $\vs$ then $\vt$ and $\vs$ \Prosetypeclash, but not the other
-way around.
-
 \TypingRuleDef{LowestCommonAncestor}
 \hypertarget{def-lowestcommonancestor}{}
 Annotating a conditional expression (see \TypingRuleRef{ECond}),
@@ -784,7 +606,7 @@ The function
   \aslto \overname{\ty}{\tty} \cup \overname{\TTypeError}{\TypeErrorConfig}
 \]
 returns the \Proselca{} of types $\vt$ and $\vs$ in $\tenv$ --- $\tty$.
-The result is a type error if a \Proselca{} does not exist or a type error is detected.
+The result is a \typingerrorterm{} if a \Proselca{} does not exist or a \typingerrorterm{} is detected.
 
 \ExampleDef{Lowest Common Ancestor}
 \listingref{example-lca} shows examples of conditional expressions and the resulting
@@ -893,7 +715,7 @@ The result is a type error if a \Proselca{} does not exist or a type error is de
         \item $\vt$ is a \tupletypeterm{} with type list $\vlit$;
         \item $\vs$ is a \tupletypeterm{} with type list $\vlis$;
         \item checking whether $\vlit$ and $\vlis$ have the same number of elements yields $\True$
-              or a type error, which short-circuits the entire rule (indicating that the number of elements in both tuples is expected
+              or a \typingerrorterm{}, which short-circuits the entire rule (indicating that the number of elements in both tuples is expected
               to be the same and thus there is no lowest common ancestor);
         \item applying $\lca$ to $\vlit[\vi]$ and $\vlis[\vi]$ in $\tenv$, for every position of $\vlit$,
               yields $\vt_\vi$\ProseOrTypeError;
@@ -904,7 +726,7 @@ The result is a type error if a \Proselca{} does not exist or a type error is de
       \item \AllApplyCase{error}
       \begin{itemize}
         \item either the AST labels of $\vt$ and $\vs$ are different, or one of them is $\TEnum$, $\TRecord$, $\TCollection$, or $\TException$;
-        \item the result is a type error indicating the lack of a lowest common ancestor.
+        \item the result is a \typingerrorterm{} indicating the lack of a lowest common ancestor.
       \end{itemize}
     \end{itemize}
   \end{itemize}
@@ -1095,7 +917,7 @@ Similarly, we determine the negation of integer constraints.
   \item $\op$ is $\NEG$;
   \item determining whether $\vt$ \typesatisfies\ $\TReal$ yields $\False$\ProseOrTypeError;
   \item determining whether $\vt$ \typesatisfies\ $\unconstrainedinteger$ yields $\False$\ProseOrTypeError;
-  \item the result is a type error indicating the $\NEG$ is appropriate only for the \realtypeterm{} and the \integertypeterm{};
+  \item the result is a \typingerrorterm{} indicating the $\NEG$ is appropriate only for the \realtypeterm{} and the \integertypeterm{};
 \end{itemize}
 
 \item \AllApplyCase{neg\_t\_real}
@@ -2159,7 +1981,7 @@ The function
 returns an integer inside an optional if $\ve$ can be symbolically simplified into an integer in $\tenv$
 and $\None$ otherwise.
 The expression $\ve$ is assumed to appear in a constraint for a type that has been successfully annotated,
-which means that applying $\normalize$ to it should not yield a type error.
+which means that applying $\normalize$ to it should not yield a \typingerrorterm{}.
 
 \ProseParagraph
 \OneApplies
@@ -2610,7 +2432,7 @@ The predicate
   \aslto \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
 \]
 tests whether the set of bit fields $\bfsone$ is included in the set of bit fields $\bfstwo$ in environment $\tenv$,
-returning a type error, if one is detected.
+returning a \typingerrorterm{}, if one is detected.
 
 \ProseParagraph
 \AllApply
@@ -2811,7 +2633,7 @@ The function
   \checkstructurelabel(\overname{\staticenvs}{\tenv} \aslsep \overname{\ty}{\vt} \aslsep \overname{\astlabels}{\vl}) \aslto
   \{\True\} \cup \TTypeError
 \]
-returns $\True$ is $\vt$ is has the \structure\ a of type corresponding to the AST label $\vl$ and a type error otherwise.
+returns $\True$ is $\vt$ is has the \structure\ a of type corresponding to the AST label $\vl$ and a \typingerrorterm{} otherwise.
 
 See \ExampleRef{The Structure of a Type}.
 
@@ -2829,7 +2651,7 @@ See \ExampleRef{The Structure of a Type}.
   \begin{itemize}
     \item determining the \structure\ of $\vt$ yields $\vtp$\ProseOrTypeError;
     \item $\vtp$ does not have the label $\vl$;
-    \item the result is a type error indicating that $\vt$ was expected to have the \structure\ of a type with the AST label $\vl$.
+    \item the result is a \typingerrorterm{} indicating that $\vt$ was expected to have the \structure\ of a type with the AST label $\vl$.
   \end{itemize}
 \end{itemize}
 
@@ -2962,7 +2784,7 @@ in the static environment $\tenv$.
   \item \AllApplyCase{error}
   \begin{itemize}
     \item obtaining the \structure\ of $\vt$ in $\tenv$ yields a type that is not a bitvector type;
-    \item the result is a type error indicating that a bitvector type was expected.
+    \item the result is a \typingerrorterm{} indicating that a bitvector type was expected.
   \end{itemize}
 \end{itemize}
 
@@ -3041,7 +2863,7 @@ If the answer is positive, the result is $\True$. \ProseOtherwiseTypeError
     \item \AllApplyCase{error}
     \begin{itemize}
       \item symbolically checking whether the bitwidth expressions $\vn$ and $\vm$ are equal (via $\bitwidthequal$) yields $\False$;
-      \item the result is a type error indicating that the bitwidths are different.
+      \item the result is a \typingerrorterm{} indicating that the bitwidths are different.
     \end{itemize}
   \end{itemize}
 \end{itemize}
@@ -3109,7 +2931,7 @@ precision lost, the type of \verb|(a * a) + 2| also denotes a precision lost.
 \FormallyParagraph
 \begin{mathpar}
   \inferrule[Loss]{
-    \vpone = \PrecisionLost \lor 
+    \vpone = \PrecisionLost \lor
     \vptwo = \PrecisionLost
   }{
     \vp = \PrecisionLost

@@ -214,10 +214,11 @@ module FunctionRenaming (C : ANNOTATE_CONFIG) = struct
   (* End *)
 
   (* Return true if two subprogram are forbidden with the same argument types. *)
-  let has_subprogram_type_clash s1 s2 =
+  let subprogram_types_clash s1 s2 =
     match (s1, s2) with
     | ST_Getter, ST_Setter
     | ST_Setter, ST_Getter
+    (* The following cases are for v0 *)
     | ST_EmptyGetter, ST_EmptySetter
     | ST_EmptySetter, ST_EmptyGetter ->
         false
@@ -256,7 +257,7 @@ module FunctionRenaming (C : ANNOTATE_CONFIG) = struct
                  let other_func_sig, _ses =
                    IMap.find name' env.global.subprograms
                  in
-                 has_subprogram_type_clash subpgm_type
+                 subprogram_types_clash subpgm_type
                    other_func_sig.subprogram_type
                  && has_arg_clash env formal_types other_func_sig.args)
                other_names
@@ -305,7 +306,9 @@ module FunctionRenaming (C : ANNOTATE_CONFIG) = struct
         | V1 -> ([], name', func_sig, ses) |: TypingRule.SubprogramForName)
     | [] -> fatal_from ~loc (Error.NoCallCandidate (name, caller_arg_types))
     | _ :: _ ->
-        fatal_from ~loc (Error.TooManyCallCandidates (name, caller_arg_types))
+        (* If more than one candidate exists, the candidate signature should clash,
+           which is detected when typechecking the corresponding declarations. *)
+        assert false
   (* End *)
 
   let try_subprogram_for_name =
@@ -377,25 +380,20 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
       | None -> raise NonStatic
     in
     let interval_of_slice env slice =
-      let make_interval x y =
-        if x > y then fatal_from ~loc @@ Error.(BadSlice slice)
-        else DI.Interval.make x y
+      let e1, e2 =
+        match slice with
+        | Slice_Length (e1, e2) -> (e1, e2)
+        (* all other forms of slice should have been reduced to Slice_Length *)
+        | _ -> assert false
       in
-      match slice with
-      | Slice_Single e ->
-          let x = eval env e in
-          make_interval x x |: TypingRule.BitfieldSliceToPositions
-      | Slice_Range (e1, e2) ->
-          let x = eval env e2 and y = eval env e1 in
-          make_interval x y |: TypingRule.BitfieldSliceToPositions
-      | Slice_Length (e1, e2) ->
-          let x = eval env e1 and y = eval env e2 in
-          make_interval x (x + y - 1) |: TypingRule.BitfieldSliceToPositions
-      | Slice_Star (e1, e2) ->
-          let x = eval env e1 and y = eval env e2 in
-          make_interval (x * y) ((x * (y + 1)) - 1)
-          |: TypingRule.BitfieldSliceToPositions
+      let offset = eval env e1 and length = eval env e2 in
+      if offset > offset + length - 1 then
+        fatal_from ~loc @@ Error.(BadSlice slice)
+      else
+        DI.Interval.make offset (offset + length - 1)
+        |: TypingRule.BitfieldSliceToPositions
     in
+
     let bitfield_slice_to_positions ~loc env diet slice =
       try
         let interval = interval_of_slice env slice in
@@ -428,7 +426,6 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
     in
     let one slice acc =
       match slice with
-      | Slice_Single e -> e :: acc
       | Slice_Length (e1, e2) ->
           let i1 = eval e1 and i2 = eval e2 in
           let rec do_rec n =
@@ -440,16 +437,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
               e :: do_rec (n + 1)
           in
           do_rec 0
-      | Slice_Range (e1, e2) ->
-          let i1 = eval e1 and i2 = eval e2 in
-          let rec do_rec i =
-            if i > i1 then acc
-            else
-              let e = E_Literal (L_Int (Z.of_int i)) |> add_dummy_annotation in
-              e :: do_rec (i + 1)
-          in
-          do_rec i2
-      | Slice_Star _ -> raise NoSingleField
+      | _ -> assert false (* Annotated slices should be only Slice_Length *)
     in
     fun slices -> List.fold_right one slices []
 
@@ -1449,15 +1437,14 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
           (* LRM R_GXKG:
              The notation b[j:i] is syntactic sugar for b[i +: j-i+1].
           *)
-          let pre_length = binop `MINUS j i |> binop `PLUS !$1 in
-          annotate_slice (Slice_Length (i, pre_length)) |: TypingRule.Slice
-      | Slice_Star (factor, pre_length) ->
+          let length = binop `MINUS j i |> binop `PLUS !$1 in
+          annotate_slice (Slice_Length (i, length)) |: TypingRule.Slice
+      | Slice_Star (factor, length) ->
           (* LRM R_GXQG:
              The notation b[i *: n] is syntactic sugar for b[i*n +: n]
           *)
-          let pre_offset = binop `MUL factor pre_length in
-          annotate_slice (Slice_Length (pre_offset, pre_length))
-          |: TypingRule.Slice
+          let offset = binop `MUL factor length in
+          annotate_slice (Slice_Length (offset, length)) |: TypingRule.Slice
       (* End *)
     in
     fun slices ->
@@ -2649,10 +2636,11 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
              annotate_lexpr env le3 t_e |: TypingRule.LESetBitField
          (* End *)
          (* Begin LESetBadField *)
+         | T_Tuple _ -> fatal_from ~loc @@ Error.AssignToTupleElement le1
          | _ ->
              conflict ~loc:le1
                [ default_t_bits; T_Record []; T_Exception []; T_Collection [] ]
-               t_e)
+               t_le1)
         |: TypingRule.LESetBadField
     (* End *)
     (* Begin LESetFields *)
@@ -3411,12 +3399,13 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
           parameters_of_expr ~env e1 @ parameters_of_expr ~env e2
       | E_Unop (_, e) -> parameters_of_expr ~env e
       | E_Literal _ -> []
-      | E_Tuple es ->
+      | E_Tuple [ e ] ->
           (* [extract_parameters] operates over untyped AST, so it must handle
              tuples - these are used to check binary operator precedence and are
              removed during typechecking) *)
-          list_concat_map (parameters_of_expr ~env) es
-      | _ -> Error.fatal_from (to_pos e) (Error.UnsupportedExpr (Static, e))
+          parameters_of_expr ~env e
+      | E_Tuple _ | _ ->
+          Error.fatal_from (to_pos e) (Error.UnsupportedExpr (Static, e))
     in
     let parameters_of_constraint ~env c =
       match c with
@@ -3454,6 +3443,19 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
       (ISet.of_list (List.map fst f.args))
       types
 
+  (* Begin CheckParameterDecls *)
+  let check_parameter_decls ~loc env func_sig =
+    let inferred_parameters = extract_parameters ~env func_sig in
+    let declared_parameters = List.map fst func_sig.parameters in
+    let all_parameters_declared =
+      list_equal String.equal inferred_parameters declared_parameters
+    in
+    check_true all_parameters_declared @@ fun () ->
+    fatal_from ~loc
+      (BadParameterDecl (func_sig.name, inferred_parameters, declared_parameters))
+    |: TypingRule.CheckParamDecls
+  (* End *)
+
   let annotate_func_sig_v1 ~loc genv func_sig =
     let env = with_empty_local genv in
     (* Check recursion limit *)
@@ -3461,6 +3463,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
       annotate_limit_expr ~warn:false ~loc env func_sig.recurse_limit
     in
     (* Annotate and declare parameters *)
+    (* AnnotateParams( *)
     let (env_with_params, ses_with_params), parameters =
       let declare_parameter (new_env, new_ses) (x, ty_opt) =
         let ty, ses_ty =
@@ -3479,19 +3482,11 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
       in
       list_fold_left_map declare_parameter (env, ses_recurse_limit)
         func_sig.parameters
+      |: TypingRule.AnnotateParams
+      (* AnnotateParams) *)
     in
     (* Check parameters are declared correctly - in order and unique *)
-    let+ () =
-      let inferred_parameters = extract_parameters ~env func_sig in
-      let declared_parameters = List.map fst func_sig.parameters in
-      let all_parameters_declared =
-        list_equal String.equal inferred_parameters declared_parameters
-      in
-      check_true all_parameters_declared @@ fun () ->
-      fatal_from ~loc
-        (BadParameterDecl
-           (func_sig.name, inferred_parameters, declared_parameters))
-    in
+    let+ () = check_parameter_decls env ~loc func_sig in
     (* Annotate and declare arguments *)
     let (env_with_args, ses_with_args), args =
       let declare_argument (new_env, new_ses) (x, ty) =
@@ -3728,12 +3723,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
         in
         let _, _, func_sig', _ =
           try Fn.subprogram_for_name ~loc env V1 func_sig.name arg_types
-          with
-          | Error.(
-              ASLException
-                { desc = NoCallCandidate _ | TooManyCallCandidates _; _ })
-          ->
-            fail ()
+          with Error.(ASLException { desc = NoCallCandidate _ }) -> fail ()
         in
         (* Check that func_sig' is a getter *)
         let wanted_getter_type =
@@ -3859,23 +3849,17 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
       match t2.desc with
       | T_Enum ids ->
           let t = T_Named name |> here in
+          (* DeclareEnumLabels( *)
           let declare_one env2 label =
             declare_const ~loc label t (L_Label label) env2
           in
           let genv3 = List.fold_left declare_one env2.global ids in
+          (* DeclareEnumLabels) *)
           { env2 with global = genv3 }
       | _ -> env2
     in
     let () = if false then Format.eprintf "Declared %s.@." name in
     new_tenv.global
-  (* End *)
-
-  (* Begin TryAddGlobalConstant *)
-  let try_add_global_constant name env e =
-    try
-      let v = StaticInterpreter.static_eval env e in
-      { env with global = add_global_constant name v env.global }
-    with Error.(ASLException { desc = UnsupportedExpr _; _ }) -> env
   (* End *)
 
   (* Begin DeclareGlobalStorage *)
@@ -3938,7 +3922,9 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
     (* UpdateGlobalStorage( *)
     let env2 =
       match keyword with
-      | GDK_Constant -> try_add_global_constant name env1 initial_value'
+      | GDK_Constant ->
+          let v = StaticInterpreter.static_eval env1 initial_value' in
+          { env1 with global = add_global_constant name v env1.global }
       | GDK_Let when should_remember_immutable_expression ses_initial_value -> (
           match StaticModel.normalize_opt env1 initial_value' with
           | Some e' -> add_global_immutable_expr name e' env1

@@ -55,6 +55,29 @@ def extract_labels_from_line(line: str, left_delim: str, labels: set[str]):
         labels.add(label)
         label_pos = right_brace_pos + 1
 
+def check_unused_latex_macros(latex_files: list[str]):
+    r"""
+    Checks whether there are LaTeX macros that are defined but never used.
+    """
+    defined_macros: set[str] = set()
+    used_macros: set[str] = set()
+    macro_def_pattern = re.compile(r"\\newcommand(\\[a-zA-Z]*)\[")
+    macro_use_pattern = re.compile(r"(?<!\\newcommand)\\[a-zA-Z]+")
+    num_errors = 0
+    for latex_source in latex_files:
+        source_str = read_file_str(latex_source)
+        for def_match in re.findall(macro_def_pattern, source_str):
+            # print(f"found macro definition {def_match}")
+            defined_macros.add(def_match)
+        for use_match in re.findall(macro_use_pattern, source_str):
+            # print(f"found macro usage {use_match}")
+            used_macros.add(use_match)
+    unused_macros = defined_macros.difference(used_macros)
+    for unused in unused_macros:
+        print(f"LaTeX macro {unused} is defined but never used!")
+        num_errors += 1
+    return num_errors
+
 
 def check_hyperlinks_and_hypertargets(latex_files: list[str]):
     r"""
@@ -147,6 +170,27 @@ def check_tododefines(latex_files: list[str]):
         print(f"WARNING: There are {num_todo_define} occurrences of \\tododefine")
         return 0
 
+def check_repeated_lines(filename: str) -> int:
+    r"""
+    Checks whether `file` contains the same line appearing twice in a row.
+    The exception is inside `CONSOLE_BEGIN...CONSOLE_END` blocks.
+    Errors are reported for the file name 'filename' and the total
+    number of found errors is returned.
+    """
+    num_errors = 0
+    line_number = 0
+    last_line = ""
+    inside_console_outout = False
+    for line in read_file_lines(filename):
+        line_number += 1
+        if r"CONSOLE_BEGIN" in line:
+            inside_console_outout = True
+        if r"CONSOLE_END" in line:
+            inside_console_outout = False
+        if not inside_console_outout and line and line == last_line and line.strip() and line.strip() != "}":
+            print(f"./{filename} line {line_number}: repeated twice")
+        last_line = line
+    return num_errors
 
 def check_repeated_words(filename: str) -> int:
     r"""
@@ -190,6 +234,12 @@ def detect_incorrect_latex_macros_spacing(filename: str) -> int:
     double_backslash_matches = re.findall(r"\\\\[a-zA-Z]+", file_str)
     for match in double_backslash_matches:
         print(f"./{filename}: double \\ in macro {match}")
+        num_errors += 1
+    for match in re.findall(r"\\overname\{\}\{.+?\}", file_str):
+        print(f"./{filename}: empty \\overname: {match}")
+        num_errors += 1
+    for match in re.findall(r"\\overname\{.+?\}\{\}", file_str):
+        print(f"./{filename}: empty \\overname label: {match}")
         num_errors += 1
 
     patterns_to_remove = [
@@ -243,12 +293,13 @@ def check_teletype_in_rule_math_mode(filename) -> int:
     teletype_pattern = re.compile(r"\\texttt{.*}")
     matches = math_mode_pattern.findall(file_str)
     for match in matches:
-        teletype_vars = teletype_pattern.findall(match)
-        for tt_var in teletype_vars:
-            print(
-                f"ERROR! {filename}: teletype font not allowed in rules, substitute {tt_var} with a proper macro"
-            )
-            num_errors += 1
+        if not "SUPPRESS_TEXTTT_LINTER" in match:
+            teletype_vars = teletype_pattern.findall(match)
+            for tt_var in teletype_vars:
+                print(
+                    f"ERROR! {filename}: teletype font not allowed in rules, substitute {tt_var} with a proper macro"
+                )
+                num_errors += 1
     return num_errors
 
 
@@ -458,20 +509,13 @@ def check_rules(filename: str) -> int:
     """
     # Treat existing issues as warnings and new issues as errors.
     file_to_num_expected_errors = {
-        "TypeDeclarations.tex" : 8,
-        "GlobalDeclarations.tex" : 6,
-        "GlobalStorageDeclarations.tex" : 7,
         "RelationsOnTypes.tex" : 15,
-        "Specifications.tex" : 26,
-        "SubprogramCalls.tex" : 19,
-        "SubprogramCalls.tex" : 19,
-        "SubprogramDeclarations.tex" : 13,
+        "SubprogramCalls.tex" : 15,
         "SymbolicEquivalenceTesting.tex" : 26,
         "SymbolicSubsumptionTesting.tex" : 23,
-        "Types.tex" : 9,
-        "SideEffects.tex" : 16,
+        "SideEffects.tex" : 13,
         "TypeSystemUtilities.tex" : 23,
-        "SemanticsUtilities.tex" : 20,
+        "SemanticsUtilities.tex" : 19,
     }
     total_expected = 0
     for num_expected in file_to_num_expected_errors.values():
@@ -654,10 +698,12 @@ def main():
     num_errors += check_hyperlinks_and_hypertargets(all_latex_sources)
     num_errors += check_undefined_references_and_multiply_defined_labels()
     num_errors += check_tododefines(content_latex_sources)
+    num_errors += check_unused_latex_macros(all_latex_sources)
     num_errors += check_per_file(
         content_latex_sources,
         [
             check_repeated_words,
+            check_repeated_lines,
             detect_incorrect_latex_macros_spacing,
             check_teletype_in_rule_math_mode,
             check_rules,
