@@ -1061,6 +1061,21 @@
                                             :otherwise value))))))
 
 
+(local
+ (defthm constraint_kind-count-parametrized-reduction
+   (IMPLIES
+    (EQUAL (CONSTRAINT_KIND-KIND X)
+           :PARAMETRIZED)
+    (<
+     (CONSTRAINT_KIND-COUNT
+      (WELLCONSTRAINED (list (CONSTRAINT_EXACT (EXPR (E_VAR name)))) prec))
+     (CONSTRAINT_KIND-COUNT X)))
+   :hints(("Goal" :in-theory (enable constraint_kind-count
+                                     int_constraintlist-count
+                                     int_constraint-count
+                                     expr-count
+                                     expr_desc-count)))))
+
 
 (with-output
   ;; makes it so it won't take forever to print the induction scheme
@@ -1288,6 +1303,9 @@
         :wellconstrained (b* (((mv (evo (expr_result constrs)) orac)
                                (resolve-int_constraints env x.constraints)))
                            (evo_normal (wellconstrained constrs x.flag)))
+        :parametrized (b* ((new-x (wellconstrained (list (constraint_exact (expr (e_var x.name))))
+                                                   (precision_full))))
+                        (resolve-constraint_kind env new-x))
         :otherwise (evo_error "Can't resolve constraint_kind" x)))
 
     (define resolve-tylist ((env env-p)
@@ -1332,11 +1350,14 @@
                    (evo_normal (ty (t_int cnstr))))
           :t_bits (b* (((mv (evo (expr_result width)) orac) (eval_expr env ty.expr)))
                     (val-case width.val
-                      :v_int (if (<= 0 width.val.val)
-                                 (evo_normal (ty (t_bits
-                                                  (expr (e_literal (l_int width.val.val)))
-                                                  ty.fields)))
-                               (evo_error "Negative bitvector width resolving type" x))
+                      :v_int ;;(if (<= 0 width.val.val)
+                      (evo_normal (ty (t_bits
+                                       (expr (e_literal (l_int width.val.val)))
+                                       ty.fields)))
+                      ;; NOTE -- separation of concerns: we once threw an error if we resolved
+                      ;; the bitvector width to a negative value. But instead we'll
+                      ;; rely on the consumer of this type to deal with it.
+                      ;; (evo_error "Negative bitvector width resolving type" x))
                       :otherwise (evo_error "Unexpected type of bitvector width type" x)))
           :t_tuple (b* (((mv (evo tys) orac) (resolve-tylist env ty.types)))
                      (evo_normal (ty (t_tuple tys))))
@@ -1344,13 +1365,13 @@
                      (array_index-case ty.index
                        :arraylength_expr (b* (((mv (evo (expr_result len)) orac) (eval_expr env ty.index.length)))
                                            (val-case len.val
-                                             :v_int (if (<= 0 len.val.val)
-                                                        (evo_normal (ty (t_array
-                                                                         (arraylength_expr
-                                                                          (expr (e_literal (l_int len.val.val))))
-                                                                         base)))
-                                                      (evo_error "Negative array length resolving type" x))
-                                             :otherwise (evo_error "Unexpected type of array length type" x)))
+                                             :v_int ;;(if (<= 0 len.val.val)
+                                             (evo_normal (ty (t_array
+                                                              (arraylength_expr
+                                                               (expr (e_literal (l_int len.val.val))))
+                                                              base)))
+                                             ;; (evo_error "Negative array length resolving type" x))
+                                             :otherwise (evo_error "Unexpected type of array length" x)))
                        :arraylength_enum (evo_normal (ty (t_array ty.index base)))))
           :t_record (b* (((mv (evo fields) orac)
                           (resolve-typed_identifierlist env ty.fields)))
@@ -1555,10 +1576,23 @@
                        (param-names (maybe-typed_identifierlist->names f.parameters))
                        (env2 (declare_local_identifiers env1 arg-names vargs))
                        (env3 (declare_local_identifiers env2 param-names vparams))
-                       ((mv (evo bodyres) orac) (eval_stmt env3 f.body.stmt)))
-                    (control_flow_state-case bodyres
-                      :returning (evo_normal (func_result bodyres.vals bodyres.env))
-                      :continuing (evo_normal (func_result nil (env->global bodyres.env)))))
+                       ((mv bodyres orac) (eval_stmt env3 f.body.stmt)))
+                    ;;; NOTE: To strictly comply with the ASL reference manual
+                    ;;; we should leave the throwing env alone. But it gets
+                    ;;; stripped out by env-pop-stack in eval_call, and it's
+                    ;;; convenient for reasoning to be able to prove what a
+                    ;;; throwing result equals without including the entire
+                    ;;; local environment.
+                    (eval_result-case bodyres
+                      :ev_normal (let ((bodyres bodyres.res))
+                                   (control_flow_state-case bodyres
+                                     :returning (evo_normal (func_result bodyres.vals bodyres.env))
+                                     :continuing (evo_normal (func_result nil (env->global bodyres.env)))))
+                      :ev_error (mv bodyres orac)
+                      :ev_throwing (mv (change-ev_throwing bodyres
+                                                           :env
+                                                           (change-env bodyres.env :local (empty-local-env)))
+                                       orac)))
           :sb_primitive (b* (((evo primres) (eval_primitive name vparams vargs)))
                           (evo_normal (func_result primres (env->global env)))))))
 

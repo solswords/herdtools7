@@ -25,6 +25,8 @@
 
 (include-book "interp")
 
+(acl2::def-ruleset openers nil)
+
 (defmacro defopener (name fn &key (hyp 't))
   `(encapsulate nil
      (set-ignore-ok t)
@@ -42,7 +44,8 @@
                             `(implies ,hyp ,concl))))
               `(defthm ,name ,thmbody
                  :hints (("goal" :expand (,call)))))))
-        (evnt name fn formals body hyp)))))
+        (evnt name fn formals body hyp)))
+     (acl2::add-to-ruleset openers ,name)))
 
 
 (defopener open-eval_stmt eval_stmt :hyp (syntaxp (quotep s)))
