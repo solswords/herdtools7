@@ -88,6 +88,50 @@
                   (natp n))
          :hints(("Goal" :in-theory (enable unsigned-byte-p)))
          :rule-classes :forward-chaining))
+(local (include-book "centaur/bitops/ihsext-basics" :Dir :System))
+
+
+(local (defthm unsigned-byte-p-of-loghead-gen
+         (implies (and (int-equiv n n1))
+                  (equal (unsigned-byte-p n (loghead n1 x))
+                         (natp n)))
+         :hints(("Goal" :in-theory (enable ifix)))))
+
+(define logapp* ((m integerp) (x integerp) (y integerp))
+  (logapp (nfix m) x y)
+  ///
+  (defthm unsigned-byte-p-of-logapp*
+    (implies (and (natp n)
+                  (<= (nfix m) n)
+                  (unsigned-byte-p (- n (nfix m)) y))
+             (unsigned-byte-p n (logapp* m x y))))
+
+  (defthm loghead*-of-logapp*
+    (implies (and (<= (nfix m) (nfix n))
+                  (unsigned-byte-p (- (nfix n) (nfix m)) y))
+             (equal (loghead* n (logapp* m x y))
+                    (logapp* m x y)))
+    :hints(("Goal" :in-theory (acl2::enable* loghead*
+                                             bitops::loghead-of-logapp-split
+                                             acl2::arith-equiv-forwarding))))
+
+  (fty::deffixequiv logapp* :args ((m natp) (x integerp) (y integerp)))
+
+  (defthm logapp*-of-loghead*
+    (equal (logapp* m (loghead* m x) y)
+           (logapp* m x y))
+    :hints(("Goal" :in-theory (enable logapp* loghead*)))))
+
+(local (defthm eval_binop-of-concat
+         (equal (eval_binop :bv_concat x y)
+                (fty::multicase
+                  ((val-case x) (val-case y))
+                  ((:v_bitvector :v_bitvector)
+                   (ev_normal (v_bitvector (+ x.len y.len)
+                                           (logapp* y.len y.val x.val))))
+                  (& (ev_error "Unsupported binop" (list :bv_concat x y)))))
+         :hints(("Goal" :in-theory (enable eval_binop
+                                           logapp*)))))
 
 
 (local (in-theory (disable v_real-of-fields)))
@@ -95,7 +139,12 @@
 (local (in-theory (disable floor)))
 
 (local (in-theory (disable v_int-of-fields)))
-(local (include-book "centaur/bitops/ihsext-basics" :Dir :System))
+
+(local (defthm loghead*-when-gte-0
+         (implies (<= 0 n)
+                  (equal (loghead* n x)
+                         (loghead n x)))
+         :hints(("Goal" :in-theory (enable loghead*)))))
 
 
 (def-asl-shallow abs-real
@@ -220,8 +269,6 @@
   :args (b)
   :returns (ret))
 
-(local (include-book "arithmetic/top" :dir :system))
-
 (local (defthm consolidate-constants-on-<
          (implies (syntaxp (and (quotep n) (quotep m)))
                   (equal (< (+ n x) m)
@@ -241,25 +288,41 @@
   :args (b n)
   :returns (ret))
 
-(Defstub foo () nil)
-(verify
- (implies (AND
-           (SUBPROGRAMS-MATCH '("ReplicateBit" "Zeros-1" "Ones-1" "ReplicateBit-1")
-                              (GLOBAL-ENV->STATIC (ENV->GLOBAL ENV))
-                              (STDLIB-STATIC-ENV))
-           (<= 3 (IFIX CLK))
-           (INTEGERP N)
-           (INTEGERP N)
-           (BOOLEANP B))
-          (equal (MV-NTH 0
-                         (EVAL_SUBPROGRAM ENV "ReplicateBit" (LIST (V_INT N))
-                                          (LIST (V_BOOL B) (V_INT N))))
-                 (foo))))
+(set-ignore-ok t)
 
-(defthm if-nonnil
-  (implies (and (syntaxp (quotep x))
-                x)
-           (equal (if x y z) y)))
+(def-asl-shallow bvlen
+  :function "Len"
+  :params (n)
+  :args (v)
+  :returns (ret))
 
-(defthm if-nil
-  (equal (if nil y z) z))
+(def-asl-shallow iszero
+  :function "IsZero"
+  :params (n)
+  :args (v)
+  :returns (ret))
+
+(def-asl-shallow isones
+  :function "IsOnes"
+  :params (n)
+  :args (v)
+  :returns (ret))
+
+(local (defthm nfix-when-not-negp
+         (implies (not (negp x))
+                  (equal (nfix x) (ifix x)))
+         :hints(("Goal" :in-theory (enable nfix)))))
+
+(def-asl-shallow zeroextend-1
+  :function "ZeroExtend-1"
+  :params (n m)
+  :args (v)
+  :returns (ret))
+
+(def-asl-shallow zeroextend
+  :function "ZeroExtend"
+  :params (n m)
+  :args (v n)
+  :returns (ret))
+
+

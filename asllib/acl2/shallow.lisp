@@ -73,7 +73,41 @@
   (defret len-of-<fn>
     (equal (len new-x) (len x))))
 
+(make-event
+ (b* (((er &) (set-evisc-tuple '(nil 6 8 nil) :sites :gag-mode :iprint :same)))
+   (value '(value-triple :evisc))))
 
+
+(define unsigned-byte-p* ((n integerp) x)
+  ;; True if either (unsigned-byte-p n x) or if n is
+  ;; ill-typed (negative or non-integer) and x is 0.
+  (unsigned-byte-p (nfix n) x)
+  ///
+  (defthm unsigned-byte-p*-implies-natp
+    (implies (unsigned-byte-p* n x)
+             (natp x))
+    :rule-classes :forward-chaining)
+
+  (fty::deffixequiv unsigned-byte-p* :args ((n natp)))
+
+  (defthm unsigned-byte-p*-of-0
+    (unsigned-byte-p* n 0)))
+
+(define loghead* ((n integerp) (x integerp))
+  :returns (new-x natp :rule-classes :type-prescription)
+  (loghead (nfix n) x)
+  ///
+  (defthm unsigned-byte-p*-of-loghead*
+    (unsigned-byte-p* n (loghead* n x))
+    :hints(("Goal" :in-theory (enable unsigned-byte-p*))))
+
+  (defthm loghead*-when-unsigned-byte-p*
+    (implies (unsigned-byte-p* n x)
+             (equal (loghead* n x) x))
+    :hints(("Goal" :in-theory (enable unsigned-byte-p*
+                                      nfix))))
+
+  (fty::deffixequiv loghead* :args ((n natp) (x integerp))))
 
 
 (defines val-to-native
@@ -180,6 +214,8 @@
                  (vallist-to-native b)))
     :hints (("goal" :expand ((vallist-to-native (cons a b)))))))
 
+
+
 (local
  (defthm vallist-p-alist-vals-of-val-imap
    (implies (val-imap-p x)
@@ -187,18 +223,192 @@
    :hints(("Goal" :in-theory (enable acl2::alist-vals)))))
 
 
+
+(defines weak-ty-satisfied
+  :flag-local nil
+  (define weak-ty-satisfied ((x val-p)
+                          (ty ty-p))
+    :measure (acl2::two-nats-measure (ty-count ty) 0)
+    (b* ((ty (ty->val ty)))
+      (fty::multicase ((type_desc-case ty)
+                       (val-case x))
+        ((:t_int :v_int) t)
+        ((:t_bits :v_bitvector) t)
+        ((:t_real :v_real) t)
+        ((:t_string :v_string) t)
+        ((:t_bool :v_bool) t)
+        ((:t_enum :v_label) (member-equal x.val ty.elts))
+        ((:t_tuple :v_array) (weak-tuple-type-satisfied x.arr ty.types))
+        ((:t_array :v_array)
+         :when (array_index-case ty.index :arraylength_expr)
+         (weak-array-type-satisfied x.arr ty.type))
+        ((:t_array :v_record)
+         :when (array_index-case ty.index :arraylength_enum)
+         (and (equal (acl2::alist-keys x.rec) (arraylength_enum->elts ty.index))
+              (weak-array-type-satisfied (acl2::alist-vals x.rec) ty.type)))
+        ((:t_record :v_record)
+         (weak-record-type-satisfied x.rec ty.fields))
+        ((:t_exception :v_record)
+         (weak-record-type-satisfied x.rec ty.fields))
+        ((:t_collection :v_record)
+         (weak-record-type-satisfied x.rec ty.fields))
+        (- nil))))
+
+  (define weak-tuple-type-satisfied ((x vallist-p)
+                                (types tylist-p))
+    :measure (acl2::two-nats-measure (tylist-count types) 0)
+    (if (atom types)
+        (atom x)
+      (and (consp x)
+           (weak-ty-satisfied (car x) (car types))
+           (weak-tuple-type-satisfied (cdr x) (Cdr types)))))
+
+  (define weak-array-type-satisfied ((x vallist-p)
+                                (ty ty-p))
+    :measure (acl2::two-nats-measure (ty-count ty) (len x))
+    (if (atom x)
+        t
+      (and (weak-ty-satisfied (car x) ty)
+           (weak-array-type-satisfied (cdr x) ty))))
+
+  (define weak-record-type-satisfied ((x val-imap-p)
+                                 (fields typed_identifierlist-p))
+    :measure (acl2::two-nats-measure (typed_identifierlist-count fields) 0)
+    (b* ((x (val-imap-fix x)))
+      (if (atom fields)
+          (atom x)
+        (and (consp x)
+             (consp (car x))
+             (b* (((cons key val) (car x))
+                  ((typed_identifier f1) (car fields)))
+               (and (equal key f1.name)
+                    (weak-ty-satisfied val f1.type)))
+             (weak-record-type-satisfied (cdr x) (cdr fields))))))
+  ///
+  (fty::deffixequiv-mutual weak-ty-satisfied))
+
+
+
+
+
+
+(defines weak-ty-satisfied-native
+  :flag-local nil
+  (define weak-ty-satisfied-native (x (ty ty-p))
+    :measure (acl2::two-nats-measure (ty-count ty) 0)
+    ;; :prepwork ((local (in-theory (enable integerp*))))
+    (b* ((ty (ty->val ty)))
+      (type_desc-case ty
+        (:t_int (integerp x))
+        (:t_bits ;;(and (integerp* x)
+         (integerp x)) ;; ? or do we want just integerp?
+        (:t_real (rationalp x))
+        (:t_string (stringp x))
+        (:t_bool (booleanp x))
+        (:t_enum (and (keywordp x)
+                      (member-equal (symbol-name x) ty.elts)))
+        (:t_tuple (weak-tuple-type-satisfied-native x ty.types))
+        (:t_array (array_index-case ty.index
+                    :arraylength_expr
+                    (and (true-listp x)
+                         (weak-array-type-satisfied-native x ty.type))
+                    :arraylength_enum
+                    (and (keyword-alist-p x)
+                         (equal (acl2::alist-keys x) (idlist-to-native (arraylength_enum->elts ty.index)))
+                         (weak-array-type-satisfied-native (acl2::alist-vals x) ty.type))))
+        (:t_record (and (keyword-alist-p x)
+                        (weak-record-type-satisfied-native x ty.fields)))
+        (:t_exception (and (keyword-alist-p x)
+                           (weak-record-type-satisfied-native x ty.fields)))
+        (:t_collection (and (keyword-alist-p x)
+                            (weak-record-type-satisfied-native x ty.fields)))
+        (otherwise nil))))
+
+  (define weak-tuple-type-satisfied-native (x (types tylist-p))
+    :measure (acl2::two-nats-measure (tylist-count types) 0)
+    (if (atom types)
+        (eq x nil)
+      (and (consp x)
+           (weak-ty-satisfied-native (car x) (car types))
+           (weak-tuple-type-satisfied-native (cdr x) (Cdr types)))))
+
+  (define weak-array-type-satisfied-native ((x true-listp)
+                                       (ty ty-p))
+    :measure (acl2::two-nats-measure (ty-count ty) (len x))
+    (if (atom x)
+        t
+      (and (weak-ty-satisfied-native (car x) ty)
+           (weak-array-type-satisfied-native (cdr x) ty))))
+
+  (define weak-record-type-satisfied-native ((x keyword-alist-p)
+                                        (fields typed_identifierlist-p))
+    :measure (acl2::two-nats-measure (typed_identifierlist-count fields) 0)
+    (b* ((x (keyword-alist-fix x)))
+      (if (atom fields)
+          (atom x)
+        (and (consp x)
+             (consp (car x))
+             (b* (((cons key val) (car x))
+                  ((typed_identifier f1) (car fields)))
+               (and (equal key (id-to-native f1.name))
+                    (weak-ty-satisfied-native val f1.type)))
+             (weak-record-type-satisfied-native (cdr x) (cdr fields))))))
+  ///
+  (fty::deffixequiv-mutual weak-ty-satisfied-native)
+
+
+  (defthm-weak-ty-satisfied-flag
+    (defthm weak-ty-satisfied-native-of-val-to-native
+      (implies (and (weak-ty-satisfied x ty))
+               (weak-ty-satisfied-native (val-to-native x) ty))
+      :hints ('(:expand ((val-to-native x)
+                         (:free (x) (weak-ty-satisfied x ty))
+                         (:free (x) (weak-ty-satisfied-native x ty)))))
+      :flag weak-ty-satisfied)
+    (defthm weak-tuple-type-satisfied-native-of-val-to-native
+      (implies (and (weak-tuple-type-satisfied x types))
+               (weak-tuple-type-satisfied-native (vallist-to-native x) types))
+      :hints ('(:expand ((vallist-to-native x)
+                         (:free (x) (weak-tuple-type-satisfied x types))
+                         (:free (x) (weak-tuple-type-satisfied-native x types)))))
+      :flag weak-tuple-type-satisfied)
+
+    (defthm weak-array-type-satisfied-native-of-val-to-native
+      (implies (and (weak-array-type-satisfied x ty))
+               (weak-array-type-satisfied-native (vallist-to-native x) ty))
+      :hints ('(:expand ((vallist-to-native x)
+                         (weak-array-type-satisfied x ty)
+                         (weak-array-type-satisfied-native nil ty)
+                         (:free (a b) (weak-array-type-satisfied-native (cons a b) ty)))))
+      :flag weak-array-type-satisfied)
+
+    (defthm weak-record-type-satisfied-native-of-val-to-native
+      (implies (weak-record-type-satisfied x fields)
+               (weak-record-type-satisfied-native (val-imap-to-native x) fields))
+      :hints ('(:expand ((val-imap-to-native x)
+                         (:free (x) (weak-record-type-satisfied x fields))
+                         (:free (x) (weak-record-type-satisfied-native x fields)))))
+      :flag weak-record-type-satisfied))
+
+
+  (defthm-weak-ty-satisfied-native-flag
+    (defthm weak-tuple-type-satisfied-native-implies-true-listp
+      (implies (weak-tuple-type-satisfied-native x types)
+               (and (true-listp x)
+                    (equal (len x) (len types))))
+      :hints ('(:expand ((weak-tuple-type-satisfied-native x types))))
+      :rule-classes :forward-chaining
+      :flag weak-tuple-type-satisfied-native)
+    :skip-others t))
+
+
 (defines typed-val-to-native
   (define typed-val-to-native ((x val-p) (ty ty-p))
-    :guard (and (ty-resolved-p ty)
-                (ty-satisfied x ty))
-    :guard-hints (("goal" :expand ((tylist-resolved-p types)
-                                   (tuple-type-satisfied x types)
-                                   (array-type-satisfied x ty)
-                                   (typed_identifierlist-resolved-p fields)
-                                   (record-type-satisfied x fields)
-                                   (ty-satisfied x ty)))
-                  (and stable-under-simplificationp
-                       '(:expand ((ty-resolved-p ty)))))
+    :guard (weak-ty-satisfied x ty)
+    :guard-hints (("goal" :expand ((weak-tuple-type-satisfied x types)
+                                   (weak-array-type-satisfied x ty)
+                                   (weak-record-type-satisfied x fields)
+                                   (weak-ty-satisfied x ty))))
     :measure (acl2::two-nats-measure (ty-count ty) 0)
     :returns (val)
     (b* ((ty (ty->val ty)))
@@ -220,8 +430,7 @@
         :t_named nil)))
   (define tuple-val-to-native ((x vallist-p)
                                (types tylist-p))
-    :guard (and (tylist-resolved-p types)
-                (tuple-type-satisfied x types))
+    :guard (weak-tuple-type-satisfied x types)
     :measure (acl2::two-nats-measure (tylist-count types) 0)
     :returns (val)
     (if (atom types)
@@ -231,8 +440,7 @@
   (define typed-vallist-to-native ((x vallist-p)
                                    (ty ty-p))
     :measure (acl2::two-nats-measure (ty-count ty) (len x))
-    :guard (and (ty-resolved-p ty)
-                (array-type-satisfied x ty))
+    :guard (weak-array-type-satisfied x ty)
     :returns (val)
     (if (atom x)
         nil
@@ -240,8 +448,7 @@
             (typed-vallist-to-native (cdr x) ty))))
   (define typed-val-imap-to-native ((x val-imap-p) (fields typed_identifierlist-p))
     :measure (acl2::two-nats-measure (typed_identifierlist-count fields) 0)
-    :guard (and (typed_identifierlist-resolved-p fields)
-                (record-type-satisfied x fields))
+    :guard (weak-record-type-satisfied x fields)
     :returns (val)
     (b* (((when (atom fields)) nil)
          ((typed_identifier f1) (car fields))
@@ -264,31 +471,31 @@
   
   (std::defret-mutual <fn>-is-val-to-native
     (defretd <fn>-is-val-to-native
-      (implies (ty-satisfied x ty)
+      (implies (weak-ty-satisfied x ty)
                (equal val (val-to-native x)))
-      :hints ('(:expand ((ty-satisfied x ty)
+      :hints ('(:expand ((weak-ty-satisfied x ty)
                          (val-to-native x)
                          <call>)))
       :fn typed-val-to-native)
     (defretd <fn>-is-val-to-native
-      (implies (tuple-type-satisfied x types)
+      (implies (weak-tuple-type-satisfied x types)
                (equal val (vallist-to-native x)))
-      :hints ('(:expand ((tuple-type-satisfied x types)
+      :hints ('(:expand ((weak-tuple-type-satisfied x types)
                          (vallist-to-native x)
                          <call>)))
       :fn tuple-val-to-native)
     (defretd <fn>-is-val-to-native
-      (implies (array-type-satisfied x ty)
+      (implies (weak-array-type-satisfied x ty)
                (equal val (vallist-to-native x)))
-      :hints ('(:expand ((array-type-satisfied x ty)
+      :hints ('(:expand ((weak-array-type-satisfied x ty)
                          (vallist-to-native x)
                          <call>)))
       :fn typed-vallist-to-native)
     (defretd <fn>-is-val-to-native
-      (implies (and (record-type-satisfied x fields)
+      (implies (and (weak-record-type-satisfied x fields)
                     (val-imap-p x))
                (equal val (val-imap-to-native x)))
-      :hints ('(:expand ((record-type-satisfied x fields)
+      :hints ('(:expand ((weak-record-type-satisfied x fields)
                          (val-imap-to-native x)
                          <call>)))
       :fn typed-val-imap-to-native))
@@ -302,6 +509,75 @@
                                             t_tuple t_array t_record t_exception
                                             t_collection t_named)))
                         (& nil))))))
+
+
+
+
+(defines weak-resolve-ty
+  :verify-guards nil
+    
+  (define weak-resolve-ty ((env static_env_global-p)
+                           (x ty-p)
+                           &key ((clk natp) 'clk))
+    :returns (res (and (eval_result-p res)
+                           (implies (eval_result-case res :ev_normal)
+                                    (ty-p (ev_normal->res res)))))
+    :measure (nats-measure clk 0 (ty-count x) 0)
+    (b* ((ty (ty->val x)))
+      (type_desc-case ty
+        :t_tuple (b* (((ev tys) (weak-resolve-tylist env ty.types)))
+                   (ev_normal (ty (t_tuple tys))))
+        :t_array (b* (((ev base) (weak-resolve-ty env ty.type)))
+                   (ev_normal (ty (t_array ty.index base))))
+        :t_record (b* (((ev fields)
+                        (weak-resolve-typed_identifierlist env ty.fields)))
+                    (ev_normal (ty (t_record fields))))
+        :t_exception (b* (((ev fields)
+                           (weak-resolve-typed_identifierlist env ty.fields)))
+                       (ev_normal (ty (t_exception fields))))
+        :t_collection (b* (((ev fields)
+                            (weak-resolve-typed_identifierlist env ty.fields)))
+                        (ev_normal (ty (t_collection fields))))
+        :t_named  (b* ((decl_types (static_env_global->declared_types env))
+                       (look (hons-assoc-equal ty.name decl_types))
+                       ((unless look)
+                        (ev_error "Named type not found" x))
+                       ((when (zp clk))
+                        (ev_error "Clock ran out resolving named type" x))
+                       (type (ty-timeframe->ty (cdr look))))
+                    (weak-resolve-ty env type :clk (1- clk)))
+        :otherwise (ev_normal (ty ty)))))
+  
+  (define weak-resolve-tylist ((env static_env_global-p)
+                               (x tylist-p)
+                               &key ((clk natp) 'clk))
+    :returns (res (and (eval_result-p res)
+                           (implies (eval_result-case res :ev_normal)
+                                    (tylist-p (ev_normal->res res)))))
+    :measure (nats-measure clk 0 (tylist-count x) 0)
+    (if (atom x)
+        (ev_normal nil)
+      (b* (((ev first) (weak-resolve-ty env (car x)))
+           ((ev rest) (weak-resolve-tylist env (cdr x))))
+        (ev_normal (cons first rest)))))
+
+  (define weak-resolve-typed_identifierlist ((env static_env_global-p)
+                                             (x typed_identifierlist-p)
+                                             &key ((clk natp) 'clk))
+    :returns (res (and (eval_result-p res)
+                           (implies (eval_result-case res :ev_normal)
+                                    (typed_identifierlist-p (ev_normal->res res)))))
+    :measure (nats-measure clk 0 (typed_identifierlist-count x) 0)
+    (b* (((when (atom x)) (ev_normal nil))
+         ((typed_identifier x1) (car x))
+         ((ev first) (weak-resolve-ty env x1.type))
+         ((ev rest) (weak-resolve-typed_identifierlist env (cdr x))))
+      (ev_normal (cons (typed_identifier x1.name first) rest))))
+  ///
+  (Verify-guards weak-resolve-ty-fn))
+
+
+
 
 ;; (define integerp* (x)
 ;;   (integerp x)
@@ -599,7 +875,7 @@
     (b* ((ty (ty->val ty)))
       (type_desc-case ty
         (:t_int (constraint_kind-value-fix (ifix x) ty.constraint))
-        (:t_bits (loghead (nfix (int-literal-expr->val ty.expr)) (ifix x)))
+        (:t_bits (loghead* (int-literal-expr->val ty.expr) (ifix x)))
         (:t_real (rfix x))
         (:t_string (acl2::str-fix x))
         (:t_bool (acl2::bool-fix x))
@@ -700,6 +976,207 @@
       :fn record-type-fix-native))
 
   (defopener open-ty-fix-native ty-fix-native
+    :hyp (syntaxp (or (quotep ty)
+                      (case-match ty
+                        (('ty (ctor . &))
+                         (member-eq ctor
+                                    '(t_int t_bits t_real t_string t_bool t_enum
+                                            t_tuple t_array t_record t_exception
+                                            t_collection t_named)))
+                        (& nil))))))
+
+
+(defines ty-names-resolved-p
+  (define ty-names-resolved-p ((x ty-p))
+    :measure (ty-count x)
+    (b* ((ty (ty->val x)))
+      (type_desc-case ty
+        :t_named nil
+        :t_tuple (tylist-names-resolved-p ty.types)
+        :t_array (ty-names-resolved-p ty.type)
+        :t_record (typed_identifierlist-names-resolved-p ty.fields)
+        :t_exception (typed_identifierlist-names-resolved-p ty.fields)
+        :t_collection (typed_identifierlist-names-resolved-p ty.fields)
+        :otherwise t)))
+  (define tylist-names-resolved-p ((x tylist-p))
+    :measure (tylist-count x)
+    (if (atom x)
+        t
+      (and (ty-names-resolved-p (car x))
+           (tylist-names-resolved-p (cdr x)))))
+  (define typed_identifierlist-names-resolved-p ((x typed_identifierlist-p))
+    :measure (typed_identifierlist-count x)
+    (if (atom x)
+        t
+      (and (ty-names-resolved-p (typed_identifier->type (car x)))
+           (typed_identifierlist-names-resolved-p (cdr x))))))
+
+(defines ty-no-empty-enums-p
+  (define ty-no-empty-enums-p ((x ty-p))
+    :measure (ty-count x)
+    (b* ((ty (ty->val x)))
+      (type_desc-case ty
+        :t_enum (consp ty.elts)
+        :t_tuple (tylist-no-empty-enums-p ty.types)
+        :t_array (ty-no-empty-enums-p ty.type)
+        :t_record (typed_identifierlist-no-empty-enums-p ty.fields)
+        :t_exception (typed_identifierlist-no-empty-enums-p ty.fields)
+        :t_collection (typed_identifierlist-no-empty-enums-p ty.fields)
+        :otherwise t)))
+  (define tylist-no-empty-enums-p ((x tylist-p))
+    :measure (tylist-count x)
+    (if (atom x)
+        t
+      (and (ty-no-empty-enums-p (car x))
+           (tylist-no-empty-enums-p (cdr x)))))
+  (define typed_identifierlist-no-empty-enums-p ((x typed_identifierlist-p))
+    :measure (typed_identifierlist-count x)
+    (if (atom x)
+        t
+      (and (ty-no-empty-enums-p (typed_identifier->type (car x)))
+           (typed_identifierlist-no-empty-enums-p (cdr x))))))
+
+
+;; Checks that names are resolved and there are no empty enums -- therefore,
+;; there exist values that weakly satisfy the type.
+(defines ty-weakly-satisfiable-p
+  (define ty-weakly-satisfiable-p ((x ty-p))
+    :measure (ty-count x)
+    (b* ((ty (ty->val x)))
+      (type_desc-case ty
+        :t_named nil
+        :t_enum (consp ty.elts)
+        :t_tuple (tylist-weakly-satisfiable-p ty.types)
+        :t_array (ty-weakly-satisfiable-p ty.type)
+        :t_record (typed_identifierlist-weakly-satisfiable-p ty.fields)
+        :t_exception (typed_identifierlist-weakly-satisfiable-p ty.fields)
+        :t_collection (typed_identifierlist-weakly-satisfiable-p ty.fields)
+        :otherwise t)))
+  (define tylist-weakly-satisfiable-p ((x tylist-p))
+    :measure (tylist-count x)
+    (if (atom x)
+        t
+      (and (ty-weakly-satisfiable-p (car x))
+           (tylist-weakly-satisfiable-p (cdr x)))))
+  (define typed_identifierlist-weakly-satisfiable-p ((x typed_identifierlist-p))
+    :measure (typed_identifierlist-count x)
+    (if (atom x)
+        t
+      (and (ty-weakly-satisfiable-p (typed_identifier->type (car x)))
+           (typed_identifierlist-weakly-satisfiable-p (cdr x))))))
+  
+
+(defines weak-ty-fix-native
+  :flag-local nil
+  (define weak-ty-fix-native (x (ty ty-p))
+    :verify-guards nil
+    :measure (acl2::two-nats-measure (ty-count ty) 0)
+    :returns (new-x (implies (ty-weakly-satisfiable-p ty)
+                             (weak-ty-satisfied-native new-x ty))
+                    :hints ('(:expand ((ty-weakly-satisfiable-p ty)
+                                       (:free (x) (weak-ty-satisfied-native x ty))
+                                       (:free (ty) (weak-array-type-satisfied-native nil ty))))))
+    (b* ((ty (ty->val ty)))
+      (type_desc-case ty
+        (:t_int (ifix x))
+        (:t_bits (ifix x))
+        (:t_real (rfix x))
+        (:t_string (acl2::str-fix x))
+        (:t_bool (acl2::bool-fix x))
+        (:t_enum (if (and (keywordp x)
+                          (member-equal (symbol-name x) ty.elts))
+                     x
+                   (if (consp ty.elts)
+                       (id-to-native (car ty.elts))
+                     (id-to-native "EMPTY_ENUM"))))
+        (:t_tuple (weak-tuple-type-fix-native x ty.types))
+        (:t_array (array_index-case ty.index
+                    :arraylength_expr
+                    (weak-array-type-fix-native (len x) x ty.type)
+                    :arraylength_enum
+                    (pairlis$ (idlist-to-native ty.index.elts)
+                              (weak-array-type-fix-native
+                               (len ty.index.elts)
+                               (acl2::alist-vals x)
+                               ty.type))))
+        (:t_record (weak-record-type-fix-native x ty.fields))
+        (:t_exception (weak-record-type-fix-native x ty.fields))
+        (:t_collection (weak-record-type-fix-native x ty.fields))
+        (otherwise nil))))
+
+  (define weak-tuple-type-fix-native (x (types tylist-p))
+    :measure (acl2::two-nats-measure (tylist-count types) 0)
+    :returns (new-x (implies (tylist-weakly-satisfiable-p types)
+                             (weak-tuple-type-satisfied-native new-x types))
+                    :hints ('(:expand ((:free (x) (weak-tuple-type-satisfied-native x types))
+                                       (tylist-weakly-satisfiable-p types)))))
+    (if (atom types)
+        nil
+      (cons (weak-ty-fix-native (and (consp x) (car x)) (car types))
+            (weak-tuple-type-fix-native (and (consp x) (cdr x)) (Cdr types)))))
+
+  (define weak-array-type-fix-native ((len natp) x (ty ty-p))
+    :measure (acl2::two-nats-measure (ty-count ty) len)
+    :returns (new-x (implies (ty-weakly-satisfiable-p ty)
+                             (and (true-listp new-x)
+                                  (equal (len new-x) (nfix len))
+                                  (weak-array-type-satisfied-native new-x ty)))
+                    :hints ((and stable-under-simplificationp
+                                 '(:expand ((weak-array-type-satisfied-native nil ty)
+                                            (:free (a b) (weak-array-type-satisfied-native (cons a b) ty)))))))
+    (if (zp len)
+        nil
+      (cons (weak-ty-fix-native (and (consp x) (car x)) ty)
+            (weak-array-type-fix-native (1- len) (and (consp x) (cdr x)) ty))))
+
+  (define weak-record-type-fix-native (x (fields typed_identifierlist-p))
+    :measure (acl2::two-nats-measure (typed_identifierlist-count fields) 0)
+    :returns (new-x (implies (typed_identifierlist-weakly-satisfiable-p fields)
+                             (and (keyword-alist-p new-x)
+                                  (weak-record-type-satisfied-native new-x fields)))
+                    :hints ('(:expand ((:free (x) (weak-record-type-satisfied-native x fields))
+                                       (typed_identifierlist-weakly-satisfiable-p fields)))))
+    (b* (((when (atom fields)) nil)
+         ((typed_identifier f1) (car fields))
+         (val (weak-ty-fix-native (and (consp x) (consp (car x)) (cdar x)) f1.type)))
+      (cons (cons (id-to-native f1.name) val)
+            (weak-record-type-fix-native (and (consp x) (cdr x)) (cdr fields)))))
+  ///
+  (fty::deffixequiv-mutual weak-ty-fix-native)
+
+  (verify-guards weak-ty-fix-native)
+
+  (std::defret-mutual weak-ty-fix-native-when-satisfied
+    (defret <fn>-when-satisfied
+      (implies (weak-ty-satisfied-native x ty)
+               (equal new-x x))
+      :hints ('(:expand ((weak-ty-satisfied-native x ty)
+                         <call>)))
+      :fn weak-ty-fix-native)
+    (defret <fn>-when-satisfied
+      (implies (weak-tuple-type-satisfied-native x types)
+               (equal new-x x))
+      :hints ('(:expand ((weak-tuple-type-satisfied-native x types)
+                         <call>)))
+      :fn weak-tuple-type-fix-native)
+    (defret <fn>-when-satisfied
+      (implies (and (weak-array-type-satisfied-native x ty)
+                    (equal (len x) (nfix len))
+                    (true-listp x))
+               (equal new-x x))
+      :hints ('(:expand ((weak-array-type-satisfied-native x ty)
+                         <call>
+                         (:free (x ty) (weak-array-type-fix-native 0 x ty)))))
+      :fn weak-array-type-fix-native)
+    (defret <fn>-when-satisfied
+      (implies (and (weak-record-type-satisfied-native x fields)
+                    (keyword-alist-p x))
+               (equal new-x x))
+      :hints ('(:expand ((weak-record-type-satisfied-native x fields)
+                         <call>)))
+      :fn weak-record-type-fix-native))
+
+  (defopener open-weak-ty-fix-native weak-ty-fix-native
     :hyp (syntaxp (or (quotep ty)
                       (case-match ty
                         (('ty (ctor . &))
@@ -870,6 +1347,40 @@
                                           t_collection t_named)))
                       (& nil)))))
 
+(defopener open-weak-ty-satisfied-native weak-ty-satisfied-native
+  :hyp (syntaxp (or (quotep ty)
+                    (case-match ty
+                      (('ty (ctor . &))
+                       (member-eq ctor
+                                  '(t_int t_bits t_real t_string t_bool t_enum
+                                          t_tuple t_array t_record t_exception
+                                          t_collection t_named)))
+                      (& nil)))))
+
+(defopener open-ty-satisfying-val ty-satisfying-val
+  :hyp (syntaxp (or (quotep x)
+                    (case-match x
+                      (('ty (ctor . &))
+                       (member-eq ctor
+                                  '(t_int t_bits t_real t_string t_bool t_enum
+                                          t_tuple t_array t_record t_exception
+                                          t_collection t_named)))
+                      (& nil)))))
+
+(defopener open-constraint_kind-satisfying-val constraint_kind-satisfying-val
+  :hyp (syntaxp (or (quotep x)
+                    (and (consp x)
+                         (member-eq (car x)
+                                    '(unconstrained wellconstrained pendingconstrained parametrized))))))
+(defopener open-int_constraintlist-satisfying-val int_constraintlist-satisfying-val
+  :hyp (syntaxp (or (quotep x)
+                    (case-match x
+                      (('cons . &) t) (& nil)))))
+(defopener open-int_constraint-satisfying-val int_constraint-satisfying-val
+  :hyp (syntaxp (or (quotep x)
+                    (and (consp x)
+                         (member-eq (car x) '(constraint_exact constraint_range))))))
+
 
 
 (deftagsum shallow_result
@@ -992,11 +1503,16 @@
     (value (cons type1 rest))))
 
 
-(define shallow-type->native-satisfies-expr (type-expr ;; expr for resolved type
+(define shallow-type->native-satisfies-expr (weakp
+                                             type-expr ;; expr for resolved type
                                              x-expr    ;; value expression
                                              hyp state)
   ;; E.g., if type-expr is (t_bits n) and x-expr is v, result will be (unsigned-byte-p n v).
-  (simplify-for-shallow `(ty-satisfied-native ,x-expr ,type-expr) hyp 'iff state))
+  (simplify-for-shallow
+   (if weakp
+       `(weak-ty-satisfied-native ,x-expr ,type-expr)
+     `(ty-satisfied-native ,x-expr ,type-expr))
+   hyp 'iff state))
 
 (defines shallow-returntype-rewrites
   ;; returns list of expressions, implicitly conjoined
@@ -1038,7 +1554,7 @@
     (case-match expr
       (('and . exprs) (shallow-returntype-type-prescriptions-lst exprs))
       (('unsigned-byte-p & val)
-       `((natp ,val)))
+       `((integerp ,val)))
       (('rationalp &) (list expr))
       (('integerp &) (list expr))
       (('stringp &) (list expr))
@@ -1054,17 +1570,27 @@
             
   
 
-(define shallow-type->asl-satisfies-expr (type-expr ;; expr for resolved type
+(define shallow-type->asl-satisfies-expr (weakp
+                                          type-expr ;; expr for resolved type
                                           x-expr    ;; value expression
                                           hyp state)
   ;; E.g., if type-expr is (t_bits n) and x-expr is v, result will be (unsigned-byte-p n v).
-  (simplify-for-shallow `(ty-satisfied ,x-expr ,type-expr) hyp 'iff state))
+  (simplify-for-shallow
+   (if weakp
+       `(weak-ty-satisfied ,x-expr ,type-expr)
+     `(ty-satisfied ,x-expr ,type-expr))
+   hyp 'iff state))
 
-(define shallow-type->native-fix-expr (type-expr ;; expr for resolved type
+(define shallow-type->native-fix-expr (weakp
+                                       type-expr ;; expr for resolved type
                                        x-expr    ;; value expression
                                        hyp state)
   ;; E.g., if type-expr is (t_bits n) and x-expr is v, result will be (loghead n v).
-  (simplify-for-shallow `(ty-fix-native ,x-expr ,type-expr) hyp 'equal state))
+  (simplify-for-shallow
+   (if weakp
+       `(weak-ty-fix-native ,x-expr ,type-expr)
+     `(ty-fix-native ,x-expr ,type-expr))
+   hyp 'equal state))
 
 (define shallow-type->native-wrap-expr (type-expr ;; expr for resolved type
                                        x-expr    ;; value expression
@@ -1157,6 +1683,20 @@
        ((er rest) (shallow-resolve-param-types (cdr fn-params) param-env-term hyp state)))
     (value (cons type-term rest))))
 
+(define shallow-resolve-weak-param-types ((fn-params maybe-typed_identifierlist-p)
+                                          (static-env static_env_global-p))
+  (b* (((when (atom fn-params)) nil)
+       ((maybe-typed_identifier p1) (car fn-params))
+       (type (or p1.type (ty (t_int (unconstrained)))))
+       (type-res (weak-resolve-ty static-env type :clk 1000))
+       ((unless (eval_result-case type-res :ev_normal))
+        (er hard? 'shallow-resolve-weak-param-types
+            "Couldn't resolve type for ~x0: type ~x1, error ~x2"
+            p1.name p1.type type-res))
+       (type-term (kwote (ev_normal->res type-res))))
+    (cons type-term
+          (shallow-resolve-weak-param-types (cdr fn-params) static-env))))
+
 ;; ---------------------------------------------------------------------------------
 ;; Computes the resolved types of the function's arguments.
 ;; Hyp here just needs to assume all parameters are integerp.
@@ -1170,35 +1710,51 @@
        ((er type-term) (shallow-resolve-type p1.type hyp param-env-term state))
        ((er rest) (shallow-resolve-arg-types (cdr fn-args) param-env-term hyp state)))
     (value (cons type-term rest))))
+
+
+(define shallow-resolve-weak-arg-types ((fn-args maybe-typed_identifierlist-p)
+                                        (static-env static_env_global-p))
+  (b* (((when (atom fn-args)) nil)
+       ((typed_identifier p1) (car fn-args))
+       (type-res (weak-resolve-ty static-env p1.type :clk 1000))
+       ((unless (eval_result-case type-res :ev_normal))
+        (er hard? 'shallow-resolve-weak-arg-types
+            "Couldn't resolve type for ~x0: type ~x1, error ~x2"
+            p1.name p1.type type-res))
+       (type-term (kwote (ev_normal->res type-res))))
+    (cons type-term
+          (shallow-resolve-weak-arg-types (cdr fn-args) static-env))))
    
     
 ;; ---------------------------------------------------------------------------------
 ;; Shallow function's DEFINE formals:
 ;; Given resolved types for the parameters and args, pair (varname type-satisfied-term).
 ;; The full set of guard assumptions can be derived from this using strip-cadrs.
-(define shallow-define-formals ((args symbol-listp)
+(define shallow-define-formals (weakp
+                                (args symbol-listp)
                                 resolved-types ;; term list, one per arg
                                 hyp ;; params integer-listp
                                 state)
   (b* (((when (atom args)) (value nil))
        ((er satisfies-term)
-        (shallow-type->native-satisfies-expr (car resolved-types) (car args)
+        (shallow-type->native-satisfies-expr weakp (car resolved-types) (car args)
                                              hyp state))
-       ((er rest) (shallow-define-formals (cdr args) (cdr resolved-types) hyp state)))
+       ((er rest) (shallow-define-formals weakp (cdr args) (cdr resolved-types) hyp state)))
     (value (cons `(,(car args) ,satisfies-term) rest))))
 
 
 ;; ---------------------------------------------------------------------------------
 ;; LET* bindings for use at the start of the shallow function to fix the
 ;; arguments to the required types.
-(define shallow-formal-fixer-alist ((args symbol-listp)
+(define shallow-formal-fixer-alist (weakp
+                                    (args symbol-listp)
                                     resolved-types ;; term list, one per arg
                                     hyp            ;; params integer-listp
                                     state)
   (b* (((when (atom args)) (value nil))
        ((er fix-expr)
-        (shallow-type->native-fix-expr (car resolved-types) (car args) hyp state))
-       ((er rest) (shallow-formal-fixer-alist (cdr args) (cdr resolved-types) hyp state)))
+        (shallow-type->native-fix-expr weakp (car resolved-types) (car args) hyp state))
+       ((er rest) (shallow-formal-fixer-alist weakp (cdr args) (cdr resolved-types) hyp state)))
     (value (cons (cons (car args) fix-expr) rest))))
 
 (define shallow-formal-fixer-bindings (alist)
@@ -1242,14 +1798,18 @@
 ;; But these fixers can't help when the input type isn't satisfiable, i.e., (t_bits n) when n < 0.
 ;; So we need to more broadly assume that the input types are all satisfiable even when we don't want to assume that the
 ;; inputs satisfy their types. Returns a list of assumptions.
-(define shallow-types-satisfiable (resolved-types
+(define shallow-types-satisfiable (weakp
+                                   resolved-types
                                    hyp ;; params integer-listp
                                    state)
   (b* (((when (atom resolved-types)) (value nil))
-       ((er first) (simplify-for-shallow `(ty-satisfying-val ,(car resolved-types)) hyp 'iff state))
+       ((er first) (simplify-for-shallow
+                    (if weakp
+                        `(ty-weakly-satisfiable-p ,(car resolved-types))
+                      `(ty-satisfying-val ,(car resolved-types))) hyp 'iff state))
        ((when (eq first nil))
         (er soft 'shallow-types-satisfiable "Type cannot be satisfied: ~x0" (car resolved-types)))
-       ((er rest) (shallow-types-satisfiable (cdr resolved-types) hyp state)))
+       ((er rest) (shallow-types-satisfiable weakp (cdr resolved-types) hyp state)))
     (value (if (eq first t)
                rest
              (cons first rest)))))
@@ -1373,32 +1933,34 @@
 
          (static-env '(stdlib-static-env)))
         args)
+
+       (weak-types t)
        
        ((when bad-args)
-        (er soft 'def-asl-subprogram "Bad arguments: ~x0" bad-args))
+        (er soft 'def-asl-shallow "Bad arguments: ~x0" bad-args))
        ((unless (stringp function))
-        (er soft 'def-asl-subprogram "Function should be a string: ~x0" function))
+        (er soft 'def-asl-shallow "Function should be a string: ~x0" function))
        ((acl2::er (cons & static-env-val))
         (acl2::simple-translate-and-eval static-env nil nil
                                          (msg "static env ~x0" static-env)
-                                         'def-asl-subprogram (w state) state t))
+                                         'def-asl-shallow (w state) state t))
        ((unless (static_env_global-p static-env-val))
-        (er soft 'def-asl-subprogram "Bad static env (evaluation of ~x0): doesn't satisfy static_env_global-p" static-env))
+        (er soft 'def-asl-shallow "Bad static env (evaluation of ~x0): doesn't satisfy static_env_global-p" static-env))
        (fn-struct (cdr (hons-assoc-equal function
                                          (static_env_global->subprograms static-env-val))))
        ((unless fn-struct)
-        (er soft 'def-asl-subprogram "Bad function ~x0: not found in static env" function))
+        (er soft 'def-asl-shallow "Bad function ~x0: not found in static env" function))
        ((func-ses fn-struct))
        ((func f) fn-struct.fn)
 
        ((unless (symbol-listp params))
-        (er soft 'def-asl-subprogram "Params should be a symbol-list"))
+        (er soft 'def-asl-shallow "Params should be a symbol-list"))
        ((unless (eql (len params) (len f.parameters)))
-        (er soft 'def-asl-subprogram "~x0 params were given but ~s1 has ~x2 parameters" (len params) function (len f.parameters)))
+        (er soft 'def-asl-shallow "~x0 params were given but ~s1 has ~x2 parameters" (len params) function (len f.parameters)))
        ((unless (symbol-listp args))
-        (er soft 'def-asl-subprogram "Args should be a symbol-list"))
+        (er soft 'def-asl-shallow "Args should be a symbol-list"))
        ((unless (eql (len args) (len f.args)))
-        (er soft 'def-asl-subprogram "~x0 args were given but ~s1 has ~x2 args" (len args) function (len f.args)))
+        (er soft 'def-asl-shallow "~x0 args were given but ~s1 has ~x2 args" (len args) function (len f.args)))
 
        (returntype-is-tuple
         (type_desc-case (ty->val f.return_type) :t_tuple))
@@ -1414,7 +1976,7 @@
                 :otherwise (or (symbolp returns)
                                (symbol-listp returns)
                                (eql (len returns) 1)))))
-        (er soft 'def-asl-subprogram "Bad number of return values"))
+        (er soft 'def-asl-shallow "Bad number of return values"))
        (returns (if (and (not returntype-is-tuple)
                          (not (symbolp returns)))
                     (car returns)
@@ -1436,28 +1998,37 @@
        (params-integerp-hyp `(and . ,params-integerp-hyps))
        ((er param-types)
         (shallow-resolve-param-types f.parameters param-env-term params-integerp-hyp state))
+       (weak-param-types
+        (if weak-types
+            (shallow-resolve-weak-param-types f.parameters static-env-val)
+          param-types))
        ((er arg-types)
         (shallow-resolve-arg-types f.args param-env-term params-integerp-hyp state))
+       (weak-arg-types
+        (if weak-types
+            (shallow-resolve-weak-arg-types f.args static-env-val)
+          arg-types))
 
-       ((er types-sat) (shallow-types-satisfiable (append param-types arg-types)
+       ((er types-sat) (shallow-types-satisfiable weak-types
+                                                  (append weak-param-types weak-arg-types)
                                                   params-integerp-hyp state))
        
        (nondup-args (set-difference-eq args params))
-       (nondup-arg-types (remove-corresponding-elements args arg-types params))
+       (nondup-arg-types (remove-corresponding-elements args weak-arg-types params))
 
        
        ((er param-formals)
-        (shallow-define-formals params param-types t state))
+        (shallow-define-formals weak-types params weak-param-types t state))
        ((er arg-formals)
-        (shallow-define-formals nondup-args nondup-arg-types params-integerp-hyp state))
+        (shallow-define-formals weak-types nondup-args nondup-arg-types params-integerp-hyp state))
        (formals (append param-formals arg-formals))
        (guard-hyps (acl2::strip-cadrs formals))
        
 
        ((er param-fixer-al)
-        (shallow-formal-fixer-alist params param-types t state))
+        (shallow-formal-fixer-alist weak-types params weak-param-types t state))
        ((er arg-fixer-al)
-        (shallow-formal-fixer-alist nondup-args nondup-arg-types params-integerp-hyp state))
+        (shallow-formal-fixer-alist weak-types nondup-args nondup-arg-types params-integerp-hyp state))
        (fixer-al (append param-fixer-al arg-fixer-al))
        (fixers (shallow-formal-fixer-bindings fixer-al))
 
@@ -1485,6 +2056,13 @@
 
        ((er return-type)
         (shallow-resolve-type f.return_type t param-env-term state))
+       (weak-return-type
+        (if weak-types
+            (b* ((res (weak-resolve-ty static-env-val f.return_type :clk 1000))
+                 ((unless (eval_result-case res :ev_normal))
+                  (er hard? 'def-asl-shallow "Couldn't resolve return type")))
+              (kwote (ev_normal->res res)))
+          return-type))
        ((er return-type/s)
         (b* ((returntype (ty->val f.return_type)))
           (type_desc-case returntype
@@ -1518,7 +2096,7 @@
        ((er body) (shallow-let-abstract body state))
 
        ((er return-type-term) (shallow-type->native-satisfies-expr
-                               return-type 'returnval t state))
+                               weak-types weak-return-type 'returnval t state))
        ;; (return-concl (if always-normal
        ;;                   return-type-term
        ;;                 (and (shallow_result-p returnval)
@@ -1531,9 +2109,11 @@
                             'asl-pkg))
        (return-rewrites
         (if always-normal
-            `(and . ,(shallow-returntype-rewrites return-type-term))
+            `(implies ,return-hyp
+                      (and . ,(shallow-returntype-rewrites return-type-term)))
           `(and (shallow_result-p returnval)
-                (implies (shallow_result-case returnval :sh_normal)
+                (implies (and (shallow_result-case returnval :sh_normal)
+                              ,return-hyp)
                          (let ((returnval (sh_normal->res returnval)))
                            (and . ,(shallow-returntype-rewrites return-type-term)))))))
        (return-rewrite-thmname (intern-in-package-of-symbol
@@ -1552,19 +2132,28 @@
                             'asl-pkg))
 
        (return-forwards (shallow-returntype-forwards return-type-term))
-       (return-forward
+       ;; (return-forward
+       ;;  (and return-forwards
+       ;;       (not always-normal)
+       ;;       `(implies (shallow_result-case returnval :sh_normal)
+       ;;                 (and . ,return-forwards))))
+       ;; (return-forward-thmname (intern-in-package-of-symbol
+       ;;                          (concatenate 'string (symbol-name name) "-RETURN-FORWARD")
+       ;;                          'asl-pkg))
+
+       (return-reverse
         (and return-forwards
              (not always-normal)
-             `(implies (shallow_result-case returnval :sh_normal)
-                       (and . ,return-forwards))))
-       (return-forward-thmname (intern-in-package-of-symbol
-                                (concatenate 'string (symbol-name name) "-RETURN-FORWARD")
+             `(implies (and ,return-hyp
+                            (not (and . ,return-forwards)))
+                       (not (equal (shallow_result-kind returnval) :sh_normal)))))
+       (return-reverse-thmname (intern-in-package-of-symbol
+                                (concatenate 'string (symbol-name name) "-RETURN-REVERSE")
                                 'asl-pkg))
 
        (return-concl `(and ,@(and return-type-prescrips `(,return-type-prescrip))
-                           ,@(and return-forward `(,return-forward))
-                           (implies ,return-hyp
-                                    ,return-rewrites)))
+                           ,@(and return-reverse `(,return-reverse))
+                           ,return-rewrites))
                                
 
        (asl-param-env-term (shallow-asl-param-env params f.parameters))
@@ -1607,8 +2196,7 @@
               ///
 
               (defret ,return-rewrite-thmname
-                (implies ,return-hyp
-                         ,return-rewrites)
+                ,return-rewrites
                 :hints (("goal" :use ,return-sig-thmname
                          :in-theory (disable ,name)))
                 :rule-classes :rewrite)
@@ -1621,14 +2209,19 @@
                                                       ,return-rewrite-thmname)))
                          :rule-classes :type-prescription)))
 
-              ,@(and return-forward
-                     `((defret ,return-forward-thmname
-                         ,return-forward
+              ,@(and return-reverse
+                     `(;; (defret ,return-forward-thmname
+                       ;;   ,return-forward
+                       ;;   :hints (("goal" :use ,return-sig-thmname
+                       ;;            :in-theory (disable ,name
+                       ;;                                ,return-rewrite-thmname)))
+                       ;;   :rule-classes ((:forward-chaining :trigger-terms ((equal (shallow_result-kind <call>)
+                       ;;                                                            :sh_normal)))))
+                       (defret ,return-reverse-thmname
+                         ,return-reverse
                          :hints (("goal" :use ,return-sig-thmname
                                   :in-theory (disable ,name
-                                                      ,return-rewrite-thmname)))
-                         :rule-classes ((:forward-chaining :trigger-terms ((equal (shallow_result-kind <call>)
-                                                                                  :sh_normal)))))))
+                                                      ,return-rewrite-thmname))))))
               
               (def-asl-subprogram ,(intern-in-package-of-symbol
                                     (concatenate 'string (symbol-name name) "-SHALLOW-CORRECT")
@@ -1663,3 +2256,380 @@
 
 
 
+
+
+
+(logic)
+
+(local (defthm maybe-stmt-count-measure
+         (implies x
+                  (< (stmt-count x) (maybe-stmt-count x)))
+         :hints(("Goal" :expand ((maybe-stmt-count x))
+                 :in-theory (enable maybe-stmt-some->val)))))
+
+(define pair-typed-identifiers ((x identifierlist-p)
+                                (types tylist-p))
+  :guard (equal (len x) (len types))
+  :returns (lst typed_identifierlist-p)
+  (if (atom x)
+      nil
+    (cons (typed_identifier (car x) (car types))
+          (pair-typed-identifiers (cdr x) (cdr types)))))
+
+(defthm typed_identifierlist-p-of-append
+  (implies (and (typed_identifierlist-p x)
+                (typed_identifierlist-p y))
+           (typed_identifierlist-p (append x y))))
+
+(defines shallow-loop-and-decls
+  (define shallow-loop-and-decls ((n natp)
+                                  (stmttype symbolp)
+                                  (x stmt-p))
+    :returns (mv (res maybe-stmt-p)
+                 (decls typed_identifierlist-p)
+                 (next-n (implies (not res) (natp next-n)) :rule-classes :type-prescription))
+    :measure (stmt-count x)
+    :verify-guards nil
+    (b* ((orig-x x)
+         (x (stmt->val x))
+         (decr (eq stmttype (stmt_desc-kind x)))
+         ((when (and decr (zp n)))
+          (mv (stmt-fix orig-x) nil nil))
+         (n (if decr (1- n) (lnfix n))))
+      (stmt_desc-case x
+        :s_seq (b* (((mv res decls1 n) (shallow-loop-and-decls n stmttype x.first))
+                    ((when res) (mv res decls1 n))
+                    ((mv res decls2 n) 
+                     (shallow-loop-and-decls n stmttype x.second)))
+                 (mv res (append decls1 decls2) n))
+        :s_decl (b* (((unless x.ty) (mv nil nil n))
+                     (ty (ty->val x.ty)))
+                  (fty::multicase
+                    ((local_decl_item-case x.item)
+                     (type_desc-case ty))
+                    ((:ldi_tuple :t_tuple)
+                     :when (eql (len x.item.names) (len ty.types))
+                     (mv nil (pair-typed-identifiers x.item.names ty.types) n))
+                    ((:ldi_var &) (mv nil (list (typed_identifier x.item.name x.ty)) n))
+                    (& (mv nil nil n))))
+        :s_cond (b* (((mv res decls n)
+                      (shallow-loop-and-decls n stmttype x.then))
+                     ((when res)
+                      (mv res decls n))
+                     ((mv res decls n)
+                      (shallow-loop-and-decls n stmttype x.else))
+                     ((when res)
+                      (mv res decls n)))
+                  (mv nil nil n))
+        :s_for (b* (((mv res decls n) (shallow-loop-and-decls n stmttype x.body))
+                    ((when res)
+                     (mv res (cons (typed_identifier x.index_name (t_int (unconstrained))) decls) n)))
+                 (mv nil nil n))
+        :s_while (shallow-loop-and-decls n stmttype x.body)
+        :s_repeat (shallow-loop-and-decls n stmttype x.body)
+        :s_try (b* (((mv res decls n) (shallow-loop-and-decls n stmttype x.body))
+                    ((when res) (mv res decls n))
+                    ((mv res decls n) (shallow-loop-and-decls-catcherlist n stmttype x.catchers))
+                    ((when res) (mv res decls n)))
+                 (shallow-loop-and-decls-maybe n stmttype x.otherwise))
+        :otherwise (mv nil nil n))))
+
+  (define shallow-loop-and-decls-maybe ((n natp)
+                                        (stmttype symbolp)
+                                        (x maybe-stmt-p))
+    :returns (mv (res maybe-stmt-p)
+                 (decls typed_identifierlist-p)
+                 (next-n (implies (not res) (natp next-n)) :rule-classes :type-prescription))
+    :measure (maybe-stmt-count x)
+    (if x
+        (shallow-loop-and-decls n stmttype x)
+      (mv nil nil (lnfix n))))
+
+  (define shallow-loop-and-decls-catcherlist ((n natp)
+                                              (stmttype symbolp)
+                                              (x catcherlist-p))
+    :returns (mv (res maybe-stmt-p)
+                 (decls typed_identifierlist-p)
+                 (next-n (implies (not res) (natp next-n)) :rule-classes :type-prescription))
+    :measure (catcherlist-count x)
+    (b* (((when (atom x))
+          (mv nil nil (lnfix n)))
+         ((mv res decls n)
+          (shallow-loop-and-decls-catcher n stmttype (car x)))
+         ((when res) (mv res decls n)))
+      (shallow-loop-and-decls-catcherlist n stmttype (cdr x))))
+
+  (define shallow-loop-and-decls-catcher ((n natp)
+                                          (stmttype symbolp)
+                                          (x catcher-p))
+    :returns (mv (res maybe-stmt-p)
+                 (decls typed_identifierlist-p)
+                 (next-n (implies (not res) (natp next-n)) :rule-classes :type-prescription))
+    :measure (catcher-count x)
+    (b* (((catcher x))
+         ((mv res decls n)
+          (shallow-loop-and-decls n stmttype x.stmt)))
+      (mv res
+          (if (and res x.name)
+              (cons (typed_identifier x.name x.ty) decls)
+            decls)
+          n)))
+  ///
+  (verify-guards shallow-loop-and-decls))
+
+
+(local
+ (progn
+   (include-book "std/osets/element-list" :dir :system)
+   (deflist identifierlist :elt-type identifier :true-listp t)))
+
+(defthm setp-of-singleton
+  (setp (list x))
+  :hints(("Goal" :in-theory (enable setp))))
+
+(defines shallow-lexpr-written-vars
+  (define shallow-lexpr-written-vars ((x lexpr-p)
+                                      (declared-vars identifierlist-p))
+    :returns (written-vars (and (set::setp written-vars)
+                                (identifierlist-p written-vars)))
+    :measure (lexpr-count x)
+    :verify-guards nil
+    (b* ((x (lexpr->val x)))
+      (lexpr_desc-case x
+        :le_var (and (member-equal x.name (identifierlist-fix declared-vars))
+                     (list x.name))
+        :le_slice (shallow-lexpr-written-vars x.base declared-vars)
+        :le_setarray (shallow-lexpr-written-vars x.base declared-vars)
+        :le_setenumarray (shallow-lexpr-written-vars x.base declared-vars)
+        :le_setfield (shallow-lexpr-written-vars x.base declared-vars)
+        :le_setfields (shallow-lexpr-written-vars x.base declared-vars)
+        :le_setcollectionfields
+        (and (member-equal x.base (identifierlist-fix declared-vars))
+             (list x.base))
+        :le_destructuring (shallow-lexprlist-written-vars x.elts declared-vars)
+        :otherwise nil)))
+  (define shallow-lexprlist-written-vars ((x lexprlist-p)
+                                      (declared-vars identifierlist-p))
+    :returns (written-vars (and (set::setp written-vars)
+                                (identifierlist-p written-vars)))
+    :measure (lexprlist-count x)
+    (if (atom x)
+        nil
+      (set::union (shallow-lexpr-written-vars (car x) declared-vars)
+                  (shallow-lexprlist-written-vars (cdr x) declared-vars))))
+  ///
+  (verify-guards shallow-lexpr-written-vars))
+
+    
+
+(defines shallow-written-vars
+  (define shallow-written-vars ((x stmt-p)
+                                (declared-vars identifierlist-p))
+    :returns (written-vars (and (setp written-vars)
+                                (identifierlist-p written-vars)))
+    :measure (stmt-count x)
+    :verify-guards nil
+    (b* ((x (stmt->val x)))
+      (stmt_desc-case x
+        :s_seq (union (shallow-written-vars x.first declared-vars)
+                           (shallow-written-vars x.second declared-vars))
+        :s_assign (shallow-lexpr-written-vars x.lexpr declared-vars)
+        :s_cond (union (shallow-written-vars x.then declared-vars)
+                            (shallow-written-vars x.else declared-vars))
+        :s_for (shallow-written-vars x.body declared-vars)
+        :s_while (shallow-written-vars x.body declared-vars)
+        :s_repeat (shallow-written-vars x.body declared-vars)
+        :s_try (union (shallow-written-vars x.body declared-vars)
+                      (union
+                       (shallow-written-vars-catcherlist x.catchers declared-vars)
+                       (shallow-written-vars-maybe x.otherwise declared-vars)))
+        :otherwise nil)))
+
+  (define shallow-written-vars-maybe ((x maybe-stmt-p)
+                                      (declared-vars identifierlist-p))
+    :returns (written-vars (and (setp written-vars)
+                                (identifierlist-p written-vars)))
+    :measure (maybe-stmt-count x)
+    (and x
+         (shallow-written-vars x declared-vars)))
+
+  (define shallow-written-vars-catcherlist ((x catcherlist-p)
+                                            (declared-vars identifierlist-p))
+    :returns (written-vars (and (setp written-vars)
+                                (identifierlist-p written-vars)))
+    :measure (catcherlist-count x)
+    (if (atom x)
+        nil
+      (union (shallow-written-vars-catcher (car x) declared-vars)
+             (shallow-written-vars-catcherlist (cdr x) declared-vars))))
+
+  (define shallow-written-vars-catcher ((x catcher-p)
+                                        (declared-vars identifierlist-p))
+    :returns (written-vars (and (setp written-vars)
+                                (identifierlist-p written-vars)))
+    :measure (catcher-count x)
+    (b* (((catcher x)))
+      (shallow-written-vars x.stmt declared-vars)))
+  ///
+  (verify-guards shallow-written-vars))
+
+
+
+
+
+
+
+
+(program)
+
+
+
+
+
+
+
+;; (define def-asl-shallow-loop-fn (name args state)
+;;   (b* (((std::extract-keyword-args
+;;          :other-args bad-args
+;;          :allowed-keys '(:prepwork)
+;;          ;; :kwd-alist kwd-alist
+;;          function
+;;          (looptype :while)
+;;          (nth 0)
+;;          local-vars ;; pairs such as ((x "__stdlib_local_x") ...)
+;;          index-var
+;;          (start-var 'start)
+;;          (end-var 'end)
+;;          measure
+;;          ;; enable
+;;          ;; disable
+;;          ;; hints
+;;          ;; prepwork
+
+;;          (static-env '(stdlib-static-env)))
+;;         args)
+       
+;;        ((when bad-args)
+;;         (er soft 'def-asl-shallow-loop "Bad arguments: ~x0" bad-args))
+;;        ((unless (stringp function))
+;;         (er soft 'def-asl-shallow-loop "Function should be a string: ~x0" function))
+;;        (orig-looptype looptype)
+;;        (looptype (case orig-looptype
+;;                    ((:while :s_while) :s_while)
+;;                    ((:for :s_for) :s_for)
+;;                    ((:repeat :s_repeat) :s_repeat)
+;;                    (t nil)))
+;;        ((acl2::er (cons & static-env-val))
+;;         (acl2::simple-translate-and-eval static-env nil nil
+;;                                          (msg "static env ~x0" static-env)
+;;                                          'def-asl-shallow-loop-fn (w state) state t))
+;;        ((unless (static_env_global-p static-env-val))
+;;         (er soft 'def-asl-shallow-loop "Bad static env (evaluation of ~x0): doesn't satisfy static_env_global-p" static-env))
+;;        (fn-struct (cdr (hons-assoc-equal function
+;;                                          (static_env_global->subprograms static-env-val))))
+;;        ((unless fn-struct)
+;;         (er soft 'def-asl-shallow-loop "Bad function ~x0: not found in static env" function))
+;;        ((func-ses fn-struct))
+;;        ((func f) fn-struct.fn)
+;;        ((unless (subprogram_body-case f.body :sb_asl))
+;;         (er soft 'def-asl-shallow-loop "Function is a primitive rather than an ASL function"))
+;;        (body (sb_asl->stmt f.body))
+       
+;;        ((mv loopstmt decls &)
+;;         (shallow-loop-and-decls nth looptype body))
+
+;;        ((unless loopstmt)
+;;         (er soft 'def-asl-shallow-loop "Loop not found: nth ~x0 in function ~x1"
+;;             nth function))
+
+;;        (local-vars-names (acl2::strip-cadrs local-vars))
+;;        (decl-names (typed_identifierlist->names decls))
+;;        (diff (difference (mergesort local-vars-names) (mergesort decl-names)))
+;;        ((when diff)
+;;         (er soft 'def-asl-shallow-loop "Variables in local-vars (not declared in function): ~x0" diff))
+
+;;        (written-vars (shallow-written-vars loopstmt decl-names))
+;;        (diff (difference (mergesort written-vars) (mergesort local-vars-names)))
+;;        ((when diff)
+;;         (er soft 'def-asl-shallow-loop "Loop writes variables missing from local-vars: ~x0" diff))
+            
+;;        ;; It seems complicated to determine automatically exactly what type
+;;        ;; theorems are needed for a loop.  We can get the types of the
+;;        ;; variables read and written in the loop, but those types might depend
+;;        ;; on other variables not otherwise involved in the loop, perhaps
+;;        ;; intervals with complicated expressions in them.  So for now we'll
+;;        ;; punt on this and require the user to write theorems.  Then maybe
+;;        ;; we'll add support for a simplified syntax for such theorems, and
+;;        ;; maybe automatically generate some of them.
+
+;;        ;; For now, we'll just get the basic argument types from the types,
+;;        ;; without anything requiring parameters. This is implemented by the
+;;        ;; weak-*-satisfied* functions.
+       
+;;        )
+       
+;;     (value `(define ,name ,formals
+;;               :returns (returnval ,return-concl
+;;                                   :rule-classes nil :name ,return-sig-thmname)
+;;               (let* ,fixers
+;;                 ,body)
+;;               ///
+
+;;               (defret ,return-rewrite-thmname
+;;                 ,return-rewrites
+;;                 :hints (("goal" :use ,return-sig-thmname
+;;                          :in-theory (disable ,name)))
+;;                 :rule-classes :rewrite)
+              
+;;               ,@(and return-type-prescrip
+;;                      `((defret ,return-type-prescrip-thmname
+;;                          ,return-type-prescrip
+;;                          :hints (("goal" :use ,return-sig-thmname
+;;                                   :in-theory (disable ,name
+;;                                                       ,return-rewrite-thmname)))
+;;                          :rule-classes :type-prescription)))
+
+;;               ,@(and return-reverse
+;;                      `(;; (defret ,return-forward-thmname
+;;                        ;;   ,return-forward
+;;                        ;;   :hints (("goal" :use ,return-sig-thmname
+;;                        ;;            :in-theory (disable ,name
+;;                        ;;                                ,return-rewrite-thmname)))
+;;                        ;;   :rule-classes ((:forward-chaining :trigger-terms ((equal (shallow_result-kind <call>)
+;;                        ;;                                                            :sh_normal)))))
+;;                        (defret ,return-reverse-thmname
+;;                          ,return-reverse
+;;                          :hints (("goal" :use ,return-sig-thmname
+;;                                   :in-theory (disable ,name
+;;                                                       ,return-rewrite-thmname))))))
+              
+;;               (def-asl-subprogram ,(intern-in-package-of-symbol
+;;                                     (concatenate 'string (symbol-name name) "-SHALLOW-CORRECT")
+;;                                     'asl-pkg)
+;;                 :function ,function
+;;                 :params ,params
+;;                 :args ,args
+;;                 :safe-clock ,safe-clock
+;;                 ;; need list of formals wrapped in val type constructors
+;;                 :bindings ((impl (,name  . ,asl-to-native-args))
+;;                            ,@(if always-normal
+;;                                  `((,return-binder impl))
+;;                                `(((sh_normal impl))
+;;                                  (,return-binder impl.res))))
+;;                 ,@(and (not always-normal)
+;;                        `(:normal-cond (shallow_result-case impl :sh_normal)
+;;                          :nonnormal-res (shallow_result-case impl
+;;                                           :sh_error (ev_error impl.desc impl.data)
+;;                                           :otherwise (b* (((sh_throwing impl)))
+;;                                                        (ev_throwing impl.throwdata
+;;                                                                     (change-env env :local (empty-local-env)))))))
+;;                 :return-values ,asl-return-exprs)))))
+
+
+
+
+;; (defmacro def-asl-shallow-loop (name &rest args)
+;;   (let* ((prepwork (cadr (assoc-keyword :prepwork args))))
+;;     `(defsection ,name
+;;        ,@prepwork
+;;        (make-event (def-asl-shallow-loop-fn ',name ',args state)))))
