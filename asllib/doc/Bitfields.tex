@@ -15,11 +15,12 @@ Bitfields are not associated with a semantic relation.
   \item The expression \texttt{myData.data} evaluates to the same value as \\
         \verb|myData[3:0] :: myData[8:5]|, with type \verb|bits(8)|;
   \item There is no bitfield which accesses \verb|myData[15:10]|;
-  \item The value field overlaps with the other fields;
-  \item The slices \verb|3:0| and \verb|8:5| which define \texttt{data} do not overlap.
+  \item The \verb|value| field overlaps with the other fields;
+  \item The slices \verb|3:0| and \verb|8:5| which define \texttt{data} do not overlap each other,
+        but they do overlap \verb|value|.
 \end{itemize}
-Note that in the \texttt{data} bitfield, bits |3:0| come before bits |8:5|,
-which is a different order from their occurrence in \texttt{myData}.
+Note that in the \texttt{data} bitfield, bits |3:0| come before and are more significant than
+bits |8:5|, which is a different order from their occurrence in \texttt{myData}.
 
 \hypertarget{def-singleslice}{}
 \hypertarget{def-rangeslice}{}
@@ -34,7 +35,7 @@ and slice of the form \texttt{[$\veone$*:$\vetwo$]} as a \scaledslice.
 Bitfields may have nested bitfields. This can have several uses, one of which being able to define two
 different views of a register.
 
-We now define several properties of bitfields, illustrated by the example below.
+This section defines several properties of bitfields, illustrated by the example below.
 These are used to define \RequirementRef{BitfieldAlignment}.
 
 The \hypertarget{def-absolutename}{\absolutename} of a (possibly-nested) bitfield is the list of identifiers starting from the
@@ -335,7 +336,7 @@ The function
 annotates a bitfield --- $\vfield$ --- with an integer --- $\width$ --- indicating the number of bits in
 the bitvector type that contains $\field$,
 in an environment $\tenv$, resulting in an
-annotated bitfield --- $\newfield$ --- or a type error, if one is detected.
+annotated bitfield --- $\newfield$ --- or a \typingerrorterm{}, if one is detected.
 
 \ExampleDef{Well-typed Bitfields}
 In \listingref{welltypedbitvectortypes}, all the uses of bitvector types with bitfields are well-typed.
@@ -472,7 +473,8 @@ The function
   \aslto \{\True\} \cup \overname{\TTypeError}{\TypeErrorConfig}
 \]
 checks whether the set of positions in $\positions$ fit within the bitvector width given by $\vwidth$,
-yielding $\True$. \ProseOtherwiseTypeError
+yielding $\True$.
+\ProseOtherwiseTypeError
 
 \ExampleDef{Checking Whether Slice Positions Fit in a Bitvector Width}
 In \listingref{bitfieldslicetopositions}, all slices declared for all bitfields
@@ -486,8 +488,8 @@ fit in the bitvector width $16$, whereas the positions defined for the bitfield
 \begin{itemize}
     \item define $\minpos$ as the minimal position in $\positions$;
     \item define $\maxpos$ as the maximal position in $\positions$;
-    \item checking that $\minpos$ is non-negative and that $\maxpos$ is less than or equal to $\vwidth$
-            yields $\True$\ProseTerminateAs{\BadSlices}.
+    \item checking that $\minpos$ is non-negative and that $\maxpos$ is less than $\vwidth$
+          yields $\True$\ProseTerminateAs{\BadSlices}.
     \item the result is $\True$.
 \end{itemize}
 
@@ -496,7 +498,7 @@ fit in the bitvector width $16$, whereas the positions defined for the bitfield
 \inferrule{
     \minpos \eqdef \min(\positions)\\
     \maxpos \eqdef \max(\positions)\\
-    \checktrans{0 \leq \minpos \land \maxpos \leq \vwidth}{\BadSlices} \typearrow \True \OrTypeError
+    \checktrans{0 \leq \minpos \land \maxpos < \vwidth}{\BadSlices} \typearrow \True \OrTypeError
 }{
     \checkpositionsinwidth(\vwidth, \positions) \typearrow \True
 }
@@ -574,12 +576,16 @@ returns the set of integers defined by the bitfield slice $\vslice$ in $\positio
 if they can be statically evaluated, or $\None$ if they cannot be statically evaluated.
 \ProseOtherwiseTypeError
 
+The function assumes that AST nodes labelled with $\SliceSingle$, $\SliceRange$, and $\SliceStar$ have been reduced
+to $\SliceLength$ (via $\annotateslices$).
+
 \ExampleDef{Converting Bitfield Slices to Positions}
 \taref{bitfieldslicetopositions} shows the optional set of positions associated with each slice
 in \listingref{bitfieldslicetopositions}, followed by examples of erroneous slices.
 
 \begin{table}[h]
 \caption{Converting Bitfield Slices to Positions\label{ta:bitfieldslicetopositions}}
+\begin{center}
 \begin{tabular}{ll}
   \textbf{Slice} & \textbf{Optional Set of Positions}\\
   \hline
@@ -590,93 +596,35 @@ in \listingref{bitfieldslicetopositions}, followed by examples of erroneous slic
   \hline
   \verb|0:3|  & $\BadSlices$\\
   \verb|5+:0| & $\BadSlices$\\
-  \verb|0*:4| & $\BadSlices$\\
+  \verb|4*:0| & $\BadSlices$\\
 \end{tabular}
+\end{center}
 \end{table}
 
 \ASLListing{Converting bitfield slices to positions}{bitfieldslicetopositions}{\typingtests/TypingRule.BitfieldSliceToPositions.asl}
 
 \ProseParagraph
-\OneApplies
+\AllApply
 \begin{itemize}
-  \item \AllApplyCase{single}
-  \begin{itemize}
-    \item $\vslice$ is a \singleslice\ defined by the expression $\ve$, that is, $\SliceSingle(\ve)$;
-    \item applying $\reducetozopt$ to $\ve$ in $\tenv$ yields the integer literal for $\vx$\ProseTerminateAs{\None};
-    \item $\positions$ is the singleton set for $\vx$.
-  \end{itemize}
-
-  \item \AllApplyCase{range}
-  \begin{itemize}
-    \item $\vslice$ is \rangeslice\ defined by expressions $\veone$ and $\vetwo$, that is, \\
-          $\SliceRange(\veone, \vetwo)$;
-    \item applying $\reducetozopt$ to $\veone$ in $\tenv$ yields the integer literal for $\vx$\ProseTerminateAs{\None};
-    \item applying $\reducetozopt$ to $\vetwo$ in $\tenv$ yields the integer literal for $\vy$\ProseTerminateAs{\None};
-    \item checking that $\vx$ is less than or equal to $\vy$ yields $\True$\ProseTerminateAs{\BadSlices};
-    \item $\positions$ is the set of integers between $\vx$ and $\vy$, inclusive.
-  \end{itemize}
-
-  \item \AllApplyCase{length}
-  \begin{itemize}
-    \item $\vslice$ is \lengthslice\ defined by expressions $\veone$ and $\vetwo$, that is, \\
-          $\SliceLength(\veone, \vetwo)$;
-    \item applying $\reducetozopt$ to $\veone$ in $\tenv$ yields the integer literal for $\vx$\ProseTerminateAs{\None};
-    \item applying $\reducetozopt$ to $\vetwo$ in $\tenv$ yields the integer literal for $\vy$\ProseTerminateAs{\None};
-    \item checking that $\vy > 0$ holds (which implies that $\vx \leq \vx+\vy-1$ holds) yields $\True$\ProseTerminateAs{\BadSlices};
-    \item $\positions$ is the set of integers between $\vx$ and $\vx+\vy-1$, inclusive.
-  \end{itemize}
-
-  \item \AllApplyCase{scaled}
-  \begin{itemize}
-    \item $\vslice$ is \scaledslice\ defined by expressions $\veone$ and $\vetwo$, that is, \\
-          $\SliceStar(\veone, \vetwo)$;
-    \item applying $\reducetozopt$ to $\veone$ in $\tenv$ yields the integer literal for $\vx$\ProseTerminateAs{\None};
-    \item applying $\reducetozopt$ to $\vetwo$ in $\tenv$ yields the integer literal for $\vy$\ProseTerminateAs{\None};
-    \item checking that $\vx > 0$ holds (which implies that $\vx \times \vy \leq \vx \times (\vy + 1) - 1$ holds) yields $\True$\ProseTerminateAs{\BadSlices};
-    \item $\positions$ is the set of integers between $\vx \times \vy$ and $\vx \times (\vy + 1) - 1$, inclusive.
-  \end{itemize}
+  \item $\vslice$ is \lengthslice\ defined by expressions $\veone$ and $\vetwo$, that is, \\
+        $\SliceLength(\veone, \vetwo)$;
+  \item applying $\reducetozopt$ to $\veone$ in $\tenv$ yields the integer literal for $\offset$\ProseTerminateAs{\None};
+  \item applying $\reducetozopt$ to $\vetwo$ in $\tenv$ yields the integer literal for $\length$\ProseTerminateAs{\None};
+  \item checking that $\offset$ is less than or equal to $\offset + \length - 1$ holds yields $\True$\ProseTerminateAs{\BadSlices};
+  \item $\positions$ is the set of integers between $\offset$ and $\offset+\length-1$, inclusive.
 \end{itemize}
+
 \FormallyParagraph
 \begin{mathpar}
-\inferrule[single]{
-  \reducetozopt(\tenv, \ve) \typearrow \langle\vx\rangle \terminateas\None
-}{
-  \bitfieldslicetopositions(\tenv, \overname{\SliceSingle(\ve)}{\vslice}) \typearrow \overname{\langle\{\vx\}\rangle}{\positions}
-}
-\end{mathpar}
-
-\begin{mathpar}
-\inferrule[range]{
-  \reducetozopt(\tenv, \veone) \typearrow \langle\vx\rangle \terminateas\None\\\\
-  \reducetozopt(\tenv, \vetwo) \typearrow \langle\vy\rangle \terminateas\None\\\\
-  \checktrans{\vy \leq \vx}{\BadSlices} \checktransarrow \True \OrTypeError\\\\
-}{
-  \bitfieldslicetopositions(\tenv, \overname{\SliceRange(\veone, \vetwo)}{\vslice}) \typearrow
-  \overname{\langle\{n \;|\; \vy \leq n \leq \vx\}\rangle}{\positions}
-}
-\end{mathpar}
-
-\begin{mathpar}
-\inferrule[length]{
-  \reducetozopt(\tenv, \veone) \typearrow \langle\vx\rangle \terminateas\None\\\\
-  \reducetozopt(\tenv, \vetwo) \typearrow \langle\vy\rangle \terminateas\None\\\\
-  \checktrans{\vy > 0}{\BadSlices} \checktransarrow \True \OrTypeError\\\\
-}{
-  \bitfieldslicetopositions(\tenv, \overname{\SliceLength(\veone, \vetwo)}{\vslice}) \typearrow
-  \overname{\langle\{n \;|\; \vx \leq n \leq \vx+\vy-1\}\rangle}{\positions}
-}
-\end{mathpar}
-\begin{mathpar}
-
-\inferrule[scaled]{
-  \reducetozopt(\tenv, \veone) \typearrow \langle\vx\rangle \terminateas\None\\\\
-  \reducetozopt(\tenv, \vetwo) \typearrow \langle\vy\rangle \terminateas\None\\\\
-  \checktrans{\vx > 0}{\BadSlices} \checktransarrow \True \OrTypeError
+\inferrule{
+  \reducetozopt(\tenv, \veone) \typearrow \langle\offset\rangle \terminateas\None\\\\
+  \reducetozopt(\tenv, \vetwo) \typearrow \langle\length\rangle \terminateas\None\\\\
+  \checktrans{\offset \leq \offset + \length - 1}{\BadSlices} \checktransarrow \True \OrTypeError
 }{
   {
   \begin{array}{r}
-  \bitfieldslicetopositions(\tenv, \overname{\SliceStar(\veone, \vetwo)}{\vslice}) \typearrow \\
-  \overname{\langle\{n \;|\; \vx \times \vy \leq n \leq \vx \times (\vy + 1) - 1\}\rangle}{\positions}
+  \bitfieldslicetopositions(\tenv, \overname{\SliceLength(\veone, \vetwo)}{\vslice}) \typearrow\\
+  \overname{\langle\{n \;|\; \offset \leq n \leq \offset+\length-1\}\rangle}{\positions}
   \end{array}
   }
 }

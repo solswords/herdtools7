@@ -125,6 +125,7 @@ arises
 arising
 arithmetic
 arm
+around
 array
 arrays
 artificial
@@ -168,6 +169,7 @@ attempt
 attempting
 attempts
 authoritative
+automatically
 auxiliary
 available
 avoid
@@ -197,6 +199,7 @@ beginning
 behave
 behavior
 behaviors
+behaviour
 being
 belongs
 below
@@ -224,6 +227,7 @@ bitwidths
 bitwise
 block
 blocks
+bodies
 body
 boolean
 both
@@ -237,6 +241,7 @@ branch
 branches
 brands
 break
+brevity
 bug
 build
 builder
@@ -299,6 +304,7 @@ choices
 choose
 chooses
 choosing
+chosen
 circular
 clash
 clashes
@@ -358,6 +364,7 @@ composition
 compound
 comprised
 comprises
+comprising
 computation
 computational
 compute
@@ -387,6 +394,7 @@ configurable
 configuration
 configurations
 conflict
+conflicting
 conflicts
 confuse
 confused
@@ -444,6 +452,7 @@ converted
 converting
 converts
 conveys
+copied
 copyright
 corporate
 correct
@@ -463,6 +472,7 @@ create
 creates
 creating
 creation
+current
 currently
 custom
 customers
@@ -604,6 +614,7 @@ elaborated
 element
 elements
 elided
+elision
 else
 emit
 emphasize
@@ -694,9 +705,11 @@ executes
 executing
 execution
 exemplified
+exemplifies
 exemplify
 exist
 existence
+existing
 exists
 exit
 expand
@@ -709,6 +722,7 @@ expects
 explain
 explained
 explaining
+explains
 explanation
 explicit
 explicitly
@@ -729,7 +743,9 @@ extensions
 extent
 extra
 extract
+extracted
 extracting
+extracts
 facilitate
 fact
 factor
@@ -746,6 +762,7 @@ favor
 feasible
 feasibly
 feature
+features
 feed
 few
 field
@@ -774,6 +791,7 @@ flavors
 floating
 flow
 flows
+focused
 fold
 follow
 followed
@@ -968,6 +986,7 @@ inner
 input
 inputs
 inserted
+inserting
 inserts
 inside
 inspect
@@ -1142,6 +1161,7 @@ meaning
 means
 mechanism
 mechanisms
+meets
 member
 members
 memory
@@ -1187,6 +1207,7 @@ native
 natural
 nearest
 necessary
+necessitates
 need
 needed
 needs
@@ -1229,6 +1250,7 @@ numbered
 numbers
 numeral
 numerator
+numerous
 object
 observe
 obtain
@@ -1419,6 +1441,7 @@ procedures
 process
 processed
 processes
+processing
 processor
 produce
 produced
@@ -1441,6 +1464,7 @@ property
 proprietary
 prose
 protected
+prototype
 prove
 proves
 provide
@@ -1523,6 +1547,7 @@ relationship
 relative
 relatively
 relevant
+reliable
 relied
 relies
 rely
@@ -1530,6 +1555,7 @@ relying
 remain
 remainder
 remaining
+remains
 remove
 removed
 removes
@@ -1538,6 +1564,7 @@ rename
 renames
 renaming
 repeat
+repeating
 replace
 replaced
 replacement
@@ -1633,6 +1660,7 @@ scoping
 second
 section
 see
+seem
 seems
 seen
 selecting
@@ -1677,6 +1705,7 @@ show
 shown
 shows
 side
+sides
 sign
 signal
 signals
@@ -1687,6 +1716,7 @@ signifying
 signs
 similar
 similarity
+similarly
 simple
 simpler
 simplification
@@ -1751,10 +1781,12 @@ static
 statically
 stating
 status
+stay
 step
 steps
 still
 storage
+store
 stored
 strictly
 string
@@ -1791,7 +1823,9 @@ subtracting
 subtraction
 subtype
 subtypes
+subtyping
 succeed
+succeeding
 succeeds
 success
 successfully
@@ -1874,6 +1908,7 @@ this
 those
 though
 thread
+threading
 three
 through
 throughout
@@ -1893,6 +1928,7 @@ tool
 tools
 top
 topological
+topologically
 total
 totally
 toward
@@ -1956,6 +1992,7 @@ unbounded
 uncaught
 unchanging
 unconstrained
+undeclared
 undefined
 under
 underapproximates
@@ -1987,6 +2024,7 @@ unreleased
 unspecified
 until
 untyped
+unusual
 unwrapping
 up
 update
@@ -2001,6 +2039,7 @@ use
 used
 useful
 user
+users
 uses
 using
 usual
@@ -2012,6 +2051,7 @@ utilized
 utilizes
 utilizing
 valid
+validity
 value
 valueless
 values
@@ -2046,6 +2086,7 @@ walk
 want
 warning
 warnings
+warns
 was
 way
 ways

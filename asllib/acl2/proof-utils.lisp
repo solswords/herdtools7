@@ -22,7 +22,7 @@
 
 (in-package "ASL")
 
-(include-book "../../interp")
+(include-book "interp")
 (include-book "centaur/meta/variable-free" :dir :system)
 (include-book "tools/easy-simplify" :dir :system)
 
@@ -744,7 +744,13 @@
          hints
          ;; prepwork
 
+         ;; Either provide normal-cond/nonnormal-res,
+         ;; no normal/error/throwing-conds,
+         ;; or no normal-cond but error and or throwing-conds.
+         normal-cond
+         nonnormal-res
          error-cond
+         error-res
          throwing-cond
          throwing-res
          
@@ -800,25 +806,41 @@
                          t
                        `(<= ,clk-val (ifix clk))))
 
-       (concl (if error-cond
-                  (let ((error-concl `(implies ,error-cond
-                                               (equal (eval_result-kind res) :ev_error))))
-                    (if throwing-cond
-                        `(and ,error-concl
-                              (implies ,throwing-cond
-                                       (equal res ,throwing-res))
-                              (implies (and (not ,error-cond)
-                                            (not ,throwing-cond))
-                                       (equal res spec)))
-                      `(and ,error-concl
-                            (implies (not ,error-cond)
-                                     (equal res spec)))))
-                (if throwing-cond
-                    `(and (implies ,throwing-cond
-                                   (equal res ,throwing-res))
-                          (implies (not ,throwing-cond)
-                                   (equal res spec)))
-                  '(equal res spec))))
+       (concl (if normal-cond
+                  (if nonnormal-res
+                      `(equal res (if ,normal-cond
+                                      spec
+                                    ,nonnormal-res))
+                    `(and (implies ,normal-cond (equal res spec))
+                          (implies (not ,normal-cond)
+                                   (not (equal (eval_result-kind res) :ev_normal)))))
+                (if error-cond
+                    (if error-res
+                        `(equal res
+                                (cond (,error-cond ,error-res)
+                                      ,@(and throwing-cond
+                                             `((,throwing-cond ,throwing-res)))
+                                      (t spec)))
+                      (let ((error-concl `(implies ,error-cond
+                                                   ,(if error-res
+                                                        `(equal res ,error-res)
+                                                      '(equal (eval_result-kind res) :ev_error)))))
+                        (if throwing-cond
+                            `(and ,error-concl
+                                  (implies ,throwing-cond
+                                           (equal res ,throwing-res))
+                                  (implies (and (not ,error-cond)
+                                                (not ,throwing-cond))
+                                           (equal res spec)))
+                          `(and ,error-concl
+                                (implies (not ,error-cond)
+                                         (equal res spec))))))
+                  (if throwing-cond
+                      `(equal res
+                              (if ,throwing-cond
+                                  ,throwing-res
+                                spec))
+                    '(equal res spec)))))
 
        (template (acl2::make-tmplsubst
                   :atoms `((<name> . ,name)

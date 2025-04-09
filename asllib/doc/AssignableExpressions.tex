@@ -391,6 +391,7 @@ transforms an $\lhsaccess$ into an AST node $\vlexpr$.
   }{\vlhsaccess} \astarrow \overname{\vsliced}{\vlexpr}
 }
 \end{mathpar}
+
 \ASTRuleDef{DesugarLHSTuple}
 \hypertarget{def-desugarlhstuple}{}
 The function
@@ -399,12 +400,26 @@ The function
 \]
 transforms a list of \optional{} $\lhsaccess$ elements into an AST node $\vlexpr$. \\
 
+\begin{mathpar}
+\inferrule{
+  \vlhsaccesses \eqdef \filteroptionlist(\vlhsaccessopts) \\
+  \vids \eqdef [i \in 1..|\vlhsaccesses|: \vlhsaccesses_i.\lhsaccessbase] \\
+  \checknoduplicates(\vids) \typearrow \True \OrTypeError \\
+  i \in 1..|\vlhsaccessopts|: \desugarlhsaccessopt(\vlhsaccessopt_i) \astarrow \vlexpr_i \\
+  \vlexprs \eqdef [i \in 1..|\vlhsaccessopts|: \vlexpr_i]
+}{
+  \desugarlhstuple(\vlhsaccessopts) \astarrow \overname{\LEDestructuring(\vlexprs)}{\vlexpr}
+}
+\end{mathpar}
+
+\ASTRuleDef{DesugarLHSAccessOpt}
 \hypertarget{def-desugarlhsaccessopt}{}
-\noindent We first define the helper AST function
+The helper AST function
 \[
     \desugarlhsaccessopt(\overname{\langle\lhsaccess\rangle}{\vlhsaccessopt}) \;\aslto\; \overname{\lexpr}{\vlexpr}
 \]
-via the following rules:
+is defined via the following rules:
+
 \begin{mathpar}
 \inferrule[none]{}
 {
@@ -420,19 +435,6 @@ via the following rules:
 }
 \end{mathpar}
 
-\noindent We now use the helper rules to define $\desugarlhstuple$:
-\begin{mathpar}
-\inferrule{
-  \vlhsaccesses \eqdef \filteroptionlist(\vlhsaccessopts) \\
-  \vids \eqdef [i \in 1..|\vlhsaccesses|: \vlhsaccesses_i.\lhsaccessbase] \\
-  \checknoduplicates(\vids) \typearrow \True \OrTypeError \\
-  i \in 1..|\vlhsaccessopts|: \desugarlhsaccessopt(\vlhsaccessopt_i) \astarrow \vlexpr_i \\
-  \vlexprs \eqdef [i \in 1..|\vlhsaccessopts|: \vlexpr_i]
-}{
-  \desugarlhstuple(\vlhsaccessopts) \astarrow \overname{\LEDestructuring(\vlexprs)}{\vlexpr}
-}
-\end{mathpar}
-
 \ASTRuleDef{DesugarLHSFieldsTuple}
 \hypertarget{def-desugarlhsfieldstuple}{}
 The function
@@ -441,12 +443,24 @@ The function
 \]
 transforms an assignment to a tuple of fields $\fields$ of variable $\id$ into an AST node $\vlexpr$. \\
 
+\begin{mathpar}
+\inferrule{
+  \fields \eqdef \filteroptionlist(\fieldopts) \\
+  \checknoduplicates(\fields) \typearrow \True \OrTypeError \\
+  i \in 1..|\fieldopts|: \desugarlhsfieldopt(\fieldopts_i) \astarrow \vlexpr_i \\
+  \vlexprs \eqdef [i \in 1..|\fieldopts|: \vlexpr_i]
+}{
+  \desugarlhsfieldstuple(\id, \fieldopts) \astarrow \overname{\LEDestructuring(\vlexprs)}{\vlexpr}
+}
+\end{mathpar}
+
+\ASTRuleDef{DesugarLHSFieldOpt}
 \hypertarget{def-desugarlhsfieldopt}{}
-\noindent We first define the helper AST function
+The helper AST function
 \[
     \desugarlhsfieldopt(\overname{\identifier}{\id} \aslsep \overname{\langle\identifier\rangle}{\fieldopt}) \;\aslto\; \overname{\lexpr}{\vlexpr}
 \]
-via the following rules:
+is defined via the following rules:
 \begin{mathpar}
 \inferrule[none]{}
 {
@@ -457,18 +471,6 @@ via the following rules:
 \begin{mathpar}
 \inferrule{}{
   \desugarlhsfieldopt(\id, \overname{\langle\vfield\rangle}{\fieldopt}) \astarrow \overname{\LESetField(\LEVar(\id), \vfield)}{\vlexpr}
-}
-\end{mathpar}
-
-\noindent We now use the helper rules to define $\desugarlhsfieldstuple$:
-\begin{mathpar}
-\inferrule{
-  \fields \eqdef \filteroptionlist(\fieldopts) \\
-  \checknoduplicates(\fields) \typearrow \True \OrTypeError \\
-  i \in 1..|\fieldopts|: \desugarlhsfieldopt(\fieldopts_i) \astarrow \vlexpr_i \\
-  \vlexprs \eqdef [i \in 1..|\fieldopts|: \vlexpr_i]
-}{
-  \desugarlhsfieldstuple(\id, \fieldopts) \astarrow \overname{\LEDestructuring(\vlexprs)}{\vlexpr}
 }
 \end{mathpar}
 
@@ -566,7 +568,7 @@ since \verb|x| is not defined as either a local storage element or as a global s
   \item \AllApplyCase{error\_undefined}
   \begin{itemize}
     \item $\vx$ is not declared in $\tenv$ as a local storage element nor as a global storage element;
-    \item the result is a type error $\UndefinedIdentifier$.
+    \item the result is a \typingerrorterm{} $\UndefinedIdentifier$.
   \end{itemize}
 \end{itemize}
 
@@ -815,7 +817,7 @@ which is when the \textsc{empty} axiom case is used.
 \section{Array Assignment Expressions\label{sec:ArrayAssignmentExpressions}}
 This section details the syntax, abstract syntax, semantics, and typing of array write expressions.
 In the untyped AST, a write to either an integer-indexed array or an enumeration-indexed array is represented
-the same way. They type system infers the kind of array and outputs a typed AST node differentiating
+the same way. The type system infers the kind of array and outputs a typed AST node differentiating
 the two kinds of arrays, either a $\LESetArray$ or a $\LESetEnumArray$, via \TypingRuleRef{LESetArray}.
 The semantics utilizes a rule matching the corresponding type of array ---
 \SemanticsRuleRef{LESetArray} for integer-indexed arrays and
@@ -1043,6 +1045,8 @@ cell of
 
 \hypertarget{def-slicelexprterm}{}
 \section{Bitvector Slice Assignment Expressions\label{sec:BitvectorSliceAssignmentExpressions}}
+\ASLListing{Assignable slice expressions}{semantics-leslice}{\semanticstests/SemanticsRule.LESlice.asl}
+
 \subsection{Abstract Syntax}
 \begin{flalign*}
 \lexpr \derives\ & \LESlice(\lexpr, \slice^*) &
@@ -1051,8 +1055,7 @@ cell of
 \subsection{Typing}
 \TypingRuleDef{LESlice}
 \ExampleDef{Typing Assignable Slice Expression}
-In \listingref{typing-leslice}, the assignable slice expression \verb|x[3:0, 7:6]| is well-typed.
-\ASLListing{Well-typed assignable slice expression}{typing-leslice}{\typingtests/TypingRule.LESlice.asl}
+In \listingref{semantics-leslice}, the assignable slice expression \verb|x[3:0, 7:6]| is well-typed.
 
 In \listingref{typing-leslice-bad}, the assignable slice expression \verb|x[3:0, 3]| is ill-typed,
 since the slice \verb|3:0| overlaps with the slice \verb|3| at position $3$.
@@ -1130,12 +1133,10 @@ See \ExampleRef{Typing Assignable Slice Expression}.
 \subsection{Semantics}
 \SemanticsRuleDef{LESlice}
 \ExampleDef{Slice Assignments}
-In \listingref{semantics-leslice}, the assignment \texttt{x[3:0] = '0000'} binds
-\texttt{x} to $\nvbitvector(11110000)$
+In \listingref{semantics-leslice}, the assignment \texttt{x[3:0, 7:6] = '000000';} binds
+\texttt{x} to \\ $\nvbitvector(00110000)$
 via the rule \SemanticsRuleRef{LESlice}
 in the environment where \texttt{x} is bound to $\nvbitvector(11111111)$.
-
-\ASLListing{Assignment to a slice}{semantics-leslice}{\semanticstests/SemanticsRule.LESlice.asl}
 
 \ProseParagraph
 \AllApply
@@ -1297,6 +1298,8 @@ In \listingref{typing-lesetbadfield}, the statement \verb|x.RED = 42;| is ill-ty
 since \verb|x| is not a \bitvectortypeterm{} nor a \structuredtype.
 \ASLListing{Assigning a field in an inappropriate type}{typing-lesetbadfield}{\typingtests/TypingRule.LESetBadField.asl}
 
+See \RequirementRef{TupleImmutability} for an example of assigning to a tuple type.
+
 \ProseParagraph
 \AllApply
 \begin{itemize}
@@ -1304,17 +1307,43 @@ since \verb|x| is not a \bitvectortypeterm{} nor a \structuredtype.
   \item annotating the right-hand-side expression corresponding to $\vleone$ in $\tenv$ yields \\ $(\vtleone, \Ignore, \Ignore)$\ProseOrTypeError;
   \item annotating the left-hand-side expression $\vleone$ in $\tenv$ yields $(\vletwo, \vses)$\ProseOrTypeError;
   \item obtaining the \underlyingtype\ of $\vtleone$ in $\tenv$ yields a type $\tleoneanon$\ProseOrTypeError;
-  \item $\vt$ is neither a \structuredtype\ nor a bitvector type;
-  \item the result is an error indicating that the type of $\vle$ conflicts with the requirements of a field access expression.
+  \item \OneApplies
+  \begin{itemize}
+    \item \AllApplyCase{tuple}
+    \begin{itemize}
+      \item $\vt$ is a \tupletypeterm;
+      \item the result is an error indicating assigning to immutable types is illegal ($\AssignmentToImmutable$).
+    \end{itemize}
+
+    \item \AllApplyCase{structured}
+    \begin{itemize}
+      \item $\vt$ is neither a \tupletypeterm{}, nor a \structuredtype, nor a \bitvectortypeterm;
+      \item the result is an error indicating that the type of $\vle$ conflicts with the requirements
+            of a field access expression ($\UnexpectedType$).
+    \end{itemize}
+  \end{itemize}
 \end{itemize}
 
 \FormallyParagraph
 \begin{mathpar}
-\inferrule{
+\inferrule[tuple]{
   \annotateexpr{\tenv, \torexpr(\vleone)} \typearrow (\vtleone, \Ignore, \Ignore) \OrTypeError\\\\
   \annotatelexpr{\tenv, \vleone, \vtleone} \typearrow (\vletwo, \vses) \OrTypeError\\\\
   \makeanonymous(\tenv, \vtleone) \typearrow \tleoneanon \OrTypeError\\\\
-  \astlabel(\tleoneanon) \not\in \{\TException, \TRecord, \TCollection, \TBits\}
+  \commonprefixline\\\\
+  \astlabel(\tleoneanon) = \TTuple
+}{
+  \annotatelexpr{\tenv, \overname{\LESetField(\vleone, \field)}{\vle}, \vte} \typearrow \TypeErrorVal{\AssignmentToImmutable}
+}
+\end{mathpar}
+
+\begin{mathpar}
+\inferrule[structured]{
+  \annotateexpr{\tenv, \torexpr(\vleone)} \typearrow (\vtleone, \Ignore, \Ignore) \OrTypeError\\\\
+  \annotatelexpr{\tenv, \vleone, \vtleone} \typearrow (\vletwo, \vses) \OrTypeError\\\\
+  \makeanonymous(\tenv, \vtleone) \typearrow \tleoneanon \OrTypeError\\\\
+  \commonprefixline\\\\
+  \astlabel(\tleoneanon) \not\in \{\TTuple, \TException, \TRecord, \TCollection, \TBits\}
 }{
   \annotatelexpr{\tenv, \overname{\LESetField(\vleone, \field)}{\vle}, \vte} \typearrow \TypeErrorVal{\UnexpectedType}
 }
@@ -1406,7 +1435,6 @@ All of the collection field assignable expressions in
 
 \CodeSubsection{\LESetStructuredFieldBegin}{\LESetStructuredFieldEnd}{../Typing.ml}
 
-\hypertarget{def-setfieldslexprterm}{}
 \section{Structured Type Multi-field Assignment Expressions\label{sec:StructuredTypeMultiFieldAssignmentExpressions}}
 
 \ASLListing{Multi-field assignment expression}{lesetfields}{\typingtests/TypingRule.LESetFields.asl}
@@ -1471,7 +1499,7 @@ All multi-field assignment expressions in \listingref{lesetfields} are well-type
     \item \AllApplyCase{error}
     \begin{itemize}
       \item $\tanonbase$ is neither a bitvector type nor a record type;
-      \item the result is a type error indicating that the type of the left-hand-side expression is expected to be
+      \item the result is a \typingerrorterm{} indicating that the type of the left-hand-side expression is expected to be
             either a bitvector type or a record type.
     \end{itemize}
   \end{itemize}
@@ -1795,7 +1823,7 @@ are well-typed.
     \begin{itemize}
       \item applying $\findbitfieldopt$ to $\bitfields$ and $\vfield$ yields $\None$, meaning the field is not declared
             in $\vtleone$;
-      \item the result is a type error $\BadField$.
+      \item the result is a \typingerrorterm{} $\BadField$.
     \end{itemize}
 
     \item \AllApplyCase{field\_simple}

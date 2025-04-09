@@ -42,6 +42,8 @@
   ;;         (cdr (assoc ',existing-type (table-alist 'fty::fixtypes world)))))
 
 (def-type-alias identifier string)
+(in-theory (enable (:t identifier)
+                   (:t identifier-fix)))
 (deflist identifierlist :elt-type identifier :true-listp t)
 
 (def-type-alias uid acl2::int)
@@ -231,7 +233,12 @@
                        (flag precision_loss_flag)))
     (:pendingconstrained ())
     (:parametrized ((id uid)
-                    (name identifier)))
+                    (name identifier))
+     ;; NOTE: In some cases we're going to transform a :parametrized
+     ;; constraint to one of the form (wellconstrained (list (constraint_exact (expr (e_var name)))) flag).
+     ;; In order to be able to recur on this without increasing the constraint_kind-count,
+     ;; we add an extra value to the count for the parametrized case.
+     :count-incr 20)
     :measure (acl2::two-nats-measure (acl2-count x) 10))
 
   (deftagsum bitfield

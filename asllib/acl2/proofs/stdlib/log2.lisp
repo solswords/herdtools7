@@ -24,7 +24,7 @@
 
 (include-book "../../openers")
 (include-book "stdlib")
-(include-book "utils")
+(include-book "../../proof-utils")
 (include-book "centaur/bitops/rational-exponent" :dir :system)
 (local (include-book "ast-theory"))
 
@@ -35,8 +35,138 @@
                            hons-assoc-equal)))
 
 
-(defloop log2-loop
-  :function "Log2"
+;; (let ((env (env (make-global-env :static (stdlib-static-env))
+;;                 (change-local-env (empty-local-env)
+;;                                   :storage
+;;                                   (put-assoc-equal
+;;                                    "__stdlib_local_a" (v_int 1)
+;;                                    (put-assoc-equal "__stdlib_local_current"
+;;                                                     (v_int 2)
+;;                                                     (put-assoc-equal "__stdlib_local_result"
+;;                                                                      (v_int 0) nil))))))
+;;       (clk 100) (limit 100))
+;;   (EVAL_LOOP ENV T LIMIT *FLOORLOG2-LOOP-TEST*
+;;              *FLOORLOG2-LOOP-BODY*))
+
+
+(defloop floorlog2-loop
+  :function "FloorLog2"
+  :looptype :s_while
+  :local-vars (((v_int a)       "__stdlib_local_a")
+               ((v_int current) "__stdlib_local_current" (v_int current-spec))
+               ((v_int result)  "__stdlib_local_result"  (v_int result-spec)))
+  :bindings ((result-spec (acl2::rational-exponent a.val))
+             (current-spec (expt 2 (+ 1 result-spec))))
+  :invariants (and (<= 0 result.val)
+                   (equal current.val (expt 2 (+ 1 result.val)))
+                   (<= current.val (* 2 a.val))
+                   (< (- (+ 1 (acl2::rational-exponent a.val)) result.val) (ifix clk))
+                   (integerp limit)
+                   (< (- (+ 1 (acl2::rational-exponent a.val)) result.val) limit))
+  :hints ((and stable-under-simplificationp
+               '(:use ((:instance acl2::rational-exponent-unique
+                        (x (V_INT->VAL
+                            (CDR (HONS-ASSOC-EQUAL "__stdlib_local_a"
+                                                   (LOCAL-ENV->STORAGE (ENV->LOCAL ENV))))))
+                        (n (V_INT->VAL
+                            (CDR (HONS-ASSOC-EQUAL "__stdlib_local_result"
+                                                   (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))))
+                       (:instance rational-exponent-when-expt-less
+                        (i (+ 1 (V_INT->VAL
+                                 (CDR (HONS-ASSOC-EQUAL "__stdlib_local_result"
+                                                        (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))))
+                        (x (V_INT->VAL
+                            (CDR (HONS-ASSOC-EQUAL "__stdlib_local_a"
+                                                   (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))))))))
+  :prepwork
+  (;; (local (Defthmd rational-exponent-unique-of-nonneg
+   ;;          (implies (and (<= (expt 2 r) a)
+   ;;                        (< a (* 2 (expt 2 r)))
+   ;;                        (integerp a)
+   ;;                        (integerp r))
+   ;;                   (equal (acl2::rational-exponent a) r))
+   ;;          :hints (("goal" :use ((:instance acl2::rational-sign-significand-exponent-unique
+   ;;                                 (sign 1) (significand (/ a (expt 2 r))) (exponent r)))))))
+                         
+
+   (local (defthm put-assoc-equal-identity-free
+            (implies (and (equal v (cdr (hons-assoc-equal k x)))
+                          (hons-assoc-equal k x)
+                          (alistp x))
+                     (equal (put-assoc-equal k v x) x))))
+
+   ;; (local (defthmd powers-of-2-not-between-lemma1
+   ;;          (implies (and (< (ifix ye) (ifix xe))
+   ;;                        (<= (ifix ye) 0))
+   ;;                   (<= (* 2 (expt 2 ye)) (expt 2 xe)))
+   ;;          :hints (("goal" :induct (expt 2 ye)))
+   ;;          :otf-flg t))
+   ;; (local (defthmd powers-of-2-not-between-lemma
+   ;;          (implies (< (ifix ye) (ifix xe))
+   ;;                   (<= (* 2 (expt 2 ye)) (expt 2 xe)))
+   ;;          :hints (("goal" :cases ((<= 0 (ifix ye)))
+   ;;                   :in-theory (enable powers-of-2-not-between-lemma1)))
+   ;;          :otf-flg t))  
+
+   ;; (local (defthm powers-of-2-not-between
+   ;;          (implies (< (expt 2 xe) (* 2 (expt 2 ye)))
+   ;;                   (<= (expt 2 xe) (expt 2 ye)))
+   ;;          :hints (("goal" :use ((:instance acl2::expt-is-increasing-for-base>1
+   ;;                                 (r 2) (i (ifix xe)) (j (ifix ye)))
+   ;;                                (:instance acl2::expt-is-increasing-for-base>1
+   ;;                                 (r 2) (i (ifix ye)) (j (ifix xe)))
+   ;;                                powers-of-2-not-between-lemma)
+   ;;                   :in-theory (acl2::e/d* (acl2::arith-equiv-forwarding)
+   ;;                                          (acl2::expt-is-increasing-for-base>1))))
+   ;;          :rule-classes nil))
+
+
+   (local (defthm v_int->val-rewrite-to-exponent
+            (implies (equal (v_int->val x) (expt 2 y))
+                     (equal (v_int->val x) (expt 2 y)))))
+
+   (local (defthmd equal-when-v_int
+            (implies (and (val-case x :v_int)
+                          (val-case y :v_int)
+                          (val-p x) (val-p y))
+                     (equal (equal x y)
+                            (equal (v_int->val x)
+                                   (v_int->val y))))
+            :hints (("goal" :use ((:instance val-fix-when-v_int (x x))
+                                  (:instance val-fix-when-v_int (x y)))
+                     :in-theory (disable v_int-of-fields
+                                         equal-of-v_int)))))))
+
+
+
+(def-asl-subprogram floorlog2-correct
+  :function "FloorLog2"
+  :args (x)
+  :hyps (and (< 0 x.val)
+             (<= (+ 2 (acl2::rational-exponent x.val)) (expt 2 128)))
+  :safe-clock (+ 2 (acl2::rational-exponent x.val))
+  :return-values ((v_int (acl2::rational-exponent x.val))))
+
+
+
+;; (let ((env (env (make-global-env :static (stdlib-static-env))
+;;                 (change-local-env (empty-local-env)
+;;                                   :storage
+;;                                   (put-assoc-equal
+;;                                    "__stdlib_local_a" (v_int 5)
+;;                                    (put-assoc-equal "__stdlib_local_current"
+;;                                                     (v_int 1)
+;;                                                     (put-assoc-equal "__stdlib_local_result"
+;;                                                                      (v_int 0) nil))))))
+;;       (clk 100) (limit 100))
+;;   (EVAL_LOOP ENV T LIMIT *CEILLOG2-LOOP-TEST*
+;;              *CEILLOG2-LOOP-BODY*))
+
+
+
+
+(defloop ceillog2-loop
+  :function "CeilLog2"
   :looptype :s_while
   :local-vars (((v_int a)       "__stdlib_local_a")
                ((v_int current) "__stdlib_local_current" (v_int current-spec))
@@ -54,11 +184,11 @@
                    (< (- (+ 1 (acl2::rational-exponent a.val)) result.val) limit))
   :hints ((and stable-under-simplificationp
                '(:use ((:instance rational-exponent-hack
-                        (a (V_INT->VAL
-                            (CDR (HONS-ASSOC-EQUAL "__stdlib_local_a"
-                                                   (LOCAL-ENV->STORAGE (ENV->LOCAL ENV))))))
                         (r (V_INT->VAL
                             (CDR (HONS-ASSOC-EQUAL "__stdlib_local_result"
+                                                   (LOCAL-ENV->STORAGE (ENV->LOCAL ENV))))))
+                        (a (V_INT->VAL
+                            (CDR (HONS-ASSOC-EQUAL "__stdlib_local_a"
                                                    (LOCAL-ENV->STORAGE (ENV->LOCAL ENV)))))))
                        (:instance powers-of-2-not-between
                         (xe (V_INT->VAL
@@ -75,8 +205,7 @@
                         (x (V_INT->VAL
                             (CDR (HONS-ASSOC-EQUAL "__stdlib_local_a"
                                                    (LOCAL-ENV->STORAGE (ENV->LOCAL ENV))))))))
-                 :in-theory (e/d (equal-when-v_int)
-                                 (rational-exponent-when-expt-less)))))
+                 :in-theory (enable equal-when-v_int))))
   :prepwork
   ((local (Defthmd rational-exponent-unique-of-nonneg
             (implies (and (<= (expt 2 r) a)
@@ -154,14 +283,35 @@
                                          equal-of-v_int)))))))
 
 
+(define ceil-log2-spec ((x rationalp))
+  :guard (< 0 x)
+  (b* ((exp (acl2::rational-exponent x)))
+    (if (equal x (expt 2 exp))
+        exp
+      (+ 1 exp)))
+  ///
+  (defthm ceil-log2-spec-correct
+    (implies (and (rationalp x)
+                  (< 0 x))
+             (let ((exp (ceil-log2-spec x)))
+               (and (<= x (expt 2 exp))
+                    (< (expt 2 (+ -1 exp)) x))))
+    :hints (("goal" :use ((:instance acl2::rational-exponent-correct-positive (x x)))
+             :in-theory (e/d (acl2::exponents-add-unrestricted)
+                             (acl2::rational-exponent-correct-positive))))))
+      
 
-(def-asl-subprogram log2-correct
-  :function "Log2"
+
+(def-asl-subprogram ceillog2-correct
+  :function "CeilLog2"
   :args (x)
-  :hyps (and (equal x.val (expt 2 i))
+  :hyps (and (< 0 x.val)
              (<= (+ 2 (acl2::rational-exponent x.val)) (expt 2 128)))
   :safe-clock (+ 2 (acl2::rational-exponent x.val))
-  :return-values ((v_int i)))
+  :return-values ((v_int (ceil-log2-spec x.val)))
+  :enable (ceil-log2-spec))
+
+
 
 
 

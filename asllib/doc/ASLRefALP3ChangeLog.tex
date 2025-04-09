@@ -15,7 +15,8 @@ The following changes have been made.
 Introduce \texttt{impdef} keyword for a subprogram that can be overridden by a corresponding \texttt{implementation} keyword (see \secref{Overriding}).
 
 \subsection{ASL-736: paired syntax for getters/setters}
-Require getters/setters to be declared together using a dedicated syntax, as follows:
+Require getters/setters to be declared together using a dedicated syntax, as follows
+(see \chapref{SubprogramDeclarations}):
 \begin{lstlisting}
 accessor Name{params}(args) <=> return_type
 begin
@@ -76,8 +77,8 @@ See \secref{CollectionTypes}, \TypingRuleRef{EGetCollectionField}, and \Semantic
 \subsection{ASL-781: name clashing}
 Permit name clashes between subprograms and other identifiers, allowing reuse of subprogram names as storage element names.
 
-\subsection{ASL-782: left-to-right evaluation order}
-Where there is a choice of evaluation order, ASL now specifies left-to-right.
+\subsection{ASL-782: evaluation order}
+Where there is a choice of evaluation order, ASL now specifies an ordering.
 See \secref{EvaluationOrder}.
 
 \subsection{ASL-785: pending constrained global storage elements}
@@ -97,13 +98,24 @@ Modified the following signatures (ASL-788):
 \begin{itemize}
   \item \texttt{UInt}:
     \begin{itemize}
-      \item previously \verb|UInt{N} (x: bits(N)) => integer{0..2^N-1}|
-      \item now \verb|UInt{N: integer{1..128}} ...|
+      \item previously \begin{small}\verb|UInt{N} (x: bits(N)) => integer{0..2^N-1}|\end{small}
+      \item now \begin{small}\verb|UInt{N: integer{1..128}}|\end{small}
     \end{itemize}
   \item \texttt{SInt}:
     \begin{itemize}
-      \item previously \verb|SInt{N} (x: bits(N)) => integer{-(2^(N-1)) .. 2^(N-1)-1}|
-      \item now \verb|SInt{N: integer{1..128}} ...|
+      \item previously \begin{small}\verb|SInt{N} (x: bits(N)) => integer{-(2^(N-1)) .. 2^(N-1)-1}|\end{small}
+      \item now \begin{small}\verb|SInt{N: integer{1..128}}|\end{small}
+    \end{itemize}
+    \item \texttt{AlignDownSize}:
+    \begin{itemize}
+      \item previously
+      \begin{small}\verb|AlignDownSize{N}(x: bits(N), size: integer {1..2^N}) => bits(N)|\end{small}
+      \item now \begin{small}\verb|AlignDownSize{N: integer{1..128}}(x: bits(N), size: integer {1..2^N}) => bits(N)|\end{small}
+    \end{itemize}
+    \item \texttt{AlignUpSize}:
+    \begin{itemize}
+      \item previously \begin{small}\verb|AlignUpSize{N}(x: bits(N), size: integer {1..2^N}) => bits(N)|\end{small}
+      \item now \begin{small}\verb|AlignUpSize{N: integer{1..128}}(x: bits(N), size: integer {1..2^N}) => bits(N) ...|\end{small}
     \end{itemize}
 \end{itemize}
 

@@ -32,7 +32,8 @@ The relation
 determines whether a value $\vv$ matches the pattern $\vp$ in an environment $\env$
 resulting in either $\Normal(\vb, \newg)$ or an abnormal configuration.
 
-We now define the syntax, abstract syntax, typing rules, and semantics rules for the following kinds of patterns:
+The rest of this chapter defines the syntax, abstract syntax, typing rules,
+and semantics rules for the following kinds of patterns:
 \begin{itemize}
 \item Matching All Values (\secref{MatchingAllValues})
 \item Matching a Single Value (\secref{MatchingASingleValue})
@@ -183,7 +184,7 @@ since \texttt{-} matches any value and \texttt{42} in particular.
     \begin{itemize}
       \item determining whether the labels of $\vtstruct$ and $\testruct$ are the same yields $\True$\ProseOrTypeError;
       \item the label of $\vtstruct$ is not one of $\TBool$, $\TReal$, $\TInt$, $\TBits$, or $\TEnum$;
-      \item the result is a type error indicating that the types $\vt$ and $\vte$ are inappropriate for this pattern.
+      \item the result is a \typingerrorterm{} indicating that the types $\vt$ and $\vte$ are inappropriate for this pattern.
     \end{itemize}
   \end{itemize}
   \item $\newp$ is the pattern that matches the expression $\vep$, that is, $\PatternSingle(\vep)$.
@@ -273,10 +274,10 @@ whereas \\
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
-  \evalexprsef{\env, \veone} \evalarrow \Normal(\vvone, \newg) \OrDynError\\\\
-  \binoprel(\EQOP, \vvone, \vvone) \evalarrow \vb
+  \evalexprsef{\env, \ve} \evalarrow \Normal(\vvone, \newg) \OrDynError\\\\
+  \binoprel(\EQOP, \vv, \vvone) \evalarrow \vb
 }{
-  \evalpattern{\env, \vv, \PatternSingle(\ve)} \evalarrow \Normal(\vb, \newg)
+  \evalpattern{\env, \vv, \overname{\PatternSingle(\ve)}{\vp}} \evalarrow \Normal(\vb, \newg)
 }
 \end{mathpar}
 \CodeSubsection{\EvalPSingleBegin}{\EvalPSingleEnd}{../Interpreter.ml}
@@ -325,8 +326,8 @@ whereas \\
   \item obtaining the \underlyingtype\ for $\vt$, $\vteone$, and $\vtetwo$ yields
         $\vtstruct$, $\vteonestruct$, and $\vtetwostruct$, respectively\ProseOrTypeError;
   \item a check the AST labels of $\vtstruct$, $\vteonestruct$, and $\vtetwostruct$ are all the same and are either
-        $\TInt$ or $\TReal$ yields $\True$. Otherwise, the result is a type error, which short-circuits the entire rule.
-        The type error indicates that the types of
+        $\TInt$ or $\TReal$ yields $\True$. Otherwise, the result is a \typingerrorterm{}, which short-circuits the entire rule.
+        The \typingerrorterm{} indicates that the types of
         $\veone$, $\vetwo$ and the type $\vt$ must be either of integer type or of \realtypeterm{}.
   \item $\newp$ is a range pattern with bounds $\veonep$ and $\vetwop$, that is, $\PatternRange(\veonep, \vetwop)$.
 \end{itemize}
@@ -524,7 +525,7 @@ whereas \texttt{match\_false} evaluates to \False, since \texttt{42} is not less
 \item obtaining the \underlyingtype\ of $\vt$ in $\tenv$ yields $\vtstruct$\ProseOrTypeError;
 \item obtaining the \underlyingtype\ of $\vte$ in $\tenv$ yields $\testruct$\ProseOrTypeError;
 \item $\vb$ is true if and only if $\vtstruct$ and $\testruct$ are both integer types or both the \realtypeterm{};
-\item if $\vb$ is $\False$ a type error is returned (indicating that the types of $\vt$ and $\vte$
+\item if $\vb$ is $\False$ a \typingerrorterm{} is returned (indicating that the types of $\vt$ and $\vte$
       are inappropriate for the $\GEQ$ operator),
       which short-circuits the entire rule;
 \item $\newp$ is the pattern which matches anything greater than or equal to $\vep$.
@@ -729,7 +730,7 @@ The tuple patterns in \listingref{typing-ptuple-bad} are ill-typed.
   \vtstruct \eqname \TTuple(\vts)\\
   \checktrans{\equallength(\vli, \vts)}{\UnexpectedType} \checktransarrow \True \OrTypeError\\\\
   i\in\listrange(\vli): \annotatepattern(\tenv, \vts[i], \vli[i]) \typearrow (\vlip[i], \vxs_i) \OrTypeError\\\\
-  \newli \eqdef \vi\in\listrange(\vli): \vlip[\vi]\\
+  \newli \eqdef i\in\listrange(\vli): \vlip[i]\\
   \vses \eqdef \bigcup_{i\in\listrange(\vli)} \vxs_i
 }{
   \annotatepattern(\tenv, \vt, \overname{\PatternTuple(\vli)}{\vp}) \typearrow (\overname{\PatternTuple(\newli)}{\newp}, \vses)
@@ -1082,13 +1083,13 @@ transforms a pattern expression parse node $\vparsednode$ into a pattern AST nod
 \end{mathpar}
 
 \begin{mathpar}
-  \inferrule[atc\_int\_constraints]{}{
-    {
-      \begin{array}{r}
-  \buildexprpattern(\Nexprpattern(\punnode{\Nexprpattern}, \Tas, \punnode{\Nconstraintkind})) \astarrow\\
-  \overname{\EATC(\astof{\vexprpattern}, \TInt(\astof{\vconstraintkind}))}{\vastnode}
-\end{array}
-}
+\inferrule[atc\_int\_constraints]{}{
+  {
+  \begin{array}{r}
+    \buildexprpattern(\Nexprpattern(\punnode{\Nexprpattern}, \Tas, \punnode{\Nconstraintkind})) \astarrow\\
+    \overname{\EATC(\astof{\vexprpattern}, \TInt(\astof{\vconstraintkind}))}{\vastnode}
+  \end{array}
+  }
 }
 \end{mathpar}
 
@@ -1134,16 +1135,16 @@ transforms a pattern expression parse node $\vparsednode$ into a pattern AST nod
 
 \begin{mathpar}
   \inferrule[record\_empty]{}{
-    {
-      \begin{array}{r}
+  {
+  \begin{array}{r}
   \buildexprpattern\left(\Nexprpattern\left(
     \begin{array}{l}
     \Tidentifier(\vt), \Tlbrace, \Trbrace \\
     \end{array}
     \right)\right) \\
     \astarrow\ \overname{\ERecord(\TNamed(\vt), \emptylist)}{\vastnode}
-\end{array}
-}
+  \end{array}
+  }
 }
 \end{mathpar}
 

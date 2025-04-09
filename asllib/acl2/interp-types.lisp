@@ -88,6 +88,9 @@
     :hints(("Goal" :in-theory (enable unit-p)))
     :rule-classes :compound-recognizer))
 
+(in-theory (enable (:t unit)
+                   (:t unit-fix)))
+
 (fty::deflist integer-list :pred integer-listp :elt-type integerp :true-listp t)
 
 

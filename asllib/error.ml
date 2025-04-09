@@ -51,12 +51,12 @@ type error_desc =
   | CannotParse
   | UnknownSymbol
   | NoCallCandidate of string * ty list
-  | TooManyCallCandidates of string * ty list
   | BadTypesForBinop of binop * ty * ty
   | CircularDeclarations of string
   | ImpureExpression of expr * SideEffect.SES.t
   | UnreconcilableTypes of ty * ty
   | AssignToImmutable of string
+  | AssignToTupleElement of lexpr
   | AlreadyDeclaredIdentifier of string
   | BadReturnStmt of ty option
   | UnexpectedSideEffect of string
@@ -169,12 +169,12 @@ let error_label = function
   | CannotParse -> "CannotParse"
   | UnknownSymbol -> "UnknownSymbol"
   | NoCallCandidate _ -> "NoCallCandidate"
-  | TooManyCallCandidates _ -> "TooManyCallCandidates"
   | BadTypesForBinop _ -> "BadTypesForBinop"
   | CircularDeclarations _ -> "CircularDeclarations"
   | ImpureExpression _ -> "ImpureExpression"
   | UnreconcilableTypes _ -> "UnreconcilableTypes"
   | AssignToImmutable _ -> "AssignToImmutable"
+  | AssignToTupleElement _ -> "AssignToTupleElement"
   | AlreadyDeclaredIdentifier _ -> "AlreadyDeclaredIdentifier"
   | BadReturnStmt _ -> "BadReturnStmt"
   | UnexpectedSideEffect _ -> "UnexpectedSideEffect"
@@ -340,11 +340,6 @@ module PPrint = struct
           "ASL Typing error: No subprogram declaration matches the \
            invocation:@ %s(%a)."
           name (pp_comma_list pp_ty) types
-    | TooManyCallCandidates (name, types) ->
-        fprintf f
-          "ASL Typing error: Too many subprogram declaration match the \
-           invocation:@ %s(%a)."
-          name (pp_comma_list pp_ty) types
     | BadTypesForBinop (op, t1, t2) ->
         fprintf f
           "ASL Typing error: Illegal application of operator %s on types@ %a@ \
@@ -368,6 +363,11 @@ module PPrint = struct
     | AssignToImmutable x ->
         fprintf f
           "ASL Typing error:@ cannot@ assign@ to@ immutable@ storage@ %S." x
+    | AssignToTupleElement tuple_e ->
+        fprintf f
+          "ASL Typing error:@ cannot@ assign@ to@ the@ (immutable)@ tuple@ \
+           value@ %a."
+          pp_lexpr tuple_e
     | AlreadyDeclaredIdentifier x ->
         fprintf f
           "ASL Typing error:@ cannot@ declare@ already@ declared@ element@ %S."

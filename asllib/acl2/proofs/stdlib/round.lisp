@@ -24,7 +24,6 @@
 
 (include-book "../../openers")
 (include-book "stdlib")
-(include-book "utils")
 (include-book "ilog2")
 (include-book "misc")
 (include-book "centaur/bitops/rational-exponent" :dir :system)

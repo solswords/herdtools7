@@ -193,3 +193,35 @@
                   (v_bitvector 1 (logbit (mod (1- shift.val) n.val) x.val)))
   :enable (bitops::loghead-of-ash))
 
+
+
+(local (include-book "centaur/bitops/equal-by-logbitp" :dir :system))
+
+(local (in-theory (enable bitops::logbitp-of-rotate-left-split
+                          bitops::logbitp-of-rotate-right-split)))
+(local (defthm rotate-left-in-terms-of-rotate-right
+         (implies (and (posp width) (natp places))
+                  (equal (rotate-left x width places)
+                         (rotate-right x width (mod (- places) width))))
+         :hints((bitops::logbitp-reasoning))))
+
+
+(def-asl-subprogram ROL-correct
+  :function "ROL"
+  :params (n)
+  :args (x shift)
+  :hyps (and (< 0 n.val)
+             (<= 0 shift.val))
+  :return-values ((v_bitvector n.val (bitops::rotate-left x.val n.val shift.val))))
+
+(def-asl-subprogram ROL_C-correct
+  :function "ROL_C"
+  :params (n)
+  :args (x shift)
+  :hyps (and (< 0 n.val)
+             (< 0 shift.val))
+  :return-values ((v_bitvector n.val (bitops::rotate-left x.val n.val shift.val))
+                  (v_bitvector 1 (logbit 0 (bitops::rotate-left x.val n.val shift.val))))
+  :enable (bitops::loghead-of-ash
+           bitops::loghead** bitops::logbitp**))
+

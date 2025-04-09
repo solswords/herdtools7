@@ -109,12 +109,18 @@ ASL Typing Tests / annotating types:
   $ aslref --no-exec TypingRule.GetVariableEnum.asl
   $ aslref TypingRule.TRecordDecl.asl
   $ aslref TypingRule.TExceptionDecl.asl
+  $ aslref TypingRule.TCollection.asl
   $ aslref TypingRule.TNonDecl.asl
   File TypingRule.TNonDecl.asl, line 1, characters 5 to 6:
   ASL Error: Cannot parse.
   [1]
   $ aslref TypingRule.TBitField.asl
   $ aslref --no-exec TypingRule.AnnotateFuncSig.asl
+  $ aslref --no-exec TypingRule.AnnotateFuncSig.bad.asl
+  File TypingRule.AnnotateFuncSig.bad.asl, line 4, characters 60 to 63:
+  ASL Typing error: a pure expression was expected, found (W), which produces
+    the following side-effects: [ReadsGlobal "W"].
+  [1]
   $ aslref TypingRule.BuiltinAggregateTypes.asl
   $ aslref --no-exec TypingRule.BuiltinExceptionType.asl
   $ aslref TypingRule.BuiltinSingularTypes.asl
@@ -303,18 +309,17 @@ ASL Typing Tests / annotating types:
   [1]
   $ aslref TypingRule.LESetBadField.asl
   File TypingRule.LESetBadField.asl, line 6, characters 4 to 5:
-  ASL Typing error: integer {42} does not subtype any of: bits(-), record {  },
-    exception {  }, collection {  }.
+  ASL Typing error: array [[Color]] of integer does not subtype any of:
+    bits(-), record {  }, exception {  }, collection {  }.
   [1]
   $ aslref TypingRule.LESetBadField.asl
   File TypingRule.LESetBadField.asl, line 6, characters 4 to 5:
-  ASL Typing error: integer {42} does not subtype any of: bits(-), record {  },
-    exception {  }, collection {  }.
+  ASL Typing error: array [[Color]] of integer does not subtype any of:
+    bits(-), record {  }, exception {  }, collection {  }.
   [1]
   $ aslref TypingRule.LESetStructuredField.asl
   $ aslref TypingRule.LESetField.asl
   $ aslref TypingRule.LESetFields.asl
-  $ aslref TypingRule.LESlice.asl
   $ aslref TypingRule.LESlice.bad.asl
   File TypingRule.LESlice.bad.asl, line 4, characters 3 to 11:
   ASL Static error: overlapping slices 0+:4, 3+:1.
@@ -435,3 +440,152 @@ ASL Typing Tests / annotating types:
   ASL typing error: unexpected collection.
   [1]
   $ aslref TypingRule.LESetCollectionFields.asl
+  $ aslref TypingRule.TypecheckDecl.asl
+  0x0000000000000000
+  0xffffffffffffffff
+  $ aslref TypingRule.Subprogram.asl
+  0x04
+  $ aslref --no-exec TypingRule.CheckStmtReturnsOrThrows.asl
+  $ aslref TypingRule.CheckStmtReturnsOrThrows.bad.asl
+  File TypingRule.CheckStmtReturnsOrThrows.bad.asl, line 6, character 4 to
+    line 16, character 8:
+  ASL Typing error: the function "incorrect_terminating_path" may not terminate
+    by returning a value or raising an exception..
+  [1]
+  $ aslref TypingRule.ControlFlowFromStmt.asl
+  File TypingRule.ControlFlowFromStmt.asl, line 8, characters 4 to 30:
+  ASL Warning: pragma require_positive will be ignored.
+  $ aslref TypingRule.ControlFlowFromStmt.bad1.asl
+  File TypingRule.ControlFlowFromStmt.bad1.asl, line 8, character 4 to line 10,
+    character 8:
+  ASL Warning: Loop does not have a limit.
+  File TypingRule.ControlFlowFromStmt.bad1.asl, line 8, character 4 to line 10,
+    character 8:
+  ASL Typing error: the function "loop_forever" may not terminate by returning
+    a value or raising an exception..
+  [1]
+  $ aslref --no-exec TypingRule.DeclareType.asl
+  $ aslref TypingRule.AnnotateExtraFields.bad.asl
+  File TypingRule.AnnotateExtraFields.bad.asl, line 1, characters 15 to 39:
+  ASL Error: Undefined identifier: 'Record'
+  [1]
+  $ aslref --no-exec TypingRule.DeclaredType.asl
+  $ aslref --no-exec TypingRule.DeclaredType.bad.asl
+  File TypingRule.DeclaredType.bad.asl, line 3, characters 12 to 23:
+  ASL Error: Undefined identifier: 'MyInt'
+  [1]
+  $ aslref --no-exec TypingRule.DeclareConst.asl
+  $ aslref --no-exec TypingRule.DeclareGlobalStorage.config.asl
+  $ aslref --no-exec TypingRule.DeclareGlobalStorage.bad1.asl
+  File TypingRule.DeclareGlobalStorage.bad1.asl, line 3, characters 0 to 29:
+  ASL Typing error: expected constant-time expression, got x as integer {1..5},
+    which produces the following side-effects: [ReadsGlobal "x"].
+  [1]
+  $ aslref --no-exec TypingRule.DeclareGlobalStorage.bad2.asl
+  File TypingRule.DeclareGlobalStorage.bad2.asl, line 3, characters 0 to 29:
+  ASL Typing error: expected constant-time expression, got 2 as integer {1..5},
+    which produces the following side-effects: [ReadsGlobal "x"].
+  [1]
+  $ aslref --no-exec TypingRule.DeclareGlobalStorage.bad3.asl
+  File TypingRule.DeclareGlobalStorage.bad3.asl, line 2, characters 37 to 38:
+  ASL Error: Cannot parse.
+  [1]
+  $ aslref --no-exec TypingRule.DeclareGlobalStorage.non_config.asl
+  $ aslref --no-exec TypingRule.UpdateGlobalStorage.constant.asl
+  $ aslref --no-exec TypingRule.UpdateGlobalStorage.config.asl
+  $ aslref --no-exec TypingRule.UpdateGlobalStorage.config.bad.asl
+  File TypingRule.UpdateGlobalStorage.config.bad.asl, line 3,
+    characters 0 to 38:
+  ASL Typing error: expected singular type, found MyException.
+  [1]
+  $ aslref --no-exec TypingRule.DefDecl.asl
+  $ aslref --no-exec TypingRule.UseDecl.asl
+  $ aslref --no-exec TypingRule.DefEnumLabels.asl
+  $ aslref --no-exec TypingRule.UseTy.asl
+  $ aslref --no-exec TypingRule.UseExpr.asl
+  $ aslref --no-exec TypingRule.UseLexpr.asl
+  $ aslref --no-exec TypingRule.UsePattern.asl
+  $ aslref --no-exec TypingRule.UseSlice.asl
+  $ aslref --no-exec TypingRule.UseBitfield.asl
+  $ aslref --no-exec TypingRule.UseConstraint.asl
+  $ aslref --no-exec TypingRule.UseStmt.asl
+  $ aslref --no-exec TypingRule.DeclDependencies.asl
+  $ aslref --no-exec TypingRule.CheckGlobalPragma.asl
+  File TypingRule.CheckGlobalPragma.asl, line 2, characters 0 to 32:
+  ASL Warning: pragma good_pragma will be ignored.
+  $ aslref --no-exec TypingRule.CheckGlobalPragma.bad.asl
+  File TypingRule.CheckGlobalPragma.bad.asl, line 2, characters 0 to 33:
+  ASL Warning: pragma bad_pragma will be ignored.
+  File TypingRule.CheckGlobalPragma.bad.asl, line 2, characters 22 to 28:
+  ASL Typing error: Illegal application of operator == on types integer {2}
+    and real.
+  [1]
+  $ aslref --no-exec TypingRule.AddSubprogramDecls.asl
+  $ aslref --no-exec TypingRule.TypeCheckAST.asl
+  File TypingRule.TypeCheckAST.asl, line 8, characters 0 to 15:
+  ASL Warning: pragma pragma1 will be ignored.
+  $ aslref --no-exec TypingRule.TypeCheckMutuallyRec.bad.asl
+  File TypingRule.TypeCheckMutuallyRec.bad.asl, line 1, characters 0 to 15:
+  ASL Typing error: multiple recursive declarations: "foo", "g".
+  [1]
+  $ aslref --no-exec TypingRule.DeclareSubprograms.asl
+  $ aslref --no-exec TypingRule.SubprogramForName.asl
+  $ aslref --no-exec TypingRule.InsertStdlibParam.asl
+  $ aslref TypingRule.SubprogramForName.asl
+  $ aslref TypingRule.SubprogramForName.bad.undefined.asl
+  File TypingRule.SubprogramForName.bad.undefined.asl, line 3,
+    characters 8 to 17:
+  ASL Error: Undefined identifier: 'add_10'
+  [1]
+  $ aslref TypingRule.SubprogramForName.bad.no_candidates.asl
+  File TypingRule.SubprogramForName.bad.no_candidates.asl, line 8,
+    characters 8 to 19:
+  ASL Typing error: No subprogram declaration matches the invocation:
+    add_10(real).
+  [1]
+  $ aslref TypingRule.ExpressionList.asl
+  $ aslref TypingRule.RenameTyEqs.asl
+  $ aslref TypingRule.CheckParamsTypeSat.asl
+  $ aslref --no-exec TypingRule.ParametersOfTy.asl
+  $ aslref --no-exec TypingRule.ParametersOfExpr.asl
+  $ aslref --no-exec TypingRule.ParametersOfExpr.bad.asl
+  File TypingRule.ParametersOfExpr.bad.asl, line 4, characters 19 to 40:
+  ASL Static Error: Unsupported expression if TRUE then B else C.
+  [1]
+  $ aslref --no-exec TypingRule.FuncSigTypes.asl
+  $ aslref --no-exec TypingRule.SubprogramTypesClash.asl
+  $ aslref TypingRule.SubprogramTypesClash.bad1.asl
+  File TypingRule.SubprogramTypesClash.bad1.asl, line 4, characters 8 to 22:
+  ASL Typing error: cannot declare already declared element "X".
+  [1]
+  $ aslref TypingRule.SubprogramTypesClash.bad2.asl
+  File TypingRule.SubprogramTypesClash.bad2.asl, line 1, characters 0 to 40:
+  ASL Typing error: cannot declare already declared element "X".
+  [1]
+  $ aslref TypingRule.CheckParamDecls.bad.asl
+  File TypingRule.CheckParamDecls.bad.asl, line 3, character 0 to line 9,
+    character 4:
+  ASL Typing error: incorrect parameter declaration for "parameter_lists",
+    expected {D, A, B, C} but {A, B, C, D} provided
+  [1]
+  $ aslref TypingRule.AnnotateReturnType.bad.asl
+  File TypingRule.AnnotateReturnType.bad.asl, line 4, character 0 to line 7,
+    character 4:
+  ASL typing error: unexpected collection.
+  [1]
+  $ aslref --no-exec TypingRule.AnnotateOneParam.asl
+  $ aslref TypingRule.AnnotateOneParam.bad1.asl
+  File TypingRule.AnnotateOneParam.bad1.asl, line 4, characters 0 to 50:
+  ASL Typing error: cannot declare already declared element "A".
+  [1]
+  $ aslref --no-exec TypingRule.AnnotateOneArg.asl
+  $ aslref TypingRule.AnnotateOneArg.bad1.asl
+  File TypingRule.AnnotateOneArg.bad1.asl, line 4, character 0 to line 9,
+    character 4:
+  ASL Typing error: cannot declare already declared element "b".
+  [1]
+  $ aslref TypingRule.AnnotateOneArg.bad2.asl
+  File TypingRule.AnnotateOneArg.bad2.asl, line 4, character 0 to line 5,
+    character 16:
+  ASL typing error: unexpected collection.
+  [1]

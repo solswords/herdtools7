@@ -43,7 +43,8 @@ evaluates a statement $\vs$ in an environment $\env$, resulting in one of four t
   \item error configurations.
 \end{itemize}
 
-We now define the syntax, abstract syntax, typing, and semantics for the following kinds of statements:
+The rest of this chapter defines the syntax, abstract syntax, typing,
+and semantics for the following kinds of statements:
 \begin{itemize}
 \item Pass statements (see \secref{PassStatements})
 \item Assignment statements (see \secref{AssignmentStatements})
@@ -227,7 +228,7 @@ $\nvint(2)$ to the mutable variable~\texttt{b}, and discards $\nvint(3)$.
 
 \FormallyParagraph
 \hypertarget{def-lexprisvar}{}
-We first define the syntactic predicate
+The rule uses the syntactic predicate defined as follows:
 \[
   \lexprisvar(\lexpr) \aslto \True
 \]
@@ -237,7 +238,8 @@ represents a variable or a discarded left-hand-side expression:
 \inferrule{}{ \lexprisvar(\vle) \evalarrow \astlabel(\vle) \in \{\LEVar, \LEDiscard\}}
 \end{mathpar}
 
-We now define the evaluation of assigning from a subprogram call:
+The inference rules defining the evaluation of assigning
+from a subprogram call are as follows:
 \begin{mathpar}
 \inferrule{
   \vles \eqdef \vle_{1..k}\\
@@ -295,7 +297,6 @@ $\nvint(42)$, and $\newenv$ is such that \texttt{x} is bound to $\nvint(3)$.
 \CodeSubsection{\EvalSAssignBegin}{\EvalSAssignEnd}{../Interpreter.ml}
 
 \section{Setter Assignment Statements\label{sec:SetterAssignmentStatements}}
-\hypertarget{def-setterassignmentstatementterm}{}
 \subsection{Syntax}
 \begin{flalign*}
 \Nstmt \derives \
@@ -452,12 +453,12 @@ As given by applying the relevant rules to the desugared AST.
   \buildoption[\buildexpr](\ve) \astarrow \astversion{\ve}
 }{
   {
-    \begin{array}{r}
-  \buildstmt(\overname{\Nstmt(\Tvar, \Ndeclitem, \namednode{\vt}{\option{\Nasty}}, \namednode{\ve}{\option{\Teq, \Nexpr}}, \Tsemicolon)}{\vparsednode})
-  \astarrow \\
-  \overname{\SDecl(\LDKVar, \astof{\vdeclitem}, \astversion{\vt}, \astversion{\ve})}{\vastnode}
-\end{array}
-}
+  \begin{array}{r}
+    \buildstmt(\overname{\Nstmt(\Tvar, \Ndeclitem, \namednode{\vt}{\option{\Nasty}}, \namednode{\ve}{\option{\Teq, \Nexpr}}, \Tsemicolon)}{\vparsednode})
+    \astarrow \\
+    \overname{\SDecl(\LDKVar, \astof{\vdeclitem}, \astversion{\vt}, \astversion{\ve})}{\vastnode}
+  \end{array}
+  }
 }
 \end{mathpar}
 
@@ -716,13 +717,13 @@ The helper function
 \]
 propagates integer constraints from the right-hand side type $\rhs$ to the left-hand side type annotation $\lhs$.
 In particular, each occurrence of \pendingconstrainedintegertype{} on the left-hand side should inherit constraints from a corresponding \wellconstrainedintegertype{} on the right-hand side.
-If the corresponding right-hand side type is not a \wellconstrainedintegertype{} (including if it is an \unconstrainedintegertype{}), the result is a type error.
+If the corresponding right-hand side type is not a \wellconstrainedintegertype{} (including if it is an \unconstrainedintegertype{}), the result is a \typingerrorterm{}.
 
 \listingref{typing-pendingconstrained} shows examples of pending-constrained
 integer types.
 
 \ExampleDef{Pending-constrained integer type vs. unconstrained integer type}
-\listingref{pending-constrained-unconstrained} corresponds to the type error
+\listingref{pending-constrained-unconstrained} corresponds to the \typingerrorterm{}
 in the \CaseName{int} below.
 \ASLListing{An ill-typed pending-constrained integer type}{pending-constrained-unconstrained}
 {\typingtests/TypingRule.InheritIntegerConstraints.unconstrained.bad.asl}
@@ -793,13 +794,13 @@ in the \CaseName{int} below.
 \hypertarget{def-checknoprecisionloss}{}
 The helper function
 \[
-  \checknoprecisionloss(\overname{\ty}{\vt})
+  \checknoprecisionloss{\overname{\ty}{\vt}}
   \typearrow \{\True\} \cup \overname{\TTypeError}{\TypeErrorConfig}
 \]
 checks whether the type $\vt$ is the result of a precision loss in its
 constraint computation (see for example \TypingRuleRef{ApplyBinopTypes}).
 
-\ExampleDef{Rejected Declaration because of Precision Loss}
+\ExampleDef{Rejected Declaration Because of Precision Loss}
 In \listingref{typing-imprecisetype}, the statement \verb|var b = a * a;|
 corresponds to the \typingerrorterm{} raised in the \CaseName{Well-Constrained}
 below.
@@ -833,17 +834,21 @@ constant types would result in more than $2^17$ elements, see
   \inferrule[Well-Constrained]{%
     \checktrans{p = \PrecisionFull}{PrecisionLostDefining}
   }{%
-    \checknoprecisionloss{\overname{\TInt(\wellconstrained(_, p))}{\vt}} \typearrow \True
+    \checknoprecisionloss{\overname{\TInt(\wellconstrained(\Ignore, p))}{\vt}} \typearrow \True
   }
-  \and
+\end{mathpar}
+
+\begin{mathpar}
   \inferrule[Integer]{%
-    \astlabel{\vc} \neq \wellconstrained
+    \astlabel(\vc) \neq \wellconstrained
   }{%
     \checknoprecisionloss{\overname{\TInt(\vc)}{\vt}} \typearrow \True
   }
-  \and
+\end{mathpar}
+
+\begin{mathpar}
   \inferrule[Other]{%
-    \astlabel{\vt} \neq \TInt
+    \astlabel(\vt) \neq \TInt
   }{%
     \checknoprecisionloss{\vt} \typearrow \True
   }
@@ -876,7 +881,7 @@ See \ExampleRef{Type-satisfaction Examples}.
   \item \AllApplyCase{error}
   \begin{itemize}
     \item testing whether $\vt$ \typesatisfies\ $\vs$ in $\tenv$ yields $\False$;
-    \item the result is a type error indicating that an expression of type $\vs$ cannot
+    \item the result is a \typingerrorterm{} indicating that an expression of type $\vs$ cannot
           be used to initialize a storage element of type $\vt$.
   \end{itemize}
 \end{itemize}
@@ -948,7 +953,6 @@ In \listingref{semantics-sdeclnone},
 \end{mathpar}
 \CodeSubsection{\EvalSDeclBegin}{\EvalSDeclEnd}{../Interpreter.ml}
 
-\hypertarget{def-declarationstatementelidedparameterterm}{}
 \section{Declaration statements with an elided parameter \label{sec:DeclarationStatementsElidedParameter}}
 \subsection{Syntax}
 \begin{flalign*}
@@ -967,7 +971,8 @@ In \listingref{semantics-sdeclnone},
 
 \ASTRuleDef{ElidedParamCall}
 \hypertarget{build-elided-param-call}{}
-The helper function $\buildelidedparamcall$ builds a $\call$ from a parsed $\Nelidedparamcall$.
+The helper function $\buildelidedparamcall$ builds a $\call$ from a parsed \\
+$\Nelidedparamcall$.
 
 \begin{mathpar}
 \inferrule{
@@ -1018,16 +1023,24 @@ The helper function $\buildelidedparamcall$ builds a $\call$ from a parsed $\Nel
 \hypertarget{def-desugarelidedparameter}{}
 The helper function
 \[
+\begin{array}{r}
 \desugarelidedparameter(
   \overname{\localdeclkeyword}{\ldk} \aslsep
   \overname{\localdeclitem}{\ldi} \aslsep
   \overname{\ty}{\vt} \aslsep
   \overname{\call}{\vcall})
-\aslto \overname{\stmt}{\news}
-\cup\ \{\ParseErrorConfig\}
+\aslto \\
+\overname{\stmt}{\news}
+\cup\ \overname{\TBuildError}{\ParseErrorConfig}
+\end{array}
 \]
 builds a declaration statement $\news$ from an assignment of the call $\vcall$ to the left-hand side $\ldi$ with keyword $\ldk$ and type annotation $\vt$, where the call has an elided parameter.
 Otherwise, the result is a parse error.
+
+\ExampleDef{Desugaring Parameter Elision Based on Declared Type Annotation}
+\listingref{DesugarElidedParameter} shows examples of how parameters can be elided
+if they can be copied from the type annotation in declaration statements.
+\ASLListing{Desugaring parameter elision based on declared type annotation}{DesugarElidedParameter}{\syntaxtests/ASTRule.DesugarElidedParameter.asl}
 
 \begin{mathpar}
 \inferrule{
@@ -1315,7 +1328,12 @@ can only be used for procedures, not functions.
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
-  \evalcall{\env, \vcall.\callname, \vcall.\callparams, \vcall.\callargs} \evalarrow \Normal(\newg, \newenv) \OrAbnormal
+{
+\begin{array}{r}
+  \evalcall{\env, \vcall.\callname, \vcall.\callparams, \vcall.\callargs} \evalarrow \\
+  \Normal(\newg, \newenv) \OrAbnormal
+\end{array}
+}
 }{
   \evalstmt{\env, \overname{\SCall(\vcall)}{\vs}} \evalarrow \Continuing(\newg, \newenv)
 }
@@ -2694,7 +2712,7 @@ and the constraints for the loop index variable \verb|i| in \verb|main| are \ver
   \item \AllApplyCase{not\_integers}
   \begin{itemize}
     \item at least one of $\structone$ and $\structtwo$ is not an integer type;
-    \item the result is a type error indicating that the start expression and end expression of \texttt{for} loops
+    \item the result is a \typingerrorterm{} indicating that the start expression and end expression of \texttt{for} loops
           must have the \structure\ of integer types.
   \end{itemize}
 
@@ -3270,7 +3288,6 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 \ExampleDef{Typing Try Statements}
 \TypingRuleDef{STry}
 In
-\listingref{semantics-catchnamed},
 \listingref{semantics-catchnamed},
 \listingref{semantics-catchotherwise},
 \listingref{semantics-catchnone},
