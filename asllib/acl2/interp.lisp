@@ -755,23 +755,37 @@
          )
       (intpair (+ len dstval_rest.first) val))))
 
-;;need RoundUp
+
 (define eval_primitive ((name identifier-p)
                         (params vallist-p)
                         (args vallist-p))
   :returns (res vallist_result-p)
+  :prepwork ((local (defthm character-listp-of-explode-nonnegative-integer
+                      (implies (character-listp acc)
+                               (character-listp (explode-nonnegative-integer x pb acc)))
+                      :hints(("Goal" :in-theory (enable explode-nonnegative-integer))))))
   (fty::multicase
     ((fty::case*-equal name)
      ((list val-case p0 p1) params)
      ((list val-case a0 a1 a2) args))
 
     (("Real" nil (:v_int))       (ev_normal (list (v_real a0.val))))
-    (("Log2" nil (:v_int))       (ev_normal (list (v_int (1- (integer-length a0.val))))))
     (("SInt" (-) (:v_bitvector)) (ev_normal (list (v_int (logext (acl2::pos-fix a0.len) a0.val)))))
-    (("UInt" (-) (:v_bitvector)) (ev_normal (list (v_int (loghead (acl2::pos-fix a0.len) a0.val)))))
+    (("UInt" (-) (:v_bitvector)) (ev_normal (list (v_int a0.val))))
     (("RoundUp" nil (:v_real))   (ev_normal (list (v_int (ceiling a0.val 1)))))
     (("RoundDown" nil (:v_real)) (ev_normal (list (v_int (floor a0.val 1)))))
     (("RoundTowardsZero" nil (:v_real)) (ev_normal (list (v_int (truncate a0.val 1)))))
+
+    ;; (("AsciiStr" nil (:v_int))   (if (and (<= 0 a0.val)
+    ;;                                       (<= a0.val 127))
+    ;;                                  (ev_normal (list (v_string (coerce (list (code-char a0.val)) 'string))))
+    ;;                                (ev_error "AsciiStr argument out of bounds" a0)))
+    (("DecStr"   nil (:v_int))   (ev_normal (list (v_string (coerce (explode-atom a0.val 10) 'string)))))
+    ;; (("HexStr"   nil (:v_int))   (ev_normal (list (v_string (coerce (explode-atom a0.val 16) 'string)))))
+    (("FloorLog2" nil (:v_int))  (if (< 0 a0.val)
+                                     (ev_normal (list (v_int (1- (integer-length a0.val)))))
+                                   (ev_error "Nonpositive argument to FloorLog2" a0)))
+
     (-                           (ev_error "Bad primitive" (list name params args))))
   )
 

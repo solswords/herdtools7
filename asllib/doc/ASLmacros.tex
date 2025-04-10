@@ -1102,8 +1102,8 @@
 \newcommand\evalforloop[0]{\hyperlink{def-evalforloop}{\textfunc{eval\_for\_loop}}}
 \newcommand\evalforstep[0]{\hyperlink{def-evalforstep}{\textfunc{eval\_for\_step}}}
 \newcommand\evalcatchers[1]{\hyperlink{def-evalcatchers}{\textfunc{eval\_catchers}}(#1)}
-\newcommand\evalsubprogram[1]{\hyperlink{def-evalsubprogram}{\textfunc{eval\_subprogram}}(#1)}
-\newcommand\evalcall[1]{\hyperlink{def-evalcall}{\textfunc{eval\_call}}(#1)}
+\newcommand\evalsubprogram[0]{\hyperlink{def-evalsubprogram}{\textfunc{eval\_subprogram}}}
+\newcommand\evalcall[0]{\hyperlink{def-evalcall}{\textfunc{eval\_call}}}
 \newcommand\evalmultiassignment[0]{\hyperlink{def-evalmultiassign}{\textfunc{multi\_assign}}}
 \newcommand\rethrowimplicit[0]{\hyperlink{def-rethrowimplicit}{\textfunc{rethrow\_implicit}}}
 \newcommand\assignargs[0]{\hyperlink{def-assignargs}{\textfunc{assign\_args}}}
@@ -1769,6 +1769,8 @@
 \newcommand\NonDeterministicTerm[0]{\hyperlink{def-nondeterministicterm}{non-determinism side effect descriptor}}
 
 \newcommand\staticallyevaluable[0]{\hyperlink{def-staticallyevaluable}{statically evaluable}}
+\newcommand\pure[0]{\hyperlink{def-sideeffectispure}{pure}}
+\newcommand\purity[0]{\hyperlink{def-sideeffectispure}{purity}}
 \newcommand\symbolicallyevaluable[0]{\hyperlink{def-symbolicallyevaluable}{symbolically evaluable}}
 \newcommand\timeframeterm[0]{\hyperlink{def-timeframe}{time frame}}
 \newcommand\timeframesterm[0]{\hyperlink{def-timeframe}{time frames}}
@@ -1807,6 +1809,7 @@
 \newcommand\checkslicesinwidth[0]{\hyperlink{def-checkslicesinwidth}{\textfunc{check\_slices\_in\_width}}}
 \newcommand\disjointslicestopositions[0]{\hyperlink{def-disjointslicestopositions}{\textfunc{disjoint\_slices\_to\_positions}}}
 \newcommand\bitfieldslicetopositions[0]{\hyperlink{def-bitfieldslicetopositions}{\textfunc{bitfield\_slice\_to\_positions}}}
+\newcommand\evalsliceexpr[0]{\hyperlink{def-evalsliceexpr}{\textfunc{eval\_slice\_expr}}}
 \newcommand\checkpositionsinwidth[0]{\hyperlink{def-checkpositionsinwidth}{\textfunc{check\_positions\_in\_width}}}
 \newcommand\checkdisjointslices[0]{\hyperlink{def-checkdisjointslices}{\textfunc{check\_disjoint\_slices}}}
 \newcommand\annotatetype[1]{\hyperlink{def-annotatetype}{\textfunc{annotate\_type}}(#1)}
@@ -3025,3 +3028,4 @@
 \newcommand\declaredparameters[0]{\texttt{declared\_parameters}}
 \newcommand\allparameters[0]{\texttt{all\_parameters}}
 \newcommand\uniqueparameters[0]{\texttt{unique\_parameters}}
+\newcommand\isstatic[0]{\texttt{is\_static}}

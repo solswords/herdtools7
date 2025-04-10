@@ -589,3 +589,67 @@ ASL Typing Tests / annotating types:
     character 16:
   ASL typing error: unexpected collection.
   [1]
+  $ aslref TypingRule.AnnotateRetTy.asl
+  $ aslref TypingRule.AnnotateRetTy.bad.asl
+  File TypingRule.AnnotateRetTy.bad.asl, line 15, characters 4 to 17:
+  ASL Error: Mismatched use of return value from call to 'flip'.
+  [1]
+  $ aslref TypingRule.AnnotateCallActualsTyped.bad1.asl
+  File TypingRule.AnnotateCallActualsTyped.bad1.asl, line 11,
+    characters 8 to 32:
+  ASL Static Error: Arity error while calling 'xor_extend':
+    2 parameters expected and 1 provided
+  [1]
+  $ aslref TypingRule.AnnotateCallActualsTyped.bad2.asl
+  File TypingRule.AnnotateCallActualsTyped.bad2.asl, line 13,
+    characters 8 to 31:
+  ASL Typing error: No subprogram declaration matches the invocation:
+    xor_extend(bits(64)).
+  [1]
+  $ aslref TypingRule.AnnotateCallActualsTyped.bad3.asl
+  File TypingRule.AnnotateCallActualsTyped.bad3.asl, line 14,
+    characters 8 to 24:
+  ASL Typing error: a subtype of integer {0..64} was expected,
+    provided integer {0..128}.
+  [1]
+  $ aslref TypingRule.SubstExpr.asl
+  $ aslref --no-exec TypingRule.CheckSymbolicallyEvaluable.asl
+  $ aslref --no-exec TypingRule.CheckSymbolicallyEvaluable.bad.asl
+  File TypingRule.CheckSymbolicallyEvaluable.bad.asl, line 10,
+    characters 5 to 28:
+  ASL Static Error: Unsupported expression symbolic_throwing{4}(4).
+  [1]
+  $ aslref TypingRule.EvalSliceExpr.asl
+  $ aslref --no-exec TypingRule.TimeFrameLDK.asl
+  $ aslref --no-exec TypingRule.TimeFrameGDK.asl
+  $ aslref --no-exec TypingRule.TimeFrame.asl
+  $ aslref --no-exec TypingRule.SideEffectIsPure.asl
+  $ aslref TypingRule.CheckSymbolicallyEvaluable.asl
+  $ aslref TypingRule.SESIsPure.asl
+  $ aslref TypingRule.SESIsPure.bad1.asl
+  File TypingRule.SESIsPure.bad1.asl, line 17, characters 11 to 37:
+  ASL Typing error: a pure expression was expected,
+    found (y > write_side_effecting()), which produces the following
+    side-effects: [WritesGlobal "g", ReadsLocal "y", ReadsGlobal "g"].
+  [1]
+  $ aslref TypingRule.SESIsPure.bad2.asl
+  File TypingRule.SESIsPure.bad2.asl, line 16, characters 17 to 39:
+  ASL Typing error: a pure expression was expected,
+    found write_side_effecting(), which produces the following side-effects:
+    [WritesGlobal "g", ReadsGlobal "g"].
+  [1]
+  $ aslref TypingRule.SESIsDeterministic.asl
+  $ aslref TypingRule.SESIsDeterministic.bad.asl
+  File TypingRule.SESIsDeterministic.bad.asl, line 10, characters 17 to 45:
+  ASL Typing error: a pure expression was expected,
+    found ARBITRARY : integer {1..1000}, which produces the following
+    side-effects: [NonDeterministic].
+  [1]
+  $ aslref TypingRule.SESIsBefore.asl
+  $ aslref TypingRule.SESIsBefore.bad.asl
+  File TypingRule.SESIsBefore.bad.asl, line 4, character 0 to line 6,
+    character 2:
+  ASL Typing error: expected constant-time expression, got (g * 2), which
+    produces the following side-effects: [ReadsGlobal "g"].
+  [1]
+  $ aslref --no-exec TypingRule.MaxTimeFrame.asl
