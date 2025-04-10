@@ -71,7 +71,19 @@
                                  exponents-add
                                  expt
                                  exponents-add-for-nonneg-exponents
-                                 expt-is-weakly-increasing-for-base>1)))))
+                                 expt-is-weakly-increasing-for-base>1))))
+
+  (defthmd ilog2-spec-is-rational-exponent
+    (implies (and (rationalp x)
+                  (< 0 x))
+             (equal (ilog2-spec x)
+                    (rational-exponent x)))
+    :hints (("goal" :use ((:instance rational-exponent-unique
+                           (n (ilog2-spec x)))
+                          (:instance ilog2-spec-satisfied))
+             :in-theory (e/d (exponents-add-unrestricted)
+                             (exponents-add expt
+                                            ilog2-spec-satisfied))))))
 
 
 
