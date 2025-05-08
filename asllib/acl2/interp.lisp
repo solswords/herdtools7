@@ -29,7 +29,6 @@
 (include-book "centaur/bitops/part-select" :dir :system)
 (include-book "centaur/bitops/part-install" :dir :system)
 (include-book "oracle")
-(include-book "std/strings/case-conversion" :dir :system)
 
 ;; (local (include-book "std/strings/hexify" :dir :system))
 (include-book "std/alists/alist-defuns" :dir :system)
@@ -137,15 +136,6 @@
          :otherwise evresult))))
 
 (defmacro let*^ (&rest args) (cons 'let** args))
-
-(acl2::def-b*-binder ev
-  :body
-  `(b* ((evresult ,(car acl2::forms)))
-     (eval_result-case evresult
-       :ev_normal (b* ,(and (not (eq (car acl2::args) '&))
-                            `((,(car acl2::args) evresult.res)))
-                    ,acl2::rest-expr)
-       :otherwise evresult)))
 
 
 (defmacro let*> (bindings &rest args)
@@ -386,8 +376,6 @@
   
 
 
-(defmacro nats-measure (&rest args)
-  `(acl2::nat-list-measure (list . ,args)))
 
 
 (define read_value_from ((vs val_read_from-list-p))
@@ -755,73 +743,40 @@
          )
       (intpair (+ len dstval_rest.first) val))))
 
-;;need RoundUp
+
 (define eval_primitive ((name identifier-p)
                         (params vallist-p)
                         (args vallist-p))
   :returns (res vallist_result-p)
+  :prepwork ((local (defthm character-listp-of-explode-nonnegative-integer
+                      (implies (character-listp acc)
+                               (character-listp (explode-nonnegative-integer x pb acc)))
+                      :hints(("Goal" :in-theory (enable explode-nonnegative-integer))))))
   (fty::multicase
     ((fty::case*-equal name)
      ((list val-case p0 p1) params)
      ((list val-case a0 a1 a2) args))
 
     (("Real" nil (:v_int))       (ev_normal (list (v_real a0.val))))
-    (("Log2" nil (:v_int))       (ev_normal (list (v_int (1- (integer-length a0.val))))))
     (("SInt" (-) (:v_bitvector)) (ev_normal (list (v_int (logext (acl2::pos-fix a0.len) a0.val)))))
-    (("UInt" (-) (:v_bitvector)) (ev_normal (list (v_int (loghead (acl2::pos-fix a0.len) a0.val)))))
+    (("UInt" (-) (:v_bitvector)) (ev_normal (list (v_int a0.val))))
     (("RoundUp" nil (:v_real))   (ev_normal (list (v_int (ceiling a0.val 1)))))
     (("RoundDown" nil (:v_real)) (ev_normal (list (v_int (floor a0.val 1)))))
     (("RoundTowardsZero" nil (:v_real)) (ev_normal (list (v_int (truncate a0.val 1)))))
+
+    ;; (("AsciiStr" nil (:v_int))   (if (and (<= 0 a0.val)
+    ;;                                       (<= a0.val 127))
+    ;;                                  (ev_normal (list (v_string (coerce (list (code-char a0.val)) 'string))))
+    ;;                                (ev_error "AsciiStr argument out of bounds" a0)))
+    (("DecStr"   nil (:v_int))   (ev_normal (list (v_string (coerce (explode-atom a0.val 10) 'string)))))
+    ;; (("HexStr"   nil (:v_int))   (ev_normal (list (v_string (coerce (explode-atom a0.val 16) 'string)))))
+    (("FloorLog2" nil (:v_int))  (if (< 0 a0.val)
+                                     (ev_normal (list (v_int (1- (integer-length a0.val)))))
+                                   (ev_error "Nonpositive argument to FloorLog2" a0)))
+
     (-                           (ev_error "Bad primitive" (list name params args))))
   )
 
-
-
-;; Could send to console or collect output -- might want to prove something
-;; about printed output.  Print is type-constrained to deal only with singular
-;; types, not compound, but we'll produce some string for records/arrays
-;; anyway.
-(define val-to-string ((v val-p))
-  :returns (str stringp :rule-classes :type-prescription)
-  :prepwork ((local (defthm character-listp-of-explode-nonnegative-integer
-                      (implies (character-listp ans)
-                               (character-listp (explode-nonnegative-integer n print-base ans)))))
-             (local (defthm character-listp-of-explode-nonnegative-atom
-                      (character-listp (explode-atom n print-base))))
-             (local (defthm character-listp-of-repeat
-                      (implies (characterp x)
-                               (character-listp (acl2::repeat n x)))
-                      :hints(("Goal" :in-theory (enable acl2::repeat)))))
-             (local (in-theory (disable explode-atom))))
-  (val-case v
-    :v_int (coerce (explode-atom v.val 10) 'string)
-    :v_bool (if v.val "TRUE" "FALSE")
-    :v_real (b* ((num (numerator v.val))
-                 (numstr (coerce (explode-atom num 10) 'string))
-                 (den (denominator v.val))
-                 ((when (eql den 1)) numstr)
-                 (denstr (coerce (explode-atom den 10) 'string)))
-              (concatenate 'string numstr "/" denstr))
-    :v_string v.val
-    :v_bitvector (b* (((when (eql v.len 0))
-                       ;; special case to match aslref -- not sure if this is a bug though
-                       "0x")
-                      (digits (str::downcase-string (coerce (explode-atom v.val 16) 'string)))
-                      (length (ceiling v.len 4))
-                      (zeros (coerce (make-list (nfix (- length (length digits)))
-                                                :initial-element #\0)
-                                     'string)))
-                   (concatenate 'string "0x" zeros digits))
-    :v_label (identifier->val v.val)
-    :v_array "<array>"
-    :v_record "<record>"))
-
-(define vallist-to-string ((v vallist-p))
-  :returns (str stringp :rule-classes :type-prescription)
-  (if (atom v)
-      ""
-    (concatenate 'string (val-to-string (car v))
-                 (vallist-to-string (cdr v)))))
 
 
 

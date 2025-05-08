@@ -244,7 +244,7 @@ from a subprogram call are as follows:
 \inferrule{
   \vles \eqdef \vle_{1..k}\\
   i=1..k: \lexprisvar(\vle_i) \evalarrow \True\\
-  \evalcall{\env, \vcall.\callname, \vcall.\callparams, \vcall.\callargs} \evalarrow \Normal(\vms, \envone) \OrAbnormal\\\\
+  \evalcall(\env, \vcall.\callname, \vcall.\callparams, \vcall.\callargs) \evalarrow \Normal(\vms, \envone) \OrAbnormal\\\\
   \evalmultiassignment(\envone, \vles, \vms) \evalarrow \Normal(\newg, \newenv) \OrAbnormal
 }{
   \evalstmt{\env, \SAssign(\LEDestructuring(\les),\ECall(\vcall))} \\
@@ -575,7 +575,7 @@ and ill-typed declaration statements in comments.
   \tyopt \eqname \langle\vt\rangle \\
   \annotatetype{\tenv, \vt} \typearrow (\vtp, \vses) \OrTypeError\\\\
   \basevalue(\tenv, \vtp) \typearrow \veinit \OrTypeError\\\\
-  \annotatelocaldeclitem{\tenv, \vtp, \LDKVar, \None, \ldip} \typearrow \newtenv \OrTypeError \\
+  \annotatelocaldeclitem(\tenv, \vtp, \LDKVar, \None, \ldip) \typearrow \newtenv \OrTypeError \\
   \news \eqdef \SDecl(\LDKVar, \ldi, \langle\vtp\rangle, \langle\veinit\rangle)
 }{
   \annotatestmt(\tenv, \overname{\SDecl(\LDKVar, \ldi, \tyopt, \None)}{\vs}) \typearrow (\news, \newtenv, \vses)
@@ -669,7 +669,7 @@ See \ExampleRef{Typing Declaration Statements}.
   \begin{itemize}
     \item $\tyopt$ is $\None$;
     \item \Prosenoprecisionloss{\vte};
-    \item $\newtenv$ is the result of $\annotatelocaldeclitem{\tenv, \vte, \ldk, \langle\vep\rangle, \ldi}$\ProseOrTypeError;
+    \item $\newtenv$ is the result of $\annotatelocaldeclitem(\tenv, \vte, \ldk, \langle\vep\rangle, \ldi)$\ProseOrTypeError;
     \item $\tyoptp$ is $\tyopt$;
     \item \Proseeqdef{$\vses$}{the empty set}.
   \end{itemize}
@@ -964,7 +964,8 @@ In \listingref{semantics-sdeclnone},
 
 \begin{flalign*}
 \Nelidedparamcall \derives \
-     & \Tidentifier \parsesep \Tlbrace \parsesep \Trbrace \parsesep \PlistZero{\Nexpr} &\\
+     & \Tidentifier \parsesep \Tlbrace \parsesep \Trbrace &\\
+  |\ & \Tidentifier \parsesep \Tlbrace \parsesep \Trbrace \parsesep \PlistZero{\Nexpr} &\\
   |\ & \Tidentifier \parsesep \Tlbrace \parsesep \Tcomma \parsesep \ClistOne{\Nexpr} \parsesep \Trbrace &\\
   |\ & \Tidentifier \parsesep \Tlbrace \parsesep \Tcomma \parsesep \ClistOne{\Nexpr} \parsesep \Trbrace \parsesep \PlistZero{\Nexpr}&
 \end{flalign*}
@@ -973,6 +974,16 @@ In \listingref{semantics-sdeclnone},
 \hypertarget{build-elided-param-call}{}
 The helper function $\buildelidedparamcall$ builds a $\call$ from a parsed \\
 $\Nelidedparamcall$.
+
+\begin{mathpar}
+\inferrule{
+  \buildcall(\Ncall(\Tidentifier(\id), \Tlpar, \Trpar))
+  \astarrow \vastnode
+}{
+  \buildelidedparamcall(\Nelidedparamcall (\Tidentifier(\id), \Tlbrace, \Trbrace))
+  \astarrow \vastnode
+}
+\end{mathpar}
 
 \begin{mathpar}
 \inferrule{
@@ -1330,7 +1341,7 @@ can only be used for procedures, not functions.
 \inferrule{
 {
 \begin{array}{r}
-  \evalcall{\env, \vcall.\callname, \vcall.\callparams, \vcall.\callargs} \evalarrow \\
+  \evalcall(\env, \vcall.\callname, \vcall.\callparams, \vcall.\callargs) \evalarrow \\
   \Normal(\newg, \newenv) \OrAbnormal
 \end{array}
 }

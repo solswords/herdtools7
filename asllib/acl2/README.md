@@ -48,8 +48,8 @@ program interactively in acl2asl as follows:
     (assign :fname "mytest.asl.lsp")
     (ld "run-interactive.lsp")
 
-Some example proofs showing the correctness of ASL stdlib functions
-are in proofs/stdlib/.
+Proofs showing the correctness of the ASL stdlib functions are in
+proofs/stdlib/. They can be run using `make` in that directory.
 
 The script `bin/run-acl2asl.sh` takes an asl file as an argument, uses
 aslref to write out the AST object, then runs the interpreter on that
@@ -61,10 +61,10 @@ including in cases of runtime errors or uncaught exceptions.
 Testing
 -------
 
-The aslreftests subdirectory has a script `test-all.sh` that
-replicates the aslref regression tests using acl2asl. The output is a
-set of diffs showing what the output/status of each run was supposed
-to be versus what it is.
+Running `make` in the aslreftests subdirectory replicates the aslref
+regression tests using acl2asl. The output is a set of diffs showing
+what the output/status of each run was supposed to be versus what it
+is.
 
 The output when there is an error differs between aslref and acl2asl;
 we aren't likely to fix all these differences because this would
@@ -74,3 +74,8 @@ interpreters produce a dynamic error, we don't compare their outputs.
 A lighter set of tests can be run using `make` in the tests
 subdirectory. These consist of most aslref tests that are supposed to
 complete without error.
+
+Both of these test builds leave `*.t` files under their subdirectories,
+which can disrupt dune-based testing of herdtools and asllib. Run
+`make clean` in both test subdirectories to fix this.
+

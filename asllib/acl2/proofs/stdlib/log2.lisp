@@ -49,20 +49,30 @@
 ;;              *FLOORLOG2-LOOP-BODY*))
 
 
+(local (defthm integer-length-in-terms-of-rational-exponent
+         (implies (force (posp x))
+                  (equal (integer-length x)
+                         (+ 1 (acl2::rational-exponent x))))
+         :hints(("Goal" :in-theory (enable acl2::rational-exponent)))))
+
+(local (in-theory (disable integer-length
+                           expt)))
+
+
 (defloop floorlog2-loop
   :function "FloorLog2"
   :looptype :s_while
   :local-vars (((v_int a)       "__stdlib_local_a")
                ((v_int current) "__stdlib_local_current" (v_int current-spec))
                ((v_int result)  "__stdlib_local_result"  (v_int result-spec)))
-  :bindings ((result-spec (acl2::rational-exponent a.val))
+  :bindings ((result-spec (+ -1 (integer-length a.val)))
              (current-spec (expt 2 (+ 1 result-spec))))
   :invariants (and (<= 0 result.val)
                    (equal current.val (expt 2 (+ 1 result.val)))
                    (<= current.val (* 2 a.val))
-                   (< (- (+ 1 (acl2::rational-exponent a.val)) result.val) (ifix clk))
+                   (< (- (integer-length a.val) result.val) (ifix clk))
                    (integerp limit)
-                   (< (- (+ 1 (acl2::rational-exponent a.val)) result.val) limit))
+                   (< (- (integer-length a.val) result.val) limit))
   :hints ((and stable-under-simplificationp
                '(:use ((:instance acl2::rational-exponent-unique
                         (x (V_INT->VAL
@@ -136,16 +146,16 @@
                                   (:instance val-fix-when-v_int (x y)))
                      :in-theory (disable v_int-of-fields
                                          equal-of-v_int)))))))
-
+         
 
 
 (def-asl-subprogram floorlog2-correct
   :function "FloorLog2"
   :args (x)
   :hyps (and (< 0 x.val)
-             (<= (+ 2 (acl2::rational-exponent x.val)) (expt 2 128)))
-  :safe-clock (+ 2 (acl2::rational-exponent x.val))
-  :return-values ((v_int (acl2::rational-exponent x.val))))
+             (<= (+ 1 (integer-length x.val)) (expt 2 128)))
+  :safe-clock (+ 1 (integer-length x.val))
+  :return-values ((v_int (1- (integer-length x.val)))))
 
 
 
@@ -171,7 +181,7 @@
   :local-vars (((v_int a)       "__stdlib_local_a")
                ((v_int current) "__stdlib_local_current" (v_int current-spec))
                ((v_int result)  "__stdlib_local_result"  (v_int result-spec)))
-  :bindings ((result-spec (let ((exp (acl2::rational-exponent a.val)))
+  :bindings ((result-spec (let ((exp (1- (integer-length a.val))))
                             (if (equal a.val (expt 2 exp))
                                 exp
                               (+ 1 exp))))
@@ -179,9 +189,9 @@
   :invariants (and (<= 0 result.val)
                    (equal current.val (expt 2 result.val))
                    (< current.val (* 2 a.val))
-                   (< (- (+ 1 (acl2::rational-exponent a.val)) result.val) (ifix clk))
+                   (< (- (integer-length a.val) result.val) (ifix clk))
                    (integerp limit)
-                   (< (- (+ 1 (acl2::rational-exponent a.val)) result.val) limit))
+                   (< (- (integer-length a.val) result.val) limit))
   :hints ((and stable-under-simplificationp
                '(:use ((:instance rational-exponent-hack
                         (r (V_INT->VAL
@@ -225,6 +235,7 @@
                                   (acl2::rational-exponent a)
                                 (+ 1 (acl2::rational-exponent a)))))
             :hints (("goal" :do-not-induct t
+                     :in-theory (enable expt)
                      :expand ((:free (x) (hide x))))
                     (and stable-under-simplificationp
                          '(:use ((:instance rational-exponent-unique-of-nonneg
@@ -244,13 +255,15 @@
             (implies (and (< (ifix ye) (ifix xe))
                           (<= (ifix ye) 0))
                      (<= (* 2 (expt 2 ye)) (expt 2 xe)))
-            :hints (("goal" :induct (expt 2 ye)))
+            :hints (("goal" :induct (expt 2 ye)
+                     :in-theory (enable expt)))
             :otf-flg t))
    (local (defthmd powers-of-2-not-between-lemma
             (implies (< (ifix ye) (ifix xe))
                      (<= (* 2 (expt 2 ye)) (expt 2 xe)))
             :hints (("goal" :cases ((<= 0 (ifix ye)))
-                     :in-theory (enable powers-of-2-not-between-lemma1)))
+                     :in-theory (enable powers-of-2-not-between-lemma1
+                                        expt)))
             :otf-flg t))  
 
    (local (defthm powers-of-2-not-between
@@ -283,21 +296,22 @@
                                          equal-of-v_int)))))))
 
 
-(define ceil-log2-spec ((x rationalp))
+(define ceil-log2-spec ((x integerp))
   :guard (< 0 x)
-  (b* ((exp (acl2::rational-exponent x)))
+  (b* ((exp (1- (integer-length x))))
     (if (equal x (expt 2 exp))
         exp
       (+ 1 exp)))
   ///
   (defthm ceil-log2-spec-correct
-    (implies (and (rationalp x)
+    (implies (and (integerp x)
                   (< 0 x))
              (let ((exp (ceil-log2-spec x)))
                (and (<= x (expt 2 exp))
                     (< (expt 2 (+ -1 exp)) x))))
     :hints (("goal" :use ((:instance acl2::rational-exponent-correct-positive (x x)))
-             :in-theory (e/d (acl2::exponents-add-unrestricted)
+             :in-theory (e/d (acl2::exponents-add-unrestricted
+                              integer-length-in-terms-of-rational-exponent)
                              (acl2::rational-exponent-correct-positive))))))
       
 
@@ -306,10 +320,11 @@
   :function "CeilLog2"
   :args (x)
   :hyps (and (< 0 x.val)
-             (<= (+ 2 (acl2::rational-exponent x.val)) (expt 2 128)))
-  :safe-clock (+ 2 (acl2::rational-exponent x.val))
+             (<= (+ 1 (integer-length x.val)) (expt 2 128)))
+  :safe-clock (+ 1 (integer-length x.val))
   :return-values ((v_int (ceil-log2-spec x.val)))
   :enable (ceil-log2-spec))
+
 
 
 

@@ -91,7 +91,8 @@
 (in-theory (enable (:t unit)
                    (:t unit-fix)))
 
-(fty::deflist integer-list :pred integer-listp :elt-type integerp :true-listp t)
+(fty::deflist integer-list :pred integer-listp :elt-type integerp :true-listp t
+  :elementp-of-nil nil)
 
 
 (defprod local-env
@@ -173,3 +174,15 @@
   :layout :fulltree)
 
 (def-eval_result slices_eval_result-p intpairlist/env-p)
+
+
+
+(acl2::def-b*-binder ev
+  :body
+  `(b* ((evresult ,(car acl2::forms)))
+     (eval_result-case evresult
+       :ev_normal (b* ,(and (not (eq (car acl2::args) '&))
+                            `((,(car acl2::args) evresult.res)))
+                    ,acl2::rest-expr)
+       :otherwise evresult)))
+

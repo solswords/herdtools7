@@ -9,6 +9,10 @@ Otherwise, it returns a \typingerrorterm{}.
 Tools such as interpreters, Verilog simulators, and verifiers can operate over the typed AST, based on the definition
 of the semantics in this reference, to test and analyze a given specification.
 
+We note that the dynamic semantics is only used to define the set of valid behaviors
+of a given specification without assigning any other quantification, such as the time
+required to evaluate it.
+
 \paragraph{Understanding the Dynamic Semantics Formalization:}
 We assume basic familiarity with the ASL language constructs.
 The ASL dynamic semantics is defined in terms of its AST,
@@ -197,7 +201,7 @@ We assume that the static environment supports the following functions:
 \[
   \begin{array}{rcl}
     \findfunc       &:& \staticenvs \times \Identifiers \partialto \func\\
-    \typesat  &:& \staticenvs \times (\ty \times \ty) \rightarrow \{\True, \False\}
+    \typesat  &:& \staticenvs \times (\ty \times \ty) \rightarrow \Bool
   \end{array}
 \]
 The partial function $\findfunc$ returns the typed AST of the subprogram for a given identifier.

@@ -1,5 +1,5 @@
 type MyCollection of collection { a: bits(8), b: bits(16) };
-type CollectionWithEmptyFieldList of collection {};
+type CollectionWithEmptyFieldList of collection {-};
 type CollectionWithoutFields of collection;
 
 // The next type declaration in comment is illegal:
@@ -12,9 +12,9 @@ type CollectionWithoutFields of collection;
 // var - = MyCollection {a = Zeros{8}, b = Zeros{16}};
 // var - : MyCollection = MyCollection {a = Zeros{8}, b = Zeros{16}};
 
-var - : MyCollection;
-var - : CollectionWithEmptyFieldList;
-var - :CollectionWithoutFields;
+var x : MyCollection;
+var y : CollectionWithEmptyFieldList;
+var z :CollectionWithoutFields;
 
 func main() => integer
 begin

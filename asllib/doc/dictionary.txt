@@ -33,6 +33,7 @@ achieves
 across
 act
 action
+actively
 actual
 adapt
 add
@@ -40,6 +41,7 @@ added
 adding
 addition
 additional
+additions
 address
 addressed
 adds
@@ -115,6 +117,7 @@ approach
 appropriate
 approximate
 approximates
+approximating
 approximation
 arbitrary
 architecture
@@ -315,6 +318,7 @@ classify
 classifying
 clause
 clauses
+closed
 closer
 closest
 closing
@@ -324,6 +328,7 @@ codes
 collection
 collections
 collectively
+colloquially
 combination
 combinations
 combine
@@ -389,6 +394,7 @@ conditional
 conditionally
 conditionals
 conditions
+conducting
 conducts
 configurable
 configuration
@@ -431,6 +437,7 @@ constructing
 construction
 constructively
 constructs
+contact
 contain
 contained
 containing
@@ -442,6 +449,7 @@ continue
 continues
 continuing
 contrast
+contributes
 control
 convenient
 convention
@@ -451,6 +459,7 @@ convert
 converted
 converting
 converts
+conveying
 conveys
 copied
 copyright
@@ -477,6 +486,7 @@ currently
 custom
 customers
 data
+datatype
 dealing
 debugging
 dec
@@ -529,6 +539,7 @@ described
 describes
 description
 descriptions
+descriptors
 designed
 desired
 destination
@@ -545,6 +556,7 @@ determine
 determined
 determines
 determining
+deterministic
 development
 diagnostic
 dictates
@@ -554,6 +566,7 @@ difference
 different
 differentiating
 differently
+differing
 digits
 directive
 directly
@@ -563,7 +576,9 @@ discarding
 discards
 disclaimer
 disclosure
+discriminant
 discussed
+discussion
 disjoint
 disjunction
 disjunctively
@@ -614,6 +629,7 @@ elaborated
 element
 elements
 elided
+eliding
 elision
 else
 emit
@@ -690,6 +706,7 @@ example
 examples
 exceed
 exceeded
+exceeding
 except
 exception
 exceptional
@@ -729,6 +746,7 @@ explicitly
 exploded
 exploding
 exponent
+exponentiation
 export
 exposes
 express
@@ -839,6 +857,7 @@ gets
 getter
 getting
 github
+give
 given
 gives
 global
@@ -938,6 +957,7 @@ includes
 including
 incomplete
 incorrect
+incorrectly
 increasing
 increments
 indeed
@@ -1020,6 +1040,7 @@ interpreter
 interpreters
 intersection
 interval
+intervals
 into
 introduce
 introduces
@@ -1159,6 +1180,7 @@ may
 mean
 meaning
 means
+meant
 mechanism
 mechanisms
 meets
@@ -1167,6 +1189,7 @@ members
 memory
 menhir
 mentioned
+merged
 meta
 might
 minimal
@@ -1186,6 +1209,7 @@ monomial
 monomials
 more
 most
+move
 multiple
 multiplication
 multiplied
@@ -1266,6 +1290,7 @@ offers
 offset
 often
 okay
+omission
 omit
 omitted
 omitting
@@ -1312,6 +1337,7 @@ outputting
 outside
 over
 overall
+overapproximated
 overapproximates
 overapproximation
 overcome
@@ -1369,6 +1395,7 @@ performing
 performs
 permission
 permit
+permits
 permitted
 permutation
 persists
@@ -1471,6 +1498,7 @@ provide
 provided
 provides
 prs
+pull
 punctuation
 pure
 purity
@@ -1511,6 +1539,7 @@ recommended
 record
 recorded
 records
+recovered
 recurse
 recursion
 recursive
@@ -1546,6 +1575,7 @@ relations
 relationship
 relative
 relatively
+release
 relevant
 reliable
 relied
@@ -1581,6 +1611,7 @@ representing
 represents
 reproduced
 request
+requests
 require
 required
 requirement
@@ -1702,6 +1733,7 @@ shorthand
 shortly
 should
 show
+showing
 shown
 shows
 side
@@ -1711,6 +1743,7 @@ signal
 signals
 signature
 signatures
+signed
 significant
 signifying
 signs
@@ -1828,6 +1861,7 @@ succeed
 succeeding
 succeeds
 success
+successful
 successfully
 successive
 succinctly
@@ -1862,6 +1896,7 @@ symbols
 syntactic
 syntactically
 syntax
+syntaxes
 system
 systems
 tab
@@ -1874,6 +1909,7 @@ takes
 taking
 team
 technical
+technically
 technique
 term
 terminal
@@ -1995,6 +2031,7 @@ unconstrained
 undeclared
 undefined
 under
+underapproximated
 underapproximates
 underapproximation
 underlying
@@ -2005,6 +2042,7 @@ understanding
 undertaken
 unevaluated
 unexpected
+uninitialized
 unintended
 union
 unique
@@ -2069,6 +2107,7 @@ verifiers
 verifying
 verilog
 version
+versions
 vertex
 vertices
 very
@@ -2091,6 +2130,7 @@ was
 way
 ways
 we
+welcome
 well
 were
 what

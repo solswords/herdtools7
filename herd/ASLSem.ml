@@ -118,6 +118,7 @@ module Make (C : Config) = struct
     let use_field_getter_extension = is_experimental
     let use_conflicting_side_effects_extension = false
     let override_mode = Asllib.Typing.Permissive
+    let control_flow_analysis = true
   end)
 
   module ASLInterpreterConfig = struct
@@ -345,7 +346,7 @@ module Make (C : Config) = struct
       | `PLUS -> M.op Op.Add
       | `SHL -> M.op Op.ShiftLeft
       | `SHR -> M.op Op.ShiftRight
-      | `BV_CONCAT -> concat
+      | `CONCAT -> concat
       | (`POW | `IMPL | `RDIV) as op ->
           Warn.fatal "ASL operation %s not yet implement in ASLSem."
             (Asllib.PP.binop_to_string op)
@@ -373,27 +374,17 @@ module Make (C : Config) = struct
      * Notice that the value is casted into an integer.
      *)
 
-    let is_nzcv =
-      if is_experimental then
-        fun x scope ->
-          match (x, scope) with
-          | "_NZCV", Scope.Global false -> true
-          | _ -> false
-      else
-        fun x scope ->
-          match (x, scope) with
-          | "PSTATE", Scope.Global false -> true
-          | _ -> false
-
-    let is_resaddr x scope =
-      match (x, scope) with "RESADDR", Scope.Global false -> true | _ -> false
+    let reg_of_scoped_id x scope =
+      match (x, scope) with
+      | "_PSTATE_N", Scope.Global false -> ASLBase.ArchReg AArch64Base.(PState PSTATE.N)
+      | "_PSTATE_Z", Scope.Global false -> ASLBase.ArchReg AArch64Base.(PState PSTATE.Z)
+      | "_PSTATE_C", Scope.Global false -> ASLBase.ArchReg AArch64Base.(PState PSTATE.C)
+      | "_PSTATE_V", Scope.Global false -> ASLBase.ArchReg AArch64Base.(PState PSTATE.V)
+      | "RESADDR", Scope.Global false -> ASLBase.ArchReg AArch64Base.ResAddr
+      | _ -> ASLBase.ASLLocalId (scope, x)
 
     let loc_of_scoped_id ii x scope =
-      if is_nzcv x scope then
-        A.Location_reg (ii.A.proc, ASLBase.ArchReg AArch64Base.NZCV)
-      else if is_resaddr x scope then
-        A.Location_reg (ii.A.proc, ASLBase.ArchReg AArch64Base.ResAddr)
-      else A.Location_reg (ii.A.proc, ASLBase.ASLLocalId (scope, x))
+      A.Location_reg (ii.A.proc, reg_of_scoped_id x scope)
 
     (* AArch64 registers hold integers, not bitvectors *)
     let is_aarch64_reg = function
@@ -773,8 +764,6 @@ module Make (C : Config) = struct
       let pow_2 = binop `POW (lit 2) in
       let t_named x = T_Named x |> with_pos in
       let side_effecting = true in
-      let uint_sint_parameter_type =
-        Asllib.ASTUtils.integer_range' (lit 1) (lit 128) |> with_pos in
       let uint_returns = int_ctnt (lit 0) (minus_one (pow_2 (var "N")))
       and sint_returns =
         let big_pow = pow_2 (minus_one (var "N")) in
@@ -811,11 +800,11 @@ module Make (C : Config) = struct
           write_memory_gen;
         (* Translations *)
         p1r "UInt"
-          ~parameters:[ ("N", Some uint_sint_parameter_type) ]
+          ~parameters:[ ("N", None) ]
           ("x", bv_var "N")
           ~returns:uint_returns uint;
         p1r "SInt"
-          ~parameters:[ ("N", Some uint_sint_parameter_type) ]
+          ~parameters:[ ("N", None) ]
           ("x", bv_var "N")
           ~returns:sint_returns sint;
         (* Misc *)

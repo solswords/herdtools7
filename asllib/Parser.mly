@@ -90,7 +90,7 @@ let prec =
   function
   | `BOR | `BAND | `IMPL | `BEQ -> 1
   | `EQ_OP | `NEQ -> 2
-  | `PLUS | `MINUS | `OR | `XOR | `AND | `BV_CONCAT -> 3
+  | `PLUS | `MINUS | `OR | `XOR | `AND | `CONCAT -> 3
   | `MUL | `DIV | `DIVRM | `RDIV | `MOD | `SHL | `SHR -> 4
   | `POW -> 5
   | `GT | `GEQ | `LT | `LEQ -> 0 (* Non assoc *)
@@ -238,7 +238,7 @@ let binop ==
   | SHL         ; { `SHL    }
   | SHR         ; { `SHR    }
   | POW         ; { `POW    }
-  | COLON_COLON ; { `BV_CONCAT }
+  | COLON_COLON ; { `CONCAT }
 
 (* ------------------------------------------------------------------------
 
@@ -250,7 +250,10 @@ let field_assign := separated_pair(IDENTIFIER, EQ, expr)
 
 let e_else :=
   | ELSE; expr
-  | annotated ( ELSIF; c=expr; THEN; e=expr; ~=e_else; <E_Cond> )
+  | annotated ( ELSIF [@internal true]; c=expr; THEN; e1=expr; e2=e_else; {
+      if Config.allow_expression_elsif then E_Cond (c, e1, e2)
+      else Error.fatal_here $startpos $endpos @@ Error.ObsoleteSyntax "Expression-level 'elsif'."
+    } )
 
 let expr :=
   annotated (
@@ -275,9 +278,7 @@ let expr :=
     | e=expr; NEQ; p=pattern_mask;                            { E_Pattern (e, Pattern_Not (p) |> add_pos_from p) }
     | ARBITRARY; COLON; ~=ty;                                 < E_Arbitrary        >
     | e=pared(expr);                                          { E_Tuple [ e ]        }
-
-    (* For E_Record we use an inlined clist0 to avoid a shift/reduce conflict with elided_param_call's empty case *)
-    | t=annotated(IDENTIFIER); LBRACE; RBRACE;
+    | t=annotated(IDENTIFIER); LBRACE; MINUS; RBRACE;
         { E_Record (add_pos_from t (T_Named t.desc), []) }
     | t=annotated(IDENTIFIER); fields=braced(clist1(field_assign));
         { E_Record (add_pos_from t (T_Named t.desc), fields) }
@@ -327,9 +328,7 @@ let expr_pattern :=
 
     | ARBITRARY; COLON; ~=ty;                                         < E_Arbitrary        >
     | e=pared(expr_pattern);                                          { E_Tuple [ e ]        }
-
-    (* For E_Record we use an inlined clist0 to avoid a shift/reduce conflict with elided_param_call *)
-    | t=annotated(IDENTIFIER); LBRACE; RBRACE;
+    | t=annotated(IDENTIFIER); LBRACE; MINUS; RBRACE;
         { E_Record (add_pos_from t (T_Named t.desc), []) }
     | t=annotated(IDENTIFIER); fields=braced(clist1(field_assign));
         { E_Record (add_pos_from t (T_Named t.desc), fields) }
@@ -356,7 +355,9 @@ let pattern_set :=
       BNOT; ~=braced(pattern_list); < Pattern_Not >
     )
 
-let fields := braced(tclist0(typed_identifier))
+let fields :=
+    braced(MINUS); { [] }
+  | braced(tclist1(typed_identifier))
 let fields_opt := { [] } | fields
 
 (* Slices *)
@@ -456,12 +457,20 @@ let lexpr :=
    have to declare new variables. *)
 
 let discard_or_identifier :=
-  | MINUS;         { fresh_var "__ldi_discard" }
+  | MINUS;         { local_ignored () }
   | ~=IDENTIFIER;  <>
 
 let decl_item :=
-  | ~=discard_or_identifier          ; < LDI_Var >
-  | ~=plist2(discard_or_identifier)  ; < LDI_Tuple >
+  | MINUS [@internal true]           ; {
+      if Config.allow_storage_discards then LDI_Var (local_ignored ())
+      else Error.fatal_here $startpos $endpos @@ Error.ObsoleteSyntax "Discarded storage declaration."
+    }
+  | ~=IDENTIFIER                     ; < LDI_Var >
+  | vs=plist2(discard_or_identifier) ; {
+      if List.for_all is_local_ignored vs && not Config.allow_storage_discards then
+        Error.fatal_here $startpos $endpos @@ Error.ObsoleteSyntax "Discarded storage declaration."
+      else LDI_Tuple vs
+    }
 
 (* ------------------------------------------------------------------------- *)
 (* Statement helpers *)
@@ -575,7 +584,7 @@ let call :=
   | name=IDENTIFIER; params=braced(clist1(expr)); args=opt_call_args;
     { { name; params; args; call_type = ST_Function } }
 let elided_param_call :=
-  | name=IDENTIFIER; LBRACE; RBRACE; args=plist0(expr);
+  | name=IDENTIFIER; LBRACE; RBRACE; args=opt_call_args;
     { { name; params=[]; args; call_type = ST_Function } }
   | name=IDENTIFIER; LBRACE; COMMA; params=clist1(expr); RBRACE; args=opt_call_args;
     { { name; params; args; call_type = ST_Function } }
@@ -584,7 +593,10 @@ let maybe_empty_stmt_list := stmt_list | annotated({ S_Pass })
 let func_body == delimited(BEGIN, maybe_empty_stmt_list, end_semicolon)
 let recurse_limit := ioption(RECURSELIMIT; expr)
 let ignored_or_identifier :=
-  | MINUS; { global_ignored () }
+  | MINUS [@internal true]; {
+      if Config.allow_storage_discards then global_ignored ()
+      else Error.fatal_here $startpos $endpos @@ Error.ObsoleteSyntax "Discarded storage declaration."
+    }
   | IDENTIFIER
 let override ==
   ioption(
@@ -592,12 +604,12 @@ let override ==
     | IMPLEMENTATION; { Implementation })
 
 let accessors :=
-  | GETTER; getter=func_body;
-    SETTER; EQ; setter_arg=IDENTIFIER; setter=func_body;
-    { { getter; setter; setter_arg } }
-  | SETTER; EQ; setter_arg=IDENTIFIER; setter=func_body;
-    GETTER; getter=func_body;
-    { { getter; setter; setter_arg } }
+  | GETTER; getter=maybe_empty_stmt_list; end_semicolon;
+    SETTER; setter=maybe_empty_stmt_list; end_semicolon;
+    { { getter; setter } }
+  | SETTER; setter=maybe_empty_stmt_list; end_semicolon;
+    GETTER; getter=maybe_empty_stmt_list; end_semicolon;
+    { { getter; setter } }
 
 let decl :=
   | d=annotated (
@@ -660,9 +672,12 @@ let decl :=
       (* End *)
     )
   ); { [d] }
-  | ~=override; ACCESSOR; name=IDENTIFIER; ~=params_opt; ~=func_args; BIARROW; ~=ty;
-    BEGIN; ~=accessors; end_semicolon;
-    { desugar_accessor_pair override name params_opt func_args ty accessors }
+  | ~=override; ACCESSOR; name=IDENTIFIER; ~=params_opt; ~=func_args; BIARROW; setter_arg=IDENTIFIER; ~=as_ty;
+    ~=accessor_body;
+    { desugar_accessor_pair override name params_opt func_args setter_arg as_ty accessor_body }
+
+let accessor_body == BEGIN; ~=accessors; end_semicolon;
+  { accessors }
 
 (* Begin AST *)
 let spec := ~=terminated(list(decl), EOF); < List.concat >

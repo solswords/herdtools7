@@ -1,8 +1,8 @@
-type E of exception {};
+type E of exception {-};
 
 func throwing () => integer
 begin
-  throw E {};
+  throw E {-};
 end;
 
 func main () => integer
@@ -11,7 +11,7 @@ begin
   var y: integer = 0;
 
   for i = 0 to throwing () do
-    let - = y * y + throwing () ;
+    - = y * y + throwing () ;
   end;
 
   return 0;

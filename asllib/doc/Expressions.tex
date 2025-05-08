@@ -803,9 +803,7 @@ the expression \texttt{NOT '1010'} evaluates to the value \texttt{'0101'}.
 \section{Conditional Expressions\label{sec:ConditionalExpressions}}
 \subsection{Syntax}
 \begin{flalign*}
-\Nexpr \derives\  & \Tif \parsesep \Nexpr \parsesep \Tthen \parsesep \Nexpr \parsesep \Neelse &\\
-\Neelse \derives\ & \Telse \parsesep \Nexpr &\\
-|\ & \Telseif \parsesep \Nexpr \parsesep \Tthen \parsesep \Nexpr \parsesep \Neelse &
+\Nexpr \derives\  & \Tif \parsesep \Nexpr \parsesep \Tthen \parsesep \Nexpr \parsesep \Telse \parsesep \Nexpr &\\
 \end{flalign*}
 
 \subsection{Abstract Syntax}
@@ -818,53 +816,19 @@ the expression \texttt{NOT '1010'} evaluates to the value \texttt{'0101'}.
   \inferrule{
     \buildexpr(\vcondexpr) \astarrow \astversion{\vcondexpr} \OrBuildError\\\\
     \buildexpr(\vthenexpr) \astarrow \astversion{\vthenexpr} \OrBuildError\\\\
-    \buildeelse(\veelse) \astarrow \astversion{\veelse} \OrBuildError\\\\
+    \buildexpr(\velseexpr) \astarrow \astversion{\velseexpr} \OrBuildError\\\\
   }{
     {
       \begin{array}{r}
   \buildexpr\left(\overname{\Nexpr\left(
     \begin{array}{l}
     \Tif, \namednode{\vcondexpr}{\Nexpr}, \Tthen, \\
-    \wrappedline\ \namednode{\vthenexpr}{\Nexpr}, \veelse: \Neelse
+    \wrappedline\ \namednode{\vthenexpr}{\Nexpr}, \Telse, \namednode{\velseexpr}{\Nexpr}
     \end{array}
     \right)}{\vparsednode}\right) \astarrow\\
-  \overname{\ECond(\astversion{\vcondexpr}, \astversion{\vthenexpr}, \astversion{\veelse})}{\vastnode}
+  \overname{\ECond(\astversion{\vcondexpr}, \astversion{\vthenexpr}, \astversion{\velseexpr})}{\vastnode}
       \end{array}
     }
-}
-\end{mathpar}
-
-\ASTRuleDef{EElse}
-\hypertarget{build-eelse}{}
-The function
-\[
-  \buildeelse(\overname{\parsenode{\Nfieldassign}}{\vparsednode}) \;\aslto\; \overname{\expr}{\vastnode}
-\]
-transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
-
-\begin{mathpar}
-\inferrule[else]{}{
-  \buildeelse(\Neelse(\Telse, \punnode{\Nexpr})) \astarrow
-  \overname{\astof{\vexpr}}{\vastnode}
-}
-\end{mathpar}
-
-\begin{mathpar}
-\inferrule[else\_if]{
-  \buildexpr(\vcondexpr) \astarrow \astversion{\vcondexpr} \OrBuildError\\\\
-  \buildexpr(\vthenexpr) \astarrow \astversion{\vthenexpr} \OrBuildError
-}{
-  {
-    \begin{array}{r}
-  \buildeelse\left(\Neelse\left(
-    \begin{array}{l}
-    \Telseif, \namednode{\vcondexpr}{\Nexpr},  \\
-    \wrappedline\ \Tthen, \namednode{\vthenexpr}{\Nexpr}, \punnode{\Neelse}
-  \end{array}
-    \right)\right) \astarrow\\
-  \overname{\ECond(\astversion{\vcondexpr}, \astversion{\vthenexpr}, \astof{\veelse})}{\vastnode}
-\end{array}
-  }
 }
 \end{mathpar}
 
@@ -1126,7 +1090,7 @@ and the values they evaluate to, as assertions on the values assigned.
 \FormallyParagraph
 \begin{mathpar}
 \inferrule[single\_returned\_value]{
-  \evalcall{\env, \vcall.\name, \vcall.\params, \vcall.\args} \evalarrow \Normal(\vms, \newenv) \OrAbnormal\\
+  \evalcall(\env, \vcall.\name, \vcall.\params, \vcall.\args) \evalarrow \Normal(\vms, \newenv) \OrAbnormal\\
   \vms \eqname [(\vv, \vg)]
 }{
   \evalexpr{\env, \ECall(\vcall)} \evalarrow \Normal((\vv, \vg), \newenv)
@@ -1135,7 +1099,7 @@ and the values they evaluate to, as assertions on the values assigned.
 
 \begin{mathpar}
 \inferrule[multiple\_returned\_values]{
-  \evalcall{\env, \vcall.\callname, \vcall.\callparams, \vcall.\callargs} \evalarrow \Normal(\vms, \newenv) \OrAbnormal\\
+  \evalcall(\env, \vcall.\callname, \vcall.\callparams, \vcall.\callargs) \evalarrow \Normal(\vms, \newenv) \OrAbnormal\\
   \vms \eqname [i=1..k: (\vv_i, \vg_i)]\\
   \vg \eqdef \vg_1 \parallelcomp \ldots \parallelcomp \vg_k \\
   \vv \eqdef \nvvector{\vv_{1..k}}
@@ -2917,7 +2881,7 @@ Note that there are two important consequences of producing an arbitrary value w
 \TypingRuleDef{EArbitrary}
 \ExampleDef{Well-typed Arbitrary Value Expressions}
 \listingref{typing-arbitrary} show examples of well-typed arbitrary value expressions.
-\ASLListing{Well-typed arbirary value expressions}{typing-arbitrary}{\typingtests/TypingRule.EArbitrary.asl}
+\ASLListing{Well-typed arbitrary value expressions}{typing-arbitrary}{\typingtests/TypingRule.EArbitrary.asl}
 
 \ProseParagraph
 \AllApply
@@ -2951,7 +2915,7 @@ the expression \verb|ARBITRARY : integer| evaluates to an arbitrary integer valu
 \ASLListing{Evaluating an \texttt{ARBITRARY} expression for an unconstrained integer}{semantics-earbitraryunconstrained}
 {\semanticstests/SemanticsRule.EArbitraryInteger3.asl}
 
-\subsubsection{Evaluation of ARBITRARY for a Costrained Integer Type}
+\subsubsection{Evaluation of ARBITRARY for a Constrained Integer Type}
 In \listingref{semantics-earbitraryconstrained},
 the expression \verb|ARBITRARY : integer {3, 42}| evaluates to either \\
 $\nvint(3)$ or $\nvint(42)$.
@@ -3017,7 +2981,7 @@ Notice that this rule introduces non-determinism.
 
 \subsection{Syntax}
 \begin{flalign*}
-\Nexpr \derives\  & \Tidentifier \parsesep \Tlbrace \parsesep \Trbrace &\\
+\Nexpr \derives\  & \Tidentifier \parsesep \Tlbrace \parsesep \Tminus \parsesep \Trbrace &\\
 	       |\ & \Tidentifier \parsesep \Tlbrace \parsesep \ClistOne{\Nfieldassign} \parsesep \Trbrace &\\
 \Nfieldassign \derives \ & \Tidentifier \parsesep \Teq \parsesep \Nexpr &
 \end{flalign*}
@@ -3034,7 +2998,7 @@ Notice that this rule introduces non-determinism.
       \begin{array}{r}
     \buildexpr(\overname{\Nexpr(
     \begin{array}{l}
-    \Tidentifier(\vt), \Tlbrace, \Trbrace
+    \Tidentifier(\vt), \Tlbrace, \Tminus, \Trbrace
     \end{array}
     )}{\vparsednode}) \\
     \astarrow\ \overname{\ERecord(\TNamed(\vt), \emptylist)}{\vastnode}

@@ -33,34 +33,8 @@ module type CONFIG = sig
 end
 
 let reserved_keywords = [
-    "SAMPLE";
-    "UNSTABLE";
-    "_"; "any";
-    "assume"; "assumes";
-    "call"; "cast";
-    "class"; "dict";
-    "endcase"; "endcatch"; "endclass";
-    "endevent"; "endfor"; "endfunc"; "endgetter";
-    "endif"; "endmodule"; "endnamespace"; "endpackage";
-    "endproperty"; "endrule"; "endsetter"; "endtemplate";
-    "endtry"; "endwhile";
-    "event"; "export";
-    "extends"; "extern"; "feature";
-    "gives";
-    "iff"; "implies"; "import";
-    "intersect"; "intrinsic";
-    "invariant"; "list";
-    "map"; "module"; "namespace"; "newevent";
-    "newmap"; "original";
-    "package"; "parallel";
-    "port"; "private";
-    "profile"; "property"; "protected"; "public";
-    "requires"; "rethrow"; "rule";
-    "shared"; "signal";
-    "template";
-    "typeof"; "union";
-    "using";
-    "ztype";
+    "pure";
+    "readonly";
 ]
 
 let is_reserved_keyword: string -> bool =
@@ -73,7 +47,7 @@ let is_reserved_keyword: string -> bool =
 
    Note that this set only contains simple enumerative types, not compound types
 
-   This function's exhaustivity is guaranteed by the test in tests/Lexer. *)
+   This function's exhaustiveness is guaranteed by the test in tests/Lexer. *)
 let token_of_string =
  let s t = Some t in
  function
@@ -304,7 +278,6 @@ exception LexerError
 let new_line lexbuf = Lexing.new_line lexbuf; lexbuf
 let bitvector_lit lxm = BITVECTOR_LIT (Bitvector.of_string lxm)
 let mask_lit lxm = MASK_LIT (Bitvector.mask_of_string lxm)
-let mask_alt_lit lxm = MASK_LIT (Bitvector.mask_of_alt_string lxm)
 let reserved_err s = Error.fatal_unknown_pos @@ (Error.ReservedIdentifier s)
 
 let fatal lexbuf desc =
@@ -406,8 +379,7 @@ let alpha = ['a'-'z' 'A'-'Z']
 let string_lit = '"' [^ '"']* '"'
 let bit = ['0' '1' ' ']
 let bits = bit*
-let mask = (bit | 'x')*
-let mask_alt = (bit | '(' bit+ ')')*
+let mask = (bit | 'x' | '(' bit+ ')')*
 let identifier = (alpha | '_') (alpha|digit|'_')*
 
 (*
@@ -472,7 +444,6 @@ and token = parse
     | '"'                      { string_lit (Buffer.create 16) lexbuf }
     | '\'' (bits as lxm) '\''  { bitvector_lit lxm                }
     | '\'' (mask as lxm) '\''  { mask_lit lxm                     }  (* Warning: masks with no unknown 'x' characters will be lexed as bitvectors. *)
-    | '\'' (mask_alt as lxm) '\'' { mask_alt_lit lxm              }
     | '!'                      { BNOT                             }
     | ','                      { COMMA                            }
     | '<'                      { LT                               }

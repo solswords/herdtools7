@@ -30,8 +30,10 @@ type args = {
   files : (file_type * string) list;
   opn : string option;
   allow_no_end_semicolon : bool;
+  allow_expression_elsif : bool;
   allow_double_underscore : bool;
   allow_unknown : bool;
+  allow_storage_discards : bool;
   print_ast : bool;
   print_lisp : bool;
   print_serialized : bool;
@@ -43,6 +45,7 @@ type args = {
   use_conflicting_side_effects_extension : bool;
   override_mode : override_mode;
   no_primitives : bool;
+  control_flow_analysis : bool;
 }
 
 let push thing ref = ref := thing :: !ref
@@ -52,8 +55,10 @@ let parse_args () =
   let target_files = ref [] in
   let exec = ref true in
   let allow_no_end_semicolon = ref false in
+  let allow_expression_elsif = ref false in
   let allow_double_underscore = ref false in
   let allow_unknown = ref false in
+  let allow_storage_discards = ref false in
   let print_ast = ref false in
   let print_serialized = ref false in
   let print_typed = ref false in
@@ -69,6 +74,7 @@ let parse_args () =
   let set_override_mode m () = override_mode := m in
   let no_primitives = ref false in
   let use_side_effects_extension = ref false in
+  let control_flow_analysis = ref true in
 
   let speclist =
     [
@@ -77,6 +83,9 @@ let parse_args () =
       ( "--allow-no-end-semicolon",
         Arg.Set allow_no_end_semicolon,
         " Allow block statements to terminate with 'end' instead of 'end;'." );
+      ( "--allow-expression-elsif",
+        Arg.Set allow_expression_elsif,
+        " Allow 'elsif' at the expression level." );
       ( "--allow-double-underscore",
         Arg.Set allow_double_underscore,
         " Allow the usage of variables beginning with double underscores \
@@ -84,6 +93,9 @@ let parse_args () =
       ( "--allow-unknown",
         Arg.Set allow_unknown,
         " Allow the usage of 'UNKNOWN' instead of 'ARBITRARY'." );
+      ( "--allow-storage-discards",
+        Arg.Set allow_storage_discards,
+        " Allow storage declarations that discard their right-hand sides." );
       ( "--print",
         Arg.Set print_ast,
         " Print the parsed AST to stdout before executing it." );
@@ -95,7 +107,7 @@ let parse_args () =
         " Print the parsed AST after typing and before executing it." );
       ( "--print-lisp",
         Arg.Set print_lisp,
-        " Print the parsed and typechecked AST in the Lisp object format.");
+        " Print the parsed and typechecked AST in the Lisp object format." );
       ( "--format-csv",
         Arg.Unit (fun () -> output_format := Error.CSV),
         " Output the errors in a CSV format." );
@@ -152,6 +164,10 @@ let parse_args () =
       ( "--no-primitives",
         Arg.Set no_primitives,
         " Do not use internal definitions for standard library subprograms." );
+      ( "--no-control-flow-analysis",
+        Arg.Clear control_flow_analysis,
+        " Do not use control-flow analysis to check that subprograms \
+         return/throw/execute `Unreachable()`." );
     ]
     |> Arg.align ?limit:None
   in
@@ -174,8 +190,10 @@ let parse_args () =
       files = !target_files;
       opn = (match !opn with "" -> None | s -> Some s);
       allow_no_end_semicolon = !allow_no_end_semicolon;
+      allow_expression_elsif = !allow_expression_elsif;
       allow_double_underscore = !allow_double_underscore;
       allow_unknown = !allow_unknown;
+      allow_storage_discards = !allow_storage_discards;
       print_ast = !print_ast;
       print_serialized = !print_serialized;
       print_typed = !print_typed;
@@ -187,6 +205,7 @@ let parse_args () =
       use_conflicting_side_effects_extension = !use_side_effects_extension;
       override_mode = !override_mode;
       no_primitives = !no_primitives;
+      control_flow_analysis = !control_flow_analysis;
     }
   in
 
@@ -225,10 +244,18 @@ let () =
 
   let parser_config =
     let allow_no_end_semicolon = args.allow_no_end_semicolon in
+    let allow_expression_elsif = args.allow_expression_elsif in
     let allow_double_underscore = args.allow_double_underscore in
     let allow_unknown = args.allow_unknown in
+    let allow_storage_discards = args.allow_storage_discards in
     let open Builder in
-    { allow_no_end_semicolon; allow_double_underscore; allow_unknown }
+    {
+      allow_no_end_semicolon;
+      allow_expression_elsif;
+      allow_double_underscore;
+      allow_unknown;
+      allow_storage_discards;
+    }
   in
 
   let extra_main =
@@ -290,6 +317,8 @@ let () =
 
       let use_conflicting_side_effects_extension =
         args.use_conflicting_side_effects_extension
+
+      let control_flow_analysis = args.control_flow_analysis
     end in
     let module T = Annotate (C) in
     or_exit @@ fun () -> T.type_check_ast ast
@@ -304,7 +333,8 @@ let () =
     if args.print_lisp then
       let lisp_ast = Lispobj.of_ast typed_ast in
       let lisp_static_env = Lispobj.of_static_env_global static_env in
-      Lispobj.print_obj Format.std_formatter (Lispobj.Cons(lisp_static_env, lisp_ast))
+      Lispobj.print_obj Format.std_formatter
+        (Lispobj.Cons (lisp_static_env, lisp_ast))
   in
 
   let exit_code, used_rules =

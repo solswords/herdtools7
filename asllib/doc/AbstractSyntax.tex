@@ -117,7 +117,7 @@ integers, Booleans, real numbers, bitvectors, and strings.
 \literal \derives\ & \lint(\overtext{n}{$\Z$})
 & \hypertarget{ast-lbool}{}
 \\
- |\ & \lbool(\overtext{b}{$\{\True, \False\}$})
+ |\ & \lbool(\overtext{b}{$\Bool$})
  & \hypertarget{ast-lreal}{}
 \\
  |\ & \lreal(\overtext{q}{$\Q$})
@@ -154,9 +154,9 @@ The following rules correspond to unary operations and binary operations that ca
 \\
         |\ & \overtext{\MUL}{\texttt{"*"}} \;|\; \overtext{\DIV}{\texttt{"DIV"}} \;|\; \overtext{\DIVRM}{\texttt{"DIVRM"}}
         \;|\; \overtext{\MOD}{\texttt{"MOD"}} \;|\; \overtext{\SHL}{\texttt{"<<"}}  \;|\; \overtext{\SHR}{\texttt{">>"}}
-        & \hypertarget{ast-rdiv}{} \hypertarget{ast-pow}{} \hypertarget{ast-bvconcat}{}
+        & \hypertarget{ast-rdiv}{} \hypertarget{ast-pow}{} \hypertarget{ast-concat}{}
 \\
-        |\ & \overtext{\RDIV}{\texttt{"/"}} \;|\; \overtext{\POW}{\texttt{"\^{}"}} \;|\; \overtext{\BVCONCAT}{\texttt{"::"}}
+        |\ & \overtext{\RDIV}{\texttt{"/"}} \;|\; \overtext{\POW}{\texttt{"\^{}"}} \;|\; \overtext{\CONCAT}{\texttt{"::"}}
         &
 \end{flalign*}
 

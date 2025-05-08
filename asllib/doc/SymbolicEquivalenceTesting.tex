@@ -193,12 +193,10 @@ We employ the following rules:
   \item \TypingRuleRef{BitwidthEqual}
   \item \TypingRuleRef{BitFieldsEqual}
   \item \TypingRuleRef{BitFieldEqual}
-  \item \TypingRuleRef{ConstraintsEqual}
   \item \TypingRuleRef{ConstraintEqual}
   \item \TypingRuleRef{SlicesEqual}
   \item \TypingRuleRef{SliceEqual}
   \item \TypingRuleRef{ArrayLengthEqual}
-  \item \TypingRuleRef{LiteralEqual}
 \end{itemize}
 
 \TypingRuleDef{Normalize}
@@ -781,7 +779,7 @@ Intuitively, $\toir$ conducts a case analysis to determine whether the ASL expre
 The function
 \[
   \exprequal(\overname{\staticenvs}{\tenv} \aslsep \overname{\expr}{\veone} \aslsep \overname{\expr}{\vetwo}) \aslto
-  \overname{\{\True, \False\}}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
+  \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
 \]
 conservatively checks whether the expression $\veone$ is equivalent to the expression $\vetwo$ in environment $\tenv$.
 The result is given in $\vb$ or a \typingerrorterm{}, if one is detected.
@@ -823,7 +821,7 @@ The result is given in $\vb$ or a \typingerrorterm{}, if one is detected.
 The helper function
 \[
   \exprequalnorm(\overname{\staticenvs}{\tenv} \aslsep \overname{\expr}{\veone} \aslsep \overname{\expr}{\vetwo})
-  \aslto \overname{\{\True, \False\}}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
+  \aslto \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
 \]
 conservatively tests whether the expression $\veone$ is equivalent to the expression $\vetwo$ in environment $\tenv$
 by attempting to transform both expressions to their symbolic expression form
@@ -882,7 +880,7 @@ The result is given in $\vb$ or a \typingerrorterm{}, if one is detected.
 The helper function
 \[
   \exprequalcase(\overname{\staticenvs}{\tenv} \aslsep \overname{\expr}{\veone} \aslsep \overname{\expr}{\vetwo})
-  \aslto \overname{\{\True, \False\}}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
+  \aslto \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
 \]
 specializes the equivalence test for expressions $\veone$ and $\vetwo$ in $\tenv$
 for the different types of expressions.
@@ -993,7 +991,7 @@ The result is given in $\vb$ or a \typingerrorterm{}, if one is detected.
   \begin{itemize}
     \item $\veone$ is the literal expression with literal $\vvone$;
     \item $\vetwo$ is the literal expression with literal $\vvtwo$;
-    \item $\vb$ is $\True$ if and only if $\vvone$ is equivalent to $\vvtwo$ in $\tenv$.
+    \item $\vb$ is $\True$ if and only if $\vvone$ is equal to $\vvtwo$ in $\tenv$.
   \end{itemize}
 
   \item \AllApplyCase{e\_pattern}
@@ -1179,7 +1177,7 @@ The result is given in $\vb$ or a \typingerrorterm{}, if one is detected.
   \inferrule[e\_literal]{
   \veone = \ELiteral(\vvone)\\
   \vetwo = \ELiteral(\vvtwo)\\\\
-  \literalequal(\vvone, \vvtwo) \typearrow \vb
+  \vb \eqdef \vvone = \vvtwo
 }{
   \exprequalcase(\tenv, \veone, \vetwo) \typearrow \vb
 }
@@ -1271,7 +1269,7 @@ The result is given in $\vb$ or a \typingerrorterm{}, if one is detected.
 The function
 \[
   \typeequal(\overname{\ty}{\vtone} \aslsep \overname{\ty}{\vttwo}) \aslto
-   \overname{\{\True, \False\}}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
+   \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
 \]
 conservatively tests whether the type $\vtone$ is equivalent to the type $\vttwo$ in environment $\tenv$
 and yields the result in $\vb$.  \ProseOtherwiseTypeError
@@ -1472,10 +1470,15 @@ and yields the result in $\vb$.  \ProseOtherwiseTypeError
 The function
 \[
   \bitwidthequal(\overname{\staticenvs}{\tenv} \aslsep \overname{\expr}{\vwone} \aslsep \overname{\expr}{\vwtwo})
-  \aslto \overname{\{\True, \False\}}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
+  \aslto \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
 \]
 conservatively tests whether the bitwidth expression $\vwone$ is equivalent to the bitwidth expression $\vwtwo$
 in environment $\tenv$ and yields the result in $\vb$.  \ProseOtherwiseTypeError
+
+\ExampleDef{Equivalence of Bitwidth Expressions}
+\listingref{BitwidthEqual} shows examples of equivalent bitwidth expressions on both sides
+of the respective local declaration statements.
+\ASLListing{Equivalence of bitwidth expressions}{BitwidthEqual}{\typingtests/TypingRule.BitwidthEqual.asl}
 
 \ProseParagraph
 Testing whether the expressions $\vwone$ and $\vwtwo$ are equivalent in $\tenv$ yields $\vb$\ProseOrTypeError.
@@ -1494,7 +1497,7 @@ Testing whether the expressions $\vwone$ and $\vwtwo$ are equivalent in $\tenv$ 
 The function
 \[
   \bitfieldsequal(\overname{\staticenvs}{\tenv} \aslsep \overname{\bitfield^*}{\bfone} \aslsep \overname{\bitfield^*}{\bftwo})
-  \aslto \overname{\{\True, \False\}}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
+  \aslto \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
 \]
 conservatively tests whether the list of bitfields $\bfone$ is equivalent to the list of bitfields $\bftwo$
 in environment $\tenv$ and yields the result in $\vb$.  \ProseOtherwiseTypeError
@@ -1539,7 +1542,7 @@ in environment $\tenv$ and yields the result in $\vb$.  \ProseOtherwiseTypeError
 The function
 \[
   \bitfieldequal(\overname{\staticenvs}{\tenv} \aslsep \overname{\bitfield}{\bfone} \aslsep \overname{\bitfield}{\bftwo})
-  \aslto \overname{\{\True, \False\}}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
+  \aslto \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
 \]
 conservatively tests whether the bitfield $\bfone$ is equivalent to the bitfield $\bftwo$ in environment $\tenv$
 and yields the result in $\vb$.  \ProseOtherwiseTypeError
@@ -1632,7 +1635,7 @@ and yields the result in $\vb$.  \ProseOtherwiseTypeError
 The function
 \[
   \constraintsequal(\overname{\staticenvs}{\tenv} \aslsep \overname{\intconstraint^*}{\csone} \aslsep \overname{\intconstraint^*}{\cstwo})
-  \aslto \overname{\{\True, \False\}}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
+  \aslto \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
 \]
 conservatively tests whether the constraint list $\csone$ is equivalent to the constraint list $\cstwo$ in environment $\tenv$
 and yields the result in $\vb$.  \ProseOtherwiseTypeError
@@ -1663,7 +1666,7 @@ and yields the result in $\vb$.  \ProseOtherwiseTypeError
 The function
 \[
   \constraintequal(\overname{\staticenvs}{\tenv} \aslsep \overname{\intconstraint}{\vcone} \aslsep \overname{\intconstraint}{\vstwo})
-  \aslto \overname{\{\True, \False\}}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
+  \aslto \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
 \]
 conservatively tests whether the constraint $\vcone$ is equivalent to the constraint $\vctwo$ in environment $\tenv$
 and yields the result in $\vb$.  \ProseOtherwiseTypeError
@@ -1726,10 +1729,14 @@ and yields the result in $\vb$.  \ProseOtherwiseTypeError
 The function
 \[
   \slicesequal(\overname{\staticenvs}{\tenv} \aslsep \overname{\slice^*}{\slicesone} \aslsep \overname{\slice^*}{\slicestwo})
-  \aslto \overname{\{\True, \False\}}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
+  \aslto \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
 \]
 conservatively tests whether the list of slices $\slicesone$ is equivalent to the list of slices $\slicestwo$
 in environment $\tenv$ and yields the result in $\vb$.  \ProseOtherwiseTypeError
+
+\ExampleDef{Equivalent Lists of Slices}
+\listingref{SlicesEqual} shows an example of two equivalent lists of slices.
+\ASLListing{Equivalent lists of slices}{SlicesEqual}{\typingtests/TypingRule.SlicesEqual.asl}
 
 \ProseParagraph
 \OneApplies
@@ -1744,7 +1751,7 @@ in environment $\tenv$ and yields the result in $\vb$.  \ProseOtherwiseTypeError
   \begin{itemize}
     \item checking whether the number of slices in $\slicesone$ is equal to the number of slice in $\slicestwo$ yields $\True$;
     \item determining whether the expression $\slicesone[i]$ is equivalent to $\slicestwo[i]$ in $\tenv$
-          for each index in the indices for $\slicesone$ ($i \in \listrange(\slicesone$) yields $\vb_i$\ProseOrTypeError;
+          for each index in the indices for $\slicesone$ ($i \in \listrange(\slicesone$)), yields $\vb_i$\ProseOrTypeError;
     \item $\vb$ is $\True$ if and only if all $\vb_i$ are $\True$ for each index in the indices for $\slicesone$.
   \end{itemize}
 \end{itemize}
@@ -1771,74 +1778,77 @@ in environment $\tenv$ and yields the result in $\vb$.  \ProseOtherwiseTypeError
 The function
 \[
   \sliceequal(\overname{\staticenvs}{\tenv} \aslsep \overname{\slice}{\sliceone} \aslsep \overname{\slice}{\slicetwo})
-  \aslto \overname{\{\True, \False\}}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
+  \aslto \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
 \]
 conservatively tests whether the slice $\sliceone$ is equivalent to the slice $\slicetwo$
 in environment $\tenv$ and yields the result in $\vb$. \ProseOtherwiseTypeError
 
+This function operates both on \typedast{} nodes, where both slices are only
+of the form $\SliceLength(\ \cdot\ ,\ \cdot\ )$, as well as \untypedast{} nodes where all slice forms
+are possible. The latter is used during checking overriding subprograms (\secref{Overriding}).
+
+\ExampleDef{Equivalent Slices}
+The specification in \listingref{SliceEqual} shows examples of equivalent slices.
+\ASLListing{Equivalent slices}{SliceEqual}{\typingtests/TypingRule.SliceEqual.asl}
+
+In \listingref{overriding}, the slice for the bitfield \verb|lsb| in both the \texttt{impdef} version
+of \verb|Foo| and the overridden version of \verb|Foo| are equivalent.
+
 \ProseParagraph
 \OneApplies
 \begin{itemize}
+  \item \AllApplyCase{single\_expr}
+  \begin{itemize}
+    \item $\sliceone$ is a slice for the single expression $\veone$, that is, $\SliceSingle(\veone)$;
+    \item $\slicetwo$ is a slice for the single expression $\vetwo$, that is, $\SliceSingle(\vetwo)$;
+    \item testing $\veone$ and $\vetwo$ for equivalence yields $\vb$\ProseOrTypeError;
+  \end{itemize}
+
+  \item \AllApplyCase{two\_exprs}
+  \begin{itemize}
+    \item $\sliceone$ is a slice consisting of the configuration domain $\vLone$ and two expressions $\veoneone$ and $\vetwoone$, that is, $\vLone(\veoneone, \vetwoone)$;
+    \item $\slicetwo$ is a slice consisting of the configuration domain $\vLtwo$ and two expressions $\veonetwo$ and $\vetwotwo$, that is, $\vLtwo(\veonetwo, \vetwotwo)$;
+    \item $\vLone$ is equal to $\vLtwo$;
+    \item testing $\veoneone$ and $\vetwoone$ for equivalence yields $\vbone$\ProseOrTypeError;
+    \item testing $\veonetwo$ and $\vetwotwo$ for equivalence yields $\vbtwo$\ProseOrTypeError;
+    \item \Proseeqdef{$\vb$}{$\True$ if and only if both $\vbone$ and $\vbtwo$ are $\True$}.
+  \end{itemize}
+
   \item \AllApplyCase{different\_labels}
   \begin{itemize}
-    \item $\sliceone$ and $\slicetwo$ have different AST labels;
-    \item $\vb$ is $\False$.
-  \end{itemize}
-
-  \item \AllApplyCase{slice\_single}
-  \begin{itemize}
-    \item $\sliceone$ is a slice for a single position, given by the expression $\veone$, that is, $\SliceSingle(\veone)$;
-    \item $\slicetwo$ is a slice for a single position, given by the expression $\vetwo$, that is, $\SliceSingle(\vetwo)$;
-    \item testing $\veone$ and $\vetwo$ for equivalence yields $\vb$\ProseOrTypeError.
-  \end{itemize}
-
-  \item \AllApplyCase{slice\_range}
-  \begin{itemize}
-    \item $\sliceone$ is a slice for a range of positions, given by the expressions $\veoneone$ and $\veonetwo$, that is, $\SliceRange(\veoneone, \veonetwo)$;
-    \item $\slicetwo$ is a slice for a range of positions, given by the expressions $\vetwoone$ and $\vetwotwo$, that is, $\SliceRange(\vetwoone, \vetwotwo)$;
-    \item testing $\veoneone$ and $\vetwoone$ for equivalence yields $\vbone$\ProseOrTypeError;
-    \item testing $\veonetwo$ and $\vetwotwo$ for equivalence yields $\vbtwo$\ProseOrTypeError;
-    \item $\vb$ is $\True$ if and only if both $\vbone$ and $\vbtwo$ are $\True$.
-  \end{itemize}
-
-  \item \AllApplyCase{slice\_length}
-  \begin{itemize}
-    \item $\sliceone$ is a slice for a range of positions, given by the start expression $\veoneone$ and length expression $\veonetwo$, that is, $\SliceLength(\veoneone, \veonetwo)$;
-    \item $\slicetwo$ is a slice for a range of positions, given by the start expression $\vetwoone$ and length expression $\vetwotwo$, that is, $\SliceLength(\vetwoone, \vetwotwo)$;
-    \item testing $\veoneone$ and $\vetwoone$ for equivalence yields $\vbone$\ProseOrTypeError;
-    \item testing $\veonetwo$ and $\vetwotwo$ for equivalence yields $\vbtwo$\ProseOrTypeError;
-    \item $\vb$ is $\True$ if and only if both $\vbone$ and $\vbtwo$ are $\True$.
+    \item $\sliceone$ is a slice consisting of the configuration domain $\vLone$;
+    \item $\slicetwo$ is a slice consisting of the configuration domain $\vLtwo$;
+    \item $\vLone$ is different to $\vLtwo$;
+    \item \Proseeqdef{$\vb$}{$\False$}.
   \end{itemize}
 \end{itemize}
 
 \FormallyParagraph
 \begin{mathpar}
-\inferrule[different\_labels]{
-  \astlabel(\sliceone) \neq \astlabel(\slicetwo)
-}{
-  \slicesequal(\tenv, \sliceone, \slicetwo) \typearrow \False
-}
-\and
-\inferrule[slice\_single]{
+\inferrule[single\_expr]{
   \exprequal(\tenv, \veone, \vetwo) \typearrow \vb \OrTypeError
 }{
-  \slicesequal(\tenv, \SliceSingle(\veone), \SliceSingle(\vetwo)) \typearrow \vb
+  \slicesequal(\tenv, \overname{\SliceSingle(\veone)}{\sliceone}, \overname{\SliceSingle(\vetwo)}{\slicetwo}) \typearrow \vb
 }
-\and
-\inferrule[slice\_range]{
-  \exprequal(\tenv, \veoneone, \vetwoone) \typearrow \vbone \OrTypeError\\\\
+\end{mathpar}
+
+\begin{mathpar}
+\inferrule[two\_exprs]{
+  \vLone, \vLtwo \in \{\SliceLength, \SliceRange, \SliceStar\}\\
+  \vLone = \vLtwo\\
+  \exprequal(\tenv, \veoneone, \veonetwo) \typearrow \vbone \OrTypeError\\\\
   \exprequal(\tenv, \vetwoone, \vetwotwo) \typearrow \vbtwo \OrTypeError\\\\
   \vb \eqdef \vbone \land \vbtwo
 }{
-  \slicesequal(\tenv, \SliceRange(\veoneone, \veonetwo), \SliceRange(\vetwoone, \vetwotwo)) \typearrow \vb
+  \slicesequal(\tenv, \overname{\vLone(\veoneone, \vetwoone)}{\sliceone}, \overname{\vLtwo(\veonetwo, \vetwotwo)}{\slicetwo}) \typearrow \vb
 }
-\and
-\inferrule[slice\_length]{
-  \exprequal(\tenv, \veoneone, \vetwoone) \typearrow \vbone \OrTypeError\\\\
-  \exprequal(\tenv, \vetwoone, \vetwotwo) \typearrow \vbtwo \OrTypeError\\\\
-  \vb \eqdef \vbone \land \vbtwo
+\end{mathpar}
+
+\begin{mathpar}
+\inferrule[different\_labels]{
+  \configdomain{\sliceone} \neq \configdomain{\slicetwo}
 }{
-  \slicesequal(\tenv, \SliceLength(\veoneone, \veonetwo), \SliceLength(\vetwoone, \vetwotwo)) \typearrow \vb
+  \slicesequal(\tenv, \sliceone, \slicetwo) \typearrow \overname{\False}{\vb}
 }
 \end{mathpar}
 
@@ -1847,7 +1857,7 @@ in environment $\tenv$ and yields the result in $\vb$. \ProseOtherwiseTypeError
 The function
 \[
   \arraylengthequal(\overname{\arrayindex}{\vlone} \aslsep \overname{\arrayindex}{\vltwo})
-  \aslto \overname{\{\True, \False\}}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
+  \aslto \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
 \]
 tests whether the array lengths $\vlone$ and $\vltwo$ are equivalent and yields the result
 in $\vb$. \ProseOtherwiseTypeError
@@ -1900,26 +1910,6 @@ in $\vb$. \ProseOtherwiseTypeError
   \vb \eqdef (\venumone = \venumtwo)
 }{
   \arraylengthequal(\ArrayLengthEnum(\venumone, \Ignore), \ArrayLengthEnum(\venumtwo, \Ignore)) \typearrow \vb
-}
-\end{mathpar}
-
-\TypingRuleDef{LiteralEqual}
-\hypertarget{def-literalequal}{}
-The function
-\[
-  \literalequal(\overname{\literal}{\vvone} \aslsep \overname{\literal}{\vvtwo}) \rightarrow \overname{\{\True, \False\}}{\vb}
-\]
-tests whether literal $\vvone$ is $\vvtwo$ by equating them.
-
-\ProseParagraph
-$\vb$ is $\True$ if and only if $\vvone$ is equal to $\vvtwo$.
-
-\FormallyParagraph
-\begin{mathpar}
-\inferrule{
-  \vb \eqdef \vvone = \vvtwo
-}{
-  \literalequal(\vvone, \vvtwo) \typearrow \vb
 }
 \end{mathpar}
 
@@ -2205,6 +2195,19 @@ $\vstwo$                      & -1                         & 0               & 1
 \end{tabular}
 \end{center}
 
+\ExampleDef{Symbolically Summing Signed Expressions}
+The following are some examples of inputs and outputs for symbolic addition:
+\begin{center}
+\begin{tabular}{rrrrrr}
+\textbf{$\vsone$} & \textbf{$\veone$} & \textbf{$\vstwo$} & \textbf{$\vetwo$} & \textbf{$\ve$} & \textbf{$\vs$}\\
+\hline
+-1 & \verb|x| & -1 & \verb|y| & \verb|x+y| & -1\\
+-1 & \verb|x| & 0 & \verb|y| & \verb|x| & -1\\
+-1 & \verb|x| & 1 & \verb|y| & \verb|x-y| & -1\\
+1 & \verb|x| & -1 & \verb|y| & \verb|x-y| & 1\\
+\end{tabular}
+\end{center}
+
 \ProseParagraph
 \OneApplies
 \begin{itemize}
@@ -2365,6 +2368,19 @@ $
 produces an expression representing the multiplication of expressions $\veone$ and $\vetwo$,
 simplifying away the case where one of the operands is the literal one.
 
+\ExampleDef{Symbolic Multiplication}
+The following table shows examples of symbolically multiplying the expression $\veone$ by the expression $\vetwo$,
+yielding the result in $\ve$:
+\begin{center}
+\begin{tabular}{lll}
+\textbf{$\veone$} & \textbf{$\vetwo$} & \textbf{$\ve$}\\
+\hline
+\verb|x*0|  & \verb|1|    & \verb|x*0|\\
+\verb|1|    & \verb|x*0|  & \verb|x*0|\\
+\verb|x*0|  & \verb|x*0|  & \verb|(x*0)*(x*0)|
+\end{tabular}
+\end{center}
+
 \ProseParagraph
 \OneApplies
 \begin{itemize}
@@ -2408,6 +2424,17 @@ The function
 \]
 looks up the environment $\tenv$ for a type $\tty$ associated with an identifier
 $\vs$. The result is \typingerrorterm{} if $\vs$ is not associated with any type.
+
+\ExampleDef{The Type Bound to an Identifier}
+In \listingref{expressions-evar}, the type bound to the global storage element
+\verb|global_non_constant| after annotating the global storage element declarations
+is \verb|integer{19}|,
+%
+the type bound to the local storage element \verb|var_x| in the static environment
+after annotating the local declaration \verb|var var_x = LOCAL_CONSTANT;| is \verb|integer{7}|.
+%
+Invoking $\typeof$ for the static environment just before annotating the local
+declaration \verb|var x = t;| in \listingref{expressions-evar-undefined} yields a \typingerrorterm.
 
 \ProseParagraph
 \OneApplies

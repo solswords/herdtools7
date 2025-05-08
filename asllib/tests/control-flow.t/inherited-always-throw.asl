@@ -1,13 +1,13 @@
-type E of exception {};
+type E of exception {-};
 
 func always_throws () => integer
 begin
-  throw E {};
+  throw E {-};
 end;
 
 func inherited_always_throws () => integer
 begin
-  let - = always_throws ();
+  let x = always_throws ();
 end;
 
 func main () => integer

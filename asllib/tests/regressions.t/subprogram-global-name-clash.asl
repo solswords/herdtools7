@@ -1,12 +1,12 @@
 var X : integer = 0;
 
-accessor X() <=> integer
+accessor X() <=> v: integer
 begin
-  getter begin
+  getter
     return X;
   end;
 
-  setter = v begin
+  setter
     X = v;
   end;
 end;
@@ -18,8 +18,8 @@ end;
 
 func main() => integer
 begin
-  let - = X;
-  let - = X(TRUE);
+  - = X;
+  - = X(TRUE);
   X() = X;
   X() = X + 1;
   assert X() == 1;
