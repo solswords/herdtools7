@@ -194,12 +194,33 @@
          :hints(("Goal" :in-theory (enable identifier-p)))
          :rule-classes :compound-recognizer))
 
+(define val-imaplist-assoc ((key identifier-p) (stack val-imaplist-p))
+  :returns (pair)
+  (if (atom stack)
+      nil
+    (or (hons-assoc-equal (identifier-fix key) (val-imap-fix (car stack)))
+        (val-imaplist-assoc key (cdr stack))))
+  ///
+  (defret cdr-pair-of-<fn>
+    (implies pair
+             (val-p (cdr pair))))
+
+  (defthm val-imaplist-assoc-of-cons
+    (equal (val-imaplist-assoc key (cons imap stack))
+           (or (hons-assoc-equal (identifier-fix key) (val-imap-fix imap))
+               (val-imaplist-assoc key stack))))
+
+  (defthm val-imaplist-assoc-of-nil
+    (equal (val-imaplist-assoc key nil) nil))
+  
+  (fty::deffixequiv val-imaplist-assoc))
+
 (define env-find ((x identifier-p)
                   (env env-p))
   :returns (res val_env_result-p)
   (b* (((env env))
        ((local-env env.local))
-       (local-look (assoc-equal (identifier-fix x) env.local.storage))
+       (local-look (val-imaplist-assoc (identifier-fix x) env.local.storage))
        ((When local-look) (lk_local (cdr local-look)))
        ((global-env env.global))
        (global-look (assoc-equal (identifier-fix x) env.global.storage))
@@ -216,6 +237,72 @@
        ((When global-look) (ev_normal (cdr global-look))))
     (ev_error "Global variable not found" x)))
 
+(define val-imaplist-assign ((name identifier-p)
+                             (v val-p)
+                             (stack val-imaplist-p))
+  :returns (new-stack val-imaplist-p)
+  (if (atom stack)
+      nil
+    (if (hons-assoc-equal (identifier-fix name) (val-imap-fix (car stack)))
+        (cons (put-assoc-equal (identifier-fix name) (val-fix v) (val-imap-fix (car stack)))
+              (val-imaplist-fix (cdr stack)))
+      (cons (val-imap-fix (car stack))
+            (val-imaplist-assign name v (cdr stack)))))
+  ///
+  (defthm val-imaplist-assoc-of-val-imaplist-assign
+    (equal (val-imaplist-assoc n1 (val-imaplist-assign n2 v stack))
+           (if (equal (identifier-fix n1) (identifier-fix n2))
+               (and (val-imaplist-assoc n1 stack)
+                    (cons (identifier-fix n1) (val-fix v)))
+             (val-imaplist-assoc n1 stack)))
+    :hints(("Goal" :in-theory (enable val-imaplist-assoc))))
+
+  (defthm val-imaplist-assign-of-cons
+    (equal (val-imaplist-assign name v (cons imap stack))
+           (if (hons-assoc-equal (identifier-fix name) (val-imap-fix imap))
+               (cons (put-assoc-equal (identifier-fix name) (Val-fix v)
+                                      (val-imap-fix imap))
+                     (val-imaplist-fix stack))
+             (cons (val-imap-fix imap)
+                   (val-imaplist-assign name v stack)))))
+
+  (defthm val-imaplist-assign-of-nil
+    (equal (val-imaplist-assign name v nil) nil))
+
+  (defthm val-imaplist-assign-redundant
+    (equal (val-imaplist-assign k1 v1 (val-imaplist-assign k1 v2 x))
+           (val-imaplist-assign k1 v1 x)))
+
+  (defthm val-imaplist-assign-identity
+    (implies (equal v (cdr (val-imaplist-assoc k x)))
+             (equal (val-imaplist-assign k v x)
+                    (val-imaplist-fix x)))
+    :hints(("Goal" :in-theory (enable val-imaplist-assoc))))
+
+  (fty::deffixequiv val-imaplist-assign)
+
+  (local
+   
+   (defthm put-assoc-equal-normalize
+     (implies (and ;; (syntaxp (and (not (equal k k1))
+               ;;               (member-equal k (put-assoc-equal-term-keys x))))
+               (hons-assoc-equal k x)
+               (not (equal k k1)))
+              (equal (put-assoc-equal k v (put-assoc-equal k1 v1 x))
+                     (put-assoc-equal k1 v1 (put-assoc-equal k v x))))
+     :hints(("Goal" :in-theory (enable put-assoc-equal)))))
+  
+  (defthm val-imaplist-assign-alternate
+    (implies (val-imaplist-assoc k1 x)
+             (equal (val-imaplist-assign k1 v1 (val-imaplist-assign k2 v2 (val-imaplist-assign k1 v3 x)))
+                    (val-imaplist-assign k1 v1 (val-imaplist-assign k2 v2 x)))))
+
+  (defthm val-imaplist-assign-normalize
+    (implies (and (val-imaplist-assoc k x)
+                  (not (equal (identifier-fix k) (identifier-fix k1))))
+             (equal (val-imaplist-assign k v (val-imaplist-assign k1 v1 x))
+                    (val-imaplist-assign k1 v1 (val-imaplist-assign k v x))))))
+
 (define env-assign-local ((name identifier-p)
                           (v val-p)
                           (env env-p))
@@ -226,7 +313,7 @@
     (change-env env
                 :local (change-local-env
                         env.local
-                        :storage (put-assoc-equal name (val-fix v) env.local.storage)))))
+                        :storage (val-imaplist-assign name v env.local.storage)))))
 
 (define env-assign-global ((name identifier-p)
                            (v val-p)
@@ -247,7 +334,7 @@
   (b* (((env env))
        ((local-env env.local))
        (name (identifier-fix name))
-       (local-look (assoc-equal name env.local.storage))
+       (local-look (val-imaplist-assoc name env.local.storage))
        ((When local-look)
         (lk_local (env-assign-local name v env)))
        ((global-env env.global))
@@ -414,8 +501,8 @@
   :returns (new-env env-p)
   (b* (((env env))
        ((local-env l) env.local)
-       (new-storage (cons (cons (identifier-fix name) (val-fix val))
-                          l.storage)))
+       (new-storage (cons (cons (cons (identifier-fix name) (val-fix val)) (car l.storage))
+                          (cdr l.storage))))
     (change-env env :local (change-local-env l :storage new-storage))))
 
 (define remove_local_identifier ((env env-p)
@@ -423,7 +510,8 @@
   :returns (new-env env-p)
   (b* (((env env))
        ((local-env l) env.local)
-       (new-storage (remove-assoc-equal (identifier-fix name) l.storage)))
+       (new-storage (cons (remove-assoc-equal (identifier-fix name) (car l.storage))
+                          (cdr l.storage))))
     (change-env env :local (change-local-env l :storage new-storage))))
 
 (define declare_local_identifiers ((env env-p)
@@ -433,10 +521,11 @@
   :returns (new-env env-p)
   (b* (((env env))
        ((local-env l) env.local)
-       (new-storage (append (pairlis$ (identifierlist-fix names)
-                                      (mbe :logic (vallist-fix (take (len names) vals))
-                                           :exec vals))
-                            l.storage)))
+       (new-storage (cons (append (pairlis$ (identifierlist-fix names)
+                                            (mbe :logic (vallist-fix (take (len names) vals))
+                                                 :exec vals))
+                                  (car l.storage))
+                          (cdr l.storage))))
     (change-env env :local (change-local-env l :storage new-storage))))
 
 
@@ -685,24 +774,23 @@
            (for_loop-step v_start dir))))
 
 
-(define pop_scope ((parent env-p)
-                   (child env-p))
+(define pop_scope ((env env-p))
   :Returns (new-env env-p)
-  :prepwork ((local (defthm fal-extract-of-val-imap
-                      (implies (val-imap-p x)
-                               (val-imap-p (acl2::fal-extract keys x)))
-                      :hints(("Goal" :in-theory (enable acl2::fal-extract))))))
-  (b* (((env child))
-       ((env parent))
-       ((local-env parent.local))
-       ((local-env child.local))
-       (dom (acl2::alist-keys parent.local.storage)))
-    (change-env child
+  (b* (((env env))
+       ((local-env env.local)))
+    (change-env env
                 :local
-                (change-local-env child.local
-                                  :storage (acl2::fal-extract
-                                            (remove-duplicates-equal dom)
-                                            child.local.storage)))))
+                (change-local-env env.local
+                                  :storage (cdr env.local.storage)))))
+
+(define push_scope ((env env-p))
+  :Returns (new-env env-p)
+  (b* (((env env))
+       ((local-env env.local)))
+    (change-env env
+                :local
+                (change-local-env env.local
+                                  :storage (cons nil env.local.storage)))))
 
 
 (define check-bad-slices ((width acl2::maybe-natp)
@@ -1697,7 +1785,7 @@
                                        :v_bool (ev_normal test.val.val)
                                        :otherwise (ev_error "Non-boolean test result" s.test)))
                        (next (if testval s.then s.else)))
-                    (eval_stmt test.env next))
+                    (eval_block test.env next))
           :s_assert (b* (((mv (evo (expr_result assert)) orac) (eval_expr env s.expr)))
                       (val-case assert.val
                         :v_bool (if assert.val.val
@@ -1707,6 +1795,7 @@
           :s_for (b* (((mv (evo (expr_result startr)) orac) (eval_expr env s.start_e))
                       ((mv (evo (expr_result endr)) orac)   (eval_expr env s.end_e))
                       ((mv (evo limit) orac)                (eval_limit env s.limit))
+                      (env (push_scope env))
                       ;;; BOZO FIXME TODO: Add loop limit
                       (env (declare_local_identifier env s.index_name startr.val))
                       ;; Type constraints ensure that start and end are integers,
@@ -1716,7 +1805,7 @@
                       ((evs env2)
                        (eval_for env s.index_name limit
                                       startv s.dir endv s.body))
-                      (env3 (remove_local_identifier env2 s.index_name)))
+                      (env3 (pop_scope env2)))
                    (evo_normal (continuing env3)))
                       
           :s_while (b* (((mv (evo limit) orac) (eval_limit env s.limit)))
@@ -1887,13 +1976,14 @@
                         (orac 'orac))
       :measure (nats-measure clk 0 (stmt-count* x) 1)
       :returns (mv (eval stmt_eval_result-p) new-orac)
-      (b* (((mv stmtres orac) (eval_stmt env x)))
+      (b* ((env (push_scope env))
+           ((mv stmtres orac) (eval_stmt env x)))
         (eval_result-case stmtres
           :ev_normal (control_flow_state-case stmtres.res
                        :returning (evo_normal stmtres.res)
-                       :continuing (evo_normal (continuing (pop_scope env stmtres.res.env))))
+                       :continuing (evo_normal (continuing (pop_scope stmtres.res.env))))
           :ev_throwing (mv (ev_throwing stmtres.throwdata
-                                        (pop_scope env stmtres.env))
+                                        (pop_scope stmtres.env))
                            orac)
           :otherwise (mv stmtres orac))))
            
@@ -2012,6 +2102,8 @@
     (verify-guards eval_expr-fn :guard-debug t
       :hints (("goal" :do-not-induct t)))
     ))
+
+
 
 
 
