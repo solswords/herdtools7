@@ -1,0 +1,16 @@
+AArch64 S+dmb.sttp+ctrl--async.mod
+Hash=567dcb209f20704bad1e93112310bc6b
+Variant=memtag,async
+
+{
+ 0:X4=x:red; 0:X3=x:green; 0:X1=y:green;
+ 1:X3=x:red; 1:X1=y:green;
+}
+ P0          | P1          ;
+ STG X4,[X3] | LDR W0,[X1] ;
+ DMB ST      | CBZ W0,L0   ;
+ MOV W0,#1   | MOV W2,#1   ;
+ STR W0,[X1] | STR W2,[X3] ;
+             | L0:         ;
+
+exists (1:TFSR_Elx=1)

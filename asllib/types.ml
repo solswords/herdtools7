@@ -160,8 +160,8 @@ let parameterized_constraints =
     incr next_uid;
     Parameterized (uid, var)
 
-let parameterized_ty var =
-  T_Int (parameterized_constraints var) |> add_dummy_annotation
+let parameterized_ty ~loc var =
+  T_Int (parameterized_constraints var) |> add_pos_from loc
 
 let to_well_constrained ty =
   match ty.desc with
@@ -257,6 +257,9 @@ module Domain = struct
     exception CannotOverApproximate
     (** Raised if over approximation is not possible. *)
 
+    exception CannotUnderApproximate
+    (** Raised if under approximation is not possible. *)
+
     (** Return bottom for Under approximation, top for over approximation. *)
     let bottom_top approx =
       if approx = Over then raise CannotOverApproximate else IntSet.empty
@@ -272,10 +275,22 @@ module Domain = struct
       try Operations.unop_values loc Error.Static op (L_Int z) |> literal_to_z
       with ASLException { desc = UnsupportedUnop _ } -> None
 
-    module SOp = StaticOperations.Make (struct
-      let fail () = assert false
+    module OverSOp = StaticOperations.Make (struct
+      let fail _ = raise CannotOverApproximate
       let warn_from ~loc:_ _ = ()
     end)
+
+    module UnderOp = StaticOperations.Make (struct
+      let fail _ = raise CannotUnderApproximate
+      let warn_from ~loc:_ _ = ()
+    end)
+
+    let constraint_binop = function
+      | Over -> OverSOp.annotate_constraint_binop
+      | Under -> (
+          fun ~loc env op s1 s2 ->
+            try UnderOp.annotate_constraint_binop ~loc env op s1 s2
+            with CannotUnderApproximate -> ([], Precision_Lost []))
 
     (** [intset_to_constraints s] converts each interval in [s] into a constraint for that interval. *)
     let intset_to_constraints s =
@@ -301,12 +316,9 @@ module Domain = struct
           IntSet.filter_map_individual (apply_unop e op)
             (approx_expr approx env e')
       | E_Binop ((#StaticOperations.int3_binop as op), e1, e2) -> (
-          let cs1 = approx_expr approx env e1 |> intset_to_constraints in
-          let cs2 = approx_expr approx env e2 |> intset_to_constraints in
-          let s', plf =
-            SOp.annotate_constraint_binop ~loc:ASTUtils.dummy_annotated env op
-              cs1 cs2
-          in
+          let s1 = approx_expr approx env e1 |> intset_to_constraints in
+          let s2 = approx_expr approx env e2 |> intset_to_constraints in
+          let s', plf = constraint_binop approx ~loc:e env op s1 s2 in
           match (plf, approx) with
           | Precision_Full, _ | Precision_Lost _, Under ->
               approx_constraints approx env s'
@@ -657,7 +669,8 @@ let unpack_options li =
   try Some (List.map unpack_one li) with NoneFound -> None
 
 (* Begin LowestCommonAncestor *)
-let rec lowest_common_ancestor env s t =
+let rec lowest_common_ancestor ~loc env s t =
+  let here = add_pos_from loc in
   let ( let+ ) o f = Option.map f o in
   (* The lowest common ancestor of types S and T is: *)
   (match (s.desc, t.desc) with
@@ -668,21 +681,22 @@ let rec lowest_common_ancestor env s t =
       (* If S and T are both named types: the (unique) common supertype of S
          and T that is a subtype of all other common supertypes of S and T. *)
       match find_named_lowest_common_supertype env name_s name_t with
-      | Some name -> Some (T_Named name |> add_dummy_annotation)
+      | Some name -> Some (T_Named name |> here)
       | None ->
           let anon_s = make_anonymous env s and anon_t = make_anonymous env t in
-          lowest_common_ancestor env anon_s anon_t)
+          lowest_common_ancestor ~loc env anon_s anon_t)
   | _, T_Named _ | T_Named _, _ ->
       let anon_s = make_anonymous env s and anon_t = make_anonymous env t in
       if type_equal env anon_s anon_t then
         Some (match s.desc with T_Named _ -> s | _ -> t)
-      else lowest_common_ancestor env anon_s anon_t
+      else lowest_common_ancestor ~loc env anon_s anon_t
   | T_Int _, T_Int UnConstrained | T_Int UnConstrained, T_Int _ ->
       (* If either S or T is an unconstrained integer type: the unconstrained
          integer type. *)
       Some integer
   | T_Int _, T_Int (Parameterized _) | T_Int (Parameterized _), T_Int _ ->
-      lowest_common_ancestor env (to_well_constrained s) (to_well_constrained t)
+      lowest_common_ancestor ~loc env (to_well_constrained s)
+        (to_well_constrained t)
   | T_Int (WellConstrained (cs_s, p1)), T_Int (WellConstrained (cs_t, p2)) ->
       (* If S and T both are well-constrained integer types: the
          well-constrained integer type with domain the union of the
@@ -690,19 +704,19 @@ let rec lowest_common_ancestor env s t =
       Some (well_constrained ~precision:(precision_join p1 p2) (cs_s @ cs_t))
   | T_Bits (e_s, _), T_Bits (e_t, _) when expr_equal env e_s e_t ->
       (* We forget the bitfields if they are not equal. *)
-      Some (T_Bits (e_s, []) |> add_dummy_annotation)
+      Some (T_Bits (e_s, []) |> here)
   | T_Array (width_s, ty_s), T_Array (width_t, ty_t)
     when array_length_equal env width_s width_t ->
-      let+ t = lowest_common_ancestor env ty_s ty_t in
-      T_Array (width_s, t) |> add_dummy_annotation
+      let+ t = lowest_common_ancestor ~loc env ty_s ty_t in
+      T_Array (width_s, t) |> here
   | T_Tuple li_s, T_Tuple li_t when List.compare_lengths li_s li_t = 0 ->
       (* If S and T both are tuple types with the same number of elements:
          the tuple type with the type of each element the lowest common ancestor
          of the types of the corresponding elements of S and T. *)
       let+ li =
-        List.map2 (lowest_common_ancestor env) li_s li_t |> unpack_options
+        List.map2 (lowest_common_ancestor ~loc env) li_s li_t |> unpack_options
       in
-      add_dummy_annotation (T_Tuple li)
+      here (T_Tuple li)
   | _ -> None)
   |: TypingRule.LowestCommonAncestor
 (* End *)
