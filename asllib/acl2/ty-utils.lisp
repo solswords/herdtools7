@@ -834,14 +834,18 @@
                                        (:free (x y) (record-type-satisfied (cons x y) fields))
                                        (record-type-satisfied nil fields)))))
     (b* (((when (atom fields)) nil)
+         ((typed_identifier f1) (car fields))
          ((when (and (consp x)
                      (or (atom (car x))
                          (not (identifier-p (caar x))))))
           (record-type-fix-val (cdr x) fields))
-         ((typed_identifier f1) (car fields))
-         (val (ty-fix-val (and (consp x) (cdar x)) f1.type)))
+         ((when (and (consp x)
+                     (equal (caar x) f1.name)))
+          (cons (cons f1.name (ty-fix-val (cdar x) f1.type))
+                (record-type-fix-val (cdr x) (cdr fields))))
+         (val (ty-fix-val (cdr (hons-assoc-equal f1.name (val-imap-fix x))) f1.type)))
       (cons (cons f1.name val)
-            (record-type-fix-val (and (consp x) (cdr x)) (cdr fields)))))
+            (record-type-fix-val x (cdr fields)))))
   ///
 
   (local (defthm val-imap-fix-when-atom
@@ -869,6 +873,19 @@
                    :induct (len x)
                    :expand ((record-type-satisfied x fields)
                             (val-imap-fix x))))))
+
+  (local (defthm record-type-satisfied-when-x-atom
+           (implies (atom (Val-imap-fix x))
+                    (iff (record-type-satisfied x fields)
+                         (atom fields)))
+           :hints(("Goal"
+                   :induct (len x)
+                   :expand ((record-type-satisfied x fields)
+                            (val-imap-fix x))))))
+
+  ;; (local (defthm nthcdr-of-len
+  ;;          (atom (nthcdr (len x) x))
+  ;;          :rule-classes :type-prescription))
   
   (std::defret-mutual ty-fix-val-when-satisfied
     (defret <fn>-when-satisfied
@@ -892,12 +909,13 @@
                          <call>
                          (:free (x ty) (array-type-fix-val 0 x ty)))))
       :fn array-type-fix-val)
-    (defret <fn>-when-satisfied
-      (implies (and (record-type-satisfied x fields))
+    (defret <fn>-when-satisfied-aux
+      (implies (record-type-satisfied x fields)
                (equal new-x (val-imap-fix x)))
       :hints ('(:expand ((record-type-satisfied x fields)
                          (val-imap-fix x)
-                         <call>)))
+                         <call>)
+                :do-not-induct t))
       :fn record-type-fix-val))
   
   (verify-guards ty-fix-val
