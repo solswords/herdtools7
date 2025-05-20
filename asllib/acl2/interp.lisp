@@ -1095,13 +1095,13 @@
 
 
 (defmacro trace-eval_subprogram ()
-  '(trace$ (eval_subprogram :entry (list 'eval_subprogram name vparams vargs)
-                            :exit (list 'eval_subprogram
-                                        (let ((value (car values)))
-                                          (eval_result-case value
-                                            :ev_normal (b* (((func_result value.res)))
-                                                         (list 'ev_normal value.res.vals))
-                                            :otherwise value))))))
+  '(trace$ (eval_subprogram-fn :entry (list 'eval_subprogram name vparams vargs)
+                               :exit (list 'eval_subprogram
+                                           (let ((value (car values)))
+                                             (eval_result-case value
+                                               :ev_normal (b* (((func_result value.res)))
+                                                            (list 'ev_normal value.res.vals))
+                                               :otherwise value))))))
 
 
 (local
