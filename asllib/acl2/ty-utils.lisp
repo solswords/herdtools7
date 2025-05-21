@@ -828,24 +828,18 @@
     :guard (and (typed_identifierlist-resolved-p fields)
                 (record-type-satisfied x fields))
     :measure (acl2::two-nats-measure (typed_identifierlist-count fields) (len x))
-    :returns (new-x (implies (typed_identifierlist-satisfiable fields)
-                             (record-type-satisfied new-x fields))
+    :returns (new-x (and (val-imap-p new-x)
+                         (implies (typed_identifierlist-satisfiable fields)
+                                  (record-type-satisfied new-x fields)))
                     :hints ('(:expand ((typed_identifierlist-satisfiable fields)
                                        (:free (x y) (record-type-satisfied (cons x y) fields))
                                        (record-type-satisfied nil fields)))))
     (b* (((when (atom fields)) nil)
          ((typed_identifier f1) (car fields))
-         ((when (and (consp x)
-                     (or (atom (car x))
-                         (not (identifier-p (caar x))))))
-          (record-type-fix-val (cdr x) fields))
-         ((when (and (consp x)
-                     (equal (caar x) f1.name)))
-          (cons (cons f1.name (ty-fix-val (cdar x) f1.type))
-                (record-type-fix-val (cdr x) (cdr fields))))
-         (val (ty-fix-val (cdr (hons-assoc-equal f1.name (val-imap-fix x))) f1.type)))
+         (val (ty-fix-val (cdr (hons-assoc-equal f1.name (val-imap-fix x))) f1.type))
+         (new-x (remove1-assoc-equal f1.name (val-imap-fix x))))
       (cons (cons f1.name val)
-            (record-type-fix-val x (cdr fields)))))
+            (record-type-fix-val new-x (cdr fields)))))
   ///
 
   (local (defthm val-imap-fix-when-atom
@@ -883,9 +877,72 @@
                    :expand ((record-type-satisfied x fields)
                             (val-imap-fix x))))))
 
+
   ;; (local (defthm nthcdr-of-len
   ;;          (atom (nthcdr (len x) x))
   ;;          :rule-classes :type-prescription))
+
+  (local (defun record-type-satisfied-ind (x fields)
+           (if (atom x)
+               fields
+             (if (and (consp (car x))
+                      (identifier-p (caar x)))
+                 (record-type-satisfied-ind (cdr x) (cdr fields))
+               (record-type-satisfied-ind (cdr x) fields)))))
+
+  (local (defthm lookup-when-record-type-satisfied
+           (implies (and (record-type-satisfied x fields)
+                         (consp fields))
+                    (and (hons-assoc-equal (typed_identifier->name (car fields)) x)
+                         (val-equiv (cdr (hons-assoc-equal (typed_identifier->name (car fields)) x))
+                                    (cdar (val-imap-fix x)))))
+           :hints(("Goal" :in-theory (enable record-type-satisfied)
+                   :expand ((val-imap-fix x))
+                   :induct (record-type-satisfied-ind x fields)))))
+           
+  
+  (local (defthm record-type-satisfied-implies-ty-satisfied
+           (implies (and (record-type-satisfied x fields)
+                         (consp fields))
+                    (ty-satisfied (cdar (val-imap-fix x))
+                                  (typed_identifier->type (car fields))))
+           :hints(("Goal" :in-theory (enable record-type-satisfied
+                                             val-imap-fix)
+                   :induct (record-type-satisfied-ind x fields)))))
+
+  (local (defthm record-type-satisfied-implies-remove1-assoc-equal
+           (implies (and (record-type-satisfied x fields)
+                         (consp fields))
+                    (equal (remove1-assoc-equal (typed_identifier->name (car fields))
+                                                (val-imap-fix x))
+                           (cdr (val-imap-fix x))))
+           :hints(("Goal" :in-theory (enable record-type-satisfied
+                                             val-imap-fix)
+                   :induct (record-type-satisfied-ind x fields)))))
+
+  (local (defthm record-type-satisfied-implies-cdr
+           (implies (and (record-type-satisfied x fields)
+                         (consp fields))
+                    (record-type-satisfied (cdr (val-imap-fix x)) (cdr fields)))
+           :hints(("Goal" :in-theory (enable record-type-satisfied
+                                             val-imap-fix)
+                   :induct (record-type-satisfied-ind x fields)))))
+
+  (local (defthm record-type-satisfied-implies-consp
+           (implies (and (record-type-satisfied x fields)
+                         (consp fields))
+                    (and (consp (val-imap-fix x))
+                         (equal (caar (val-imap-fix x))
+                                (typed_identifier->name (car fields)))))
+           :hints(("Goal" :in-theory (enable record-type-satisfied
+                                             val-imap-fix)
+                   :induct (record-type-satisfied-ind x fields)))))
+
+  (local (defthm equal-of-cons
+           (equal (equal (cons a b) c)
+                  (and (consp c)
+                       (Equal (car c) a)
+                       (equal (cdr c) b)))))
   
   (std::defret-mutual ty-fix-val-when-satisfied
     (defret <fn>-when-satisfied
@@ -912,8 +969,8 @@
     (defret <fn>-when-satisfied-aux
       (implies (record-type-satisfied x fields)
                (equal new-x (val-imap-fix x)))
-      :hints ('(:expand ((record-type-satisfied x fields)
-                         (val-imap-fix x)
+      :hints ('(:expand (;; (record-type-satisfied x fields)
+                         ;; (val-imap-fix x)
                          <call>)
                 :do-not-induct t))
       :fn record-type-fix-val))

@@ -33,6 +33,13 @@
 (local (table fty::deftagsum-defaults :short-names t))
 
 
+(defxdoc asl-ast
+  :parents (asl)
+  :short "Format of the ASL AST")
+
+(local (xdoc::set-default-parents asl-ast))
+
+
 (defmacro def-type-alias (new-type existing-type)
   `(defprod ,new-type
      ((val ,existing-type))
@@ -500,11 +507,15 @@
 (fty::defmap expr-imap :key-type identifier :val-type expr :true-listp t)
 
 (defprod static_env_global
-  ((declared_types ty-timeframe-imap)
-   (constant_values literal-storage)
-   (storage_types ty-global_decl_keyword-imap)
+  :short "Static environment for ASL"
+  :long "<p>This contains basically everything important about the ASL program that
+doesn't change over the course of evaluation: function and type definitions,
+global variable types, constant values, etc.</p>"
+  ((declared_types ty-timeframe-imap "Maps type names to their definitions")
+   (constant_values literal-storage "Maps constant names to their (literal) values")
+   (storage_types ty-global_decl_keyword-imap "Maps global variable names to their types and declaration keywords")
    (subtypes identifier-imap)
-   (subprograms func-ses-imap)
+   (subprograms func-ses-imap "Maps function names to their definitions")
    (overloaded_subprograms identifierlist-imap)
    (expr_equiv expr-imap))
   :layout :alist)
