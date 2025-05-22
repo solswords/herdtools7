@@ -1608,7 +1608,7 @@
 
            ((unless (and (eql (len vparams) (len f.parameters))
                          (eql (len vargs) (len f.args))))
-            (evo_error "Bad arity" (list name (len vparams) (len vargs))))
+            (evo_error "Bad arity" (list name (cons (len vparams) (len f.parameters)) (cons (len vargs) (len f.args)))))
          
            ;; probably redundant but in the document
            (env1 (change-env env :local (empty-local-env)))
