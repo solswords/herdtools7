@@ -593,7 +593,7 @@ as follows, more or less following the above made-up example:</p>
   (b* (((when (atom params)) nil)
        ((maybe-typed_identifier p1) (car fn-params))
        (ctor (if p1.type
-                 (b* ((ty (ty->val p1.type)))
+                 (b* ((ty (ty->desc p1.type)))
                    (type_desc-case ty
                      (:t_int 'v_int)
                      (:t_bits 'v_bitvector)
@@ -618,7 +618,7 @@ as follows, more or less following the above made-up example:</p>
   :guard (equal (len args) (len fn-args))
   (b* (((when (atom args)) nil)
        ((typed_identifier p1) (car fn-args))
-       (ctor (b* ((ty (ty->val p1.type)))
+       (ctor (b* ((ty (ty->desc p1.type)))
                (type_desc-case ty
                  (:t_int 'v_int)
                  (:t_bits 'v_bitvector)
@@ -655,9 +655,9 @@ as follows, more or less following the above made-up example:</p>
     :measure (ty-count x)
     :returns (new-x ty-p)
     (b* ((?orig x)
-         (x (ty->val x)))
+         (x (ty->desc x)))
       (change-ty orig
-                 :val
+                 :desc
                  (type_desc-case x
                    :t_int (t_int (constraint_kind-remove-parameters x.constraint))
                    :t_tuple (t_tuple (tylist-remove-parameters x.types))

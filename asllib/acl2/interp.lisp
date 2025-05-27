@@ -1017,8 +1017,8 @@
 (define subtypes ((tenv static_env_global-p)
                   (ty1 ty-p)
                   (ty2 ty-p))
-  (b* ((ty1 (ty->val ty1))
-       (ty2 (ty->val ty2)))
+  (b* ((ty1 (ty->desc ty1))
+       (ty2 (ty->desc ty2)))
     (fty::multicase ((type_desc-case ty1)
                      (type_desc-case ty2))
       ((:t_named :t_named) (subtypes_names tenv ty1.name ty2.name))
@@ -1111,13 +1111,15 @@
            :PARAMETRIZED)
     (<
      (CONSTRAINT_KIND-COUNT
-      (WELLCONSTRAINED (list (CONSTRAINT_EXACT (EXPR (E_VAR name)))) prec))
+      (WELLCONSTRAINED (list (CONSTRAINT_EXACT (EXPR (E_VAR name) pos))) prec))
      (CONSTRAINT_KIND-COUNT X)))
    :hints(("Goal" :in-theory (enable constraint_kind-count
                                      int_constraintlist-count
                                      int_constraint-count
                                      expr-count
                                      expr_desc-count)))))
+
+(defconst *dummy-position* (make-posn :fname "<none>" :lnum 0 :bol 0 :cnum 0))
 
 
 (with-output
@@ -1314,7 +1316,7 @@
           (int_constraint-case constr
             :constraint_exact (b* (((mv (evo (expr_result c)) orac) (eval_expr env constr.val)))
                                 (val-case c.val
-                                  :v_int (b* ((first  (constraint_exact (expr (e_literal (l_int c.val.val)))))
+                                  :v_int (b* ((first  (constraint_exact (expr (e_literal (l_int c.val.val)) (expr->pos_start constr.val))))
                                               ((mv (evo (expr_result rest)) orac)
                                                (resolve-int_constraints env (cdr x))))
                                            (evo_normal (cons first rest)))
@@ -1326,8 +1328,8 @@
                                    (val-case to.val))
                                   ((:v_int :v_int)
                                    (b* ((first (constraint_range
-                                                (expr (e_literal (l_int from.val.val)))
-                                                (expr (e_literal (l_int to.val.val)))))
+                                                (expr (e_literal (l_int from.val.val)) (expr->pos_start constr.from))
+                                                (expr (e_literal (l_int to.val.val)) (expr->pos_start constr.to))))
                                         ((mv (evo (expr_result rest)) orac)
                                          (resolve-int_constraints env (cdr x))))
                                      (evo_normal (cons first rest))))
@@ -1346,7 +1348,7 @@
         :wellconstrained (b* (((mv (evo (expr_result constrs)) orac)
                                (resolve-int_constraints env x.constraints)))
                            (evo_normal (wellconstrained constrs x.flag)))
-        :parametrized (b* ((new-x (wellconstrained (list (constraint_exact (expr (e_var x.name))))
+        :parametrized (b* ((new-x (wellconstrained (list (constraint_exact (expr (e_var x.name) *dummy-position*)))
                                                    (precision_full))))
                         (resolve-constraint_kind env new-x))
         :otherwise (evo_error "Can't resolve constraint_kind" x)))
@@ -1387,23 +1389,25 @@
                                       (ty-p (ev_normal->res res)))))
                    new-orac)
       :measure (nats-measure clk 0 (ty-count x) 0)
-      (b* ((ty (ty->val x)))
+      (b* ((pos (ty->pos_start x))
+           (ty (ty->desc x)))
         (type_desc-case ty
           :t_int (b* (((mv (evo cnstr) orac) (resolve-constraint_kind env ty.constraint)))
-                   (evo_normal (ty (t_int cnstr))))
+                   (evo_normal (ty (t_int cnstr) pos)))
           :t_bits (b* (((mv (evo (expr_result width)) orac) (eval_expr env ty.expr)))
                     (val-case width.val
                       :v_int ;;(if (<= 0 width.val.val)
                       (evo_normal (ty (t_bits
-                                       (expr (e_literal (l_int width.val.val)))
-                                       ty.fields)))
+                                       (expr (e_literal (l_int width.val.val)) pos)
+                                       ty.fields)
+                                      pos))
                       ;; NOTE -- separation of concerns: we once threw an error if we resolved
                       ;; the bitvector width to a negative value. But instead we'll
                       ;; rely on the consumer of this type to deal with it.
                       ;; (evo_error "Negative bitvector width resolving type" x))
                       :otherwise (evo_error "Unexpected type of bitvector width type" x)))
           :t_tuple (b* (((mv (evo tys) orac) (resolve-tylist env ty.types)))
-                     (evo_normal (ty (t_tuple tys))))
+                     (evo_normal (ty (t_tuple tys) pos)))
           :t_array (b* (((mv (evo base) orac) (resolve-ty env ty.type)))
                      (array_index-case ty.index
                        :arraylength_expr (b* (((mv (evo (expr_result len)) orac) (eval_expr env ty.index.length)))
@@ -1411,20 +1415,21 @@
                                              :v_int ;;(if (<= 0 len.val.val)
                                              (evo_normal (ty (t_array
                                                               (arraylength_expr
-                                                               (expr (e_literal (l_int len.val.val))))
-                                                              base)))
+                                                               (expr (e_literal (l_int len.val.val)) pos))
+                                                              base)
+                                                             pos))
                                              ;; (evo_error "Negative array length resolving type" x))
                                              :otherwise (evo_error "Unexpected type of array length" x)))
-                       :arraylength_enum (evo_normal (ty (t_array ty.index base)))))
+                       :arraylength_enum (evo_normal (ty (t_array ty.index base) pos))))
           :t_record (b* (((mv (evo fields) orac)
                           (resolve-typed_identifierlist env ty.fields)))
-                      (evo_normal (ty (t_record fields))))
+                      (evo_normal (ty (t_record fields) pos)))
           :t_exception (b* (((mv (evo fields) orac)
                              (resolve-typed_identifierlist env ty.fields)))
-                         (evo_normal (ty (t_exception fields))))
+                         (evo_normal (ty (t_exception fields) pos)))
           :t_collection (b* (((mv (evo fields) orac)
                              (resolve-typed_identifierlist env ty.fields)))
-                         (evo_normal (ty (t_collection fields))))
+                         (evo_normal (ty (t_collection fields) pos)))
           :t_named  (b* ((decl_types (static_env_global->declared_types
                                       (global-env->static (env->global env))))
                          (look (hons-assoc-equal ty.name decl_types))
@@ -1434,7 +1439,7 @@
                           (evo_error "Clock ran out resolving named type" x))
                          (type (ty-timeframe->ty (cdr look))))
                       (resolve-ty env type :clk (1- clk)))
-          :otherwise (evo_normal (ty ty)))))
+          :otherwise (evo_normal (ty ty pos)))))
                         
       
     
@@ -1478,7 +1483,7 @@
       ;; Note: this isn't supposed to produce any side effects so we'll omit
       ;; the environment and just return the value
       :returns (mv (eval val_result-p) new-orac)
-      (b* ((desc (pattern->val p)))
+      (b* ((desc (pattern->desc p)))
         (pattern_desc-case desc
           :pattern_all (evo_normal (v_bool t)) ;; SemanticsRule.PAll
           :pattern_any (eval_pattern-any env val desc.patterns)
@@ -1648,7 +1653,7 @@
                         (orac 'orac))
       :returns (mv (eval env_eval_result-p) new-orac)
       :measure (nats-measure clk 0 (lexpr-count* lx) 0)
-      (b* ((lx (lexpr->val lx)))
+      (b* ((lx (lexpr->desc lx)))
         (lexpr_desc-case lx
           :le_discard (evo_normal (env-fix env))
           :le_var (b* ((envres (env-assign lx.name v env)))
@@ -1747,7 +1752,7 @@
                        (orac 'orac))
       :measure (nats-measure clk 0 (stmt-count* s) 0)
       :returns (mv (eval stmt_eval_result-p) new-orac)
-      (b* ((s (stmt->val s)))
+      (b* ((s (stmt->desc s)))
         (stmt_desc-case s
           :s_pass (evo_normal (continuing env))
           :s_seq (b* (((evs env) (eval_stmt env s.first)))
@@ -2014,7 +2019,7 @@
       :measure (nats-measure clk 0 (ty-count ty) 0);;(val-count v)
       :guard-debug t
       :verify-guards nil
-      (b* ((ty (ty->val ty)))
+      (b* ((ty (ty->desc ty)))
         (fty::multicase
           ((val-case v)
            (type_desc-case ty))

@@ -115,7 +115,7 @@
     :verify-guards nil
     :measure (acl2::two-nats-measure (ty-count x) 0)
     :returns (mv (val maybe-val-p) new-orac)
-    (b* ((x (ty->val x)))
+    (b* ((x (ty->desc x)))
       (type_desc-case x
         :t_int (b* (((mv val orac) (constraint_kind-oracle-val x.constraint orac)))
                  (mv (and val (v_int val)) orac))

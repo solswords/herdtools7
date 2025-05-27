@@ -102,7 +102,7 @@
 (defines ty-resolved-p
   (define ty-resolved-p ((x ty-p))
     :measure (ty-count x)
-    (b* ((x (ty->val x)))
+    (b* ((x (ty->desc x)))
       (type_desc-case x
         :t_int (constraint_kind-resolved-p x.constraint)
         :t_bits (int-literal-expr-p x.expr)
@@ -117,7 +117,7 @@
     ///
     (defthm ty_resolved-p-implies
       (implies (ty-resolved-p x)
-               (b* ((x (ty->val x)))
+               (b* ((x (ty->desc x)))
                  (and (implies (type_desc-case x :t_int)
                                (constraint_kind-resolved-p (t_int->constraint x)))
                       (implies (type_desc-case x :t_bits)
@@ -210,7 +210,7 @@
                           (ty ty-p))
     :guard (ty-resolved-p ty)
     :measure (acl2::two-nats-measure (ty-count ty) 0)
-    (b* ((ty (ty->val ty)))
+    (b* ((ty (ty->desc ty)))
       (fty::multicase ((type_desc-case ty)
                        (val-case x))
         ((:t_int :v_int) (constraint_kind-satisfied x.val ty.constraint))
@@ -338,7 +338,7 @@
     :verify-guards nil
     :measure (ty-count x)
     :returns (val maybe-val-p)
-    (b* ((x (ty->val x)))
+    (b* ((x (ty->desc x)))
       (type_desc-case x
         :t_int (b* ((val (constraint_kind-satisfying-val x.constraint)))
                  (and val (v_int val)))
@@ -490,7 +490,7 @@
     :verify-guards nil
     :measure (ty-count x)
     :returns (ok)
-    (b* ((x (ty->val x)))
+    (b* ((x (ty->desc x)))
       (type_desc-case x
         :t_int (b* ((val (constraint_kind-satisfying-val x.constraint)))
                  (and val t))
@@ -764,7 +764,7 @@
                     :hints ('(:expand ((ty-satisfiable ty)
                                        (:free (x) (ty-satisfied x ty))
                                        (:free (ty) (array-type-satisfied nil ty))))))
-    (b* ((ty (ty->val ty)))
+    (b* ((ty (ty->desc ty)))
       (type_desc-case ty
         (:t_int (v_int (constraint_kind-value-fix (v_int->val x) ty.constraint)))
         (:t_bits (v_bitvector (int-literal-expr->val ty.expr)
@@ -1005,21 +1005,22 @@
                            (implies (eval_result-case res :ev_normal)
                                     (ty-p (ev_normal->res res)))))
     :measure (nats-measure clk 0 (ty-count x) 0)
-    (b* ((ty (ty->val x)))
+    (b* ((pos (ty->pos_start x))
+         (ty (ty->desc x)))
       (type_desc-case ty
         :t_tuple (b* (((ev tys) (name-resolve-tylist env ty.types)))
-                   (ev_normal (ty (t_tuple tys))))
+                   (ev_normal (ty (t_tuple tys) pos)))
         :t_array (b* (((ev base) (name-resolve-ty env ty.type)))
-                   (ev_normal (ty (t_array ty.index base))))
+                   (ev_normal (ty (t_array ty.index base) pos)))
         :t_record (b* (((ev fields)
                         (name-resolve-typed_identifierlist env ty.fields)))
-                    (ev_normal (ty (t_record fields))))
+                    (ev_normal (ty (t_record fields) pos)))
         :t_exception (b* (((ev fields)
                            (name-resolve-typed_identifierlist env ty.fields)))
-                       (ev_normal (ty (t_exception fields))))
+                       (ev_normal (ty (t_exception fields) pos)))
         :t_collection (b* (((ev fields)
                             (name-resolve-typed_identifierlist env ty.fields)))
-                        (ev_normal (ty (t_collection fields))))
+                        (ev_normal (ty (t_collection fields) pos)))
         :t_named  (b* ((decl_types (static_env_global->declared_types env))
                        (look (hons-assoc-equal ty.name decl_types))
                        ((unless look)
@@ -1028,7 +1029,7 @@
                         (ev_error "Clock ran out resolving named type" x))
                        (type (ty-timeframe->ty (cdr look))))
                     (name-resolve-ty env type :clk (1- clk)))
-        :otherwise (ev_normal (ty ty)))))
+        :otherwise (ev_normal (ty ty pos)))))
   
   (define name-resolve-tylist ((env static_env_global-p)
                                (x tylist-p)

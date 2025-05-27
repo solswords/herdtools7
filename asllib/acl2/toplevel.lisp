@@ -43,7 +43,7 @@
                      (x decl-p)
                      &key (orac 'orac))
   :returns (mv (res env_eval_result-p) new-orac)
-  (b* ((x (decl->val x)))
+  (b* ((x (decl->desc x)))
     (decl_desc-case x
       :d_globalstorage
       (b* (((global_decl d) x.decl)
