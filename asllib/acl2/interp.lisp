@@ -1776,7 +1776,7 @@
                          (x (expr->desc s.expr)))
                       (expr_desc-case x
                         :e_tuple (b* (((mv (evo (exprlist_result xr)) orac) (eval_expr_list env x.exprs)))
-                                   (evo_normal (returning xr.val (env->global xr.env))))
+                                   (evo_normal (returning (list (v_array xr.val)) (env->global xr.env))))
                         :otherwise (b* (((mv (evo (expr_result xr)) orac) (eval_expr env s.expr)))
                                      (evo_normal (returning (list xr.val) (env->global xr.env))))))
                          
