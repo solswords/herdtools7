@@ -136,9 +136,11 @@
 (deftagsum eval_result
   (:ev_normal (res))
   (:ev_throwing ((throwdata maybe-throwdata)
-                 (env env)))
+                 (env env)
+                 (backtrace)))
   (:ev_error    ((desc stringp)
-                 (data))))
+                 (data)
+                 (backtrace))))
 
 
 (defmacro def-eval_result (pred res-pred)

@@ -235,7 +235,7 @@
        ((global-env env.global))
        (global-look (assoc-equal (identifier-fix x) env.global.storage))
        ((When global-look) (ev_normal (cdr global-look))))
-    (ev_error "Global variable not found" x)))
+    (ev_error "Global variable not found" x nil)))
 
 (define val-imaplist-assign ((name identifier-p)
                              (v val-p)
@@ -430,7 +430,7 @@
        (name (identifier-fix name))
        (look (assoc-equal name s.subprograms))
        ((unless look)
-        (ev_error "Unrecognized subprogram" name))
+        (ev_error "Unrecognized subprogram" name nil))
        (stack_size (increment-stack name g.stack_size))
        (new-g (change-global-env g :stack_size stack_size)))
     (ev_normal (make-env :global new-g :local (empty-local-env)))))
@@ -537,7 +537,7 @@
   (declare (ignorable env name recurse-limit))
   (if (and recurse-limit
            (< (lifix recurse-limit) (get_stack_size name env)))
-      (ev_error "Recursion limit ran out" name)
+      (ev_error "Recursion limit ran out" name nil)
     (ev_normal nil)))
        
 
@@ -597,7 +597,7 @@
   :returns (i int_eval_result-p)
   (val-case x
     :v_int (ev_normal x.val)
-    :otherwise (ev_error "v_to_int bad type" x)))
+    :otherwise (ev_error "v_to_int bad type" x nil)))
 
 (def-eval_result bool_eval_result-p booleanp)
 
@@ -605,7 +605,7 @@
   :returns (i bool_eval_result-p)
   (val-case x
     :v_bool (ev_normal x.val)
-    :otherwise (ev_error "v_to_bool bad type" x)))
+    :otherwise (ev_error "v_to_bool bad type" x nil)))
 
 (def-eval_result id_eval_result-p identifier-p)
 
@@ -613,7 +613,7 @@
   :returns (i id_eval_result-p)
   (val-case x
     :v_label (ev_normal x.val)
-    :otherwise (ev_error "v_to_label bad type" x)))
+    :otherwise (ev_error "v_to_label bad type" x nil)))
 
 (local (defthm rationalp-when-integerp-rw
          (implies (integerp x)
@@ -626,7 +626,7 @@
   :returns (v val_result-p)
   (b* ((look (assoc-equal (identifier-fix field)
                           (val-imap-fix rec)))
-       ((unless look) (ev_error "get_field not found" field)))
+       ((unless look) (ev_error "get_field not found" field nil)))
     (ev_normal (cdr look))))
 
 (define get_field ((field identifier-p)
@@ -634,7 +634,7 @@
   :returns (v val_result-p)
   (val-case rec
     :v_record (get_field! field rec.rec)
-    :otherwise (ev_error "get_field non record" rec)))
+    :otherwise (ev_error "get_field non record" rec nil)))
 
 (define map-get_field! ((fields identifierlist-p)
                         (rec val-imap-p))
@@ -649,7 +649,7 @@
   :returns (v vallist_result-p)
   (val-case rec
     :v_record (map-get_field! fields rec.rec)
-    :otherwise (ev_error "map-get_field non record" rec)))
+    :otherwise (ev_error "map-get_field non record" rec nil)))
 
 (define concat_bitvectors ((vals vallist-p))
   ;; Check order?
@@ -663,7 +663,7 @@
       :v_bitvector (ev_normal
                     (v_bitvector (+ v1.len rest.len)
                                  (logapp rest.len rest.val v1.val)))
-      :otherwise (ev_error "concat_bitvectors non bitvector" v1)))
+      :otherwise (ev_error "concat_bitvectors non bitvector" v1 nil)))
   ///
   (defret kind-of-<fn>
     (implies (eval_result-case v :ev_normal)
@@ -684,7 +684,7 @@
   (b* (((when (atom fields)) (ev_normal (v_record rec)))
        (field (identifier-fix (car fields)))
        ((unless (assoc-equal field (val-imap-fix rec)))
-        (ev_error "bitvec_fields_to_record!: field not in record" field))
+        (ev_error "bitvec_fields_to_record!: field not in record" field nil))
        ((intpair s) (car slices))
        (start s.first)
        (length s.second)
@@ -692,7 +692,7 @@
                      (<= 0 length)
                      (or (not width)
                          (<= (+ start length) width))))
-        (ev_error "bitvec_fields_to_record!: out of bounds slice" (car slices)))
+        (ev_error "bitvec_fields_to_record!: out of bounds slice" (car slices) nil))
        (fieldval (loghead length (logtail start bv)))
        (new-rec (put-assoc-equal field (v_bitvector length fieldval) (val-imap-fix rec))))
     (bitvec_fields_to_record! (cdr fields) (cdr slices) new-rec bv width)))
@@ -706,10 +706,10 @@
   :guard (eql (len fields) (len slices))
   :returns (v val_result-p)
   (b* (((unless (val-case rec :v_record))
-        (ev_error "bitvec_fields_to_record non record" rec))
+        (ev_error "bitvec_fields_to_record non record" rec nil))
        ((unless (or (val-case bv :v_bitvector)
                     (val-case bv :v_int)))
-        (ev_error "bitvec_fields_to_record non bitvec/integer" bv))
+        (ev_error "bitvec_fields_to_record non bitvec/integer" bv nil))
        ((v_record rec))
        ((mv bv-val bv-len) (val-case bv
                              :v_bitvector (mv bv.val bv.len)
@@ -802,10 +802,10 @@
        (len s1.second)
        ((when (or (< start 0)
                   (< len 0)))
-        (ev_error "Bad slice" s1))
+        (ev_error "Bad slice" s1 nil))
        ((when (and width
                    (< (lnfix width) (+ start len))))
-        (ev_error "Slice out of range of width" (list s1 width))))
+        (ev_error "Slice out of range of width" (list s1 width) nil)))
     (check-bad-slices width (cdr slices))))
 
 
@@ -860,9 +860,9 @@
     ;; (("HexStr"   nil (:v_int))   (ev_normal (list (v_string (coerce (explode-atom a0.val 16) 'string)))))
     (("FloorLog2" nil (:v_int))  (if (< 0 a0.val)
                                      (ev_normal (list (v_int (1- (integer-length a0.val)))))
-                                   (ev_error "Nonpositive argument to FloorLog2" a0)))
+                                   (ev_error "Nonpositive argument to FloorLog2" a0 nil)))
 
-    (-                           (ev_error "Bad primitive" (list name params args))))
+    (-                           (ev_error "Bad primitive" (list name params args) nil)))
   )
 
 
@@ -884,7 +884,7 @@
        (yend-<=-xstart (<= yend xstart)))
     (if (or xend-<=-ystart yend-<=-xstart)
         (ev_normal nil)
-      (ev_error "Dynamic error: overlapping slice assignment" (list x y)))))
+      (ev_error "Dynamic error: overlapping slice assignment" (list x y) nil))))
 
 
 (define check_non_overlapping_slices-1 ((x intpair-p)
@@ -906,7 +906,7 @@
   (val-case x
     :v_int (ev_normal x.val)
     :v_bitvector (ev_normal x.val)
-    :otherwise (ev_error "vbv-to-int type error" x)))
+    :otherwise (ev_error "vbv-to-int type error" x nil)))
 
 (define slices-width ((slices intpairlist-p))
   :returns (width natp :rule-classes :type-prescription)
@@ -940,7 +940,7 @@
                             (dst val-p))
   :returns (res val_result-p)
   (b* (((unless (val-case dst :v_bitvector))
-        (ev_error "write_to_bitvector type error" dst))
+        (ev_error "write_to_bitvector type error" dst nil))
        ((v_bitvector dst))
        ((ev src.val) (vbv-to-int src))
        ((ev &) (check-bad-slices dst.len slices))
@@ -967,7 +967,7 @@
                                 ((ev val_inv) (eval_unop :not val))
                                 ((ev val/unset) (eval_binop :and val_inv unset_bv)))
                              (eval_binop :eq_op val/unset unset_bv))
-              :otherwise (ev_error "Unsupported pattern_mask case" (cons val mask)))))
+              :otherwise (ev_error "Unsupported pattern_mask case" (cons val mask) nil))))
 
 
 
@@ -986,6 +986,35 @@
                            `((,(car acl2::args) evresult.res)))
                     ,acl2::rest-expr)
        :otherwise (mv evresult orac))))
+
+
+(define init-backtrace ((x eval_result-p) (pos posn-p))
+  :returns (new-x eval_result-p)
+  (eval_result-case x
+    :ev_normal   (eval_result-fix x)
+    :ev_throwing (change-ev_throwing x :backtrace (list pos))
+    :ev_error    (change-ev_error x :backtrace (list pos)))
+  ///
+  (defret eval_result-kind-of-<fn>
+    (equal (eval_result-kind new-x)
+           (eval_result-kind x)))
+  (defret <fn>-when-ev_normal
+    (implies (eval_result-case x :ev_normal)
+             (equal new-x (eval_result-fix x))))
+
+  (defret val_result-p-of-<fn>
+    (implies (val_result-p x)
+             (val_result-p new-x))))
+
+(acl2::def-b*-binder evob
+  :body
+  `(b* ((evresult ,(car acl2::forms)))
+     (eval_result-case evresult
+       :ev_normal (b* ,(and (not (eq (car acl2::args) '&))
+                           `((,(car acl2::args) evresult.res)))
+                    ,acl2::rest-expr)
+       
+       :otherwise (mv (init-backtrace evresult pos) orac))))
 
 
 
@@ -1047,13 +1076,14 @@
     
 
 (define rethrow_implicit ((throw throwdata-p)
-                          (blkres stmt_eval_result-p))
+                          (blkres stmt_eval_result-p)
+                          (backtrace))
   :returns (res stmt_eval_result-p
                 :hyp (stmt_eval_result-p blkres))
   (b* (((when (eval_result-case blkres
                 :ev_throwing (not blkres.throwdata)
                 :otherwise nil))
-        (ev_throwing throw (ev_throwing->env blkres))))
+        (ev_throwing throw (ev_throwing->env blkres) backtrace)))
     blkres))
 
 
@@ -1064,7 +1094,7 @@
   (if x
       (if (< 0 (lifix x))
           (ev_normal (1- (lifix x)))
-        (ev_error "Loop limit ran out" nil))
+        (ev_error "Loop limit ran out" nil nil))
     (ev_normal nil)))
 
 (defmacro trace-eval_expr ()
@@ -1137,20 +1167,21 @@
       :returns (mv (eval expr_eval_result-p)
                    new-orac)
       :measure (nats-measure clk 0 (expr-count e) 0)
-      (b* ((desc (expr->desc e)))
+      (b* ((desc (expr->desc e))
+           (pos (expr->pos_start e)))
         (expr_desc-case desc
           :e_literal (evo_normal (expr_result (v_of_literal desc.val) env)) ;; SemanticsRule.ELit
           :e_var (b* ((look (env-find desc.name env)))
                    (env_result-case look
                      :lk_local (evo_normal (expr_result look.val env))
                      :lk_global (evo_normal (expr_result look.val env))
-                     :lk_notfound (evo_error "Variable not found" desc))) ;; SemanticsRule.EVar
+                     :lk_notfound (evo_error "Variable not found" desc (list pos)))) ;; SemanticsRule.EVar
           :e_pattern (b* (((mv (evo (expr_result v1)) orac) (eval_expr env desc.expr))
                           ((mv (evo val) orac) (eval_pattern v1.env v1.val desc.pattern)))
                       (evo_normal (expr_result val v1.env)))
           :e_unop ;; anna
           (b* (((mv (evo (expr_result v)) orac) (eval_expr env desc.arg))
-               ((evo val) (eval_unop desc.op v.val))) ;;SemanticsRule.Unop
+               ((evob val) (eval_unop desc.op v.val))) ;;SemanticsRule.Unop
            (evo_normal (expr_result val v.env)))
           :e_binop ;;
           ;;shortcuts first
@@ -1159,36 +1190,36 @@
                     (val-case v1.val
                       :v_bool (if v1.val.val
                                   (b* (((mv (evo (expr_result v2)) orac) (eval_expr v1.env desc.arg2))
-                                       ((evo val) (eval_binop desc.op v1.val v2.val)))
+                                       ((evob val) (eval_binop desc.op v1.val v2.val)))
                                     (evo_normal (expr_result val v2.env)))
                                 (evo_normal (expr_result (v_bool nil) v1.env)))
-                      :otherwise (evo_error "First argument of && evaluated to non-boolean" desc))))
+                      :otherwise (evo_error "First argument of && evaluated to non-boolean" desc (list pos)))))
             (:bor (b* (((mv (evo (expr_result v1)) orac) (eval_expr env desc.arg1)))
                    (val-case v1.val
                      :v_bool (if v1.val.val
                                  (evo_normal (expr_result (v_bool t) v1.env))
                                (b* (((mv (evo (expr_result v2)) orac) (eval_expr v1.env desc.arg2))
-                                    ((evo val) (eval_binop desc.op v1.val v2.val)))
+                                    ((evob val) (eval_binop desc.op v1.val v2.val)))
                                  (evo_normal (expr_result val v2.env))))
-                     :otherwise (evo_error "First argument of || evaluated to non-boolean" desc))))
+                     :otherwise (evo_error "First argument of || evaluated to non-boolean" desc (list pos)))))
             (:impl (b* (((mv (evo (expr_result v1)) orac) (eval_expr env desc.arg1)))
                     (val-case v1.val
                       :v_bool (if v1.val.val
                                   (b* (((mv (evo (expr_result v2)) orac) (eval_expr v1.env desc.arg2))
-                                       ((evo val) (eval_binop desc.op v1.val v2.val)))
+                                       ((evob val) (eval_binop desc.op v1.val v2.val)))
                                     (evo_normal (expr_result val v2.env)))
                                 (evo_normal (expr_result (v_bool t) v1.env)))
-                      :otherwise (evo_error "First argument of ==> evaluated to non-boolean" desc))))
+                      :otherwise (evo_error "First argument of ==> evaluated to non-boolean" desc (list pos)))))
             ;;all other ops
             (otherwise 
              (b* (((mv (evo (expr_result v1)) orac) (eval_expr env desc.arg1))
                   ((mv (evo (expr_result v2)) orac) (eval_expr v1.env desc.arg2))
-                  ((evo val) (eval_binop desc.op v1.val v2.val)))
+                  ((evob val) (eval_binop desc.op v1.val v2.val)))
                (evo_normal (expr_result val v2.env)))))
           :e_call ;; sol
           (b* (((call c) desc.call)
                ((mv (evo (exprlist_result e)) orac)
-                (eval_call c.name env c.params c.args))
+                (eval_call c.name env c.params c.args (expr->pos_start e)))
                (v (if (and (consp e.val)
                            (atom (cdr e.val)))
                       (car e.val)
@@ -1200,72 +1231,72 @@
                (srcval vexpr.val)
                )
             (val-case srcval
-              :v_int (b* (((evo &) (check-bad-slices nil vslices.pairlist))
+              :v_int (b* (((evob &) (check-bad-slices nil vslices.pairlist))
                           ((intpair res) (slices_sub srcval.val vslices.pairlist)))
                        (evo_normal
                         (expr_result
                          (v_bitvector res.first (loghead res.first res.second))
                          vslices.env)))
-              :v_bitvector (b* (((evo &) (check-bad-slices srcval.len vslices.pairlist))
+              :v_bitvector (b* (((evob &) (check-bad-slices srcval.len vslices.pairlist))
                                 ((intpair res) (slices_sub srcval.val vslices.pairlist)))
                              (evo_normal
                               (expr_result
                                (v_bitvector res.first (loghead res.first res.second))
                                vslices.env)))
-              :otherwise (evo_error "Unexpected result of evaluation of desc.expr" desc)))
+              :otherwise (evo_error "Unexpected result of evaluation of desc.expr" desc (list pos))))
           :e_cond  ;; anna
           (b* (((mv (evo (expr_result test)) orac) (eval_expr env desc.test))
                ((evo choice) (val-case test.val
                               :v_bool (ev_normal (if test.val.val desc.then desc.else))
-                              :otherwise (ev_error "bad test in e_cond" test.val))))
+                              :otherwise (ev_error "bad test in e_cond" test.val (list pos)))))
            (eval_expr test.env choice))
           :e_getarray ;; sol
           (b* (((mv (evo (expr_result arr)) orac) (eval_expr env desc.base))
                ((mv (evo (expr_result idx)) orac) (eval_expr arr.env desc.index))
                ((evo idxv) (val-case idx.val
                             :v_int (ev_normal idx.val.val)
-                            :otherwise (ev_error "getarray non-integer index" desc)))
+                            :otherwise (ev_error "getarray non-integer index" desc (list pos))))
                ((evo arrv) (val-case arr.val
                             :v_array (ev_normal arr.val.arr)
-                            :otherwise (ev_error "getarray non-array value" desc))))
+                            :otherwise (ev_error "getarray non-array value" desc (list pos)))))
             (if (and (<= 0 idxv)
                      (< idxv (len arrv)))
                 (evo_normal (expr_result (nth idxv arrv) idx.env))
-              (evo_error "getarray index out of range" desc)))
+              (evo_error "getarray index out of range" desc (list pos))))
           :e_getenumarray ;; sol
           (b* (((mv (evo (expr_result arr)) orac) (eval_expr env desc.base))
                ((mv (evo (expr_result idx)) orac) (eval_expr arr.env desc.index))
                ((evo idxv) (val-case idx.val
                              :v_label (ev_normal idx.val.val)
-                            :otherwise (ev_error "getenumarray non-label index" desc)))
+                            :otherwise (ev_error "getenumarray non-label index" desc (list pos))))
                ((evo arrv) (val-case arr.val
                              :v_record (ev_normal arr.val.rec)
-                             :otherwise (ev_error "getenumarray non-record value" desc)))
+                             :otherwise (ev_error "getenumarray non-record value" desc (list pos))))
                (look (assoc-equal idxv arrv)))
             (if look
                 (evo_normal (expr_result (cdr look) idx.env))
-              (evo_error "getenumarray index not found" desc)))
+              (evo_error "getenumarray index not found" desc (list pos))))
           :e_getfield ;; anna
           (b* (((mv (evo (expr_result recres)) orac) (eval_expr env desc.base))
-               ((evo fieldval) (get_field desc.field recres.val)))
+               ((evob fieldval) (get_field desc.field recres.val)))
             (evo_normal (expr_result fieldval recres.env)))
           :e_getfields ;; sol
           (b* (((mv (evo (expr_result recres)) orac) (eval_expr env desc.base))
-               ((evo fieldvals) (map-get_field desc.fields recres.val))
-               ((evo val) (concat_bitvectors fieldvals)))
+               ((evob fieldvals) (map-get_field desc.fields recres.val))
+               ((evob val) (concat_bitvectors fieldvals)))
             (evo_normal (expr_result val recres.env)))
           :e_getcollectionfields
           (b* (((evo gval) (env-find-global desc.base env))
-               ((evo fieldvals) (map-get_field desc.fields gval))
-               ((evo val) (concat_bitvectors fieldvals)))
+               ((evob fieldvals) (map-get_field desc.fields gval))
+               ((evob val) (concat_bitvectors fieldvals)))
             (evo_normal (expr_result val env)))
           :e_getitem ;; anna
           (b* (((mv (evo (expr_result varr)) orac) (eval_expr env desc.base)))
            (val-case varr.val
              :v_array (if (or (< desc.index 0) (<= (len varr.val.arr) desc.index))
-                          (evo_error "index out of bounds" desc)
+                          (evo_error "index out of bounds" desc (list pos))
                         (evo_normal (expr_result (nth desc.index varr.val.arr) varr.env)))
-             :otherwise (evo_error "evaluation of the base did not return v_array as expected" desc)))
+             :otherwise (evo_error "evaluation of the base did not return v_array as expected" desc (list pos))))
           :e_record ;; sol
           (b* ((exprs (named_exprlist->exprs desc.fields))
                (names (named_exprlist->names desc.fields))
@@ -1280,8 +1311,8 @@
                ((evo lenv) (val-case len.val
                             :v_int (if (<= 0 len.val.val)
                                        (ev_normal len.val.val)
-                                     (ev_error "array negative length" desc))
-                            :otherwise (ev_error "array non-integer length" desc))))
+                                     (ev_error "array negative length" desc (list pos)))
+                            :otherwise (ev_error "array non-integer length" desc (list pos)))))
             (evo_normal (expr_result (v_array (make-list lenv :initial-element v.val)) len.env)))
           :e_enumarray ;; anna
           (b* (((mv (evo (expr_result v)) orac) (eval_expr env desc.value))
@@ -1294,12 +1325,12 @@
           (b* (((mv (evo ty) orac) (resolve-ty env desc.type))
                ((mv val orac) (ty-oracle-val ty orac))
                ((unless val)
-                (evo_error "Unsatisfiable type in e_arbitrary" desc)))
+                (evo_error "Unsatisfiable type in e_arbitrary" desc (list pos))))
             (evo_normal (expr_result val env)))
           :e_atc ;;anna
           (b* (((mv (evo (expr_result v)) orac) (eval_expr env desc.expr))
                ((mv (evo b) orac) (is_val_of_type v.env v.val desc.type)))
-            (if b (evo_normal v) (evo_error "DynError(DETAF" desc)))
+            (if b (evo_normal v) (evo_error "DynError(DETAF" desc (list pos))))
           )))
 
     (define resolve-int_constraints ((env env-p)
@@ -1320,7 +1351,7 @@
                                               ((mv (evo (expr_result rest)) orac)
                                                (resolve-int_constraints env (cdr x))))
                                            (evo_normal (cons first rest)))
-                                  :otherwise (evo_error "Constraint_exact evaluated to unexpected type" constr)))
+                                  :otherwise (evo_error "Constraint_exact evaluated to unexpected type" constr nil)))
             :constraint_range (b* (((mv (evo (expr_result from)) orac) (eval_expr env constr.from))
                                    ((mv (evo (expr_result to)) orac) (eval_expr env constr.to)))
                                 (fty::multicase
@@ -1333,7 +1364,7 @@
                                         ((mv (evo (expr_result rest)) orac)
                                          (resolve-int_constraints env (cdr x))))
                                      (evo_normal (cons first rest))))
-                                  (- (evo_error "Constraint_range evaluated to unexpected type" constr))))))))
+                                  (- (evo_error "Constraint_range evaluated to unexpected type" constr nil))))))))
 
     (define resolve-constraint_kind ((env env-p)
                                      (x constraint_kind-p)
@@ -1351,7 +1382,7 @@
         :parametrized (b* ((new-x (wellconstrained (list (constraint_exact (expr (e_var x.name) *dummy-position*)))
                                                    (precision_full))))
                         (resolve-constraint_kind env new-x))
-        :otherwise (evo_error "Can't resolve constraint_kind" x)))
+        :otherwise (evo_error "Can't resolve constraint_kind" x nil)))
 
     (define resolve-tylist ((env env-p)
                             (x tylist-p)
@@ -1392,7 +1423,7 @@
       (b* ((pos (ty->pos_start x))
            (ty (ty->desc x)))
         (type_desc-case ty
-          :t_int (b* (((mv (evo cnstr) orac) (resolve-constraint_kind env ty.constraint)))
+          :t_int (b* (((mv (evob cnstr) orac) (resolve-constraint_kind env ty.constraint)))
                    (evo_normal (ty (t_int cnstr) pos)))
           :t_bits (b* (((mv (evo (expr_result width)) orac) (eval_expr env ty.expr)))
                     (val-case width.val
@@ -1405,7 +1436,7 @@
                       ;; the bitvector width to a negative value. But instead we'll
                       ;; rely on the consumer of this type to deal with it.
                       ;; (evo_error "Negative bitvector width resolving type" x))
-                      :otherwise (evo_error "Unexpected type of bitvector width type" x)))
+                      :otherwise (evo_error "Unexpected type of bitvector width type" x (list pos))))
           :t_tuple (b* (((mv (evo tys) orac) (resolve-tylist env ty.types)))
                      (evo_normal (ty (t_tuple tys) pos)))
           :t_array (b* (((mv (evo base) orac) (resolve-ty env ty.type)))
@@ -1419,7 +1450,7 @@
                                                               base)
                                                              pos))
                                              ;; (evo_error "Negative array length resolving type" x))
-                                             :otherwise (evo_error "Unexpected type of array length" x)))
+                                             :otherwise (evo_error "Unexpected type of array length" x (list pos))))
                        :arraylength_enum (evo_normal (ty (t_array ty.index base) pos))))
           :t_record (b* (((mv (evo fields) orac)
                           (resolve-typed_identifierlist env ty.fields)))
@@ -1434,42 +1465,12 @@
                                       (global-env->static (env->global env))))
                          (look (hons-assoc-equal ty.name decl_types))
                          ((unless look)
-                          (evo_error "Named type not found" x))
+                          (evo_error "Named type not found" x (list pos)))
                          ((when (zp clk))
-                          (evo_error "Clock ran out resolving named type" x))
+                          (evo_error "Clock ran out resolving named type" x (list pos)))
                          (type (ty-timeframe->ty (cdr look))))
                       (resolve-ty env type :clk (1- clk)))
           :otherwise (evo_normal (ty ty pos)))))
-                        
-      
-    
-    (define check_int_constraints ((env env-p) (i integerp) (constrs int_constraintlist-p)
-                                   &key ((clk natp) 'clk) (orac 'orac))
-      :short "At least one constraint needs to be satisfied"
-      :long "We assume that any expr eval is sidefect free, therefore there is nto nedd to return env"
-      :returns (mv (sat bool_eval_result-p) new-orac)
-      :measure (nats-measure clk 0 (int_constraintlist-count constrs) 0)
-      (if (atom constrs)
-          (evo_normal nil)
-        (b* ((constr (car constrs)))
-          (int_constraint-case constr
-            :constraint_exact (b* (((mv (evo (expr_result c)) orac) (eval_expr env constr.val)))
-                                (val-case c.val
-                                  :v_int (if (equal c.val.val i)
-                                             (evo_normal t)
-                                           (check_int_constraints env i (cdr constrs)))
-                                  :otherwise (evo_error "Constraint_exact evaluated to unexpected type" constr)))
-            :constraint_range (b* (((mv (evo (expr_result from)) orac) (eval_expr env (constraint_range->from constr)))
-                                   ((mv (evo (expr_result to)) orac) (eval_expr env (constraint_range->to constr))))
-                                (fty::multicase
-                                  ((val-case from.val)
-                                   (val-case to.val))
-                                  ((:v_int :v_int) (if (and (<= from.val.val i)
-                                                            (<= i to.val.val))
-                                                       (evo_normal t)
-                                                     (check_int_constraints env i (cdr constrs))))
-                                  (- (evo_error "Constraint_range evaluated to unexpected type" constr)))))
-           )))
 
     
     (define eval_pattern ((env env-p)
@@ -1483,33 +1484,34 @@
       ;; Note: this isn't supposed to produce any side effects so we'll omit
       ;; the environment and just return the value
       :returns (mv (eval val_result-p) new-orac)
-      (b* ((desc (pattern->desc p)))
+      (b* ((desc (pattern->desc p))
+           (pos (pattern->pos_start p)))
         (pattern_desc-case desc
           :pattern_all (evo_normal (v_bool t)) ;; SemanticsRule.PAll
           :pattern_any (eval_pattern-any env val desc.patterns)
           :pattern_geq (b* (((mv (evo (expr_result v1)) orac) (eval_expr env desc.expr)))
-                         (mv (eval_binop :geq val v1.val) orac))
+                         (mv (init-backtrace (eval_binop :geq val v1.val) pos) orac))
           :pattern_leq (b* (((mv (evo (expr_result v1)) orac) (eval_expr env desc.expr)))
-                         (mv (eval_binop :leq val v1.val) orac))
+                         (mv (init-backtrace (eval_binop :leq val v1.val) pos) orac))
           :pattern_mask  ;;We are not checking whether set/unset are consistent
           (val-case val
             :v_bitvector (mv (eval_pattern_mask val desc.mask) orac)
-            :otherwise (evo_error "Unsupported patter_mask case" desc))
+            :otherwise (evo_error "Unsupported pattern_mask case" desc (list pos)))
           :pattern_not (b* (((mv (evo v1) orac) (eval_pattern env val desc.pattern)))
-                         (mv (eval_unop :bnot v1) orac))
+                         (mv (init-backtrace (eval_unop :bnot v1) pos) orac))
           :pattern_range (b* (((mv (evo (expr_result v1)) orac) (eval_expr env desc.lower))
                               ((mv (evo (expr_result v2)) orac) (eval_expr env desc.upper))
-                              ((evo lower) (eval_binop :geq val v1.val))
-                              ((evo upper) (eval_binop :leq val v2.val)))
-                           (mv (eval_binop :band lower upper) orac))
+                              ((evob lower) (eval_binop :geq val v1.val))
+                              ((evob upper) (eval_binop :leq val v2.val)))
+                           (mv (init-backtrace (eval_binop :band lower upper) pos) orac))
           :pattern_single (b* (((mv (evo (expr_result v1)) orac) (eval_expr env desc.expr)))
-                            (mv (eval_binop :eq_op val v1.val) orac))
+                            (mv (init-backtrace (eval_binop :eq_op val v1.val) pos) orac))
           :pattern_tuple (b* ((len (len desc.patterns))
                               ((evo vs) (val-case val
                                          :v_array (if (eql (len val.arr) len)
                                                       (ev_normal val.arr)
-                                                    (ev_error "pattern tuple length mismatch" p))
-                                         :otherwise (ev_error "pattern tuple type mismatch" p))))
+                                                    (ev_error "pattern tuple length mismatch" p (list pos)))
+                                         :otherwise (ev_error "pattern tuple type mismatch" p (list pos)))))
                            (eval_pattern_tuple env vs desc.patterns)))))
 
     (define eval_pattern_tuple ((env env-p)
@@ -1546,7 +1548,7 @@
            :v_bool (if v1.val
                        (evo_normal v1)
                      (eval_pattern-any env val (cdr p)))
-           :otherwise (evo_error "Bad result type from eval_pattern" v1)))))
+           :otherwise (evo_error "Bad result type from eval_pattern" v1 (list (pattern->pos_start (car p))))))))
 
 
     (define eval_expr_list ((env env-p)
@@ -1567,6 +1569,7 @@
                        (env env-p)
                        (params exprlist-p)
                        (args exprlist-p)
+                       (pos posn-p)
                        &key
                        ((clk natp) 'clk)
                        (orac 'orac))
@@ -1580,7 +1583,7 @@
            ;; the measure will decrease provided that they haven't been exceeded
            ((evo sub-env) (env-push-stack name env))
            ((when (zp clk))
-            (evo_error "Recursion limit ran out" name))
+            (evo_error "Recursion limit ran out" name (list pos)))
            ((mv sub-res orac)
             (eval_subprogram sub-env name vparams.val vargs.val :clk (1- clk))))
         (eval_result-case sub-res
@@ -1589,8 +1592,8 @@
                           (env (env-pop-stack name env subprog-eval.env)))
                        (evo_normal (exprlist_result subprog-eval.vals env)))
           :ev_throwing (b* ((env (env-pop-stack name env (env->global sub-res.env))))
-                         (mv (ev_throwing sub-res.throwdata env) orac))
-          :ev_error (mv sub-res orac))))
+                         (mv (ev_throwing sub-res.throwdata env (cons pos sub-res.backtrace)) orac))
+          :ev_error (mv (change-ev_error sub-res :backtrace (cons pos sub-res.backtrace)) orac))))
 
     (define eval_subprogram ((env env-p)
                              (name identifier-p)
@@ -1606,14 +1609,18 @@
                                (global-env->static
                                 (env->global env)))))
            ((unless look)
-            (evo_error "Subprogam not found" name))
+            (evo_error "Subprogam not found" name nil))
            ((func f) (func-ses->fn (cdr look)))
            ;; ((unless (subprogram_body-case f.body :sb_asl))
            ;;  (evo_error "Primitive subfunctions not supported" name))
 
            ((unless (and (eql (len vparams) (len f.parameters))
                          (eql (len vargs) (len f.args))))
-            (evo_error "Bad arity" (list name (cons (len vparams) (len f.parameters)) (cons (len vargs) (len f.args)))))
+            (evo_error "Bad arity" (cons name
+                                         (if (eql (len vparams) (len f.parameters))
+                                             (list (len vargs) (len f.args))
+                                           (list (len vparams) (len f.parameters))))
+                       (list name vparams vargs)))
          
            ;; probably redundant but in the document
            (env1 (change-env env :local (empty-local-env)))
@@ -1636,10 +1643,12 @@
                                    (control_flow_state-case bodyres
                                      :returning (evo_normal (func_result bodyres.vals bodyres.env))
                                      :continuing (evo_normal (func_result nil (env->global bodyres.env)))))
-                      :ev_error (mv bodyres orac)
+                      :ev_error (mv (change-ev_error bodyres :backtrace (cons (list name vparams vargs) bodyres.backtrace))
+                                    orac)
                       :ev_throwing (mv (change-ev_throwing bodyres
                                                            :env
-                                                           (change-env bodyres.env :local (empty-local-env)))
+                                                           (change-env bodyres.env :local (empty-local-env))
+                                                           :backtrace (cons (list name vparams vargs) bodyres.backtrace))
                                        orac)))
           :sb_primitive (b* (((evo primres) (eval_primitive name vparams vargs)))
                           (evo_normal (func_result primres (env->global env)))))))
@@ -1653,42 +1662,43 @@
                         (orac 'orac))
       :returns (mv (eval env_eval_result-p) new-orac)
       :measure (nats-measure clk 0 (lexpr-count* lx) 0)
-      (b* ((lx (lexpr->desc lx)))
+      (b* ((pos (lexpr->pos_start lx))
+           (lx (lexpr->desc lx)))
         (lexpr_desc-case lx
           :le_discard (evo_normal (env-fix env))
           :le_var (b* ((envres (env-assign lx.name v env)))
                     (env_result-case envres
                       :lk_local (evo_normal envres.val)
                       :lk_global (evo_normal envres.val)
-                      :lk_notfound (evo_error "assign to undeclared variable" lx)))
+                      :lk_notfound (evo_error "assign to undeclared variable" lx (list pos))))
           :le_slice (b* ((rbase (expr_of_lexpr lx.base))
                          ((mv (evo (expr_result rbv)) orac) (eval_expr env rbase))
                          ((mv (evo (intpairlist/env vslices)) orac) (eval_slice_list rbv.env lx.slices))
-                         ((evo &) (check_non_overlapping_slices vslices.pairlist))
-                         ((evo newbase) (write_to_bitvector vslices.pairlist v rbv.val)))
+                         ((evob &) (check_non_overlapping_slices vslices.pairlist))
+                         ((evob newbase) (write_to_bitvector vslices.pairlist v rbv.val)))
                       (eval_lexpr vslices.env lx.base newbase))
           :le_setarray (b* ((rbase (expr_of_lexpr lx.base))
                             ((mv (evo (expr_result rbv)) orac) (eval_expr env rbase))
                             ((mv (evo (expr_result idx)) orac) (eval_expr rbv.env lx.index))
-                            ((evo idxv) (v_to_int idx.val))
+                            ((evob idxv) (v_to_int idx.val))
                             ((evo newarray)
                              (val-case rbv.val
                                :v_array (if (and (<= 0 idxv)
                                                  (< idxv (len rbv.val.arr)))
                                             (ev_normal (v_array (update-nth idxv v rbv.val.arr)))
-                                          (ev_error "le_setarray index out of obunds" lx))
-                               :otherwise (ev_error "le_setarray non array base" lx))))
+                                          (ev_error "le_setarray index out of obunds" lx (list pos)))
+                               :otherwise (ev_error "le_setarray non array base" lx (list pos)))))
                          (eval_lexpr idx.env lx.base newarray))
           :le_setenumarray (b* ((rbase (expr_of_lexpr lx.base))
                                 ((mv (evo (expr_result rbv)) orac) (eval_expr env rbase))
                                 ((mv (evo (expr_result idx)) orac) (eval_expr rbv.env lx.index))
-                                ((evo idxv) (v_to_label idx.val))
+                                ((evob idxv) (v_to_label idx.val))
                                 ((evo newarray)
                                  (val-case rbv.val
                                    :v_record (if (assoc-equal idxv rbv.val.rec)
                                                  (ev_normal (v_record (put-assoc-equal idxv v rbv.val.rec)))
-                                               (ev_error "le_setenumarray unrecognized index" lx))
-                                   :otherwise (ev_error "le_setenumarray non record base" lx))))
+                                               (ev_error "le_setenumarray unrecognized index" lx (list pos)))
+                                   :otherwise (ev_error "le_setenumarray non record base" lx (list pos)))))
                              (eval_lexpr idx.env lx.base newarray))
           :le_setfield (b* ((rbase (expr_of_lexpr lx.base))
                             ((mv (evo (expr_result rbv)) orac) (eval_expr env rbase))
@@ -1696,17 +1706,17 @@
                              (val-case rbv.val
                                :v_record (if (assoc-equal lx.field rbv.val.rec)
                                              (ev_normal (v_record (put-assoc-equal lx.field v rbv.val.rec)))
-                                           (ev_error "le_setfield unrecognized field" lx))
-                               :otherwise (ev_error "le_setfield non record base" lx))))
+                                           (ev_error "le_setfield unrecognized field" lx (list pos)))
+                               :otherwise (ev_error "le_setfield non record base" lx (list pos)))))
                          (eval_lexpr rbv.env lx.base newrec))
           :le_setfields (b* (((when (not (eql (len lx.fields) (len lx.pairs))))
-                              (evo_error "le_setfields length mismatch" lx))
+                              (evo_error "le_setfields length mismatch" lx (list pos)))
                              (rbase (expr_of_lexpr lx.base))
                              ((mv (evo (expr_result rbv)) orac) (eval_expr env rbase))
-                             ((evo newval) (bitvec_fields_to_record lx.fields lx.pairs rbv.val v)))
+                             ((evob newval) (bitvec_fields_to_record lx.fields lx.pairs rbv.val v)))
                           (eval_lexpr rbv.env lx.base newval))
           :le_setcollectionfields (b* (((when (not (eql (len lx.fields) (len lx.pairs))))
-                                        (evo_error "le_setfields length mismatch" lx))
+                                        (evo_error "le_setfields length mismatch" lx (list pos)))
                                        ((evo rbv) (env-find-global lx.base env))
                                        ((evo newval) (bitvec_fields_to_record lx.fields lx.pairs rbv v))
                                        (newenv (env-assign-global lx.base newval env)))
@@ -1714,8 +1724,8 @@
           :le_destructuring (val-case v
                               :v_array (if (eql (len v.arr) (len lx.elts))
                                            (eval_lexpr_list env lx.elts v.arr)
-                                         (evo_error "le_destructuring length mismatch" lx))
-                              :otherwise (evo_error "le_destructuring type mismatch" lx)))))
+                                         (evo_error "le_destructuring length mismatch" lx (list pos)))
+                              :otherwise (evo_error "le_destructuring type mismatch" lx (list pos))))))
 
     (define eval_lexpr_list ((env env-p)
                              (lx lexprlist-p)
@@ -1742,7 +1752,8 @@
                    new-orac)
       (b* (((unless x) (evo_normal nil))
            ((mv (evo (expr_result res)) orac) (eval_expr env x))
-           ((evo val) (v_to_int res.val)))
+           (pos (expr->pos_start x))
+           ((evob val) (v_to_int res.val)))
         (evo_normal val)))
 
     (define eval_stmt ((env env-p)
@@ -1752,13 +1763,14 @@
                        (orac 'orac))
       :measure (nats-measure clk 0 (stmt-count* s) 0)
       :returns (mv (eval stmt_eval_result-p) new-orac)
-      (b* ((s (stmt->desc s)))
+      (b* ((pos (stmt->pos_start s))
+           (s (stmt->desc s)))
         (stmt_desc-case s
           :s_pass (evo_normal (continuing env))
           :s_seq (b* (((evs env) (eval_stmt env s.first)))
                    (eval_stmt env s.second))
           :s_decl
-          (b* (((unless s.expr) (evo_error "uninitialized declaration" s))
+          (b* (((unless s.expr) (evo_error "uninitialized declaration" s (list pos)))
                ((mv (evo (expr_result v)) orac) (eval_expr env s.expr)))
             (local_decl_item-case s.item
               :ldi_var (b* ((env (declare_local_identifier v.env s.item.name v.val)))
@@ -1767,14 +1779,14 @@
                            :v_array (if (eql (len v.val.arr) (len s.item.names))
                                         (b* ((env (declare_local_identifiers v.env s.item.names v.val.arr)))
                                           (evo_normal (continuing env)))
-                                      (evo_error "tuple length mismatch" s))
-                           :otherwise (evo_error "local declaration type mismatch" s))))
+                                      (evo_error "tuple length mismatch" s (list pos)))
+                           :otherwise (evo_error "local declaration type mismatch" s (list pos)))))
           :s_assign
           (b* (((mv (evo (expr_result v)) orac) (eval_expr env s.expr))
                ((mv (evo new-env) orac) (eval_lexpr v.env s.lexpr v.val)))
             (evo_normal (continuing new-env)))
           :s_call (b* (((call c) s.call)
-                       ((mv (evo (exprlist_result cres)) orac) (eval_call c.name env c.params c.args)))
+                       ((mv (evo (exprlist_result cres)) orac) (eval_call c.name env c.params c.args pos)))
                     (evo_normal (continuing cres.env)))
           :s_return (b* (((unless s.expr)
                           (evo_normal (returning nil (env->global env))))
@@ -1788,15 +1800,15 @@
           :s_cond (b* (((mv (evo (expr_result test)) orac) (eval_expr env s.test))
                        ((evo testval) (val-case test.val
                                        :v_bool (ev_normal test.val.val)
-                                       :otherwise (ev_error "Non-boolean test result" s.test)))
+                                       :otherwise (ev_error "Non-boolean test result" s.test (list pos))))
                        (next (if testval s.then s.else)))
                     (eval_block test.env next))
           :s_assert (b* (((mv (evo (expr_result assert)) orac) (eval_expr env s.expr)))
                       (val-case assert.val
                         :v_bool (if assert.val.val
                                     (evo_normal (continuing assert.env))
-                                  (evo_error "Assertion failed" s.expr))
-                        :otherwise (evo_error "Non-boolean assertion result" s.expr)))
+                                  (evo_error "Assertion failed" s.expr (list pos)))
+                        :otherwise (evo_error "Non-boolean assertion result" s.expr (list pos))))
           :s_for (b* (((mv (evo (expr_result startr)) orac) (eval_expr env s.start_e))
                       ((mv (evo (expr_result endr)) orac)   (eval_expr env s.end_e))
                       ((mv (evo limit) orac)                (eval_limit env s.limit))
@@ -1805,8 +1817,8 @@
                       (env (declare_local_identifier env s.index_name startr.val))
                       ;; Type constraints ensure that start and end are integers,
                       ;; will do this here so we don't have to wrap them in values
-                      ((evo startv) (v_to_int startr.val))
-                      ((evo endv)   (v_to_int endr.val))
+                      ((evob startv) (v_to_int startr.val))
+                      ((evob endv)   (v_to_int endr.val))
                       ((evs env2)
                        (eval_for env s.index_name limit
                                       startv s.dir endv s.body))
@@ -1816,16 +1828,16 @@
           :s_while (b* (((mv (evo limit) orac) (eval_limit env s.limit)))
                      (eval_loop env t limit s.test s.body))
           :s_repeat (b* (((mv (evo limit) orac) (eval_limit env s.limit))
-                         ((evo limit2) (tick_loop_limit limit))
+                         ((evob limit2) (tick_loop_limit limit))
                          ((evs env1) (eval_block env s.body)))
                       (eval_loop env1 nil limit2 s.test s.body))
           :s_throw (b* (((unless s.val)
-                         (mv (ev_throwing nil env) orac))
+                         (mv (ev_throwing nil env (list pos)) orac))
                         ((expr*maybe-ty s.val))
                         ((unless s.val.ty)
-                         (evo_error "Throw with untyped exception" s))
+                         (evo_error "Throw with untyped exception" s (list pos)))
                         ((mv (evo (expr_result ex)) orac) (eval_expr env s.val.expr)))
-                     (mv (ev_throwing (throwdata ex.val s.val.ty) ex.env) orac))
+                     (mv (ev_throwing (throwdata ex.val s.val.ty) ex.env (list pos)) orac))
           :s_try (b* (((mv try orac) (eval_block env s.body))
                       ((when (eval_result-case try
                                :ev_throwing (not try.throwdata)
@@ -1835,19 +1847,20 @@
                    ;; NOTE: The eval_catchers semantics rule takes the original env (from before the eval_block above!)
                    ;; but then uses it just for the static env, combining its static env with the dynamic env from the throw.
                    ;; But it seems the static env shouldn't ever change so why bother?
-                   (eval_catchers try.env s.catchers s.otherwise try.throwdata))
+                   (eval_catchers try.env s.catchers s.otherwise try.throwdata try.backtrace))
                       
           :s_print (b* (((mv (evo (exprlist_result e)) orac) (eval_expr_list env s.args))
                         (str (vallist-to-string e.val))
                         (- (cw (if s.newline "~s0~%" "~s0") str)))
                      (evo_normal (continuing e.env)))
-          :s_unreachable (evo_error "unreachable" s)
-          :s_pragma (evo_error "unsupported statement" s))))
+          :s_unreachable (evo_error "unreachable" s (list pos))
+          :s_pragma (evo_error "unsupported statement" s (list pos)))))
 
      (define eval_catchers ((env env-p)
                             (catchers catcherlist-p)
                             (otherwise maybe-stmt-p)
                             (throw throwdata-p)
+                            (backtrace)
                             &key
                             ((clk natp) 'clk)
                             (orac 'orac))
@@ -1859,19 +1872,19 @@
            (catcher? (find_catcher (global-env->static (env->global env)) throw.ty catchers))
            ((unless catcher?)
             (b* (((unless otherwise)
-                  (mv (ev_throwing throw env) orac))
+                  (mv (ev_throwing throw env backtrace) orac))
                  ((mv blkres orac) (eval_block env otherwise)))
-              (mv (rethrow_implicit throw blkres) orac)))
+              (mv (rethrow_implicit throw blkres backtrace) orac)))
            ((catcher c) catcher?)
            ((unless c.name)
             (b* (((mv blkres orac) (eval_block env c.stmt)))
-              (mv (rethrow_implicit throw blkres) orac)))
+              (mv (rethrow_implicit throw blkres backtrace) orac)))
            (env2 (declare_local_identifier env c.name throw.val))
            ((mv blkres orac)
             (b* (((evs blkenv) (eval_block env2 c.stmt))
                  (env3 (remove_local_identifier blkenv c.name)))
               (evo_normal (continuing env3)))))
-        (mv (rethrow_implicit throw blkres) orac)))
+        (mv (rethrow_implicit throw blkres backtrace) orac)))
            
     
    
@@ -1886,7 +1899,7 @@
         :slice_single (b* (((mv (evo (expr_result v)) orac) (eval_expr env s.index)))
                        (val-case v.val
                          :v_int (evo_normal (intpair/env (intpair v.val.val 1) v.env))
-                         :otherwise (evo_error "Bad single slice" s)))
+                         :otherwise (evo_error "Bad single slice" s (list (expr->pos_start s.index)))))
         :slice_range (b* (((mv (evo (expr_result mend)) orac) (eval_expr env s.end))
                           ((mv (evo (expr_result mstart)) orac) (eval_expr mend.env s.start)))
                       (val-case mend.val
@@ -1895,16 +1908,16 @@
                                          (intpair/env
                                           (intpair mstart.val.val (+ 1 (- mend.val.val mstart.val.val)))
                                           mstart.env))
-                                 :otherwise (evo_error "Bad start in the slice range" s))
-                        :otherwise (evo_error "Bad top/end in the slice range" s)))
+                                 :otherwise (evo_error "Bad start in the slice range" s (list (expr->pos_start s.start))))
+                        :otherwise (evo_error "Bad top/end in the slice range" s (list (expr->pos_start s.end)))))
         :slice_length (b* (((mv (evo (expr_result mstart)) orac) (eval_expr env s.start))
                            ((mv (evo (expr_result mlength)) orac) (eval_expr mstart.env s.length)))
                        (val-case mstart.val
                          :v_int (val-case mlength.val
                                   :v_int (evo_normal
                                           (intpair/env (intpair mstart.val.val mlength.val.val) mstart.env))
-                                  :otherwise (evo_error "Bad start in the slice range" s))
-                         :otherwise (evo_error "Bad top/end in the slice range" s)))
+                                  :otherwise (evo_error "Bad start in the slice range" s (list (expr->pos_start s.start))))
+                         :otherwise (evo_error "Bad length in the slice range" s (list (expr->pos_start s.length)))))
         :slice_star (b* (((mv (evo (expr_result mfactor)) orac) (eval_expr env s.factor))
                          ((mv (evo (expr_result mlength)) orac) (eval_expr mfactor.env s.length)))
                      (val-case mfactor.val
@@ -1913,8 +1926,8 @@
                                         (intpair/env
                                          (intpair (* mfactor.val.val mlength.val.val) mlength.val.val)
                                          mlength.env))
-                                :otherwise (evo_error "Bad length in factor slice" s))
-                       :otherwise (evo_error "Bad factor in factor slice" s)))
+                                :otherwise (evo_error "Bad length in factor slice" s (list (expr->pos_start s.length))))
+                       :otherwise (evo_error "Bad factor in factor slice" s (list (expr->pos_start s.factor)))))
         ))
      
     (define eval_slice_list ((env env-p)
@@ -1965,13 +1978,14 @@
                              2)
       :returns (mv (eval stmt_eval_result-p) new-orac)
       (b* (((mv (evo (expr_result cres)) orac) (eval_expr env e_cond))
-           ((evo cbool) (v_to_bool cres.val))
+           (pos (expr->pos_start e_cond))
+           ((evob cbool) (v_to_bool cres.val))
            ((when (xor is_while cbool))
             (evo_normal (continuing cres.env)))
-           ((evo limit1) (tick_loop_limit limit))
+           ((evob limit1) (tick_loop_limit limit))
            ((evs env2) (eval_block cres.env body))
            ((when (zp clk))
-            (evo_error "Loop limit ran out" body)))
+            (evo_error "Loop limit ran out" body (list (stmt->pos_start body)))))
         (eval_loop env2 is_while limit1 e_cond body :clk (1- clk))))
            
     (define eval_block ((env env-p)
@@ -1988,7 +2002,8 @@
                        :returning (evo_normal stmtres.res)
                        :continuing (evo_normal (continuing (pop_scope stmtres.res.env))))
           :ev_throwing (mv (ev_throwing stmtres.throwdata
-                                        (pop_scope stmtres.env))
+                                        (pop_scope stmtres.env)
+                                        stmtres.backtrace)
                            orac)
           :otherwise (mv stmtres orac))))
            
@@ -1996,21 +2011,50 @@
     (define is_val_of_type_tuple ((env env-p) (vals vallist-p) (types tylist-p)
                                   &key ((clk natp) 'clk)
                                   (orac 'orac))
+      :guard (eql (len vals) (len types))
       :returns (mv (res bool_eval_result-p) new-orac)
       :measure (nats-measure clk 0 (tylist-count types) 0);;(vallist-count vals)
       :guard-debug t
       :verify-guards nil
-      (if (and (atom vals) (atom types))
+      (if (atom types)
           (evo_normal t)
-        (if (and (consp vals) (consp types))
-            (b* ((v (car vals))
-                 (ty (car types))
-                 ((mv (evo first-ok) orac) (is_val_of_type env v ty))
-                 ((unless first-ok) (evo_normal nil))
-                 ((mv (evo rest_ok) orac) (is_val_of_type_tuple env (cdr vals) (cdr types)))
-                 )
-              (evo_normal rest_ok))
-          (evo_error "is_val_of_type_tuple failed: value list and type list of unqual length" (cons vals types)))))
+        (b* ((v (car vals))
+             (ty (car types))
+             ((mv (evo first-ok) orac) (is_val_of_type env v ty))
+             ((unless first-ok) (evo_normal nil))
+             ((mv (evo rest_ok) orac) (is_val_of_type_tuple env (cdr vals) (cdr types)))
+             )
+          (evo_normal rest_ok))))
+                        
+      
+    
+    (define check_int_constraints ((env env-p) (i integerp) (constrs int_constraintlist-p)
+                                   &key ((clk natp) 'clk) (orac 'orac))
+      :short "At least one constraint needs to be satisfied"
+      :long "We assume that any expr eval is sidefect free, therefore there is nto nedd to return env"
+      :returns (mv (sat bool_eval_result-p) new-orac)
+      :measure (nats-measure clk 0 (int_constraintlist-count constrs) 0)
+      (if (atom constrs)
+          (evo_normal nil)
+        (b* ((constr (car constrs)))
+          (int_constraint-case constr
+            :constraint_exact (b* (((mv (evo (expr_result c)) orac) (eval_expr env constr.val)))
+                                (val-case c.val
+                                  :v_int (if (equal c.val.val i)
+                                             (evo_normal t)
+                                           (check_int_constraints env i (cdr constrs)))
+                                  :otherwise (evo_error "Constraint_exact evaluated to unexpected type" constr (list (expr->pos_start constr.val)))))
+            :constraint_range (b* (((mv (evo (expr_result from)) orac) (eval_expr env constr.from))
+                                   ((mv (evo (expr_result to)) orac) (eval_expr env constr.to)))
+                                (fty::multicase
+                                  ((val-case from.val)
+                                   (val-case to.val))
+                                  ((:v_int :v_int) (if (and (<= from.val.val i)
+                                                            (<= i to.val.val))
+                                                       (evo_normal t)
+                                                     (check_int_constraints env i (cdr constrs))))
+                                  (- (evo_error "Constraint_range evaluated to unexpected type" constr (list (expr->pos_start constr.from))))))
+           ))))
     
     (define is_val_of_type ((env env-p) (v val-p) (ty ty-p)
                             &key ((clk natp) 'clk)
@@ -2019,7 +2063,8 @@
       :measure (nats-measure clk 0 (ty-count ty) 0);;(val-count v)
       :guard-debug t
       :verify-guards nil
-      (b* ((ty (ty->desc ty)))
+      (b* ((pos (ty->pos_start ty))
+           (ty (ty->desc ty)))
         (fty::multicase
           ((val-case v)
            (type_desc-case ty))
@@ -2027,17 +2072,19 @@
                              :unconstrained (evo_normal t)        ;;INT_UNCONSTRAINED
                              :wellconstrained (check_int_constraints env v.val ty.constraint.constraints) ;;INT_WELLCONSTRAINED
                              :otherwise ;;pendingconstraines and parametrized are not mentioned in ASLRef????
-                             (evo_error "is_val_of_type failed - cases of int constrained not covered in ASLRef" (cons v ty))))
+                             (evo_error "is_val_of_type failed - cases of int constrained not covered in ASLRef" (cons v ty) (list pos))))
           ((-      :t_int) (constraint_kind-case ty.constraint
                              :unconstrained (evo_normal t)        ;;INT_UNCONSTRAINED
-                             :otherwise (evo_error "is_val_of_type failed T_INT with other than v_int" (cons v ty))))
+                             :otherwise (evo_error "is_val_of_type failed T_INT with other than v_int" (cons v ty) (list pos))))
           ((:v_bitvector :t_bits) (b* (((mv (evo (expr_result n)) orac) (eval_expr env ty.expr)))
                                     (val-case n.val
                                       :v_int (evo_normal (equal n.val.val v.len))   ;;BITS
-                                      :otherwise (evo_error "is_val_of_type failed - unexpected value of e in (T_BITS e,-)" (cons v ty)))))
+                                      :otherwise (evo_error "is_val_of_type failed - unexpected value of e in (T_BITS e,-)" (cons v ty) (list pos)))))
           ((:v_array :t_tuple) (b* (((unless (and (consp v.arr)
                                                   (consp ty.types)))
-                                     (evo_error "For the case of tuple, both v-arr and ty.types must be non-empty lists" (cons v ty))))
+                                     (evo_error "For the case of tuple, both v-arr and ty.types must be non-empty lists" (cons v ty) (list pos)))
+                                    ((unless (eql (len v.arr) (len ty.types)))
+                                     (evo_error "is_val_of_type: value tuple of different length than type tuple" (cons v ty) (list pos))))
                                  (is_val_of_type_tuple env v.arr ty.types)))
           (- (evo_normal t)) ;;TYPE_EQUAL
         )))
