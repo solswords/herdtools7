@@ -975,8 +975,15 @@
 (defmacro evo_normal (arg)
   `(mv (ev_normal ,arg) orac))
 
+
+;; This is just a convenient function to hang rewrite rules on for FGL.
+(define pass-error (val orac)
+  :inline t
+  :enabled t
+  (mv val orac))
+
 (defmacro evo_error (&rest args)
-  `(mv (ev_error . ,args) orac))
+  `(pass-error (ev_error . ,args) orac))
 
 (acl2::def-b*-binder evo
   :body
@@ -1014,7 +1021,7 @@
                            `((,(car acl2::args) evresult.res)))
                     ,acl2::rest-expr)
        
-       :otherwise (mv (init-backtrace evresult pos) orac))))
+       :otherwise (pass-error (init-backtrace evresult pos) orac))))
 
 
 

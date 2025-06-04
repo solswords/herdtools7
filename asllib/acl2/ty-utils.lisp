@@ -1058,3 +1058,40 @@
       (ev_normal (cons (typed_identifier x1.name first) rest))))
   ///
   (Verify-guards name-resolve-ty-fn))
+
+
+
+(defines ty-remove-bitfields
+  :verify-guards nil
+    
+  (define ty-remove-bitfields ((x ty-p))
+    :returns (res ty-p)
+    :measure (ty-count x)
+    (b* ((pos (ty->pos_start x))
+         (ty (ty->desc x)))
+      (type_desc-case ty
+        :t_bits (ty (change-t_bits ty :fields nil) pos)
+        :t_tuple (ty (t_tuple (tylist-remove-bitfields ty.types)) pos)
+        :t_array (ty (t_array ty.index (ty-remove-bitfields ty.type)) pos)
+        :t_record (ty (t_record (typed_identifierlist-remove-bitfields ty.fields)) pos)
+        :t_exception (ty (t_exception (typed_identifierlist-remove-bitfields ty.fields)) pos)
+        :t_collection (ty (t_collection (typed_identifierlist-remove-bitfields ty.fields)) pos)
+        :otherwise (ty-fix x))))
+  
+  (define tylist-remove-bitfields ((x tylist-p))
+    :returns (res tylist-p)
+    :measure (tylist-count x)
+    (if (atom x)
+        nil
+      (cons (ty-remove-bitfields (car x))
+            (tylist-remove-bitfields (cdr x)))))
+
+  (define typed_identifierlist-remove-bitfields ((x typed_identifierlist-p))
+    :returns (res typed_identifierlist-p)
+    :measure (typed_identifierlist-count x)
+    (b* (((when (atom x)) nil)
+         ((typed_identifier x1) (car x)))
+      (cons (typed_identifier x1.name (ty-remove-bitfields x1.type))
+            (typed_identifierlist-remove-bitfields (cdr x)))))
+  ///
+  (Verify-guards ty-remove-bitfields))
