@@ -122,22 +122,6 @@
                     look))
     :hints(("Goal" :in-theory (enable spmatch-force-exec)))))
 
-(define all-subprograms-match ((env static_env_global-p)
-                               (ref-env static_env_global-p))
-  :returns (ok)
-  (all-entries-match (static_env_global->subprograms env)
-                     (static_env_global->subprograms ref-env))
-  ///
-  (defret lookup-when-<fn>
-    (implies (and (syntaxp (quotep name))
-                  ok
-                  (equal look (spmatch-force-exec
-                               (hons-assoc-equal name (static_env_global->subprograms ref-env))))
-                  (syntaxp (quotep look))
-                  look)
-             (equal (hons-assoc-equal name (static_env_global->subprograms env))
-                    look))
-    :hints(("Goal" :in-theory (enable spmatch-force-exec)))))
 
 (define subprograms-match ((names identifierlist-p)
                            (env static_env_global-p)
@@ -575,8 +559,9 @@ as follows, more or less following the above made-up example:</p>
                                      ;; and the loop index one past the end:
                                      (equal res.res.env
                                             (change-env
-                                             env :local
-                                             :local
+                                             env :local ...))))))))))
+ })
+
 ")
 
 (defmacro defloop (name &rest args)

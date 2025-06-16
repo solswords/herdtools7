@@ -36,6 +36,25 @@
 
 (stobjs::defstobj-clone orac acl2::orac :pkg asl-pkg)
 
+(defxdoc orac
+  :short "Clone of @(see acl2::orac), used for generating arbitrary values of ASL types"
+  :long "<p>To support @('e_arbitrary') expressions with full generality, we need a way
+of generating arbitrary data. We use the @(see acl2::orac) stobj for this,
+wrapping its functions for generating basic typed data with specialized ones
+for producing arbitrary data of ASL types.</p>
+
+<p>The function @(see ty-oracle-val) reads a typed value from the oracle,
+producing a value that provably satisfies the type (or nil if the type is
+unsatisfiable) and a new oracle.</p>
+
+<p>Any value satisfying a type can indeed by produced by @(see
+ty-oracle-val). We show this by defining @(see typed-val-to-oracle), which maps
+an arbitrary value satisfying a type to data that can be placed in the
+@('orac') that will ensure that @(see ty-oracle-val) of that type will produce
+that value.</p>
+
+<p>See also @(see e_arbitrary) and @(see eval_expr).</p>")
+
 (define int_constraint-oracle-val ((rel-val natp)
                                  (x int_constraint-p))
   :guard (and (int_constraint-resolved-p x)
@@ -112,6 +131,15 @@
 (defines ty-oracle-val
   :flag-local nil
   (define ty-oracle-val ((x ty-p) orac)
+    :parents (orac)
+    :short "Produce an arbitrary value satisfying the given type using values read from the
+@(see orac)."
+    :long "<p>The following theorem states that this function always produces a
+well-typed value if the type is satsifiable:</p> @(def ty-oracle-val-correct)
+
+<p>Additionally, the following theorem states that any value satisfying a type
+can be produced by this function if the oracle is set up appropriately (see
+@(see typed-val-to-oracle)):</p> @(def typed-val-to-oracle-correct)"
     :guard (ty-resolved-p x)
     :verify-guards nil
     :measure (acl2::two-nats-measure (ty-count x) 0)
@@ -376,6 +404,10 @@
 
 (defines typed-val-to-oracle
   (define typed-val-to-oracle ((x ty-p) (val val-p))
+    :short "Produce a list of values that, when placed in the @(see orac)'s @('oracle-st')
+field and its mode set appropriately, makes @('(ty-oracle-val x orac)') produce
+@('val')."
+    :long "<p>Correctness theorem:</p>@(def typed-val-to-oracle-correct)"
     :guard (and (ty-resolved-p x)
                 (ty-satisfied val x))
     :verify-guards nil

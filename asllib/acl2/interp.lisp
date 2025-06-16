@@ -46,6 +46,8 @@
 (local (in-theory (disable (tau-system))))
 (local (in-theory (disable put-assoc-equal)))
 
+(local (xdoc::set-default-parents asl-interpreter-functions))
+
 (local
   (defthm alistp-when-val-imap-p-rw
     (implies (val-imap-p x)
@@ -57,6 +59,7 @@
    (implies (func-ses-imap-p x)
             (alistp x))
    :hints(("Goal" :in-theory (enable func-ses-imap-p)))))
+
 
 
 (define v_of_literal ((x literal-p))
@@ -91,27 +94,35 @@
 
 
 (defprod expr_result
+  :short "Type of the result from evaluating an ASL expression"
   ((val val)
    (env env)))
 
 (def-eval_result expr_eval_result-p expr_result-p)
 
 (defprod exprlist_result
+  :short "Type of the result from evaluating a list of ASL expressions"
   ((val vallist)
    (env env)))
 
 (def-eval_result exprlist_eval_result-p exprlist_result-p)
 
 (deftagsum control_flow_state
+  :short "Type of result from evaluating a statement"
   (:returning ((vals vallist)
-               (env global-env)))
-  (:continuing ((env env))))
+               (env global-env))
+   :short "Indicates that a return has been encountered")
+  (:continuing ((env env))
+   :short "Indicates that no return has been encountered and execution of the current
+function continues"))
 
 (def-eval_result stmt_eval_result-p control_flow_state-p)
 
 (defprod func_result ((vals vallist ;; val_read_from-list
                             )
-                      (env global-env)))
+                      (env global-env))
+  :short "Type of result from evaluating a function call: a list of return values and an
+updated global environment")
 
 (def-eval_result func_eval_result-p func_result-p)
 
@@ -148,6 +159,8 @@
                             (let*> ,rest-bindings . ,args))))))
 
 (deftagsum env_result
+  :short "Type of result from searching an env for a variable, indicating it's bound
+locally, globally, or not at all"
   (:lk_local ((val)))
   (:lk_global ((val)))
   (:lk_notfound ()))
@@ -195,6 +208,7 @@
          :rule-classes :compound-recognizer))
 
 (define val-imaplist-assoc ((key identifier-p) (stack val-imaplist-p))
+  :short "Look up a variable in a stack of local storage scopes."
   :returns (pair)
   (if (atom stack)
       nil
@@ -217,6 +231,7 @@
 
 (define env-find ((x identifier-p)
                   (env env-p))
+  :short "Look up a variable in the environment, checking both local and global scopes."
   :returns (res val_env_result-p)
   (b* (((env env))
        ((local-env env.local))
@@ -229,6 +244,7 @@
 
 (define env-find-global ((x identifier-p)
                          (env env-p))
+  :short "Look up a variable in the global storage of the environment"
   ;; Gets the value of global variable x if exists, error otherwise
   :returns (res val_result-p)
   (b* (((env env))
@@ -240,6 +256,9 @@
 (define val-imaplist-assign ((name identifier-p)
                              (v val-p)
                              (stack val-imaplist-p))
+  :short "Assign a new value to a variable in a stack of local storage scopes. Looks for
+the scope in which it is stored and updates it in place. Does not store the
+value if the variable was not already present."
   :returns (new-stack val-imaplist-p)
   (if (atom stack)
       nil
@@ -306,6 +325,8 @@
 (define env-assign-local ((name identifier-p)
                           (v val-p)
                           (env env-p))
+  :short "Update the value of a variable in the local scope of the environment. If the
+variable is not already declared locally, this has no effect."
   :returns (new-env env-p)
   (b* (((env env))
        ((local-env env.local))
@@ -318,6 +339,7 @@
 (define env-assign-global ((name identifier-p)
                            (v val-p)
                            (env env-p))
+  :short "Set the value of a variable in the global scope of the environment."
   :returns (new-env env-p)
   (b* (((env env))
        ((global-env env.global))
@@ -330,6 +352,8 @@
 (define env-assign ((name identifier-p)
                     (v val-p)
                     (env env-p))
+  :short "Assign a new value to a variable in the environment, if it is either locally or
+globally declared. If not, produce a NOTFOUND object to indicate the error."
   :returns (res env_env_result-p)
   (b* (((env env))
        ((local-env env.local))
@@ -351,7 +375,9 @@
 (def-eval_result env_eval_result-p env-p)
 
 (define stack_size-lookup ((name identifier-p)
-                      (stack_size pos-imap-p))
+                           (stack_size pos-imap-p))
+  :short "Look up the stack size (number of current nested invocations) of the given
+function in the environment's stack_size field."
   :returns (val natp :rule-classes :type-prescription)
   :hooks (:fix)
   (b* ((name (identifier-fix name))
@@ -362,6 +388,7 @@
 
 (define increment-stack ((name identifier-p)
                          (stack_size pos-imap-p))
+  :short "Increment the stack size entry (number of current nested invocations) for the given function."
   :returns (res pos-imap-p)
   (b* ((name (identifier-fix name))
        (stack_size (pos-imap-fix stack_size))
@@ -398,6 +425,7 @@
 
 (define decrement-stack ((name identifier-p)
                          (stack_size pos-imap-p))
+  :short "Decrement the stack size entry (number of current nested invocations) for the given function."
   :returns (res pos-imap-p)
   (b* ((name (identifier-fix name))
        (stack_size (pos-imap-fix stack_size))
@@ -423,6 +451,9 @@
 
 (define env-push-stack ((name identifier-p)
                         (env env-p))
+  :short "Prepare to call a given function: produce a new env in which the function's
+stack size entry is incremented and the local environment is empty. Fails if
+the function is not a declared subprogram."
   :returns (new-env env_eval_result-p)
   (b* (((env env))
        ((global-env g) env.global)
@@ -438,6 +469,11 @@
 (define env-pop-stack ((name identifier-p)
                        (prev-env env-p)
                        (call-env global-env-p))
+  :short "Undo the operation of @(see env-push-stack) by returning an env where the
+global scope is that of @('call-env') (the environment resulting from the
+subprogram call) with the function's stack size entry decremented, and the
+local scope is that of @('prev-env') (the environment before the subprogram
+call)."
   :returns (new-env env-p)
   ;; Takes the local component of the prev-env
   ;; and combines it with the global component of the call-env, but decrements name's stack size.
@@ -451,6 +487,7 @@
 
 (define get_stack_size ((name identifier-p)
                         (env env-p))
+  :short "Look up the stack_size entry for the given function in the env"
   :returns (sz natp :rule-classes :type-prescription)
   (b* (((env env))
        ((global-env g) env.global))
@@ -465,16 +502,17 @@
 
 
 
-(define read_value_from ((vs val_read_from-list-p))
-  :returns (vals vallist-p)
-  (if (atom vs)
-      nil
-    (cons (val_read_from->val (car vs))
-          (read_value_from (cdr vs)))))
+;; (define read_value_from ((vs val_read_from-list-p))
+;;   :returns (vals vallist-p)
+;;   (if (atom vs)
+;;       nil
+;;     (cons (val_read_from->val (car vs))
+;;           (read_value_from (cdr vs)))))
 
 
 
 (define typed_identifierlist->names ((x typed_identifierlist-p))
+  :parents (typed_identifierlist)
   :returns (names identifierlist-p)
   (if (atom x)
       nil
@@ -485,6 +523,7 @@
     (equal (len names) (len x))))
 
 (define maybe-typed_identifierlist->names ((x maybe-typed_identifierlist-p))
+  :parents (maybe-typed_identifierlist)
   :returns (names identifierlist-p)
   (if (atom x)
       nil
@@ -498,6 +537,8 @@
 (define declare_local_identifier ((env env-p)
                                   (name identifier-p)
                                   (val val-p))
+  :short "Declare a variable in the local environment, associating it with the given
+value in the topmost scope."
   :returns (new-env env-p)
   (b* (((env env))
        ((local-env l) env.local)
@@ -507,6 +548,8 @@
 
 (define remove_local_identifier ((env env-p)
                                  (name identifier-p))
+  :short "Remove a variable binding from the top scope of the local environment."
+  :long "<p>Currently only used in @(see eval_catchers)</p>"
   :returns (new-env env-p)
   (b* (((env env))
        ((local-env l) env.local)
@@ -517,6 +560,8 @@
 (define declare_local_identifiers ((env env-p)
                                    (names identifierlist-p)
                                    (vals vallist-p))
+  :short "Declare a list of variables in the local environment, associating them with the
+corresponding values in the topmost scope."
   :guard (eql (len names) (len vals))
   :returns (new-env env-p)
   (b* (((env env))
@@ -533,6 +578,7 @@
 (define check_recurse_limit ((env env-p)
                              (name identifier-p)
                              (recurse-limit acl2::maybe-integerp))
+  :short "Produce an error if the given function is at or above its given recursion limit."
   :returns (eval eval_result-p)
   (declare (ignorable env name recurse-limit))
   (if (and recurse-limit
@@ -561,6 +607,7 @@
 
 
 (define named_exprlist->exprs ((x named_exprlist-p))
+  :parents (named_exprlist)
   :returns (exprs exprlist-p)
   (if (atom x)
       nil
@@ -577,6 +624,7 @@
     :rule-classes :linear))
 
 (define named_exprlist->names ((x named_exprlist-p))
+  :parents (named_exprlist)
   :returns (names identifierlist-p)
   (if (atom x)
       nil
@@ -594,6 +642,8 @@
 (def-eval_result int_eval_result-p integerp)
 
 (define v_to_int ((x val-p))
+  :short "Extract the integer value from a v_int type value, or produce an error if it's
+the wrong type."
   :returns (i int_eval_result-p)
   (val-case x
     :v_int (ev_normal x.val)
@@ -602,6 +652,8 @@
 (def-eval_result bool_eval_result-p booleanp)
 
 (define v_to_bool ((x val-p))
+  :short "Extract a Boolean from a v_bool type value, or produce an error if
+ it's the wrong type."
   :returns (i bool_eval_result-p)
   (val-case x
     :v_bool (ev_normal x.val)
@@ -610,6 +662,8 @@
 (def-eval_result id_eval_result-p identifier-p)
 
 (define v_to_label ((x val-p))
+  :short "Extract the identifier from a v_label type value, or produce an error if it's
+the wrong type."
   :returns (i id_eval_result-p)
   (val-case x
     :v_label (ev_normal x.val)
@@ -623,6 +677,7 @@
 
 (define get_field! ((field identifier-p)
                     (rec val-imap-p))
+  :short "Get a named field from a record alist, producing an error if it's not present"
   :returns (v val_result-p)
   (b* ((look (assoc-equal (identifier-fix field)
                           (val-imap-fix rec)))
@@ -632,12 +687,16 @@
 (define get_field ((field identifier-p)
                    (rec val-p))
   :returns (v val_result-p)
+  :short "Get the named field from a v_record type value, or produce an error if it's not
+a v_record or the field isn't present"
   (val-case rec
     :v_record (get_field! field rec.rec)
     :otherwise (ev_error "get_field non record" rec nil)))
 
 (define map-get_field! ((fields identifierlist-p)
                         (rec val-imap-p))
+  :short "Get the values for a list of named fields from a record alist,
+ producing an error if any are not present."
   :returns (v vallist_result-p)
   (b* (((when (atom fields)) (ev_normal nil))
        ((ev val1) (get_field! (car fields) rec))
@@ -646,12 +705,18 @@
 
 (define map-get_field ((fields identifierlist-p)
                        (rec val-p))
+  :short "Get the values for a list of named fields from a v_record type value, or
+produce an error if it's not a v_record or if any field isn't present"
   :returns (v vallist_result-p)
   (val-case rec
     :v_record (map-get_field! fields rec.rec)
     :otherwise (ev_error "map-get_field non record" rec nil)))
 
 (define concat_bitvectors ((vals vallist-p))
+  :short "Concatenate the given list of bitvectors together, producing a single bitvector
+whose width is the sum of their widths, where the first value in the list
+determines the MSBs of the resulting vector. Produce an error if any of the
+values are not of v_bitvector type."
   ;; Check order?
   :returns (v val_result-p)
   :verify-guards nil
@@ -679,6 +744,12 @@
                                   (rec val-imap-p)
                                   (bv integerp)
                                   (width acl2::maybe-integerp))
+  :short "For the given list of record fields and corresponding list of bitvector slice specifiers
+ (pairs of integers where the first is the LSB and second is the width of the
+ slice), extract each bitslice from the given bitvector (integer) and store it
+ in the corresponding record field. Error if any of the fields is not present
+ in the record, or if any of the slices is out of bounds for the bitvector
+ width."
   :guard (eql (len fields) (len slices))
   :returns (v val_result-p)
   (b* (((when (atom fields)) (ev_normal (v_record rec)))
@@ -703,6 +774,13 @@
                                  (slices intpairlist-p)
                                  (rec val-p)
                                  (bv val-p))
+  :short "For the given list of record fields and corresponding list of bitvector slice specifiers
+ (pairs of integers where the first is the LSB and second is the width of the
+ slice), extract each bitslice from @('bv'), which should be of v_bitvector or
+ v_int type, and store it in the corresponding field of @('rec'), which should
+ be of v_record type. Error if any of the fields is not present in the record,
+ any of the slices is out of bounds for the bitvector width, or if @('bv') or
+ @('rec') are of wrong value types."
   :guard (eql (len fields) (len slices))
   :returns (v val_result-p)
   (b* (((unless (val-case rec :v_record))
@@ -720,7 +798,9 @@
 (define for_loop-test ((v_start integerp)
                        (v_end integerp)
                        (dir for_direction-p))
-  ;; says whether we terminate
+  :short "Test for termination of a for loop. @('v_start') is the iteration index (which
+is initiially the starting value) and @('v_end') is the final value. Terminate (return t)
+if @('v_start') is past @('v_end') in the direction indicated."
   (if (eq (for_direction-fix dir) :up)
       (< (lifix v_end) (lifix v_start))
     (> (lifix v_end) (lifix v_start))))
@@ -728,6 +808,8 @@
 (define for_loop-measure ((v_start integerp)
                           (v_end integerp)
                           (dir for_direction-p))
+  :short "Measure for termination of for loop iterations, based on the difference between
+start and end indices."
   :returns (meas natp :rule-classes :type-prescription)
   (nfix (+ 3 (if (eq (for_direction-fix dir) :up)
                  (- (lifix v_end) (lifix v_start))
@@ -743,7 +825,7 @@
 
 (define for_loop-step ((v_start integerp)
                        (dir for_direction-p))
-  ;; says whether we terminate
+  :short "Return the next value for the iteration index based on the direction."
   (+ (lifix v_start)
      (if (eq (for_direction-fix dir) :up) 1 -1))
   ///
@@ -764,6 +846,8 @@
                        ;; missing limit
                        (v_start integerp)
                        (dir for_direction-p))
+  :short "Step the for loop iteration index value, store it under the appropriate local
+variable in the env (must already be declared), and return the new value."
   :returns (mv (v_step integerp)
                (new-env env-p))
   (b* ((v_step (for_loop-step v_start dir)))
@@ -775,6 +859,8 @@
 
 
 (define pop_scope ((env env-p))
+  :short "Exit a local block scope by throwing out the topmost scope of the
+ env's local storage stack."
   :Returns (new-env env-p)
   (b* (((env env))
        ((local-env env.local)))
@@ -784,6 +870,8 @@
                                   :storage (cdr env.local.storage)))))
 
 (define push_scope ((env env-p))
+  :short "Enter a new local block scope by consing an empty scope onto the
+ env's local storage stack."
   :Returns (new-env env-p)
   (b* (((env env))
        ((local-env env.local)))
@@ -795,6 +883,10 @@
 
 (define check-bad-slices ((width acl2::maybe-natp)
                           (slices intpairlist-p))
+  :short "For the given list of bitvector slices (pairs of integers where the first is
+the LSB and second is the width of the slice), produce an error if any are out
+of bounds for the given width. If the width is nil, only produce an error
+if either the LSB or width is negative."
   :returns (res eval_result-p)
   (b* (((when (atom slices)) (ev_normal nil))
        ((intpair s1) (car slices))
@@ -818,7 +910,11 @@
                      (integerp (intpair->second res))
                      (<= 0 (intpair->second res)))
                 "(length . value)")
-                
+  :short "For the given list of bitvector slices (pairs of integers where the first is
+the LSB and second is the width of the slice) and integer source value, produce
+the value concatenating all the slices of that source value, where the first
+slice corresponds to the MSBs of the result.  The result is a pair of integers
+where the first is the total width and the second is the concatenated value."
   :guard-debug t
   (if (atom vslices) (intpair 0 0)
     (b* (((intpair first_vslice) (car vslices))
@@ -835,6 +931,11 @@
 (define eval_primitive ((name identifier-p)
                         (params vallist-p)
                         (args vallist-p))
+  :short "Evaluate the given named primitive on the given parameters and arguments."
+  :long "<p>Note that all these primitives are defined in the ASL standard library. If you use
+@('aslref') with the @('--no-primitives') command line option to dump the typed
+AST read by ACL2, then the stdlib definitions will be used instead and this
+function shouldn't be called.</p>"
   :returns (res vallist_result-p)
   :prepwork ((local (defthm character-listp-of-explode-nonnegative-integer
                       (implies (character-listp acc)
@@ -871,6 +972,9 @@
 
 (define check_two_ranges_non_overlapping ((x intpair-p)
                                           (y intpair-p))
+  :short "Check that two bitvector slices (pairs of integers where the first is
+the LSB and second is the width of the slice) are non-overlapping, producing an
+error if they do overlap."
   :returns (err eval_result-p)
   (b* (((intpair x))
        (xstart (nfix x.first))
@@ -889,12 +993,18 @@
 
 (define check_non_overlapping_slices-1 ((x intpair-p)
                                        (y intpairlist-p))
+  :short "Check whether any of the bitvector slices (pairs of integers where the first is
+the LSB and second is the width of the slice) in the list y overlap with slice x, producing an
+error if so."
   :returns (err eval_result-p)
   (B* (((when (atom y)) (ev_normal nil))
        ((ev -) (check_two_ranges_non_overlapping x (car y))))
     (check_non_overlapping_slices-1 x (cdr y))))
 
 (define check_non_overlapping_slices ((x intpairlist-p))
+  :short "Check whether any of the bitvector slices (pairs of integers where the first is
+the LSB and second is the width of the slice) in the list x overlap with any in
+the list y, producing an error if so."
   :returns (err eval_result-p)
   (B* (((when (atom x)) (ev_normal nil))
        ((ev -) (check_non_overlapping_slices-1 (car x) (cdr x))))
@@ -902,6 +1012,8 @@
 
 
 (define vbv-to-int ((x val-p))
+  :short "Extract the integer value of a value of v_int or v_bitvector type, or produce
+an error if the input is of neither type."
   :returns (res int_eval_result-p)
   (val-case x
     :v_int (ev_normal x.val)
@@ -909,6 +1021,8 @@
     :otherwise (ev_error "vbv-to-int type error" x nil)))
 
 (define slices-width ((slices intpairlist-p))
+  :short "Return the sum of the widths (second elements) of the given bitvector
+ slices."
   :returns (width natp :rule-classes :type-prescription)
   (if (atom slices)
       0
@@ -919,6 +1033,12 @@
                                 (slices intpairlist-p)
                                 (src integerp)
                                 (dst integerp))
+  :short "Install bits from @('src') into locations in @('dst') given by the bitvector
+slices. The total width of the slices determines the number of bits of @('src')
+that are used.  The first slice determines where in @('dst') the most
+significant set of bits of @('src') will be placed, and similarly the last
+slice in the list gives the location in @('dst') where the LSBs of @('src') are
+to go."
   :guard (eql width (slices-width slices))
   :guard-hints (("goal" :expand ((slices-width slices))))
   :returns (res integerp :rule-classes :type-prescription)
@@ -938,6 +1058,22 @@
 (define write_to_bitvector ((slices intpairlist-p)
                             (src val-p)
                             (dst val-p))
+  :short "Install bits from @('src'), which must be a v_int or v_bitvector value, into
+@('dst'), which must be a v_bitvector (otherwise we produce an error). The
+ total width of @('slices') determines the number of bits of @('src') that are
+ used; the first slice determines where in @('dst') the MSBs of this range of
+ bits of @('src') are placed, and similarly the last slice determines where
+ in @('dst') the LSBs are placed."
+  :long "<p>We produce errors in the following cases:</p>
+<ul>
+<li> @('dst') is not a bitvector</li>
+<li> @('src') is not either a bitvector or integer</li>
+<li> any slice has a negative index or ranges past the width of @('dst').</li>
+</ul>
+
+<p>Note ASL type checking (and runtime checks) actually requires that @('src')
+is a bitvector with width equal to the total width of @('slices'). We might
+consider checking this as well.</p>"
   :returns (res val_result-p)
   (b* (((unless (val-case dst :v_bitvector))
         (ev_error "write_to_bitvector type error" dst nil))
@@ -955,19 +1091,23 @@
 
 (define eval_pattern_mask ((val val-p)
                            (mask bitvector_mask-p))
-      :returns  (res val_result-p)
-      :guard-hints (("goal" :in-theory (enable eval_binop)))
-      (b* (((bitvector_mask mask)))
-            (val-case val
-              :v_bitvector (b* ((set_bv   (v_bitvector mask.length (loghead mask.length mask.set)))
-                                (unset_bv (v_bitvector mask.length (loghead mask.length mask.unset)))
-                                ((ev val/set) (eval_binop :and val set_bv))
-                                ((ev set-ok)  (eval_binop :eq_op val/set set_bv))
-                                ((unless (v_bool->val set-ok)) (ev_normal (v_bool nil)))
-                                ((ev val_inv) (eval_unop :not val))
-                                ((ev val/unset) (eval_binop :and val_inv unset_bv)))
-                             (eval_binop :eq_op val/unset unset_bv))
-              :otherwise (ev_error "Unsupported pattern_mask case" (cons val mask) nil))))
+  :short "<p>Checks whether the given value (which must be of v_bitvector type, or an
+error results) satisfies the given bitvector mask. That is, every 1-bit in the
+@('set') field of the mask must be 1 in @('val'), and every 1-bit in the
+@('unset') field must be 0 in @('val').</p>"
+  :returns  (res val_result-p)
+  :guard-hints (("goal" :in-theory (enable eval_binop)))
+  (b* (((bitvector_mask mask)))
+    (val-case val
+      :v_bitvector (b* ((set_bv   (v_bitvector mask.length (loghead mask.length mask.set)))
+                        (unset_bv (v_bitvector mask.length (loghead mask.length mask.unset)))
+                        ((ev val/set) (eval_binop :and val set_bv))
+                        ((ev set-ok)  (eval_binop :eq_op val/set set_bv))
+                        ((unless (v_bool->val set-ok)) (ev_normal (v_bool nil)))
+                        ((ev val_inv) (eval_unop :not val))
+                        ((ev val/unset) (eval_binop :and val_inv unset_bv)))
+                     (eval_binop :eq_op val/unset unset_bv))
+      :otherwise (ev_error "Unsupported pattern_mask case" (cons val mask) nil))))
 
 
 
@@ -978,6 +1118,10 @@
 
 ;; This is just a convenient function to hang rewrite rules on for FGL.
 (define pass-error (val orac)
+  :short "This function is just the @('mv') of its two arguments, but it is only called
+when the resulting value is an error. It is a convenience for FGL rewriting so
+that the @('orac') can be found for counterexample generation when we detect an
+error has been reached. Arguably unnecessary given FGL's backtrace capability."
   :inline t
   :enabled t
   (mv val orac))
@@ -986,6 +1130,11 @@
   `(pass-error (ev_error . ,args) orac))
 
 (acl2::def-b*-binder evo
+  :parents (asl-interpreter-functions)
+  :short "Binds an eval_result object. If it is an ev_error or ev_throwing,
+ returns it immediately along with the @('orac'). If it is an @('ev_normal'),
+ bind the argument to the @('res') field of the object and continue to
+ evaluate."
   :body
   `(b* ((evresult ,(car acl2::forms)))
      (eval_result-case evresult
@@ -994,8 +1143,16 @@
                     ,acl2::rest-expr)
        :otherwise (mv evresult orac))))
 
+(defxdoc evo
+  :short "@(csee B*) binder: see @(see patbind-evo)")
+
 
 (define init-backtrace ((x eval_result-p) (pos posn-p))
+  :short "If @('x') is of ev_error or ev_throwing type (not ev_normal), set the backtrace
+field to a list containing the given position to initialize the
+backtrace. Called from the interpreter in cases where an error/throw may have
+occurred where a position wasn't available (especially from the @('evob')
+binder)."
   :returns (new-x eval_result-p)
   (eval_result-case x
     :ev_normal   (eval_result-fix x)
@@ -1014,6 +1171,15 @@
              (val_result-p new-x))))
 
 (acl2::def-b*-binder evob
+  :parents (asl-interpreter-functions)
+  :short "Binds an eval_result object. If it is an ev_error or ev_throwing,
+ initializes its backtrace with the variable @('pos') (which must already be
+ bound) and returns it immediately along with the @('orac'). If it is an
+ @('ev_normal'), bind the argument to the @('res') field of the object and
+ continue to evaluate."
+  :long "<p>This is almost the same as @(see patbind-evo) but @('evob') should be used
+when the backtrace hasn't been properly initialized, i.e. when the error was
+passed down from a context where a code position wasn't available.</p>"
   :body
   `(b* ((evresult ,(car acl2::forms)))
      (eval_result-case evresult
@@ -1023,9 +1189,19 @@
        
        :otherwise (pass-error (init-backtrace evresult pos) orac))))
 
+(defxdoc evob
+  :short "@(csee B*) binder: see @(see patbind-evob)")
+
 
 
 (acl2::def-b*-binder evs
+  :parents (asl-interpreter-functions)
+  :short "The given form is expected to return an @(see eval_result) object which in the
+@('ev_normal') case contains a @(see control_flow_state) result, as well as an
+@('orac'). Deals with @('ev_error') and @('ev_throwing') results the same way
+as @(see patbind-evo), but additionally if the control_flow_state result is of
+@('returning') type, returns it; otherwise, in the @('continuing') case,
+evaluates the rest of the bindings/body."
   :body
   `(b* (((mv (evo cflow) orac) ,(car acl2::forms)))
      (control_flow_state-case cflow
@@ -1034,10 +1210,22 @@
                                     `((,(car acl2::args) cflow.env)))
                             ,acl2::rest-expr))))
 
+(defxdoc evs
+  :short "@(csee B*) binder: see @(see patbind-evs)")
+
 
 (encapsulate nil
   (local (in-theory (enable nfix)))
   ;; Note: if the subtypes map is malformed, this function won't terminate.
+  (defxdoc subtypes_names
+    :short "Checks the subtypes map of the given @(see static_env_global) to
+ see if @('name1') is a subtype of @('name2'). That is, it checks whether
+ either the two names are equal, or else the supertype of @('name1') according
+ to the subtypes map is transitively a subtype of @('name2')."
+    :long "<p>This is defined with @('acl2::def-tr') to create a function that doesn't
+necessarily terminate, e.g. if we encounter a cycle in the subtypes
+relation. In this case it returns NIL (not a subtype).</p>")
+  
   (acl2::def-tr subtypes_names (tenv name1 name2)
     (declare (xargs :guard (and (static_env_global-p tenv)
                                 (identifier-p name1)
@@ -1053,6 +1241,10 @@
 (define subtypes ((tenv static_env_global-p)
                   (ty1 ty-p)
                   (ty2 ty-p))
+  :short "Checks whether @('ty1') is a subtype of @('ty2') according to the subtypes
+map. Following ASLRef, this only is the case if both types are named and
+@('ty2') is among the chain of supertypes of @('ty1') in the static
+environment's subtypes map (according to @(see subtypes_names))."
   (b* ((ty1 (ty->desc ty1))
        (ty2 (ty->desc ty2)))
     (fty::multicase ((type_desc-case ty1)
@@ -1066,6 +1258,9 @@
 (define find_catcher ((tenv static_env_global-p)
                       (ty ty-p)
                       (catchers catcherlist-p))
+  :short "Looks for an element of @('catchers') that accepts an exception of type
+@('ty'); that is, @('ty') must be a subtype (see @(see subtypes)) of the type
+accepted by the catcher."
   :returns (catcher maybe-catcher-p)
   (b* (((when (atom catchers)) nil)
        ((catcher c) (car catchers))
@@ -1085,6 +1280,11 @@
 (define rethrow_implicit ((throw throwdata-p)
                           (blkres stmt_eval_result-p)
                           (backtrace))
+  :short "This supports the empty @('throw') statement inside catcher blocks. If the
+result of evaluating a catcher (the @('blkres') argument) is an
+@('ev_throwing') with empty throwdata, then we re-throw the original exception,
+i.e. return an @('ev_throwing') with the given throwdata and backtrace from the
+original exception."
   :returns (res stmt_eval_result-p
                 :hyp (stmt_eval_result-p blkres))
   (b* (((when (eval_result-case blkres
@@ -1095,6 +1295,10 @@
 
 
 (define tick_loop_limit ((x acl2::maybe-integerp))
+  :short "The given loop limit is either an integer or nil (signifying no limit.) If nil,
+just returns @('(ev_normal nil)'). Otherwise returns (normal) the decremented
+value unless it's zero or less, in which case the loop limit has run out and we
+return an error."
   :returns (res (and (eval_result-p res)
                      (implies (eval_result-case res :ev_normal)
                               (acl2::maybe-integerp (ev_normal->res res)))))
@@ -1159,18 +1363,27 @@
 
 (defconst *dummy-position* (make-posn :fname "<none>" :lnum 0 :bol 0 :cnum 0))
 
-
 (with-output
   ;; makes it so it won't take forever to print the induction scheme
   :evisc (:gag-mode (evisc-tuple 3 4 nil nil))
   :off (event)
-  (defines eval_expr
-    :prepwork ((local (in-theory (disable xor not))))
+  (defines asl-interpreter-mutual-recursion
+    :short "Mutual recursion defining the ASL interpreter"
+    :parents (asl-interpreter-main-functions asl-interpreter-functions)
+    :prepwork ((local (in-theory (disable xor not)))
+               (local (xdoc::set-default-parents asl-interpreter-functions asl-interpreter-mutual-recursion)))
     (define eval_expr ((env env-p)
                        (e expr-p)
                        &key
                        ((clk natp) 'clk)
                        (orac 'orac))
+      :parents (asl-interpreter-main-functions asl-interpreter-functions asl-interpreter-mutual-recursion)
+      :short "Evaluate an ASL expression @('e') under the given environment @('env'). Returns
+an @(see eval_result) and an @('orac'). The eval_result in the @('ev_normal')
+case contains an @(see expr_result) object, consisting of the value resulting
+from evaluating the expression and a new @('env'). The global environment may
+be updated since expressions can include function calls."
+      :long "@(def eval_expr-fn)"
       :verify-guards nil
       :returns (mv (eval expr_eval_result-p)
                    new-orac)
@@ -1180,10 +1393,12 @@
         (expr_desc-case desc
           :e_literal (evo_normal (expr_result (v_of_literal desc.val) env)) ;; SemanticsRule.ELit
           :e_var (b* ((look (env-find desc.name env)))
-                   (env_result-case look
+                   (env_result-case look                    ;; SemanticsRule.EVar
                      :lk_local (evo_normal (expr_result look.val env))
                      :lk_global (evo_normal (expr_result look.val env))
-                     :lk_notfound (evo_error "Variable not found" desc (list pos)))) ;; SemanticsRule.EVar
+                     :lk_notfound (evo_error "Variable not found" desc (list (list pos
+                                                                                   (local-env->storage (env->local env))
+                                                                                   (global-env->storage (env->global env)))))))
           :e_pattern (b* (((mv (evo (expr_result v1)) orac) (eval_expr env desc.expr))
                           ((mv (evo val) orac) (eval_pattern v1.env v1.val desc.pattern)))
                       (evo_normal (expr_result val v1.env)))
@@ -1344,6 +1559,9 @@
     (define resolve-int_constraints ((env env-p)
                                      (x int_constraintlist-p)
                                      &key ((clk natp) 'clk) (orac 'orac))
+      :short "Resolve subexpressions in the given @(see int_constraintlist) @('x') to integer
+literal expressions (satisfying @(see int-literal-expr-p)), or produce an error
+if this can't be done."
       :returns (mv (res (and (eval_result-p res)
                              (implies (eval_result-case res :ev_normal)
                                       (int_constraintlist-p (ev_normal->res res)))))
@@ -1377,6 +1595,9 @@
     (define resolve-constraint_kind ((env env-p)
                                      (x constraint_kind-p)
                                      &key ((clk natp) 'clk) (orac 'orac))
+      :short "Resolve subexpressions in the given @(see constraint_kind) @('x') to integer
+literal expressions (satisfying @(see int-literal-expr-p)), or produce an error
+if this can't be done."
       :returns (mv (res (and (eval_result-p res)
                              (implies (eval_result-case res :ev_normal)
                                       (constraint_kind-p (ev_normal->res res)))))
@@ -1395,6 +1616,9 @@
     (define resolve-tylist ((env env-p)
                             (x tylist-p)
                             &key ((clk natp) 'clk) (orac 'orac))
+      :short "Resolve subexpressions in the given list of types (@(see tylist)) @('x') to
+integer literal expressions (satisfying @(see int-literal-expr-p)), or produce
+an error if this can't be done."
       :returns (mv (res (and (eval_result-p res)
                              (implies (eval_result-case res :ev_normal)
                                       (tylist-p (ev_normal->res res)))))
@@ -1409,6 +1633,9 @@
     (define resolve-typed_identifierlist ((env env-p)
                                           (x typed_identifierlist-p)
                                           &key ((clk natp) 'clk) (orac 'orac))
+      :short "Resolve subexpressions in the given @(see typed_identifierlist)
+@('x') to integer literal expressions (satisfying @(see int-literal-expr-p)),
+or produce an error if this can't be done."
       :returns (mv (res (and (eval_result-p res)
                              (implies (eval_result-case res :ev_normal)
                                       (typed_identifierlist-p (ev_normal->res res)))))
@@ -1423,6 +1650,10 @@
     (define resolve-ty ((env env-p)
                         (x ty-p)
                         &key ((clk natp) 'clk) (orac 'orac))
+      :short "Resolve subexpressions in the given type (@(see ty)) @('x') to
+integer literal expressions (satisfying @(see int-literal-expr-p)), or produce
+an error if this can't be done. Used in @(see eval_expr) as part of the
+evaluation of @('e_arbitrary') expressions."
       :returns (mv (res (and (eval_result-p res)
                              (implies (eval_result-case res :ev_normal)
                                       (ty-p (ev_normal->res res)))))
@@ -1487,6 +1718,7 @@
                           &key
                           ((clk natp) 'clk)
                           (orac 'orac))
+      :short "Evaluate whether the @(see pattern) @('p') matches the value @('val')."
       :measure (nats-measure clk 0 (pattern-count p) 0)
       ;; :returns (val val-p)
       ;; Note: this isn't supposed to produce any side effects so we'll omit
@@ -1528,6 +1760,7 @@
                                 &key
                                 ((clk natp) 'clk)
                                 (orac 'orac))
+      :short "Evaluate whether the @(see patternlist) @('p') matches the values @('vals')."
       :guard (eql (len vals) (len p))
       :measure (nats-measure clk 0 (patternlist-count p) 0)
       :returns (mv (eval val_result-p) new-orac)
@@ -1546,8 +1779,8 @@
                               &key
                               ((clk natp) 'clk)
                               (orac 'orac))
+      :short "Evaluate whether any pattern in @(see patternlist) @('p') matches the value @('val')."
       :measure (nats-measure clk 0 (patternlist-count p) 0)
-
       :returns (mv (eval val_result-p) new-orac)
       (if (atom p)
           (evo_normal (v_bool nil))
@@ -1564,6 +1797,10 @@
                             &key
                             ((clk natp) 'clk)
                             (orac 'orac))
+      :short "Evaluate a list of expressions. Produces an eval_result and @('orac'), where in
+the @('ev_normal') case the eval_result contains an @(see exprlist_result)
+containing the list of values of the expressions and the final env resulting
+from the evaluations."
       :returns (mv (eval exprlist_eval_result-p) new-orac)
       :measure (nats-measure clk 0 (exprlist-count e) 0)
       (b* (((when (atom e))
@@ -1581,6 +1818,13 @@
                        &key
                        ((clk natp) 'clk)
                        (orac 'orac))
+      :short "Evaluate the parameter and argument expressions of a call expression or
+statement, and subsequently call the given subprogram on them using @(see
+eval_subprogram). The process of calling a subprogram is divided somewhat
+arbitrarily between this function and @(see eval_subprogram). In addition to
+evaluating the parameters and arguments, this function also checks the function
+recursion limit and global recursion limit @('clk'), and pushes/pops the new
+local scope from the environment."
       :measure (nats-measure clk 0 (+ (exprlist-count params)
                                       (exprlist-count args)) 0)
       :returns (mv (eval exprlist_eval_result-p) new-orac)
@@ -1600,8 +1844,14 @@
                           (env (env-pop-stack name env subprog-eval.env)))
                        (evo_normal (exprlist_result subprog-eval.vals env)))
           :ev_throwing (b* ((env (env-pop-stack name env (env->global sub-res.env))))
-                         (mv (ev_throwing sub-res.throwdata env (cons pos sub-res.backtrace)) orac))
-          :ev_error (mv (change-ev_error sub-res :backtrace (cons pos sub-res.backtrace)) orac))))
+                         (mv (ev_throwing sub-res.throwdata env (cons (list pos
+                                                                            (local-env->storage (env->local vparams.env))
+                                                                            (global-env->storage (env->global vparams.env)))
+                                                                      sub-res.backtrace)) orac))
+          :ev_error (mv (change-ev_error sub-res :backtrace (cons (list pos
+                                                                        (local-env->storage (env->local env))
+                                                                        (global-env->storage (env->global env)))
+                                                                  sub-res.backtrace)) orac))))
 
     (define eval_subprogram ((env env-p)
                              (name identifier-p)
@@ -1610,6 +1860,21 @@
                              &key
                              ((clk natp) 'clk)
                              (orac 'orac))
+      :parents (asl-interpreter-main-functions asl-interpreter-functions asl-interpreter-mutual-recursion)
+      :short "Evaluate a subprogram, calling the function named @('name') (either an ASL
+function or a primitive) on the given parameter and argument values
+@('vparams'), @('vargs')."
+      :long "<p>When proving theorems about an ASL function we typically target the
+@('eval_subprogram') of that function, since the interface is relatively
+clean (mainly, parameters and arguments are passed in as values, not
+expressions).</p>
+
+<p>One slight departure from ASLRef semantics is that we strip out the local
+environment when we produce an @('ev_throwing') result. This is done anyway by
+@(see eval_call), but we do it here to clean the interface further: no need to
+see the local environment in any returned object.</p>
+
+@(def eval_subprogram-fn)"
       :measure (nats-measure clk 1 0 0)
       :returns (mv (eval func_eval_result-p) new-orac)
       (b* ((look (assoc-equal (identifier-fix name)
@@ -1668,6 +1933,14 @@
                         &key
                         ((clk natp) 'clk)
                         (orac 'orac))
+      :short "Evaluate an assignment of a value @('v') to a left-hand side (@(see lexpr)) @('lx')."
+      :long "<p>LHS expressions include various field/slot/slice accesses. The typical
+pattern for assigning @('<base>.<field>') is:</p>
+<nl>
+<li>Transform @('<base>') (another lexpr) into an expression @('rbase') using @(see expr_of_lexpr)</li>
+<li>Evaluate @('rbase') using @(see eval_expr), resuting in value @('rbv')</li>
+<li>Modify @('rbv') to replace its @('<field>') field with @('v'), resulting in value @('newbase')</li>
+<li>Recursively call @('eval_lexpr') to assign @('<base>') the value @('newbase').</li></nl>"
       :returns (mv (eval env_eval_result-p) new-orac)
       :measure (nats-measure clk 0 (lexpr-count* lx) 0)
       (b* ((pos (lexpr->pos_start lx))
@@ -1741,6 +2014,8 @@
                              &key
                              ((clk natp) 'clk)
                              (orac 'orac))
+      :short "Assign a list of LHS expressions (@(see lexprlist)) @('lx') a corresponding
+list of values @('v') using @('eval_lexpr')."
       :guard (eql (len lx) (len v))
       :returns (mv (eval env_eval_result-p) new-orac)
       :measure (nats-measure clk 0 (lexprlist-count* lx) 0)
@@ -1753,6 +2028,8 @@
                         &key
                         ((clk natp) 'clk)
                         (orac 'orac))
+      :short "Evaluate a loop or recursion limit, producing either an error, an integer if
+there was a limit, or nil if there was no limit."
       :measure (nats-measure clk 0 (maybe-expr-count x) 0)
       :returns (mv (res (and (eval_result-p res)
                              (implies (eval_result-case res :ev_normal)
@@ -1769,6 +2046,14 @@
                        &key
                        ((clk natp) 'clk)
                        (orac 'orac))
+      :parents (asl-interpreter-main-functions asl-interpreter-functions asl-interpreter-mutual-recursion)
+      :short "Evaluate a statement @('s') under environment @('env'). Results in an @(see
+eval_result) and an @('orac'), where in the @('ev_normal') case the eval_result
+contains a @(see <control_flow_state) object. This object records whether a
+return was encountered; if so, it gives the returned list of values and global
+environment, otherwise if not returning it gives the updated (full, local and
+global) environment."
+      :long "@(def eval_stmt-fn)"
       :measure (nats-measure clk 0 (stmt-count* s) 0)
       :returns (mv (eval stmt_eval_result-p) new-orac)
       (b* ((pos (stmt->pos_start s))
@@ -1884,6 +2169,8 @@
                             &key
                             ((clk natp) 'clk)
                             (orac 'orac))
+       :short "Given data from a thrown exception, determines whether any of the catchers or
+otherwise block from a try statement apply and calls the appropriate block."
       :returns (mv (eval stmt_eval_result-p) new-orac)
       :measure (nats-measure clk 0 (+ (catcherlist-count* catchers)
                                       (maybe-stmt-count* otherwise))
@@ -1913,6 +2200,10 @@
                         &key
                         ((clk natp) 'clk)
                         (orac 'orac))
+       :short "Evaluates a @(see slice) @('s'), producing an @(see eval_result) which in the
+@('ev_normal') case contains an @(see intpair/env) object: an @(see intpair)
+where the first element gives the LSB of the slice and the second gives the
+width of the slice, and an updated environment."
       :returns (mv (eval slice_eval_result-p) new-orac)
       :measure (nats-measure clk 0 (slice-count s) 0)
       (slice-case s
@@ -1955,6 +2246,8 @@
                             &key
                             ((clk natp) 'clk)
                             (orac 'orac))
+      :short "Evaluate a list of slices with @(see eval_slice). Produces a list of @(see
+intpair) objects and a final environment."
       :returns (mv (eval slices_eval_result-p) new-orac)
       :measure (nats-measure clk 0 (slicelist-count sl) 0)
       (b* (((when (atom sl))
@@ -1974,6 +2267,10 @@
                       &key
                       ((clk natp) 'clk)
                       (orac 'orac))
+      :short "Evaluate a for loop. ASL semantics say the starting and ending indices are
+evaluated once, and while the index variable is set to each consecutive value
+it can't be modified, so the number of runs of the body is fixed at the
+beginning (except for the cases of returns and exceptions/errors)."
       :measure (nats-measure clk 0
                              (stmt-count* body)
                              (for_loop-measure v_start v_end dir))
@@ -1993,6 +2290,9 @@
                        &key
                        ((clk natp) 'clk)
                        (orac 'orac))
+      :short "Evaluate a while or repeat loop. Until the limit runs out or the @('e_cond')
+expression evaluates to false (for while) or true (for repeat/until), evaluate
+the body and then call the loop again."
       :measure (nats-measure clk 0 (+ (expr-count e_cond)
                                       (stmt-count* body))
                              2)
@@ -2013,6 +2313,8 @@
                         &key
                         ((clk natp) 'clk)
                         (orac 'orac))
+      :short "Evaluate a statement in a new local scope frame. Local variables declared
+within this statement will then disappear after the statement is completed."
       :measure (nats-measure clk 0 (stmt-count* x) 1)
       :returns (mv (eval stmt_eval_result-p) new-orac)
       (b* ((env (push_scope env))
@@ -2031,6 +2333,8 @@
     (define is_val_of_type_tuple ((env env-p) (vals vallist-p) (types tylist-p)
                                   &key ((clk natp) 'clk)
                                   (orac 'orac))
+      :short "Check whether values @('vals') each satisfy the corresponding @('types') using
+@(see is_val_of_type)."
       :guard (eql (len vals) (len types))
       :returns (mv (res bool_eval_result-p) new-orac)
       :measure (nats-measure clk 0 (tylist-count types) 0);;(vallist-count vals)
@@ -2051,7 +2355,7 @@
     (define check_int_constraints ((env env-p) (i integerp) (constrs int_constraintlist-p)
                                    &key ((clk natp) 'clk) (orac 'orac))
       :short "At least one constraint needs to be satisfied"
-      :long "We assume that any expr eval is sidefect free, therefore there is nto nedd to return env"
+      :long "<p>We assume that any expr eval is side-effect free, therefore there is no need to return env</p>"
       :returns (mv (sat bool_eval_result-p) new-orac)
       :measure (nats-measure clk 0 (int_constraintlist-count constrs) 0)
       (if (atom constrs)
@@ -2079,6 +2383,11 @@
     (define is_val_of_type ((env env-p) (v val-p) (ty ty-p)
                             &key ((clk natp) 'clk)
                             (orac 'orac))
+      :short "Check whether the given value @('v') satisfies type @('ty'). Used
+ in @(see eval_expr) for the evaluation of @('e_atc') (asserting type
+ conversion) expressions."
+      :long "<p>Expressions within types are typechecked to be pure/immutable, so following
+ASLRef we don't return the environment.</p>"
       :returns (mv (res bool_eval_result-p) new-orac)
       :measure (nats-measure clk 0 (ty-count ty) 0);;(val-count v)
       :guard-debug t
