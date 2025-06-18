@@ -24,6 +24,7 @@
 
 (include-book "ast")
 (include-book "ihs/logops-definitions" :dir :system)
+(include-book "utils/omaps")
 (local (include-book "std/lists/nth" :dir :system))
 (local (include-book "std/lists/repeat" :dir :system))
 (local (include-book "std/lists/take" :dir :system))
@@ -53,17 +54,11 @@
     (:v_record ((rec val-imap)))
     (:v_array  ((arr vallist))))
   (fty::deflist vallist :elt-type val :true-listp t)
-  (fty::defmap val-imap :key-type identifier :val-type val :true-listp t
+  (fty::defomap val-imap :key-type identifier :val-type val ;; :true-listp t
     :short "Mapping from identifiers to ASL values. Used both for the values of
 records (see @(see val)) as well as the storage of local and global variables.")
   ///
   
-  (defthm val-imap-p-of-pairlis$
-    (implies (and (identifierlist-p keys)
-                  (vallist-p vals)
-                  (equal (len keys) (len vals)))
-             (val-imap-p (pairlis$ keys vals))))
-
   (defthm vallist-p-of-update-nth
     (implies (and (vallist-p x)
                   (val-p v)
@@ -71,12 +66,33 @@ records (see @(see val)) as well as the storage of local and global variables.")
              (vallist-p (update-nth n v x)))
     :hints(("Goal" :in-theory (enable update-nth vallist-p))))
 
-  (defthm val-imap-p-of-put-assoc-equal
-    (implies (and (val-imap-p x)
-                  (identifier-p k)
-                  (val-p v))
-             (val-imap-p (put-assoc-equal k v x)))
-    :hints(("Goal" :in-theory (enable put-assoc-equal)))))
+  (defthm vallist-p-vals-of-val-imap-p
+    (implies (val-imap-p x)
+             (vallist-p (omap::key-ord-values x)))
+    :hints(("Goal" :in-theory (enable omap::key-ord-values))))
+
+  (defthm identifierlist-p-keys-of-val-imap-p
+    (implies (val-imap-p x)
+             (identifierlist-p (omap::keys x)))
+    :hints(("Goal" :in-theory (enable omap::omap-keys-redef
+                                      (:i omap::keys)))))
+
+  (defthm val-imap-p-of-from-lists
+    (implies (and (identifierlist-p x)
+                  (vallist-p y)
+                  (equal (len x) (len y)))
+             (val-imap-p (omap::from-lists x y)))
+    :hints(("Goal" :in-theory (enable omap::from-lists)))))
+
+(fty::defmap val-alist :key-type identifier :Val-type val :true-listp t
+  ///
+  
+  (defthm val-alist-p-of-pairlis$
+    (implies (and (identifierlist-p keys)
+                  (vallist-p vals)
+                  (equal (len keys) (len vals)))
+             (val-alist-p (pairlis$ keys vals)))))
+
 
 (fty::defoption maybe-val val)
 
