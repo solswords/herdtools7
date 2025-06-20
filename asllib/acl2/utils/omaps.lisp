@@ -156,10 +156,53 @@
                    (cons val (key-ord-values x)))
     :hints(("Goal" :in-theory (enable update)
             :expand ((:free (X y) (key-ord-values (cons x y)))
-                     (:free (x y) (tail (cons x y))))))))
+                     (:free (x y) (tail (cons x y)))))))
 
-;; (defthm keys-of-from-lists-when-setp
-;;   (implies (set::setp keys)
-;;            (equal (keys (from-lists keys vals))
-;;                   keys))
-;;   :hints(("Goal" :in-theory (enable from-lists keys
+  (defthm consp-of-key-ord-values
+    (equal (consp (key-ord-values x))
+           (not (emptyp x)))))
+
+
+
+(defthm keys-of-from-lists
+  (equal (keys (from-lists keys vals))
+         (set::mergesort keys))
+  :hints(("Goal" :in-theory (enable from-lists
+                                    keys
+                                    set::mergesort))))
+
+
+(local (defthmd update-when-key-less
+         (implies (or (emptyp x)
+                      (<< key (car (keys x))))
+                  (equal (update key val x)
+                         (cons (cons key val)
+                               (mfix x))))
+         :hints(("Goal" 
+                 :expand ((update key val x)
+                          (update key val nil)
+                          (keys x))))))
+
+(local
+ (defthm head-of-from-lists-when-keys-set
+   (implies (set::setp keys)
+            (equal (head (from-lists keys vals))
+                   (mv (car keys) (and (consp keys) (car vals)))))
+   :hints(("Goal" :in-theory (enable (:i from-lists)
+                                     update-when-key-less)
+           :induct (from-lists keys vals)
+           :expand ((from-lists keys vals)
+                    (:Free (vals) (from-lists nil vals))
+                    (setp keys))))))
+
+(defthm key-ord-values-of-from-lists-when-keys-set
+  (implies (set::setp keys)
+           (equal (key-ord-values (from-lists keys vals))
+                  (take (len keys) vals)))
+  :hints(("Goal" :in-theory (enable (:i from-lists)
+                                    update-when-key-less)
+          :induct (from-lists keys vals)
+          :expand ((from-lists keys vals)
+                   (:free (vals) (from-lists nil vals))
+                   (:free (a b) (key-ord-values (cons a b)))
+                   (set::setp keys)))))

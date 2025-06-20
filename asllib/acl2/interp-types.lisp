@@ -74,7 +74,7 @@ records (see @(see val)) as well as the storage of local and global variables.")
   (defthm identifierlist-p-keys-of-val-imap-p
     (implies (val-imap-p x)
              (identifierlist-p (omap::keys x)))
-    :hints(("Goal" :in-theory (enable omap::omap-keys-redef
+    :hints(("Goal" :in-theory (enable omap::keys-redef
                                       (:i omap::keys)))))
 
   (defthm val-imap-p-of-from-lists

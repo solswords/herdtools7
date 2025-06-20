@@ -511,17 +511,6 @@ call)."
 
 
 
-(define typed_identifierlist->names ((x typed_identifierlist-p))
-  :parents (typed_identifierlist)
-  :returns (names identifierlist-p)
-  (if (atom x)
-      nil
-    (cons (typed_identifier->name (car x))
-          (typed_identifierlist->names (cdr x))))
-  ///
-  (defret len-of-<fn>
-    (equal (len names) (len x))))
-
 (define maybe-typed_identifierlist->names ((x maybe-typed_identifierlist-p))
   :parents (maybe-typed_identifierlist)
   :returns (names identifierlist-p)
@@ -1524,7 +1513,7 @@ be updated since expressions can include function calls."
           (b* ((exprs (named_exprlist->exprs desc.fields))
                (names (named_exprlist->names desc.fields))
                ((mv (evo (exprlist_result e)) orac) (eval_expr_list env exprs)))
-            (evo_normal (expr_result (v_record (pairlis$ names e.val)) e.env)))
+            (evo_normal (expr_result (v_record (pairlis$ names e.val))) e.env))
           :e_tuple ;; anna
           (b* (((mv (evo (exprlist_result vals)) orac) (eval_expr_list env desc.exprs)))
             (evo_normal (expr_result (v_array vals.val) vals.env)))
