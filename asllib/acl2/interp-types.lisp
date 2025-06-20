@@ -84,6 +84,19 @@ records (see @(see val)) as well as the storage of local and global variables.")
              (val-imap-p (omap::from-lists x y)))
     :hints(("Goal" :in-theory (enable omap::from-lists)))))
 
+
+(defthm identifierlist-p-of-insert
+  (implies (and (identifierlist-p x)
+                (identifier-p k))
+           (identifierlist-p (insert k x)))
+  :hints(("Goal" :in-theory (enable insert
+                                    tail emptyp head))))
+
+(defthm identifierlist-p-of-mergesort
+  (implies (identifierlist-p x)
+           (identifierlist-p (mergesort x)))
+  :hints(("Goal" :in-theory (enable mergesort))))
+
 (fty::defmap val-alist :key-type identifier :Val-type val :true-listp t
   ///
   

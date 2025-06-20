@@ -885,17 +885,7 @@
                 (atom x))))
 
 
-(local (defthm identifierlist-p-of-insert
-         (implies (and (identifierlist-p x)
-                       (identifier-p k))
-                  (identifierlist-p (insert k x)))
-         :hints(("Goal" :in-theory (enable insert
-                                           tail emptyp head)))))
 
-(local (defthm identifierlist-p-of-mergesort
-         (implies (identifierlist-p x)
-                  (identifierlist-p (mergesort x)))
-         :hints(("Goal" :in-theory (enable mergesort)))))
 
 
 (defines ty-fix-val

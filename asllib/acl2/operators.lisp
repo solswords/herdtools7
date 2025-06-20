@@ -30,7 +30,7 @@
 (local (include-book "ihs/quotient-remainder-lemmas" :dir :system))
 (local (include-book "arithmetic/top" :dir :system))
 (local (in-theory (disable (tau-system) unsigned-byte-p)))
-
+(local (std::add-default-post-define-hook :fix))
 (def-eval_result val_result-p val-p)
 
 (fty::def-enumcase binop-case binop-p)
@@ -195,7 +195,9 @@
     ((:eq_op :v_label :v_label)   (ev_normal (v_bool (equal v1.val v2.val))))
     ((:neq   :v_label :v_label)   (ev_normal (v_bool (not (equal v1.val v2.val)))))
     ;;  Failure
-    (-                            (ev_error "Unsupported binop" (list op v1 v2) nil))))
+    (-                            (ev_error "Unsupported binop" (list (binop-fix op)
+                                                                      (val-fix v1)
+                                                                      (val-fix v2)) nil))))
 
 
 (fty::def-enumcase unop-case unop-p)
@@ -211,6 +213,7 @@
     ((:neg :v_real)      (ev_normal (v_real (- v.val))))
     ((:bnot :v_bool)     (ev_normal (v_bool (not v.val))))
     ((:not :v_bitvector) (ev_normal (v_bitvector* v.len (lognot v.val))))
-    (-                   (ev_error "bad unop" (list op v) nil))))
+    (-                   (ev_error "bad unop" (list (unop-fix op)
+                                                    (val-fix v)) nil))))
 
 

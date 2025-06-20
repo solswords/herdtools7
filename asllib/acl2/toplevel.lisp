@@ -23,6 +23,7 @@
 (in-package "ASL")
 
 (include-book "interp")
+(local (std::add-default-post-define-hook :fix))
 
 (defxdoc asl
   :parents (acl2::top)

@@ -45,6 +45,7 @@
 (local (table fty::deftagsum-defaults :short-names t))
 (local (in-theory (disable (tau-system))))
 (local (in-theory (disable put-assoc-equal)))
+(local (std::add-default-post-define-hook :fix))
 
 (local (xdoc::set-default-parents asl-interpreter-functions))
 
@@ -251,7 +252,7 @@ locally, globally, or not at all"
        ((global-env env.global))
        (global-look (omap::assoc (identifier-fix x) env.global.storage))
        ((When global-look) (ev_normal (cdr global-look))))
-    (ev_error "Global variable not found" x nil)))
+    (ev_error "Global variable not found" (identifier-fix x) nil)))
 
 
 
@@ -578,8 +579,10 @@ corresponding values in the topmost scope."
   (declare (ignorable env name recurse-limit))
   (if (and recurse-limit
            (< (lifix recurse-limit) (get_stack_size name env)))
-      (ev_error "Recursion limit ran out" name nil)
-    (ev_normal nil)))
+      (ev_error "Recursion limit ran out" (identifier-fix name) nil)
+    (ev_normal nil))
+  ///
+  (local (in-theory (enable acl2::maybe-integerp-fix))))
        
 
 
@@ -642,7 +645,7 @@ the wrong type."
   :returns (i int_eval_result-p)
   (val-case x
     :v_int (ev_normal x.val)
-    :otherwise (ev_error "v_to_int bad type" x nil)))
+    :otherwise (ev_error "v_to_int bad type" (val-fix x) nil)))
 
 (def-eval_result bool_eval_result-p booleanp)
 
@@ -652,7 +655,7 @@ the wrong type."
   :returns (i bool_eval_result-p)
   (val-case x
     :v_bool (ev_normal x.val)
-    :otherwise (ev_error "v_to_bool bad type" x nil)))
+    :otherwise (ev_error "v_to_bool bad type" (val-fix x) nil)))
 
 (def-eval_result id_eval_result-p identifier-p)
 
@@ -662,7 +665,7 @@ the wrong type."
   :returns (i id_eval_result-p)
   (val-case x
     :v_label (ev_normal x.val)
-    :otherwise (ev_error "v_to_label bad type" x nil)))
+    :otherwise (ev_error "v_to_label bad type" (val-fix x) nil)))
 
 (local (defthm rationalp-when-integerp-rw
          (implies (integerp x)
@@ -676,7 +679,7 @@ the wrong type."
   :returns (v val_result-p)
   (b* ((look (omap::assoc (identifier-fix field)
                           (val-imap-fix rec)))
-       ((unless look) (ev_error "get_field not found" field nil)))
+       ((unless look) (ev_error "get_field not found" (identifier-fix field) nil)))
     (ev_normal (cdr look))))
 
 (define get_field ((field identifier-p)
@@ -686,7 +689,7 @@ the wrong type."
 a v_record or the field isn't present"
   (val-case rec
     :v_record (get_field! field rec.rec)
-    :otherwise (ev_error "get_field non record" rec nil)))
+    :otherwise (ev_error "get_field non record" (val-fix rec) nil)))
 
 (define map-get_field! ((fields identifierlist-p)
                         (rec val-imap-p))
@@ -705,7 +708,7 @@ produce an error if it's not a v_record or if any field isn't present"
   :returns (v vallist_result-p)
   (val-case rec
     :v_record (map-get_field! fields rec.rec)
-    :otherwise (ev_error "map-get_field non record" rec nil)))
+    :otherwise (ev_error "map-get_field non record" (val-fix rec) nil)))
 
 (define concat_bitvectors ((vals vallist-p))
   :short "Concatenate the given list of bitvectors together, producing a single bitvector
@@ -723,7 +726,7 @@ values are not of v_bitvector type."
       :v_bitvector (ev_normal
                     (v_bitvector (+ v1.len rest.len)
                                  (logapp rest.len rest.val v1.val)))
-      :otherwise (ev_error "concat_bitvectors non bitvector" v1 nil)))
+      :otherwise (ev_error "concat_bitvectors non bitvector" (val-fix v1) nil)))
   ///
   (defret kind-of-<fn>
     (implies (eval_result-case v :ev_normal)
@@ -757,11 +760,13 @@ values are not of v_bitvector type."
        ((unless (and (<= 0 start)
                      (<= 0 length)
                      (or (not width)
-                         (<= (+ start length) width))))
-        (ev_error "bitvec_fields_to_record!: out of bounds slice" (car slices) nil))
+                         (<= (+ start length) (lifix width)))))
+        (ev_error "bitvec_fields_to_record!: out of bounds slice" (intpair-fix (car slices)) nil))
        (fieldval (loghead length (logtail start bv)))
        (new-rec (omap::update field (v_bitvector length fieldval) (val-imap-fix rec))))
-    (bitvec_fields_to_record! (cdr fields) (cdr slices) new-rec bv width)))
+    (bitvec_fields_to_record! (cdr fields) (cdr slices) new-rec bv width))
+  ///
+  (local (in-theory (enable acl2::maybe-integerp-fix))))
        
        
 
@@ -779,10 +784,10 @@ values are not of v_bitvector type."
   :guard (eql (len fields) (len slices))
   :returns (v val_result-p)
   (b* (((unless (val-case rec :v_record))
-        (ev_error "bitvec_fields_to_record non record" rec nil))
+        (ev_error "bitvec_fields_to_record non record" (val-fix rec) nil))
        ((unless (or (val-case bv :v_bitvector)
                     (val-case bv :v_int)))
-        (ev_error "bitvec_fields_to_record non bitvec/integer" bv nil))
+        (ev_error "bitvec_fields_to_record non bitvec/integer" (val-fix bv) nil))
        ((v_record rec))
        ((mv bv-val bv-len) (val-case bv
                              :v_bitvector (mv bv.val bv.len)
@@ -889,11 +894,14 @@ if either the LSB or width is negative."
        (len s1.second)
        ((when (or (< start 0)
                   (< len 0)))
-        (ev_error "Bad slice" s1 nil))
+        (ev_error "Bad slice" (intpair-fix s1) nil))
        ((when (and width
                    (< (lnfix width) (+ start len))))
-        (ev_error "Slice out of range of width" (list s1 width) nil)))
-    (check-bad-slices width (cdr slices))))
+        (ev_error "Slice out of range of width" (list (intpair-fix s1)
+                                                      (acl2::maybe-natp-fix width)) nil)))
+    (check-bad-slices width (cdr slices)))
+  ///
+  (local (in-theory (enable acl2::maybe-natp-fix))))
 
 
 (define slices_sub ((srcval  integerp)
@@ -936,29 +944,32 @@ function shouldn't be called.</p>"
                       (implies (character-listp acc)
                                (character-listp (explode-nonnegative-integer x pb acc)))
                       :hints(("Goal" :in-theory (enable explode-nonnegative-integer))))))
-  (fty::multicase
-    ((fty::case*-equal name)
-     ((list val-case p0 p1) params)
-     ((list val-case a0 a1 a2) args))
+  (b* ((name (identifier-fix name)))
+    (fty::multicase
+      ((fty::case*-equal name)
+       ((list val-case p0 p1) params)
+       ((list val-case a0 a1 a2) args))
 
-    (("Real" nil (:v_int))       (ev_normal (list (v_real a0.val))))
-    (("SInt" (-) (:v_bitvector)) (ev_normal (list (v_int (logext (acl2::pos-fix a0.len) a0.val)))))
-    (("UInt" (-) (:v_bitvector)) (ev_normal (list (v_int a0.val))))
-    (("RoundUp" nil (:v_real))   (ev_normal (list (v_int (ceiling a0.val 1)))))
-    (("RoundDown" nil (:v_real)) (ev_normal (list (v_int (floor a0.val 1)))))
-    (("RoundTowardsZero" nil (:v_real)) (ev_normal (list (v_int (truncate a0.val 1)))))
+      (("Real" nil (:v_int))       (ev_normal (list (v_real a0.val))))
+      (("SInt" (-) (:v_bitvector)) (ev_normal (list (v_int (logext (acl2::pos-fix a0.len) a0.val)))))
+      (("UInt" (-) (:v_bitvector)) (ev_normal (list (v_int a0.val))))
+      (("RoundUp" nil (:v_real))   (ev_normal (list (v_int (ceiling a0.val 1)))))
+      (("RoundDown" nil (:v_real)) (ev_normal (list (v_int (floor a0.val 1)))))
+      (("RoundTowardsZero" nil (:v_real)) (ev_normal (list (v_int (truncate a0.val 1)))))
 
-    ;; (("AsciiStr" nil (:v_int))   (if (and (<= 0 a0.val)
-    ;;                                       (<= a0.val 127))
-    ;;                                  (ev_normal (list (v_string (coerce (list (code-char a0.val)) 'string))))
-    ;;                                (ev_error "AsciiStr argument out of bounds" a0)))
-    (("DecStr"   nil (:v_int))   (ev_normal (list (v_string (coerce (explode-atom a0.val 10) 'string)))))
-    ;; (("HexStr"   nil (:v_int))   (ev_normal (list (v_string (coerce (explode-atom a0.val 16) 'string)))))
-    (("FloorLog2" nil (:v_int))  (if (< 0 a0.val)
-                                     (ev_normal (list (v_int (1- (integer-length a0.val)))))
-                                   (ev_error "Nonpositive argument to FloorLog2" a0 nil)))
+      ;; (("AsciiStr" nil (:v_int))   (if (and (<= 0 a0.val)
+      ;;                                       (<= a0.val 127))
+      ;;                                  (ev_normal (list (v_string (coerce (list (code-char a0.val)) 'string))))
+      ;;                                (ev_error "AsciiStr argument out of bounds" a0)))
+      (("DecStr"   nil (:v_int))   (ev_normal (list (v_string (coerce (explode-atom a0.val 10) 'string)))))
+      ;; (("HexStr"   nil (:v_int))   (ev_normal (list (v_string (coerce (explode-atom a0.val 16) 'string)))))
+      (("FloorLog2" nil (:v_int))  (if (< 0 a0.val)
+                                       (ev_normal (list (v_int (1- (integer-length a0.val)))))
+                                     (ev_error "Nonpositive argument to FloorLog2" (val-fix a0) nil)))
 
-    (-                           (ev_error "Bad primitive" (list name params args) nil)))
+      (-                           (ev_error "Bad primitive" (list name
+                                                                   (vallist-fix params)
+                                                                   (vallist-fix args)) nil))))
   )
 
 
@@ -983,7 +994,9 @@ error if they do overlap."
        (yend-<=-xstart (<= yend xstart)))
     (if (or xend-<=-ystart yend-<=-xstart)
         (ev_normal nil)
-      (ev_error "Dynamic error: overlapping slice assignment" (list x y) nil))))
+      (ev_error "Dynamic error: overlapping slice assignment"
+                (list (intpair-fix x)
+                      (intpair-fix y)) nil))))
 
 
 (define check_non_overlapping_slices-1 ((x intpair-p)
@@ -1013,7 +1026,7 @@ an error if the input is of neither type."
   (val-case x
     :v_int (ev_normal x.val)
     :v_bitvector (ev_normal x.val)
-    :otherwise (ev_error "vbv-to-int type error" x nil)))
+    :otherwise (ev_error "vbv-to-int type error" (val-fix x) nil)))
 
 (define slices-width ((slices intpairlist-p))
   :short "Return the sum of the widths (second elements) of the given bitvector
@@ -1071,7 +1084,7 @@ is a bitvector with width equal to the total width of @('slices'). We might
 consider checking this as well.</p>"
   :returns (res val_result-p)
   (b* (((unless (val-case dst :v_bitvector))
-        (ev_error "write_to_bitvector type error" dst nil))
+        (ev_error "write_to_bitvector type error" (val-fix dst) nil))
        ((v_bitvector dst))
        ((ev src.val) (vbv-to-int src))
        ((ev &) (check-bad-slices dst.len slices))
@@ -1102,7 +1115,9 @@ error results) satisfies the given bitvector mask. That is, every 1-bit in the
                         ((ev val_inv) (eval_unop :not val))
                         ((ev val/unset) (eval_binop :and val_inv unset_bv)))
                      (eval_binop :eq_op val/unset unset_bv))
-      :otherwise (ev_error "Unsupported pattern_mask case" (cons val mask) nil))))
+      :otherwise (ev_error "Unsupported pattern_mask case" (cons (val-fix val)
+                                                                 (bitvector_mask-fix mask))
+                           nil))))
 
 
 
@@ -1151,8 +1166,8 @@ binder)."
   :returns (new-x eval_result-p)
   (eval_result-case x
     :ev_normal   (eval_result-fix x)
-    :ev_throwing (change-ev_throwing x :backtrace (list pos))
-    :ev_error    (change-ev_error x :backtrace (list pos)))
+    :ev_throwing (change-ev_throwing x :backtrace (list (posn-fix pos)))
+    :ev_error    (change-ev_error x :backtrace (list (posn-fix pos))))
   ///
   (defret eval_result-kind-of-<fn>
     (equal (eval_result-kind new-x)
@@ -1231,7 +1246,31 @@ relation. In this case it returns NIL (not a subtype).</p>")
          (look (hons-assoc-equal name1 (static_env_global->subtypes tenv)))
          ((unless look) nil))
       (subtypes_names tenv (cdr look) name2))
-    :diverge nil))
+    :diverge nil)
+
+  (fty::deffixequiv subtypes_names-steps
+    :args ((tenv static_env_global-p)
+           (name1 identifier-p)
+           (name2 identifier-p)))
+
+  (local (defun terminates-hint (stable-under-simplificationp clause)
+           (and stable-under-simplificationp
+                (let ((lit (assoc 'subtypes_names-terminates clause))
+                      (other (cadr (assoc 'not clause))))
+                  (case-match lit
+                    (('subtypes_names-terminates tenv name1 name2)
+                     `(:expand (:with subtypes_names-terminates ,other)
+                       :use ((:instance subtypes_names-terminates-suff
+                              (tr-clk (subtypes_names-terminates-witness
+                                       . ,(cdr other)))
+                              (tenv ,tenv) (name1 ,name1) (name2 ,name2)))))
+                    (& nil))))))
+  (fty::deffixcong static_env_global-equiv iff (subtypes_names-terminates tenv name1 name2) tenv
+    :hints ((terminates-hint stable-under-simplificationp clause)))
+  
+  (fty::deffixequiv subtypes_names :args ((tenv static_env_global-p)
+                                          (name1 identifier-p)
+                                          (name2 identifier-p))))
 
 (define subtypes ((tenv static_env_global-p)
                   (ty1 ty-p)
@@ -1285,7 +1324,7 @@ original exception."
   (b* (((when (eval_result-case blkres
                 :ev_throwing (not blkres.throwdata)
                 :otherwise nil))
-        (ev_throwing throw (ev_throwing->env blkres) backtrace)))
+        (ev_throwing (throwdata-fix throw) (ev_throwing->env blkres) backtrace)))
     blkres))
 
 
@@ -1301,7 +1340,9 @@ return an error."
       (if (< 0 (lifix x))
           (ev_normal (1- (lifix x)))
         (ev_error "Loop limit ran out" nil nil))
-    (ev_normal nil)))
+    (ev_normal nil))
+  ///
+  (local (in-theory (enable acl2::maybe-integerp-fix))))
 
 (defmacro trace-eval_expr ()
   '(trace$ (eval_expr-fn :entry (list 'eval_expr e)
@@ -1358,17 +1399,6 @@ return an error."
 
 (defconst *dummy-position* (make-posn :fname "<none>" :lnum 0 :bol 0 :cnum 0))
 
-(local (defthm identifierlist-p-of-insert
-         (implies (and (identifierlist-p x)
-                       (identifier-p k))
-                  (identifierlist-p (insert k x)))
-         :hints(("Goal" :in-theory (enable insert
-                                           tail emptyp head)))))
-
-(local (defthm identifierlist-p-of-mergesort
-         (implies (identifierlist-p x)
-                  (identifierlist-p (mergesort x)))
-         :hints(("Goal" :in-theory (enable mergesort)))))
 
 (with-output
   ;; makes it so it won't take forever to print the induction scheme
@@ -1577,7 +1607,7 @@ if this can't be done."
       :measure (nats-measure clk 0 (int_constraintlist-count x) 0)
       (if (atom x)
           (evo_normal nil)
-        (b* ((constr (car x)))
+        (b* ((constr (int_constraint-fix (car x))))
           (int_constraint-case constr
             :constraint_exact (b* (((mv (evo (expr_result c)) orac) (eval_expr env constr.val)))
                                 (val-case c.val
@@ -1619,7 +1649,8 @@ if this can't be done."
         :parametrized (b* ((new-x (wellconstrained (list (constraint_exact (expr (e_var x.name) *dummy-position*)))
                                                    (precision_full))))
                         (resolve-constraint_kind env new-x))
-        :otherwise (evo_error "Can't resolve constraint_kind" x nil)))
+        :otherwise (evo_error "Can't resolve constraint_kind"
+                              (constraint_kind-fix x) nil)))
 
     (define resolve-tylist ((env env-p)
                             (x tylist-p)
@@ -1683,7 +1714,8 @@ evaluation of @('e_arbitrary') expressions."
                       ;; the bitvector width to a negative value. But instead we'll
                       ;; rely on the consumer of this type to deal with it.
                       ;; (evo_error "Negative bitvector width resolving type" x))
-                      :otherwise (evo_error "Unexpected type of bitvector width type" x (list pos))))
+                      :otherwise (evo_error "Unexpected type of bitvector width type"
+                                            (ty-fix x) (list pos))))
           :t_tuple (b* (((mv (evo tys) orac) (resolve-tylist env ty.types)))
                      (evo_normal (ty (t_tuple tys) pos)))
           :t_array (b* (((mv (evo base) orac) (resolve-ty env ty.type)))
@@ -1697,7 +1729,8 @@ evaluation of @('e_arbitrary') expressions."
                                                               base)
                                                              pos))
                                              ;; (evo_error "Negative array length resolving type" x))
-                                             :otherwise (evo_error "Unexpected type of array length" x (list pos))))
+                                             :otherwise (evo_error "Unexpected type of array length"
+                                                                   (ty-fix x) (list pos))))
                        :arraylength_enum (evo_normal (ty (t_array ty.index base) pos))))
           :t_record (b* (((mv (evo fields) orac)
                           (resolve-typed_identifierlist env ty.fields)))
@@ -1712,9 +1745,9 @@ evaluation of @('e_arbitrary') expressions."
                                       (global-env->static (env->global env))))
                          (look (hons-assoc-equal ty.name decl_types))
                          ((unless look)
-                          (evo_error "Named type not found" x (list pos)))
+                          (evo_error "Named type not found" (ty-fix x) (list pos)))
                          ((when (zp clk))
-                          (evo_error "Clock ran out resolving named type" x (list pos)))
+                          (evo_error "Clock ran out resolving named type" (ty-fix x) (list pos)))
                          (type (ty-timeframe->ty (cdr look))))
                       (resolve-ty env type :clk (1- clk)))
           :otherwise (evo_normal (ty ty pos)))))
@@ -1758,8 +1791,10 @@ evaluation of @('e_arbitrary') expressions."
                               ((evo vs) (val-case val
                                          :v_array (if (eql (len val.arr) len)
                                                       (ev_normal val.arr)
-                                                    (ev_error "pattern tuple length mismatch" p (list pos)))
-                                         :otherwise (ev_error "pattern tuple type mismatch" p (list pos)))))
+                                                    (ev_error "pattern tuple length mismatch"
+                                                              (pattern-fix p) (list pos)))
+                                         :otherwise (ev_error "pattern tuple type mismatch"
+                                                              (pattern-fix p) (list pos)))))
                            (eval_pattern_tuple env vs desc.patterns)))))
 
     (define eval_pattern_tuple ((env env-p)
@@ -1843,7 +1878,7 @@ local scope from the environment."
            ;; the measure will decrease provided that they haven't been exceeded
            ((evo sub-env) (env-push-stack name env))
            ((when (zp clk))
-            (evo_error "Recursion limit ran out" name (list pos)))
+            (evo_error "Recursion limit ran out" (identifier-fix name) (list (posn-fix pos))))
            ((mv sub-res orac)
             (eval_subprogram sub-env name vparams.val vargs.val :clk (1- clk))))
         (eval_result-case sub-res
@@ -1852,11 +1887,11 @@ local scope from the environment."
                           (env (env-pop-stack name env subprog-eval.env)))
                        (evo_normal (exprlist_result subprog-eval.vals env)))
           :ev_throwing (b* ((env (env-pop-stack name env (env->global sub-res.env))))
-                         (mv (ev_throwing sub-res.throwdata env (cons (list pos
+                         (mv (ev_throwing sub-res.throwdata env (cons (list (posn-fix pos)
                                                                             (local-env->storage (env->local vparams.env))
                                                                             (global-env->storage (env->global vparams.env)))
                                                                       sub-res.backtrace)) orac))
-          :ev_error (mv (change-ev_error sub-res :backtrace (cons (list pos
+          :ev_error (mv (change-ev_error sub-res :backtrace (cons (list (posn-fix pos)
                                                                         (local-env->storage (env->local env))
                                                                         (global-env->storage (env->global env)))
                                                                   sub-res.backtrace)) orac))))
@@ -1889,19 +1924,21 @@ see the local environment in any returned object.</p>
                               (static_env_global->subprograms
                                (global-env->static
                                 (env->global env)))))
+           (vparams (vallist-fix vparams))
+           (vargs (vallist-fix vargs))
            ((unless look)
-            (evo_error "Subprogam not found" name nil))
+            (evo_error "Subprogam not found" (identifier-fix name) nil))
            ((func f) (func-ses->fn (cdr look)))
            ;; ((unless (subprogram_body-case f.body :sb_asl))
            ;;  (evo_error "Primitive subfunctions not supported" name))
 
            ((unless (and (eql (len vparams) (len f.parameters))
                          (eql (len vargs) (len f.args))))
-            (evo_error "Bad arity" (cons name
+            (evo_error "Bad arity" (cons (identifier-fix name)
                                          (if (eql (len vparams) (len f.parameters))
                                              (list (len vargs) (len f.args))
                                            (list (len vparams) (len f.parameters))))
-                       (list name vparams vargs)))
+                       (list (identifier-fix name) vparams vargs)))
          
            ;; probably redundant but in the document
            (env1 (change-env env :local (empty-local-env)))
@@ -1924,12 +1961,12 @@ see the local environment in any returned object.</p>
                                    (control_flow_state-case bodyres
                                      :returning (evo_normal (func_result bodyres.vals bodyres.env))
                                      :continuing (evo_normal (func_result nil (env->global bodyres.env)))))
-                      :ev_error (mv (change-ev_error bodyres :backtrace (cons (list name vparams vargs) bodyres.backtrace))
+                      :ev_error (mv (change-ev_error bodyres :backtrace (cons (list (identifier-fix name) vparams vargs) bodyres.backtrace))
                                     orac)
                       :ev_throwing (mv (change-ev_throwing bodyres
                                                            :env
                                                            (change-env bodyres.env :local (empty-local-env))
-                                                           :backtrace (cons (list name vparams vargs) bodyres.backtrace))
+                                                           :backtrace (cons (list (identifier-fix name) vparams vargs) bodyres.backtrace))
                                        orac)))
           :sb_primitive (b* (((evo primres) (eval_primitive name vparams vargs)))
                           (evo_normal (func_result primres (env->global env)))))))
@@ -1974,7 +2011,7 @@ pattern for assigning @('<base>.<field>') is:</p>
                              (val-case rbv.val
                                :v_array (if (and (<= 0 idxv)
                                                  (< idxv (len rbv.val.arr)))
-                                            (ev_normal (v_array (update-nth idxv v rbv.val.arr)))
+                                            (ev_normal (v_array (update-nth idxv (val-fix v) rbv.val.arr)))
                                           (ev_error "le_setarray index out of obunds" lx (list pos)))
                                :otherwise (ev_error "le_setarray non array base" lx (list pos)))))
                          (eval_lexpr idx.env lx.base newarray))
@@ -1985,7 +2022,7 @@ pattern for assigning @('<base>.<field>') is:</p>
                                 ((evo newarray)
                                  (val-case rbv.val
                                    :v_record (if (omap::assoc idxv rbv.val.rec)
-                                                 (ev_normal (v_record (omap::update idxv v rbv.val.rec)))
+                                                 (ev_normal (v_record (omap::update idxv (val-fix v) rbv.val.rec)))
                                                (ev_error "le_setenumarray unrecognized index" lx (list pos)))
                                    :otherwise (ev_error "le_setenumarray non record base" lx (list pos)))))
                              (eval_lexpr idx.env lx.base newarray))
@@ -1994,7 +2031,7 @@ pattern for assigning @('<base>.<field>') is:</p>
                             ((evo newrec)
                              (val-case rbv.val
                                :v_record (if (omap::assoc lx.field rbv.val.rec)
-                                             (ev_normal (v_record (omap::update lx.field v rbv.val.rec)))
+                                             (ev_normal (v_record (omap::update lx.field (val-fix v) rbv.val.rec)))
                                            (ev_error "le_setfield unrecognized field" lx (list pos)))
                                :otherwise (ev_error "le_setfield non record base" lx (list pos)))))
                          (eval_lexpr rbv.env lx.base newrec))
@@ -2187,7 +2224,7 @@ otherwise block from a try statement apply and calls the appropriate block."
            (catcher? (find_catcher (global-env->static (env->global env)) throw.ty catchers))
            ((unless catcher?)
             (b* (((unless otherwise)
-                  (mv (ev_throwing throw env backtrace) orac))
+                  (mv (ev_throwing (throwdata-fix throw) env backtrace) orac))
                  ((mv blkres orac) (eval_block env otherwise)))
               (mv (rethrow_implicit throw blkres backtrace) orac)))
            ((catcher c) catcher?)
@@ -2218,7 +2255,8 @@ width of the slice, and an updated environment."
         :slice_single (b* (((mv (evo (expr_result v)) orac) (eval_expr env s.index)))
                        (val-case v.val
                          :v_int (evo_normal (intpair/env (intpair v.val.val 1) v.env))
-                         :otherwise (evo_error "Bad single slice" s (list (expr->pos_start s.index)))))
+                         :otherwise (evo_error "Bad single slice"
+                                               (slice-fix s) (list (expr->pos_start s.index)))))
         :slice_range (b* (((mv (evo (expr_result mend)) orac) (eval_expr env s.end))
                           ((mv (evo (expr_result mstart)) orac) (eval_expr mend.env s.start)))
                       (val-case mend.val
@@ -2227,16 +2265,20 @@ width of the slice, and an updated environment."
                                          (intpair/env
                                           (intpair mstart.val.val (+ 1 (- mend.val.val mstart.val.val)))
                                           mstart.env))
-                                 :otherwise (evo_error "Bad start in the slice range" s (list (expr->pos_start s.start))))
-                        :otherwise (evo_error "Bad top/end in the slice range" s (list (expr->pos_start s.end)))))
+                                 :otherwise (evo_error "Bad start in the slice range" (slice-fix s)
+                                                       (list (expr->pos_start s.start))))
+                        :otherwise (evo_error "Bad top/end in the slice range"
+                                              (slice-fix s) (list (expr->pos_start s.end)))))
         :slice_length (b* (((mv (evo (expr_result mstart)) orac) (eval_expr env s.start))
                            ((mv (evo (expr_result mlength)) orac) (eval_expr mstart.env s.length)))
                        (val-case mstart.val
                          :v_int (val-case mlength.val
                                   :v_int (evo_normal
                                           (intpair/env (intpair mstart.val.val mlength.val.val) mstart.env))
-                                  :otherwise (evo_error "Bad start in the slice range" s (list (expr->pos_start s.start))))
-                         :otherwise (evo_error "Bad length in the slice range" s (list (expr->pos_start s.length)))))
+                                  :otherwise (evo_error "Bad start in the slice range"
+                                                        (slice-fix s) (list (expr->pos_start s.start))))
+                         :otherwise (evo_error "Bad length in the slice range"
+                                               (slice-fix s) (list (expr->pos_start s.length)))))
         :slice_star (b* (((mv (evo (expr_result mfactor)) orac) (eval_expr env s.factor))
                          ((mv (evo (expr_result mlength)) orac) (eval_expr mfactor.env s.length)))
                      (val-case mfactor.val
@@ -2245,8 +2287,10 @@ width of the slice, and an updated environment."
                                         (intpair/env
                                          (intpair (* mfactor.val.val mlength.val.val) mlength.val.val)
                                          mlength.env))
-                                :otherwise (evo_error "Bad length in factor slice" s (list (expr->pos_start s.length))))
-                       :otherwise (evo_error "Bad factor in factor slice" s (list (expr->pos_start s.factor)))))
+                                :otherwise (evo_error "Bad length in factor slice"
+                                                      (slice-fix s) (list (expr->pos_start s.length))))
+                       :otherwise (evo_error "Bad factor in factor slice"
+                                             (slice-fix s) (list (expr->pos_start s.factor)))))
         ))
      
     (define eval_slice_list ((env env-p)
@@ -2313,7 +2357,7 @@ the body and then call the loop again."
            ((evob limit1) (tick_loop_limit limit))
            ((evs env2) (eval_block cres.env body))
            ((when (zp clk))
-            (evo_error "Loop limit ran out" body (list (stmt->pos_start body)))))
+            (evo_error "Loop limit ran out" (stmt-fix body) (list (stmt->pos_start body)))))
         (eval_loop env2 is_while limit1 e_cond body :clk (1- clk))))
            
     (define eval_block ((env env-p)
@@ -2368,7 +2412,8 @@ within this statement will then disappear after the statement is completed."
       :measure (nats-measure clk 0 (int_constraintlist-count constrs) 0)
       (if (atom constrs)
           (evo_normal nil)
-        (b* ((constr (car constrs)))
+        (b* ((constr (int_constraint-fix (car constrs)))
+             (i (lifix i)))
           (int_constraint-case constr
             :constraint_exact (b* (((mv (evo (expr_result c)) orac) (eval_expr env constr.val)))
                                 (val-case c.val
@@ -2401,7 +2446,8 @@ ASLRef we don't return the environment.</p>"
       :guard-debug t
       :verify-guards nil
       (b* ((pos (ty->pos_start ty))
-           (ty (ty->desc ty)))
+           (ty (ty->desc ty))
+           (v (val-fix v)))
         (fty::multicase
           ((val-case v)
            (type_desc-case ty))
@@ -2429,6 +2475,23 @@ ASLRef we don't return the environment.</p>"
     ///
     (local (make-event
             `(in-theory (disable . ,(fgetprop 'eval_expr-fn 'acl2::recursivep nil (w state))))))
+
+    (local (defthm xor-of-bool-fix
+             (equal (xor (acl2::bool-fix x) y) (xor x y))
+             :hints(("Goal" :in-theory (enable xor)))))
+
+    
+                              
+    (encapsulate nil
+      (local (in-theory (e/d (maybe-expr-fix-when-some
+                              maybe-expr-some
+                              maybe-expr-some->Val)
+                             (maybe-expr-some-of-fields
+                              cons-equal
+                              len
+                              hons-assoc-equal
+                              nth update-nth))))
+      (fty::deffixequiv-mutual asl-interpreter-mutual-recursion))
     
     (std::defret-mutual len-of-eval_expr_list
       (defret len-of-eval_expr_list
@@ -2478,7 +2541,7 @@ ASLRef we don't return the environment.</p>"
       (defret resolved-p-of-<fn>
         (implies (eval_result-case res :ev_normal)
                  (ty-resolved-p (ev_normal->res res)))
-        :hints ('(:expand (<call>)
+        :hints ('(:expand ((:free (clk) <call>))
                   :in-theory (enable ty-resolved-p
                                      array_index-resolved-p
                                      int-literal-expr-p))
@@ -2489,8 +2552,7 @@ ASLRef we don't return the environment.</p>"
 
     
     (verify-guards eval_expr-fn :guard-debug t
-      :hints (("goal" :do-not-induct t)))
-    ))
+      :hints (("goal" :do-not-induct t)))))
 
 
 
