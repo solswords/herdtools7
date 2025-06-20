@@ -54,8 +54,8 @@ env's global storage alist"
   :returns (new-env env-p)
   (b* (((env env))
        ((global-env g) env.global)
-       (new-storage (cons (cons (identifier-fix name) (val-fix val))
-                          g.storage)))
+       (new-storage (omap::update (identifier-fix name) (val-fix val)
+                                  g.storage)))
     (change-env env :global (change-global-env g :storage new-storage))))
 
 (define eval_global ((env env-p)

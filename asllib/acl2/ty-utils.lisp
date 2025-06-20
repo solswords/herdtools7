@@ -303,7 +303,9 @@
     :measure (acl2::two-nats-measure (typed_identifierlist-count fields) 0)
     (b* (((when (atom fields)) t)
          ((typed_identifier f1) (car fields))
-         (val (omap::lookup f1.name (val-imap-fix x))))
+         (look (omap::assoc f1.name (val-imap-fix x)))
+         ((unless look) nil)
+         (val (cdr look)))
       (and (ty-satisfied val f1.type)
            (record-type-satisfied x (cdr fields)))))
   ///
@@ -550,8 +552,7 @@
                   (val-imap-p rest))
              (record-type-satisfied (omap::update key val rest) x))
     :hints (("goal" :induct (typed_identifierlist->names x)
-             :in-theory (enable (:i typed_identifierlist->names)
-                                omap::lookup)
+             :in-theory (enable (:i typed_identifierlist->names))
              :expand ((typed_identifierlist->names x)
                       (:free (y) (record-type-satisfied y x))))))
   
@@ -896,6 +897,7 @@
                   (identifierlist-p (mergesort x)))
          :hints(("Goal" :in-theory (enable mergesort)))))
 
+
 (defines ty-fix-val
   :flag-local nil
   (define ty-fix-val ((x val-p) (ty ty-p))
@@ -973,6 +975,8 @@
 
   (define record-type-fix-val ((x val-imap-p) (fields typed_identifierlist-p))
     :guard (and (typed_identifierlist-resolved-p fields)
+                (subsetp-equal (typed_identifierlist->names fields)
+                               (omap::keys x))
                 (record-type-satisfied x fields))
     :measure (acl2::two-nats-measure (typed_identifierlist-count fields) 0)
     :returns (new-x (and (val-imap-p new-x)
@@ -992,10 +996,10 @@
                     (record-type-fix-val x (cdr fields)))))
   ///
 
-  (local (defthm val-imap-fix-when-atom
-           (implies (not (consp x))
-                    (equal (val-imap-fix x) nil))
-           :hints(("Goal" :in-theory (enable val-imap-fix)))))
+  ;; (local (defthm val-imap-fix-when-atom
+  ;;          (implies (not (consp x))
+  ;;                   (equal (val-imap-fix x) nil))
+  ;;          :hints(("Goal" :in-theory (enable val-imap-fix)))))
 
   ;; (local (in-theory (enable val-imap-fix)))
   (fty::deffixequiv-mutual ty-fix-val
@@ -1118,10 +1122,16 @@
       :fn array-type-fix-val)
     (defret <fn>-when-satisfied-aux
       (implies (record-type-satisfied x fields)
-               (equal new-x (val-imap-fix x)))
-      :hints ('(:expand (;; (record-type-satisfied x fields)
+               (equal new-x
+                      (omap::restrict (mergesort (typed_identifierlist->names fields))
+                                      (val-imap-fix x))))
+      :hints ('(:expand ((record-type-satisfied x fields)
                          ;; (val-imap-fix x)
+                         (typed_identifierlist->names fields)
+                         (:free (a b) (mergesort (cons a b)))
                          <call>)
+                :in-theory (enable omap::restrict-of-insert-split
+                                   omap::lookup)
                 :do-not-induct t))
       :fn record-type-fix-val))
   
@@ -1132,8 +1142,9 @@
                              (record-type-satisfied x fields)
                              (array-type-satisfied x ty)
                              (tuple-type-satisfied nil types)
-                             (record-type-satisfied nil fields))
-             :in-theory (enable loghead*)
+                             (record-type-satisfied nil fields)
+                             (typed_identifierlist->names fields))
+             :in-theory (enable loghead* omap::lookup)
              :do-not-induct t))))
 
 

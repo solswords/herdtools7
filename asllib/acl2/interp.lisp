@@ -212,7 +212,7 @@ locally, globally, or not at all"
   :returns (pair)
   (if (atom stack)
       nil
-    (or (hons-assoc-equal (identifier-fix key) (val-imap-fix (car stack)))
+    (or (omap::assoc (identifier-fix key) (val-imap-fix (car stack)))
         (val-imaplist-assoc key (cdr stack))))
   ///
   (defret cdr-pair-of-<fn>
@@ -221,7 +221,7 @@ locally, globally, or not at all"
 
   (defthm val-imaplist-assoc-of-cons
     (equal (val-imaplist-assoc key (cons imap stack))
-           (or (hons-assoc-equal (identifier-fix key) (val-imap-fix imap))
+           (or (omap::assoc (identifier-fix key) (val-imap-fix imap))
                (val-imaplist-assoc key stack))))
 
   (defthm val-imaplist-assoc-of-nil
@@ -238,7 +238,7 @@ locally, globally, or not at all"
        (local-look (val-imaplist-assoc (identifier-fix x) env.local.storage))
        ((When local-look) (lk_local (cdr local-look)))
        ((global-env env.global))
-       (global-look (assoc-equal (identifier-fix x) env.global.storage))
+       (global-look (omap::assoc (identifier-fix x) env.global.storage))
        ((When global-look) (lk_global (cdr global-look))))
     (lk_notfound)))
 
@@ -249,9 +249,11 @@ locally, globally, or not at all"
   :returns (res val_result-p)
   (b* (((env env))
        ((global-env env.global))
-       (global-look (assoc-equal (identifier-fix x) env.global.storage))
+       (global-look (omap::assoc (identifier-fix x) env.global.storage))
        ((When global-look) (ev_normal (cdr global-look))))
     (ev_error "Global variable not found" x nil)))
+
+
 
 (define val-imaplist-assign ((name identifier-p)
                              (v val-p)
@@ -262,8 +264,8 @@ value if the variable was not already present."
   :returns (new-stack val-imaplist-p)
   (if (atom stack)
       nil
-    (if (hons-assoc-equal (identifier-fix name) (val-imap-fix (car stack)))
-        (cons (put-assoc-equal (identifier-fix name) (val-fix v) (val-imap-fix (car stack)))
+    (if (omap::assoc (identifier-fix name) (val-imap-fix (car stack)))
+        (cons (omap::update (identifier-fix name) (val-fix v) (val-imap-fix (car stack)))
               (val-imaplist-fix (cdr stack)))
       (cons (val-imap-fix (car stack))
             (val-imaplist-assign name v (cdr stack)))))
@@ -278,9 +280,9 @@ value if the variable was not already present."
 
   (defthm val-imaplist-assign-of-cons
     (equal (val-imaplist-assign name v (cons imap stack))
-           (if (hons-assoc-equal (identifier-fix name) (val-imap-fix imap))
-               (cons (put-assoc-equal (identifier-fix name) (Val-fix v)
-                                      (val-imap-fix imap))
+           (if (omap::assoc (identifier-fix name) (val-imap-fix imap))
+               (cons (omap::update (identifier-fix name) (Val-fix v)
+                                   (val-imap-fix imap))
                      (val-imaplist-fix stack))
              (cons (val-imap-fix imap)
                    (val-imaplist-assign name v stack)))))
@@ -314,7 +316,10 @@ value if the variable was not already present."
   (defthm val-imaplist-assign-alternate
     (implies (val-imaplist-assoc k1 x)
              (equal (val-imaplist-assign k1 v1 (val-imaplist-assign k2 v2 (val-imaplist-assign k1 v3 x)))
-                    (val-imaplist-assign k1 v1 (val-imaplist-assign k2 v2 x)))))
+                    (val-imaplist-assign k1 v1 (val-imaplist-assign k2 v2 x))))
+    :hints (("goal" :induct t)
+            (and stable-under-simplificationp
+                 '(:cases ((equal (identifier-fix k1) (identifier-fix k2)))))))
 
   (defthm val-imaplist-assign-normalize
     (implies (and (val-imaplist-assoc k x)
@@ -347,7 +352,7 @@ variable is not already declared locally, this has no effect."
     (change-env env
                 :global (change-global-env
                          env.global
-                         :storage (put-assoc-equal name (val-fix v) env.global.storage)))))
+                         :storage (omap::update name (val-fix v) env.global.storage)))))
 
 (define env-assign ((name identifier-p)
                     (v val-p)
@@ -362,7 +367,7 @@ globally declared. If not, produce a NOTFOUND object to indicate the error."
        ((When local-look)
         (lk_local (env-assign-local name v env)))
        ((global-env env.global))
-       (global-look (assoc-equal name env.global.storage))
+       (global-look (omap::assoc name env.global.storage))
        ((When global-look)
         (lk_global (env-assign-global name v env))))
     (lk_notfound)))
@@ -531,7 +536,7 @@ value in the topmost scope."
   :returns (new-env env-p)
   (b* (((env env))
        ((local-env l) env.local)
-       (new-storage (cons (cons (cons (identifier-fix name) (val-fix val)) (car l.storage))
+       (new-storage (cons (omap::update (identifier-fix name) (val-fix val) (car l.storage))
                           (cdr l.storage))))
     (change-env env :local (change-local-env l :storage new-storage))))
 
@@ -542,7 +547,7 @@ value in the topmost scope."
   :returns (new-env env-p)
   (b* (((env env))
        ((local-env l) env.local)
-       (new-storage (cons (remove-assoc-equal (identifier-fix name) (car l.storage))
+       (new-storage (cons (omap::delete (identifier-fix name) (car l.storage))
                           (cdr l.storage))))
     (change-env env :local (change-local-env l :storage new-storage))))
 
@@ -555,10 +560,11 @@ corresponding values in the topmost scope."
   :returns (new-env env-p)
   (b* (((env env))
        ((local-env l) env.local)
-       (new-storage (cons (append (pairlis$ (identifierlist-fix names)
-                                            (mbe :logic (vallist-fix (take (len names) vals))
-                                                 :exec vals))
-                                  (car l.storage))
+       (new-storage (cons (omap::from-lists*
+                           (identifierlist-fix names)
+                           (mbe :logic (vallist-fix (take (len names) vals))
+                                :exec vals)
+                           (car l.storage))
                           (cdr l.storage))))
     (change-env env :local (change-local-env l :storage new-storage))))
 
@@ -668,7 +674,7 @@ the wrong type."
                     (rec val-imap-p))
   :short "Get a named field from a record alist, producing an error if it's not present"
   :returns (v val_result-p)
-  (b* ((look (assoc-equal (identifier-fix field)
+  (b* ((look (omap::assoc (identifier-fix field)
                           (val-imap-fix rec)))
        ((unless look) (ev_error "get_field not found" field nil)))
     (ev_normal (cdr look))))
@@ -743,7 +749,7 @@ values are not of v_bitvector type."
   :returns (v val_result-p)
   (b* (((when (atom fields)) (ev_normal (v_record rec)))
        (field (identifier-fix (car fields)))
-       ((unless (assoc-equal field (val-imap-fix rec)))
+       ((unless (omap::assoc field (val-imap-fix rec)))
         (ev_error "bitvec_fields_to_record!: field not in record" field nil))
        ((intpair s) (car slices))
        (start s.first)
@@ -754,7 +760,7 @@ values are not of v_bitvector type."
                          (<= (+ start length) width))))
         (ev_error "bitvec_fields_to_record!: out of bounds slice" (car slices) nil))
        (fieldval (loghead length (logtail start bv)))
-       (new-rec (put-assoc-equal field (v_bitvector length fieldval) (val-imap-fix rec))))
+       (new-rec (omap::update field (v_bitvector length fieldval) (val-imap-fix rec))))
     (bitvec_fields_to_record! (cdr fields) (cdr slices) new-rec bv width)))
        
        
@@ -1352,6 +1358,18 @@ return an error."
 
 (defconst *dummy-position* (make-posn :fname "<none>" :lnum 0 :bol 0 :cnum 0))
 
+(local (defthm identifierlist-p-of-insert
+         (implies (and (identifierlist-p x)
+                       (identifier-p k))
+                  (identifierlist-p (insert k x)))
+         :hints(("Goal" :in-theory (enable insert
+                                           tail emptyp head)))))
+
+(local (defthm identifierlist-p-of-mergesort
+         (implies (identifierlist-p x)
+                  (identifierlist-p (mergesort x)))
+         :hints(("Goal" :in-theory (enable mergesort)))))
+
 (with-output
   ;; makes it so it won't take forever to print the induction scheme
   :evisc (:gag-mode (evisc-tuple 3 4 nil nil))
@@ -1484,7 +1502,7 @@ be updated since expressions can include function calls."
                ((evo arrv) (val-case arr.val
                              :v_record (ev_normal arr.val.rec)
                              :otherwise (ev_error "getenumarray non-record value" desc (list pos))))
-               (look (assoc-equal idxv arrv)))
+               (look (omap::assoc idxv arrv)))
             (if look
                 (evo_normal (expr_result (cdr look) idx.env))
               (evo_error "getenumarray index not found" desc (list pos))))
@@ -1513,7 +1531,7 @@ be updated since expressions can include function calls."
           (b* ((exprs (named_exprlist->exprs desc.fields))
                (names (named_exprlist->names desc.fields))
                ((mv (evo (exprlist_result e)) orac) (eval_expr_list env exprs)))
-            (evo_normal (expr_result (v_record (pairlis$ names e.val))) e.env))
+            (evo_normal (expr_result (v_record (omap::from-lists names e.val)) e.env)))
           :e_tuple ;; anna
           (b* (((mv (evo (exprlist_result vals)) orac) (eval_expr_list env desc.exprs)))
             (evo_normal (expr_result (v_array vals.val) vals.env)))
@@ -1528,9 +1546,10 @@ be updated since expressions can include function calls."
             (evo_normal (expr_result (v_array (make-list lenv :initial-element v.val)) len.env)))
           :e_enumarray ;; anna
           (b* (((mv (evo (expr_result v)) orac) (eval_expr env desc.value))
-               (len (len desc.labels))
+               (labels (set::mergesort desc.labels))
+               (len (len labels))
                (vals (make-list len :initial-element v.val)) 
-               (rec (pairlis$ desc.labels vals))
+               (rec (omap::from-lists labels vals))
                )
             (evo_normal (expr_result (v_record rec) v.env)))
           :e_arbitrary ;; sol
@@ -1965,8 +1984,8 @@ pattern for assigning @('<base>.<field>') is:</p>
                                 ((evob idxv) (v_to_label idx.val))
                                 ((evo newarray)
                                  (val-case rbv.val
-                                   :v_record (if (assoc-equal idxv rbv.val.rec)
-                                                 (ev_normal (v_record (put-assoc-equal idxv v rbv.val.rec)))
+                                   :v_record (if (omap::assoc idxv rbv.val.rec)
+                                                 (ev_normal (v_record (omap::update idxv v rbv.val.rec)))
                                                (ev_error "le_setenumarray unrecognized index" lx (list pos)))
                                    :otherwise (ev_error "le_setenumarray non record base" lx (list pos)))))
                              (eval_lexpr idx.env lx.base newarray))
@@ -1974,8 +1993,8 @@ pattern for assigning @('<base>.<field>') is:</p>
                             ((mv (evo (expr_result rbv)) orac) (eval_expr env rbase))
                             ((evo newrec)
                              (val-case rbv.val
-                               :v_record (if (assoc-equal lx.field rbv.val.rec)
-                                             (ev_normal (v_record (put-assoc-equal lx.field v rbv.val.rec)))
+                               :v_record (if (omap::assoc lx.field rbv.val.rec)
+                                             (ev_normal (v_record (omap::update lx.field v rbv.val.rec)))
                                            (ev_error "le_setfield unrecognized field" lx (list pos)))
                                :otherwise (ev_error "le_setfield non record base" lx (list pos)))))
                          (eval_lexpr rbv.env lx.base newrec))

@@ -75,6 +75,10 @@
          (emptyp x))
   :hints(("Goal" :in-theory (enable keys))))
 
+(defthm keys-under-iff
+  (iff (keys x) (not (emptyp x)))
+  :hints(("Goal" :in-theory (enable keys))))
+
 
 #!set
 (local
@@ -160,7 +164,12 @@
 
   (defthm consp-of-key-ord-values
     (equal (consp (key-ord-values x))
-           (not (emptyp x)))))
+           (not (emptyp x))))
+
+  (defthm len-of-key-ord-values
+    (equal (len (key-ord-values x))
+           (len (keys x)))
+    :hints(("Goal" :in-theory (enable keys-redef)))))
 
 
 
@@ -206,3 +215,142 @@
                    (:free (vals) (from-lists nil vals))
                    (:free (a b) (key-ord-values (cons a b)))
                    (set::setp keys)))))
+
+
+(local (defthm assoc-when-key-<<-head-key
+         (implies (<< key (head-key x))
+                  (not (assoc key x)))
+         :hints(("Goal" :in-theory (enable assoc)
+                 :induct t)
+                (and stable-under-simplificationp
+                     '(:cases ((emptyp (tail x))))))))
+
+
+
+(define diff-key ((x mapp) (y mapp))
+  :returns (key)
+  (b* (((when (emptyp x))
+        (if (emptyp y)
+            nil
+          (head-key y)))
+       ((when (emptyp y)) (head-key x))
+       ((mv xkey xval) (head x))
+       ((mv ykey yval) (head y))
+       ((unless (equal xkey ykey))
+        (if (<< xkey ykey) xkey ykey))
+       ((unless (equal xval yval))
+        xkey))
+    (diff-key (tail x) (tail y)))
+  ///
+  (defret diff-key-lower-bound
+    (b* ((xhead (head-key x))
+         (yhead (head-key y)))
+      (implies (not (equal (mfix x) (mfix y)))
+               (if (emptyp x)
+                   (if (emptyp y)
+                       (equal key nil)
+                     (not (<< key yhead)))
+                 (if (emptyp y)
+                     (not (<< key xhead))
+                   (if (<< xhead yhead)
+                       (not (<< key xhead))
+                     (not (<< key yhead)))))))
+    :hints (("goal" :induct t)
+            (and stable-under-simplificationp
+                 '(:use ((:instance head-ordered (x x))
+                         (:instance head-ordered (x y)))
+                   :in-theory (disable head-ordered)))))
+  
+  (std::defretd diff-key-when-unequal
+    (implies (not (equal (mfix x) (mfix y)))
+             (not (equal (assoc key x) (assoc key y))))
+    :hints(("Goal" :in-theory (enable assoc)
+            :induct t)
+           (and stable-under-simplificationp
+                '(:use ((:instance diff-key-lower-bound
+                         (x (tail x)) (y (tail y)))
+                        (:instance head-ordered)
+                        (:instance head-ordered (x y)))
+                  :in-theory (disable head-ordered))))))
+        
+        
+
+(defthm cons-of-assoc
+  (equal (cons k (cdr (assoc k x)))
+         (or (assoc k x)
+             (cons k nil)))
+  :hints(("Goal" :in-theory (enable assoc))))
+
+
+(defthmd restrict-of-insert-split
+  (equal (restrict (set::insert k keys) x)
+         (if (assoc k x)
+             (update k (lookup k x)
+                     (restrict keys x))
+           (restrict keys x)))
+  :hints (("goal" :use ((:instance diff-key-when-unequal
+                         (x (restrict (set::insert k keys) x))
+                         (y (if (assoc k x)
+                                (update k (lookup k x)
+                                        (restrict keys x))
+                              (restrict keys x)))))
+           :in-theory (enable lookup assoc-of-restrict)
+           :do-not-induct t)))
+
+
+(defthmd assoc-iff-in-keys
+  (iff (assoc k x)
+       (set::in k (keys x)))
+  :hints(("Goal" :in-theory (enable keys assoc))))
+
+
+(defthm restrict-of-keys
+  (equal (restrict (keys x) x)
+         (mfix x))
+  :hints (("goal" :use ((:instance diff-key-when-unequal
+                         (x (restrict (keys x) x))
+                         (y (mfix x))))
+           :in-theory (enable assoc-of-restrict
+                              assoc-iff-in-keys))))
+
+
+(local (defthm len-of-member
+         (<= (len (member-equal k x)) (len x))
+         :rule-classes :linear))
+
+(defthmd assoc-of-from-lists
+  (equal (assoc k (from-lists keys vals))
+         (let ((mem (member-equal k keys)))
+           (and mem
+                (let ((idx (- (len keys) (len mem))))
+                  (cons k (nth idx vals))))))
+  :hints(("Goal" :in-theory (enable assoc from-lists))))
+             
+
+
+(define from-lists* ((keys true-listp)
+                     (vals true-listp)
+                     (base mapp))
+  :guard (= (len keys) (len vals))
+  :returns (map mapp)
+  (cond ((endp keys) (mfix base))
+        (t (update (car keys) (car vals)
+                   (from-lists* (cdr keys) (cdr vals) base))))
+  ///
+  (defthmd assoc-of-from-lists*
+    (equal (assoc k (from-lists* keys vals base))
+           (let ((mem (member-equal k keys)))
+             (if mem
+                 (let ((idx (- (len keys) (len mem))))
+                   (cons k (nth idx vals)))
+               (assoc k base)))))
+
+  (defthm from-lists*-in-terms-of-update*
+    (equal (from-lists* keys vals base)
+           (update* (from-lists keys vals) base))
+    :hints (("goal" :use ((:instance diff-key-when-unequal
+                           (x (from-lists* keys vals base))
+                           (y (update* (from-lists keys vals) base))))
+             :in-theory (enable assoc-of-from-lists*
+                                assoc-of-from-lists)
+             :do-not-induct t))))

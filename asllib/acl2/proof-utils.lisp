@@ -714,7 +714,7 @@ as follows, more or less following the above made-up example:</p>
   :guard (equal (len params) (len fn-params))
   (b* (((when (atom params)) (value (cons hyps local-storage-term)))
        ((maybe-typed_identifier p1) (car fn-params))
-       (new-local-storage-term `(put-assoc-equal ,p1.name ,(car params) ,local-storage-term))
+       (new-local-storage-term `(omap::update ,p1.name (val-fix ,(car params)) ,local-storage-term))
        ((unless p1.type)
         (subprogram-param-hyps (cdr params) (cdr fn-params) hyps new-local-storage-term state))
        ((er first) (subprogram-arg-hyp (car params) p1.type hyps local-storage-term state))
@@ -735,7 +735,7 @@ as follows, more or less following the above made-up example:</p>
   :guard (equal (len args) (len fn-args))
   (b* (((when (atom args)) (value (cons hyps local-storage-term)))
        ((maybe-typed_identifier p1) (car fn-args))
-       (new-local-storage-term `(put-assoc-equal ,p1.name ,(car args) ,local-storage-term))
+       (new-local-storage-term `(omap::update ,p1.name (val-fix ,(car args)) ,local-storage-term))
        ((er first) (subprogram-arg-hyp (car args) p1.type hyps local-storage-term state))
        ((when (eq first nil))
         (er soft 'def-asl-subprogram "Unsatisfiable parameter type: ~x0" p1)))
@@ -938,7 +938,7 @@ as follows, more or less following the above made-up example:</p>
 
        ((er hyps) (simplify-for-def-asl-subprogram `(b* (,@param-bindings ,@arg-bindings) ,hyps) t state))
        (hyp-list (reverse (cleanup-hyps (list hyps))))
-       ((er (cons hyp-list storage-term)) (subprogram-param-hyps params f.parameters hyp-list 'env.local.storage state))
+       ((er (cons hyp-list storage-term)) (subprogram-param-hyps params f.parameters hyp-list '(val-imap-fix env.local.storage) state))
        ((er (cons hyp-list &)) (subprogram-arg-hyps args f.args hyp-list storage-term state))
        (hyps (sublis-subtrees binding-subst (cleanup-hyps (reverse hyp-list))))
 
@@ -1065,6 +1065,7 @@ as follows, more or less following the above made-up example:</p>
     write_to_bitvector
     write_to_bitvector-aux
     vbv-to-int
-    v_to_int))
+    v_to_int
+    omap::assoc-of-from-lists))
 
 (acl2::def-ruleset asl-code-proof-disables nil)

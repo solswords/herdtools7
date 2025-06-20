@@ -22,5 +22,6 @@
 
 (in-package "ACL2")
 (include-book "../portcullis")
+(include-book "std/omaps/portcullis" :dir :system)
 (ld "~/acl2-customization.lsp" :ld-missing-input-ok t)
 (in-package "ACL2")
