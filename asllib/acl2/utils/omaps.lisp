@@ -354,3 +354,25 @@
              :in-theory (enable assoc-of-from-lists*
                                 assoc-of-from-lists)
              :do-not-induct t))))
+
+
+(defthm assoc-of-delete
+  (equal (assoc k1 (delete k2 x))
+         (and (not (equal k1 k2))
+              (assoc k1 x)))
+  :hints(("Goal" :in-theory (enable assoc delete))))
+
+(defthm delete-of-update-same
+  (equal (delete k (update k v x))
+         (delete k x))
+  :hints (("goal" :use ((:instance diff-key-when-unequal
+                         (x (delete k (update k v x)))
+                         (y (delete k x)))))))
+
+(defthm delete-of-update-diff
+  (implies (not (equal k k2))
+           (equal (delete k (update k2 v x))
+                  (update k2 v (delete k x))))
+  :hints (("goal" :use ((:instance diff-key-when-unequal
+                         (x (delete k (update k2 v x)))
+                         (y (update k2 v (delete k x))))))))
