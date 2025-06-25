@@ -258,8 +258,9 @@
                        <invariants>
                        ;; (no-duplicatesp-equal (acl2::alist-keys (car env.local.storage)))
                        )
-                  (b* (((mv (ev_normal res) &) <loop-form>))
-                    <concl>)))
+                  (b* (((mv (ev_normal res) new-orac) <loop-form>))
+                    (and (equal new-orac orac)
+                         <concl>))))
        :hints (;; copied from just-induct-and-expand
                (if (equal (car id) '(0))
                    (let* ((expand-hints (acl2::just-expand-cp-parse-hints
@@ -765,12 +766,13 @@ as follows, more or less following the above made-up example:</p>
                                           <static-env>)
                        <hyps>
                        <measure-reqs>)
-                  (let* ((res (mv-nth 0 (eval_subprogram
-                                         env <fn>
-                                         <params>
-                                         <args>)))
-                         (spec (ev_normal (func_result <retvals> (env->global env)))))
-                    <concl>)))
+                  (b* (((mv res new-orac) (eval_subprogram
+                                           env <fn>
+                                           <params>
+                                           <args>))
+                       (spec (ev_normal (func_result <retvals> (env->global env)))))
+                    (and (equal new-orac orac)
+                         <concl>))))
        :hints ((:@ (not :no-expand-hint)
                 ("goal" :expand ((:free (params args)
                                  (eval_subprogram env <fn> params args :clk clk)))))
