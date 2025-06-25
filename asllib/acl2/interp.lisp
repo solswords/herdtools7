@@ -2469,8 +2469,8 @@ ASLRef we don't return the environment.</p>"
                                     ((unless (eql (len v.arr) (len ty.types)))
                                      (evo_error "is_val_of_type: value tuple of different length than type tuple" (cons v ty) (list pos))))
                                  (is_val_of_type_tuple env v.arr ty.types)))
-          (- (evo_normal t)) ;;TYPE_EQUAL
-        )))
+          (- (evo_error "is_val_of_type: bad val type combo" (cons v ty) (list pos))))
+        ))
 
     ///
     (local (make-event
@@ -2549,7 +2549,6 @@ ASLRef we don't return the environment.</p>"
                      '(:expand ((ty-resolved-p x)))))
         :fn resolve-ty)
       :skip-others t)
-
     
     (verify-guards eval_expr-fn :guard-debug t
       :hints (("goal" :do-not-induct t)))))
