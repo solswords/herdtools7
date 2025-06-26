@@ -423,7 +423,8 @@ and of_constraint_kind (x : constraint_kind) =
           of_precision_loss_flag flg;
         ]
     | PendingConstrained -> [ key "PENDINGCONSTRAINED" ]
-    | Parameterized (u, i) -> [ key "PARAMETRIZED"; of_uid u; of_identifier i ])
+    | Parameterized (_, i) -> [ key "PARAMETRIZED"; of_identifier i ])
+(* note: removed non-semantically-relevant UID *)
 
 and of_bitfield x =
   tagged_list_of_list

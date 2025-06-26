@@ -322,12 +322,12 @@ to them are removed by the typechecker.")
                        (flag precision_loss_flag)))
     (:pendingconstrained ()
      :short "Shouldn't see this in type-checked ASTs")
-    (:parametrized ((id uid)
+    (:parametrized (;; (id uid)
                     (name identifier))
      :short "Shouldn't see this while interpreting type-checked ASTs"
      :long "<p>This can occur in the types of parameters of function declarations but
 shouldn't occur in @(see e_arbitrary) or @(see e_atc) expressions where they
-are semantically relevent.</p>"
+are semantically relevant.</p>"
      ;; NOTE: In some cases we're going to transform a :parametrized
      ;; constraint to one of the form (wellconstrained (list (constraint_exact (expr (e_var name)))) flag).
      ;; In order to be able to recur on this without increasing the constraint_kind-count,
