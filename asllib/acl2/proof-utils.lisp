@@ -160,7 +160,24 @@
                   (subprograms-match names1 env env1)
                   (syntaxp (quotep names1))
                   (subsetp-equal names names1))
-             (subprograms-match names env env1))))
+             (subprograms-match names env env1)))
+
+  (defthm subprograms-match-when-other-assumption
+    (implies (and (subprograms-match names1 env env2)
+                  (syntaxp (not (equal env1 env2)))
+                  (subprograms-match names env1 env2)
+                  (subprograms-match names env env2))
+             (subprograms-match names env env1)))
+
+  (defthm subprograms-match-force-exec
+    (implies (and (syntaxp (quotep names))
+                  (equal env1v (spmatch-force-exec env1))
+                  (syntaxp (quotep env1v))
+                  (equal env2v (spmatch-force-exec env2))
+                  (syntaxp (quotep env2v)))
+             (equal (subprograms-match names env1 env2)
+                    (spmatch-force-exec (subprograms-match names env1v env2v))))
+    :hints(("Goal" :in-theory (enable spmatch-force-exec)))))
 
 
 
@@ -778,11 +795,12 @@ as follows, more or less following the above made-up example:</p>
                                  (eval_subprogram env <fn> params args :clk clk)))))
                <hints>))
 
-     (table asl-subprogram-table
-            <fn> (list '<subprograms>
-                       '<direct-subprograms>
-                       '<clk-expr>
-                       '<name>))))
+     (:@ :table-update
+      (table asl-subprogram-table
+             <fn> (list '<subprograms>
+                        '<direct-subprograms>
+                        '<clk-expr>
+                        '<name>)))))
 
 (define collect-direct-subprograms (body acc)
   (if (atom body)
@@ -924,6 +942,7 @@ as follows, more or less following the above made-up example:</p>
         (er soft 'def-asl-subprogram "Bad function ~x0: not found in static env" function))
        ((func-ses fn-struct))
        ((func f) fn-struct.fn)
+       (primitivep (subprogram_body-case f.body :sb_primitive))
 
        ((unless (symbol-listp params))
         (er soft 'def-asl-subprogram "Params should be a symbol-list"))
@@ -949,13 +968,16 @@ as follows, more or less following the above made-up example:</p>
        (subprograms (cons function (collect-transitive-subprograms direct-subprograms table nil)))
 
        (clk-val
-        (or safe-clock
-            (+ 1 (maximize-const-clocks direct-subprograms table -1))))
+        (if primitivep
+            0
+          (or safe-clock
+              (+ 1 (maximize-const-clocks direct-subprograms table -1)))))
 
        (measure-reqs (if (eql clk-val 0)
                          t
                        `(<= ,clk-val (ifix clk))))
 
+       (table-update (equal static-env '(stdlib-static-env)))
        (concl (if normal-cond
                   (if nonnormal-res
                       `(equal res (if ,normal-cond
@@ -1013,7 +1035,8 @@ as follows, more or less following the above made-up example:</p>
                              (<user-bindings> . ,bindings)
                              (<hyps> . ,hyps)
                              (<hints> . ,hints))
-                  :features (and no-expand-hint '(:no-expand-hint)))))
+                  :features (append (and no-expand-hint '(:no-expand-hint))
+                                    (and table-update '(:table-update))))))
 
     (value (acl2::template-subst-top *def-asl-subprogram-template* template))))
 
@@ -1022,6 +1045,58 @@ as follows, more or less following the above made-up example:</p>
     `(defsection ,name
        ,@prepwork
        (make-event (def-asl-subprogram-fn ',name ',args state)))))
+
+
+(defun assoc-keyword-permissive (k args)
+  (if (atom args)
+      nil
+    (cond ((eq k (car args)) args)
+          ((keywordp (car args)) (assoc-keyword-permissive k (cddr args)))
+          (t (assoc-keyword-permissive k (cdr args))))))
+
+(define def-asl-subprogram-stdlib-fn (name args state)
+  ;; Wraps def-asl-subprogram. Checks whether we need to do a separate proof
+  ;; for the stdlib version with and without primitives.
+  (b* (((acl2::er (cons & static-env-val))
+        (acl2::simple-translate-and-eval '(stdlib-static-env) nil nil
+                                         (msg "static env ~x0" '(stdlib-static-env))
+                                         'def-asl-subprogram (w state) state t))
+       ((acl2::er (cons & prim-static-env-val))
+        (acl2::simple-translate-and-eval '(stdlib-prim-static-env) nil nil
+                                         (msg "static env ~x0" '(stdlib-prim-static-env))
+                                         'def-asl-subprogram (w state) state t))
+       (function (cadr (assoc-keyword-permissive :function args)))
+       ;; (fn-struct-prim (cdr (hons-assoc-equal function
+       ;;                                        (static_env_global->subprograms prim-static-env-val))))
+       ;; ((func-ses fn-struct-prim))
+       ;; ((func pf) fn-struct-prim.fn)
+       ;; ((unless (subprogram_body-case pf.body :sb_asl))
+       ;;  ;; The function is a primitive in the primitive static-env, so only do
+       ;;  ;; a proof for the non-primitive version.
+       ;;  (def-asl-subprogram-fn name args state))
+       (fn-struct (cdr (hons-assoc-equal function
+                                         (static_env_global->subprograms static-env-val))))
+       ((func-ses fn-struct))
+       ((func f) fn-struct.fn)
+       (direct-subprograms (collect-direct-subprograms f.body nil))
+       (table  (table-alist 'asl-subprogram-table (w state)))
+       (subprograms (cons function (collect-transitive-subprograms direct-subprograms table nil)))
+       ((when (subprograms-match subprograms prim-static-env-val static-env-val))
+        ;; The function and all its transitive callees are the same in both
+        ;; versions, so just prove it for one and the theorems will apply to
+        ;; the other.
+        (def-asl-subprogram-fn name args state))
+       ;; Otherwise tweak the name and arguments and duplicate the proof in the primitive static env.
+       (name-prim (intern-in-package-of-symbol (concatenate 'string (symbol-name name) "-PRIM") name))
+       ((er thms1) (def-asl-subprogram-fn name args state))
+       ((er thms2) (def-asl-subprogram-fn name-prim (list* :static-env '(stdlib-prim-static-env) args) state)))
+    (value `(progn ,thms1 ,thms2))))
+
+(defmacro def-asl-subprogram-stdlib (name &rest args)
+  (let* ((prepwork (cadr (assoc-keyword :prepwork args))))
+    `(defsection ,name
+       ,@prepwork
+       (make-event (def-asl-subprogram-stdlib-fn ',name ',args state)))))
 
 
                              
@@ -1068,6 +1143,7 @@ as follows, more or less following the above made-up example:</p>
     write_to_bitvector-aux
     vbv-to-int
     v_to_int
+    eval_primitive
     omap::assoc-of-from-lists))
 
 (acl2::def-ruleset asl-code-proof-disables nil)

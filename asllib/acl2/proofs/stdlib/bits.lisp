@@ -202,7 +202,7 @@
 
 
 
-(def-asl-subprogram replicate-1-correct
+(def-asl-subprogram-stdlib replicate-1-correct
   :function "Replicate-1"
   :params (n m)
   :args (x)
@@ -232,7 +232,7 @@
             :hints(("Goal" :in-theory (enable logrepeat)))))))
 
 
-(def-asl-subprogram replicate-correct
+(def-asl-subprogram-stdlib replicate-correct
   :function "Replicate"
   :params (m n)
   :args (x n)
@@ -279,7 +279,7 @@
                                                      bitops::ihsext-recursive-redefs)))))))
 
 
-(def-asl-subprogram BitCount-correct
+(def-asl-subprogram-stdlib BitCount-correct
   :function "BitCount"
   :params (n)
   :args (x)
@@ -334,7 +334,7 @@
 
 
 
-(def-asl-subprogram LowestSetBit-correct
+(def-asl-subprogram-stdlib LowestSetBit-correct
   :function "LowestSetBit"
   :params (n)
   :args (x)
@@ -357,7 +357,7 @@
                                                      bitops::trailing-0-count
                                                      bitops::ihsext-inductions)))))))
 
-(def-asl-subprogram LowestSetBitNZ-correct
+(def-asl-subprogram-stdlib LowestSetBitNZ-correct
   :function "LowestSetBitNZ"
   :params (n)
   :args (x)
@@ -410,7 +410,7 @@
             :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-inductions
                                                      bitops::ihsext-recursive-redefs)))))))
 
-(def-asl-subprogram HighestSetBit-correct
+(def-asl-subprogram-stdlib HighestSetBit-correct
   :function "HighestSetBit"
   :params (n)
   :args (x)
@@ -419,7 +419,7 @@
                '(:cases ((equal (v_bitvector->val x) 0))))))
 
 
-(def-asl-subprogram HighestSetBitNZ-correct
+(def-asl-subprogram-stdlib HighestSetBitNZ-correct
   :function "HighestSetBitNZ"
   :params (n)
   :args (x)
@@ -441,7 +441,7 @@
                                                     bitops::ihsext-inductions)))))))
 
 
-(def-asl-subprogram SignExtend-1-correct
+(def-asl-subprogram-stdlib SignExtend-1-correct
   :function "SignExtend-1"
   :params (n m)
   :args (x)
@@ -496,7 +496,7 @@
                                      (v_bitvector-requirements))))))))
 
 
-(def-asl-subprogram SignExtend-correct
+(def-asl-subprogram-stdlib SignExtend-correct
   :function "SignExtend"
   :params (n m)
   :args (x n)
@@ -506,7 +506,7 @@
   :enable (logext))
 
 
-(def-asl-subprogram Extend-1-correct
+(def-asl-subprogram-stdlib Extend-1-correct
   :function "Extend-1"
   :params (n m)
   :args (x unsigned)
@@ -519,7 +519,7 @@
                                  (logext m.val x.val)))))
 
 
-(def-asl-subprogram Extend-correct
+(def-asl-subprogram-stdlib Extend-correct
   :function "Extend"
   :params (n m)
   :args (x n unsigned)
@@ -535,7 +535,7 @@
 
 
 
-(def-asl-subprogram CountLeadingZeroBits-correct
+(def-asl-subprogram-stdlib CountLeadingZeroBits-correct
   :function "CountLeadingZeroBits"
   :params (n)
   :args (x)
@@ -546,7 +546,7 @@
 ;; CountLeadingZeroBits and CountLeadingSignBits: the former counts all the
 ;; zeros leading up to the most significant 1 bit, whereas the latter counts
 ;; the leading 0s/1s except for the sign bit.
-(def-asl-subprogram CountLeadingSignBits-correct
+(def-asl-subprogram-stdlib CountLeadingSignBits-correct
   :function "CountLeadingSignBits"
   :params (n)
   :args (x)
