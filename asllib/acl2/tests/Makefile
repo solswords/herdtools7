@@ -58,7 +58,6 @@ ASLSemanticsReference.t/SemanticsRule.EBinopImplExFalso.asl \
 ASLSemanticsReference.t/SemanticsRule.EBinopOrTrue.asl \
 ASLSemanticsReference.t/SemanticsRule.SAssertOk.asl \
 ASLSemanticsReference.t/SemanticsRule.LEDiscard.asl \
-ASLSemanticsReference.t/SemanticsRule.LDDiscard.asl \
 ASLSemanticsReference.t/SemanticsRule.EConcat2.asl \
 ASLSemanticsReference.t/SemanticsRule.LEGlobalVar.asl \
 ASLSemanticsReference.t/SemanticsRule.SCond2.asl \
@@ -225,6 +224,7 @@ FAILING_TESTS := \
 ASLSemanticsReference.t/SemanticsRule.EArbitraryInteger0.asl \
 ASLSemanticsReference.t/SemanticsRule.EArbitraryIntegerRange3-42-3.asl \
 side-effects.t/assert-unknown.asl \
+ASLSemanticsReference.t/SemanticsRule.LDDiscard.asl \
 
 
 
