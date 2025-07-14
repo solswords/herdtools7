@@ -16,5 +16,5 @@ top.cert : stdlib-ast.lsp stdlib-prim-ast.lsp
 .PHONY: clean all asts
 
 clean:
-	rm -f stdlib-ast.lsp
+	rm -f stdlib-ast.lsp stdlib-prim-ast.lsp
 	clean.pl .
