@@ -22,35 +22,41 @@
 
 (in-package "ASL")
 
-;; TODO: Document and add the stdlib proofs.
+;; This *non-locally* includes many theorems needed for admitting and
+;; guard-verifying an interpreter. Should be included locally only.
 
-(include-book "toplevel")
-(include-book "debug-interp")
-(include-book "proofs/stdlib/top")
-(include-book "xdoc/save" :dir :system)
-(include-book "oslib/date" :dir :system)
-(defttag :manual-info)
+(include-book "ast")
+(include-book "std/lists/repeat" :dir :system)
+(include-book "centaur/vl/util/default-hints" :dir :system)
 
-(value-triple (acl2::tshell-ensure))
-(defconsts (*herdtools-git-hash* state)
-  (b* (((mv ?ok lines state)
-        (acl2::tshell-call "git rev-parse HEAD")))
-    (mv (subseq (car lines) 0 8) state)))
+(defthm len-equal-0
+  (equal (equal 0 (len x))
+         (not (consp x)))
+  :hints(("Goal" :in-theory (enable len))))
 
-(defconsts (*acl2-git-hash* state)
-  (b* ((dir (acl2::include-book-dir :system state))
-       ((mv ?ok lines state)
-        (acl2::tshell-call (concatenate 'string
-                                        "cd " dir "; git rev-parse HEAD"))))
-    (mv (subseq (car lines) 0 8) state)))
-
-(defconsts (*manual-date* state) (oslib::date))
+(defthm len-of-cons
+  (Equal (len (cons x y))
+         (+ 1 (len y))))
 
 
-(defxdoc acl2::top
-  :short "ACL2 ASL interpreter manual"
-  :long "<p>This manual was built on @(`(:raw *manual-date*)`) from Herdtools7 git
-version @(`(:raw *herdtools-git-hash*)`) and ACL2 git version @(`(:raw
-*acl2-git-hash*)`). See @(see asl) for a starting point.</p>")
+(defthm rationalp-when-integerp-rw
+  (implies (integerp x)
+           (rationalp x)))
 
-(xdoc::save "./manual" :error t)
+(defthm assoc-equal-is-hons-assoc-equal
+  (implies k
+           (equal (assoc-equal k x)
+                  (hons-assoc-equal k x)))
+  :hints(("Goal" :in-theory (enable assoc-equal hons-assoc-equal))))
+
+(defthm alistp-when-func-ses-imap-p-rw
+  (implies (func-ses-imap-p x)
+           (alistp x))
+  :hints(("Goal" :in-theory (enable func-ses-imap-p))))
+
+(defthm identifier-p-compound-recognizer
+  (implies (identifier-p x)
+           (stringp x))
+  :hints(("Goal" :in-theory (enable identifier-p)))
+  :rule-classes :compound-recognizer)
+
