@@ -32,6 +32,7 @@
 
 ;; First exercise: just collect a trace of all subprogram calls.
 
+
 (defxdoc asl-tracing
   :parents (asl)
   :short "Versions of the ASL interpreter that produce a trace of the evaluation"
@@ -55,7 +56,8 @@ asl-trace) for the format of these objects.</p>")
      (result eval_result-p
              :reqfix (eval_result-case result
                        :ev_normal (ev_normal (func_result-fix result.res))
-                       :otherwise result)))
+                       :otherwise result))
+     (pos posn))
     :require (eval_result-case result
                :ev_normal (func_result-p result.res)
                :otherwise t)
@@ -221,7 +223,8 @@ asl-trace) for the format of these objects.</p>")
                                  (vargs vallist-p)
                                  &key
                                  ((clk natp) 'clk)
-                                 (orac 'orac))
+                                 (orac 'orac)
+                                 ((pos posn-p) 'pos))
       :short "Full Tracing version of @(see eval_subprogram); see @(see
 asl-interpreter-mutual-recursion-*ft) for overview."
       :measure (nats-measure clk 1 0 1)
@@ -234,7 +237,8 @@ asl-interpreter-mutual-recursion-*ft) for overview."
                          :args vargs
                          :globals-in (global-env->storage (env->global env))
                          :calls (acl2::rev trace)
-                         :result res))))
+                         :result res
+                         :pos pos))))
         (mv res orac trace)))))
 
 
@@ -544,6 +548,7 @@ tracespec.</p>")))
                                  &key
                                  ((clk natp) 'clk)
                                  (orac 'orac)
+                                 ((pos posn-p) 'pos)
                                  ((tracespec tracespec-p) 'tracespec))
       :short "Tracing version of @(see eval_subprogram); see @(see
 asl-interpreter-mutual-recursion-*t) for overview."
@@ -563,7 +568,8 @@ asl-interpreter-mutual-recursion-*t) for overview."
                          :calls (acl2::rev trace)
                          :result (if entry.resultp
                                      res
-                                   (ev_error "Not tracing result" nil nil))))))
+                                   (ev_error "Not tracing result" nil nil))
+                         :pos pos))))
         (mv res orac trace)))))
 
 
