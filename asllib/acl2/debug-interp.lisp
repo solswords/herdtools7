@@ -472,7 +472,9 @@ calls within that call.</p>
               (equals-original-thm '*ft (w state))
               '(verify-guards eval_expr-*ft-fn))
              form)))
-   form))
+   
+   `(progn (defconst *asl-interpreter-mutual-recursion-*ft-form* ',form)
+           ,form)))
 ;; ---------------------------------------------------------------------------
 
 
@@ -614,5 +616,15 @@ asl-interpreter-mutual-recursion-*t) for overview."
               (equals-original-thm '*t (w state))
               '(verify-guards eval_expr-*t-fn))
              form)))
-   form))
+   `(progn (defconst *asl-interpreter-mutual-recursion-*t-form* ',form)
+           ,form)))
 ;; ---------------------------------------------------------------------------
+
+
+(define find-define (name x)
+  (if (atom x)
+      nil
+    (case-match x
+      (('define !name . &) x)
+      (& (or (find-define name (car x))
+             (find-define name (cdr x)))))))

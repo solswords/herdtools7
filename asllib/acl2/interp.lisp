@@ -1349,15 +1349,16 @@ return an error."
                                                             . ,(and locals '((local-env->storage (env->local value.env)))))))))))
 
 
-(defmacro trace-eval_subprogram ()
-  '(trace$ (eval_subprogram-fn :entry (list 'eval_subprogram name vparams vargs)
+(defmacro trace-eval_subprogram (&optional (evisc-tuple '(nil 7 12 nil)))
+  `(trace$ (eval_subprogram-fn :entry (list 'eval_subprogram name vparams vargs)
                                :exit (list 'eval_subprogram
                                            name
                                            (let ((value (car values)))
                                              (eval_result-case value
                                                :ev_normal (b* (((func_result value.res)))
                                                             (list 'ev_normal value.res.vals))
-                                               :otherwise value))))))
+                                               :otherwise value)))
+                               :evisc-tuple ',evisc-tuple)))
 
 
 (defthm constraint_kind-count-parametrized-reduction
