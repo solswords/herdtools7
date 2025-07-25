@@ -124,10 +124,15 @@ corresponding to 1-bits of @('set') must be 1 whereas all bits corresponding to
 
 (defprod posn
   :short "File position marker for ASL code"
+  :long "<p>Note @('cnum') denotes character number (in the whole file), not column
+number. The column number would be @('cnum') minus @('bol').</p>"
   ((fname stringp :rule-classes :type-prescription)
-   (lnum natp :rule-classes :type-prescription)
-   (bol natp :rule-classes :type-prescription)
-   (cnum integerp :rule-classes :type-prescription))
+   (lnum natp :rule-classes :type-prescription
+         "Line number")
+   (bol natp :rule-classes :type-prescription
+        "Beginning of line character index")
+   (cnum integerp :rule-classes :type-prescription
+         "Character index from the beginning of the file"))
   :layout :alist)
 
 (deftypes expr

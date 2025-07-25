@@ -2400,7 +2400,7 @@ it can't be modified, so the number of runs of the body is fixed at the
 beginning (except for the cases of returns and exceptions/errors)."
        :measure (nats-measure clk 0
                               (stmt-count* body)
-                              (for_loop-measure v_start v_end dir))
+                              (+ 1 (for_loop-measure v_start v_end dir)))
        :returns (mv (eval stmt_eval_result-p) new-orac)
        (b* (((evo limit1) (tick_loop_limit limit))
             ((when (for_loop-test v_start v_end dir))
@@ -2442,7 +2442,7 @@ the body and then call the loop again."
                          (orac 'orac))
        :short "Evaluate a statement in a new local scope frame. Local variables declared
 within this statement will then disappear after the statement is completed."
-       :measure (nats-measure clk 0 (stmt-count* x) 1)
+       :measure (nats-measure clk 0 (stmt-count* x) 2)
        :returns (mv (eval stmt_eval_result-p) new-orac)
        (b* ((env (push_scope env))
             ((evbind stmtres) (eval_stmt env x)))
