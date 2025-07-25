@@ -27,6 +27,9 @@
 (include-book "clause-processors/just-expand" :dir :System)
 (local (include-book "interp-theory"))
 
+(local (in-theory (disable integer-listp))) ;; doubles the time for some deftypes if not disabled
+
+
 ;; Define a new version of the interpreter that additionally collects
 ;; debug/trace information according to a trace specification.
 
@@ -110,6 +113,9 @@ end of its execution")
 
 (fty::defoption maybe-string stringp)
 
+(std::defenum trace-abort-p (:before :after nil))
+
+
 (fty::deftypes tracespec
   (defprod tracespec
     :short "Specification for what calls and statements will be traced."
@@ -156,7 +162,10 @@ the given column number (note: not character number as in a @(see posn).")
      (final-vars
       identifierlist-p
       "If tracing, collect the given variable values at the end of execution")
-     (interior-tracespec maybe-tracespec-p))
+     (interior-tracespec maybe-tracespec-p)
+     (abort trace-abort-p)
+     ;; (abort-after booleanp)
+     )
     :measure (acl2::two-nats-measure (acl2-count x) 3)
     :layout :list)
 
@@ -193,7 +202,10 @@ the given column number (note: not character number as in a @(see posn)."
      (paramsp booleanp)
      (argsp booleanp)
      (resultp booleanp)
-     (interior-tracespec maybe-tracespec-p))
+     (interior-tracespec maybe-tracespec-p)
+     (abort trace-abort-p)
+     ;; (abort-after booleanp)
+     )
     :measure (acl2::two-nats-measure (acl2-count x) 3)
     :layout :list)
 
@@ -458,6 +470,17 @@ asl-interpreter-mutual-recursion-*t) for overview."
       :returns (mv (eval func_eval_result-p) new-orac
                    (trace asl-tracelist-p))
       (b* ((ts-entry (find-call-tracespec name pos tracespec))
+           ((when (and ts-entry (eq (call-tracespec->abort ts-entry) :before)))
+            (b* (((call-tracespec ts-entry))
+                 (trace (list (make-calltrace
+                               :name ts-entry.name
+                               :fn name
+                               :params (and ts-entry.paramsp vparams)
+                               :args (and ts-entry.argsp vargs)
+                               :result (ev_error "Trace abort" nil nil)
+                               :pos pos))))
+              (pass-error-*t
+               (ev_error "Trace abort" ts-entry (list (posn-fix pos))))))
            (tracespec (combine-tracespecs t
                                           (and ts-entry (call-tracespec->interior-tracespec ts-entry))
                                           tracespec))
@@ -476,7 +499,10 @@ asl-interpreter-mutual-recursion-*t) for overview."
                                        :ev_normal (ev_normal (func_result->vals res.res))
                                        :otherwise res)
                                    (ev_error "Not tracing result" nil nil))
-                         :pos pos))))
+                         :pos pos)))
+           ((when (eq ts-entry.abort :after))
+            (pass-error-*t
+             (ev_error "Trace abort" ts-entry (list (posn-fix pos))))))
         (mv res orac trace)))))
 
 
@@ -494,6 +520,15 @@ asl-interpreter-mutual-recursion-*t) for overview."
       :returns (mv (eval stmt_eval_result-p) new-orac
                    (trace asl-tracelist-p))
       (b* ((ts-entry (find-stmt-tracespec s tracespec))
+           ((when (and ts-entry (eq (stmt-tracespec->abort ts-entry) :before)))
+            (b* (((stmt-tracespec ts-entry))
+                 (trace (list (make-stmttrace
+                               :name ts-entry.name
+                               :stmt s
+                               :initial-vars (env-find-vars ts-entry.initial-vars env)
+                               :result (ev_error "Trace abort" nil nil)))))
+              (pass-error-*t
+               (ev_error "Trace abort" ts-entry (list (stmt->pos_start s))))))
            (tracespec (combine-tracespecs nil
                                           (and ts-entry (stmt-tracespec->interior-tracespec ts-entry))
                                           tracespec))
@@ -517,10 +552,11 @@ asl-interpreter-mutual-recursion-*t) for overview."
                                      :otherwise nil)))
                            (and ts-entry.final-vars ;; optimization
                                 env
-                                (env-find-vars ts-entry.final-vars env)))))))
+                                (env-find-vars ts-entry.final-vars env))))))
+           ((when (eq ts-entry.abort :after))
+            (pass-error-*t
+             (ev_error "Trace abort" ts-entry (list (stmt->pos_start s))))))
         (mv res orac trace)))))
-                                             
-
    
 
 
@@ -599,12 +635,14 @@ asl-interpreter-mutual-recursion-*t) for overview."
                                       (len (member '&key macro-args)))
                                    macro-args)))
         `(defret ,(intern-in-package-of-symbol
-                   (concatenate 'string "<FN>" "-" (symbol-name suffix) "-EQUALS-ORIGINAL")
+                   (concatenate 'string "<FN>" "-EQUALS-ORIGINAL")
                    'asl-pkg)
            (b* (((mv res-mod orac-mod &) (,name-mod . ,nonkey-formals))
                 ((mv res orac) (,name . ,nonkey-formals)))
-             (and (equal res-mod res)
-                  (equal orac-mod orac)))
+             (implies (not (and (eval_result-case res-mod :ev_error)
+                                (equal (ev_error->desc res-mod) "Trace abort")))
+                      (and (equal res-mod res)
+                           (equal orac-mod orac))))
            :hints ((let ((expand (acl2::just-expand-cp-parse-hints
                                   '((:free (,@nonkey-formals clk orac) (,name-mod . ,nonkey-formals))
                                     (:free (,@nonkey-formals clk orac) (,name . ,nonkey-formals)))
@@ -615,7 +653,24 @@ asl-interpreter-mutual-recursion-*t) for overview."
                                           clause
                                           '(t ;; last-only
                                             t ;; lambdas
-                                            ,expand)))))
+                                            ,expand))
+                       :do-not-induct t)))
+          :rule-classes ((:rewrite)
+                         (:forward-chaining
+                          :corollary
+                          (b* (((mv res-mod & &) (,name-mod . ,nonkey-formals))
+                               ((mv res-orig &) (,name . ,nonkey-formals)))
+                            (implies (and (equal (eval_result-kind res-mod) key)
+                                          (not (equal key :ev_error)))
+                                     (equal (eval_result-kind res-orig) key))))
+                         (:forward-chaining
+                          :corollary
+                          (b* (((mv res-mod & &) (,name-mod . ,nonkey-formals))
+                               ((mv res-orig &) (,name . ,nonkey-formals)))
+                            (implies (and (equal (ev_error->desc res-mod) desc)
+                                          (not (equal desc "Trace abort")))
+                                     (equal (ev_error->desc res-orig) desc))))
+                         )
            :fn ,name-mod))
       (eval-return-equiv-thms (cdr names) suffix wrld)))))
 
@@ -635,11 +690,12 @@ asl-interpreter-mutual-recursion-*t) for overview."
                   (concatenate 'string "EVAL_SUBPROGRAM-" (symbol-name suffix)
                                "-EQUALS-ORIGINAL")
                   'asl-pkg)
-          (b* (((mv res-mod orac-mod &) (,eval_subprogram-mod
-                                         env name vparams vargs))
+          (b* (((mv res-mod orac-mod &) (,eval_subprogram-mod env name vparams vargs))
                ((mv res orac) (eval_subprogram env name vparams vargs)))
-            (and (equal res-mod res)
-                 (equal orac-mod orac)))
+            (implies (not (and (eval_result-case res-mod :ev_error)
+                               (equal (ev_error->desc res-mod) "Trace abort")))
+                     (and (equal res-mod res)
+                          (equal orac-mod orac))))
           :hints ((let ((expand (acl2::just-expand-cp-parse-hints
                                  '((:free (env name vparams vargs clk orac)
                                     (,eval_subprogram-mod env name vparams vargs)))
@@ -650,17 +706,36 @@ asl-interpreter-mutual-recursion-*t) for overview."
                                          clause
                                          '(t ;; last-only
                                            t ;; lambdas
-                                           ,expand)))))
+                                           ,expand))
+                      :do-not-induct t)))
+          :rule-classes ((:rewrite)
+                         (:forward-chaining
+                          :corollary
+                          (b* (((mv res-mod & &) (,eval_subprogram-mod
+                                                         env name vparams vargs))
+                               ((mv res-orig &) (eval_subprogram env name vparams vargs)))
+                            (implies (and (equal (eval_result-kind res-mod) key)
+                                          (not (equal key :ev_error)))
+                                     (equal (eval_result-kind res-orig) key))))
+                         (:forward-chaining
+                          :corollary
+                          (b* (((mv res-mod & &) (,eval_subprogram-mod
+                                                         env name vparams vargs))
+                               ((mv res-orig &) (eval_subprogram env name vparams vargs)))
+                            (implies (and (equal (ev_error->desc res-mod) desc)
+                                          (not (equal desc "Trace abort")))
+                                     (equal (ev_error->desc res-orig) desc)))))
           :fn ,eval_subprogram-mod)
         (defret ,(intern-in-package-of-symbol
                   (concatenate 'string "EVAL_STMT-" (symbol-name suffix)
                                "-EQUALS-ORIGINAL")
                   'asl-pkg)
-          (b* (((mv res-mod orac-mod &) (,eval_stmt-mod
-                                         env s))
+          (b* (((mv res-mod orac-mod &) (,eval_stmt-mod env s))
                ((mv res orac) (eval_stmt env s)))
-            (and (equal res-mod res)
-                 (equal orac-mod orac)))
+            (implies (not (and (eval_result-case res-mod :ev_error)
+                               (equal (ev_error->desc res-mod) "Trace abort")))
+                     (and (equal res-mod res)
+                          (equal orac-mod orac))))
           :hints ((let ((expand (acl2::just-expand-cp-parse-hints
                                  '((:free (env s clk orac)
                                     (,eval_stmt-mod env s)))
@@ -671,8 +746,26 @@ asl-interpreter-mutual-recursion-*t) for overview."
                                          clause
                                          '(t ;; last-only
                                            t ;; lambdas
-                                           ,expand)))))
-          :fn ,eval_stmt-mod)
+                                           ,expand))
+                      :do-not-induct t)))
+          :rule-classes ((:rewrite)
+                         (:forward-chaining
+                          :corollary
+                          (b* (((mv res-mod & &) (,eval_stmt-mod
+                                                         env s))
+                               ((mv res-orig &) (eval_stmt env s)))
+                            (implies (and (equal (eval_result-kind res-mod) key)
+                                          (not (equal key :ev_error)))
+                                     (equal (eval_result-kind res-orig) key))))
+                         (:forward-chaining
+                          :corollary
+                          (b* (((mv res-mod & &) (,eval_stmt-mod
+                                                         env s))
+                               ((mv res-orig &) (eval_stmt env s)))
+                            (implies (and (equal (ev_error->desc res-mod) desc)
+                                          (not (equal desc "Trace abort")))
+                                     (equal (ev_error->desc res-orig) desc)))))
+           :fn ,eval_stmt-mod)
         . ,(eval-return-equiv-thms *asl-interp-fns* suffix wrld)))))
 
 (local
@@ -769,6 +862,19 @@ tracespec.</p>")))
 
 
 (local (xdoc::set-default-parents asl-interpreter-mutual-recursion-*t))
+
+(local
+ (defthm eval_result-kind-of-rethrow_implicit
+   (equal (eval_result-kind (rethrow_implicit throw blkres backtrace))
+          (eval_result-kind blkres))
+   :hints(("Goal" :in-theory (enable rethrow_implicit)))))
+
+(local
+ (defthm ev_error->desc-of-rethrow_implicit
+   (implies (eval_result-case blkres :ev_error)
+            (equal (ev_error->desc (rethrow_implicit throw blkres backtrace))
+                   (ev_error->desc blkres)))
+   :hints(("Goal" :in-theory (enable rethrow_implicit)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Definition of the Tracing ASL Interpreter (suffixed with *t)
