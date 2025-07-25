@@ -52,11 +52,15 @@ asl-trace) for the format of these objects.</p>")
     :parents (asl-tracing)
     :short "An element of an ASL trace indicating some event that occurred in the program."
     (:calltrace
-     ((fn identifier-p)
+     ((name
+       symbolp
+       "Name of the tracespec that produced this trace")
+      (fn identifier-p)
       (params vallist-p)
       (args vallist-p)
-      (subtraces asl-tracelist
-                 "Traces from within this call, in sequential order.")
+      (subtraces
+       asl-tracelist
+       "Traces from within this call, in sequential order.")
       (result eval_result-p
               :reqfix (eval_result-case result
                         :ev_normal (ev_normal (vallist-fix result.res))
@@ -67,7 +71,10 @@ asl-trace) for the format of these objects.</p>")
                 :otherwise t)
      :short "An ASL subprogram call, including inputs, result, and sub-calls.")
     (:stmttrace
-     ((stmt stmt-p)
+     ((name
+       symbolp
+       "Name of the tracespec that produced this trace")
+      (stmt stmt-p)
       (initial-vars val-imap-p)
       (subtraces asl-tracelist
                  "Traces from within this statement, in sequential order.")
@@ -122,7 +129,10 @@ end of its execution")
 traced, and the variable values that should be collected when tracing. This
 condition is a conjunction of the requirements given by the settings of this
 object's fields."
-    ((stmttype
+    ((name
+      symbolp
+      "User-provided name for this tracespec, recorded in the trace data")
+     (stmttype
       symbolp
       "If NIL, no requirement; otherwise should be one of the possible results of
 @('stmt_desc->kind')."
@@ -158,7 +168,10 @@ the given column number (note: not character number as in a @(see posn).")
     :parents (asl-tracing)
     :short "Entry describing the conditions under which a function call should be traced
 and what information should be collected in its trace."
-    ((fn
+    ((name
+      symbolp
+      "User-provided name for this tracespec, recorded in the trace data")
+     (fn
       maybe-identifier-p
       "If NIL, no requirement; otherwise, the function name to trace."
       :rule-classes :type-prescription)
@@ -431,14 +444,14 @@ the given column number (note: not character number as in a @(see posn)."
 (local
  (defconst *eval_subprogram-*t-def*
    '(define eval_subprogram-*t ((env env-p)
-                                 (name identifier-p)
-                                 (vparams vallist-p)
-                                 (vargs vallist-p)
-                                 &key
-                                 ((clk natp) 'clk)
-                                 (orac 'orac)
-                                 ((pos posn-p) 'pos)
-                                 ((tracespec tracespec-p) 'tracespec))
+                                (name identifier-p)
+                                (vparams vallist-p)
+                                (vargs vallist-p)
+                                &key
+                                ((clk natp) 'clk)
+                                (orac 'orac)
+                                ((pos posn-p) 'pos)
+                                ((tracespec tracespec-p) 'tracespec))
       :short "Tracing version of @(see eval_subprogram); see @(see
 asl-interpreter-mutual-recursion-*t) for overview."
       :measure (nats-measure clk 1 0 1)
@@ -453,6 +466,7 @@ asl-interpreter-mutual-recursion-*t) for overview."
             (mv res orac trace))
            ((call-tracespec ts-entry))
            (trace (list (make-calltrace
+                         :name ts-entry.name
                          :fn name
                          :params (and ts-entry.paramsp vparams)
                          :args (and ts-entry.argsp vargs)
@@ -487,6 +501,7 @@ asl-interpreter-mutual-recursion-*t) for overview."
            ((unless ts-entry) (mv res orac trace))
            ((stmt-tracespec ts-entry))
            (trace (list (make-stmttrace
+                         :name ts-entry.name
                          :stmt s
                          :initial-vars (env-find-vars ts-entry.initial-vars env)
                          :subtraces trace
