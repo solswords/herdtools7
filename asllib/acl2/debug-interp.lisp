@@ -406,8 +406,11 @@ the given column number (note: not character number as in a @(see posn)."
 
 (acl2::def-b*-binder evoo-*t
   :body
-  `(b* (((evbind-*t (evo-*t ,(car acl2::args))) . ,acl2::forms))
-     ,acl2::rest-expr))
+  `(b* (((evbind-*t evoo-*t-tmp) . ,acl2::forms)
+        ((evo-*t ,(car acl2::args)) evoo-*t-tmp))
+     (acl2::check-vars-not-free
+      (evoo-*t-tmp)
+     ,acl2::rest-expr)))
 
 (acl2::def-b*-binder evs-*t
   :body
