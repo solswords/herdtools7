@@ -33,17 +33,43 @@
 ;; Define a new version of the interpreter that additionally collects
 ;; debug/trace information according to a trace specification.
 
-;; First exercise: just collect a trace of all subprogram calls.
-
 
 (defxdoc asl-tracing
   :parents (asl)
-  :short "Versions of the ASL interpreter that produce a trace of the evaluation"
+  :short "Returning trace information from the ASL interpreter."
   :long "<p>The main ASL interpreter (see @(see asl-interpreter-mutual-recursion)) only
 produces the final result of the evaluation; in some cases we want to see (and
-reason about) what happened internally. Subtopics of this doc topic include
-derived versions of the ASL interpreter that produce trace objects. See @(see
-asl-trace) for the format of these objects.</p>")
+reason about) what happened internally. To allow this, we derive from that
+original interpreter a tracing version @(see
+asl-interpreter-mutual-recursion-*t) that additionally produces customizable
+trace data, tracking certain function calls or statement executions.</p>
+
+<p>The information to collect is specified by a @(see tracespec) data
+structure. The resulting trace information is an @(see asl-tracelist)
+object.</p>
+
+<h3>Features</h3>
+<ul>
+
+<li>Trace specifiers can be given names (user-provided symbols); each trace is
+labelled with the name of the trace specifier it resulted
+from. Traces (including subtraces) can be searched by name using @(see
+asl-tracelist-find-by-name).</li>
+
+<li>Trace specifiers can match on code location; e.g., if we want to track
+calls of \"foo\" only from a particular line of code, the tracespec can
+specify that.</li>
+
+<li>Trace specifiers can cause other trace specifiers to be used inside their
+scope.  For example, if we want to track calls of \"foo\" but only those that
+occur within a call of \"bar\", this can be arranged by having the trace
+specifier for \"bar\" include a trace specifier for \"foo\" in its
+@(':interior-tracespec') field.</li>
+
+<li>Trace specifiers can cause the interpreter to abort, either before or after
+the matching call or statement is executed, by setting the @(':abort') field of
+the tracespec.</li>
+</ul>")
 
 (std::defenum control_status-p (:returning :continuing))
 (defthm control_status-p-of-control_flow_state-kind
@@ -58,34 +84,37 @@ asl-trace) for the format of these objects.</p>")
      ((name
        symbolp
        "Name of the tracespec that produced this trace")
-      (fn identifier-p)
-      (params vallist-p)
-      (args vallist-p)
+      (fn identifier-p "Function that was called")
+      (params vallist-p "Input parameters")
+      (args vallist-p "Input arguments")
       (subtraces
        asl-tracelist
        "Traces from within this call, in sequential order.")
       (result eval_result-p
               :reqfix (eval_result-case result
                         :ev_normal (ev_normal (vallist-fix result.res))
-                        :otherwise result))
-      (pos posn))
+                        :otherwise result)
+              "Return values, if normal result, or error data")
+      (pos posn "File position of the call"))
      :require (eval_result-case result
                 :ev_normal (vallist-p result.res)
                 :otherwise t)
-     :short "An ASL subprogram call, including inputs, result, and sub-calls.")
+     :short "A trace of an ASL subprogram call, including inputs, result, and sub-calls.")
     (:stmttrace
      ((name
        symbolp
        "Name of the tracespec that produced this trace")
-      (stmt stmt-p)
-      (initial-vars val-imap-p)
+      (stmt stmt-p "Statement that was traced")
+      (initial-vars val-imap-p "Values of tracked variables just before executing this statement")
       (subtraces asl-tracelist
                  "Traces from within this statement, in sequential order.")
       (result eval_result-p
               :reqfix (eval_result-case result
                         :ev_normal (ev_normal (control_status-fix result.res))
-                        :otherwise result))
-      (final-vars val-imap-p))
+                        :otherwise result)
+              "The statement's continuing/returing status, if normal, or error data")
+      (final-vars val-imap-p
+                  "Values of tracked variables after executing this statement"))
      :require (eval_result-case result
                 :ev_normal (control_status-p result.res)
                 :otherwise t)
@@ -118,19 +147,24 @@ end of its execution")
 
 (fty::deftypes tracespec
   (defprod tracespec
+    :parents (asl-tracing)
     :short "Specification for what calls and statements will be traced."
-    :long "<p>Transient and permanent here indicate whether they persist across subroutine calls.</p>"
-    ((stmt-specs-transient stmt-tracespeclist-p)
-     (stmt-specs-permanent stmt-tracespeclist-p)
-     (call-specs-transient call-tracespeclist-p)
-     (call-specs-permanent call-tracespeclist-p))
+    :long "<p>Transient and permanent here indicate whether they persist across subroutine
+calls.  The elements of each list are either (respectively) @(see
+stmt-tracespec) or @(see call-tracespec) objects.</p>"
+    ((stmt-specs-permanent stmt-tracespeclist-p)
+     (call-specs-permanent call-tracespeclist-p)
+     (stmt-specs-transient stmt-tracespeclist-p)
+     (call-specs-transient call-tracespeclist-p))
     :measure (acl2::two-nats-measure (acl2-count x) 1)
     :layout :list)
 
   (fty::defoption maybe-tracespec tracespec
+    :parents (tracespec)
     :measure (acl2::two-nats-measure (acl2-count x) 2))
      
   (defprod stmt-tracespec
+    :parents (tracespec)
     :short "Specification for a condition under which a statement execution should be
 traced, and the variable values that should be collected when tracing. This
 condition is a conjunction of the requirements given by the settings of this
@@ -162,14 +196,27 @@ the given column number (note: not character number as in a @(see posn).")
      (final-vars
       identifierlist-p
       "If tracing, collect the given variable values at the end of execution")
-     (interior-tracespec maybe-tracespec-p)
-     (abort trace-abort-p)
-     ;; (abort-after booleanp)
-     )
+     (interior-tracespec
+      maybe-tracespec-p
+      "New tracespec used while inside this statement. This is combined with the
+current tracespec using @(see combine-tracespecs) with first argument @('nil');
+that is, if this tracespec is not provided, then the current set of transient
+tracespecs remain in force, but if this tracespec is provided, then its
+transient tracespecs replace the ones currently in force and its permanent
+tracespecs are added to the current permanent tracespecs for the duration of
+this statement's execution.")
+     (abort
+      trace-abort-p
+      "If set, then if a matching statement is encountered, execution ends producing
+an @('ev_error') result with special descriptor \"Trace abort\" either before
+executing that statement (if set to @(':before')) or after (if set to
+@(':after')). An error encountered during execution of the statement takes
+precedence over an @(':after') abort."))
     :measure (acl2::two-nats-measure (acl2-count x) 3)
     :layout :list)
 
   (fty::deflist stmt-tracespeclist :elt-type stmt-tracespec
+    :parents (tracespec)
     :true-listp t :elementp-of-nil nil
     :measure (acl2::two-nats-measure (acl2-count x) 0))
 
@@ -202,14 +249,27 @@ the given column number (note: not character number as in a @(see posn)."
      (paramsp booleanp)
      (argsp booleanp)
      (resultp booleanp)
-     (interior-tracespec maybe-tracespec-p)
-     (abort trace-abort-p)
-     ;; (abort-after booleanp)
-     )
+     (interior-tracespec
+      maybe-tracespec-p
+      "New tracespec used while inside this subroutine call. This is combined with the
+current tracespec using @(see combine-tracespecs) with first argument @('t');
+that is, the current set of transient tracespecs in force are not used for the
+subroutine call (as always, whether a tracespec has matched on that subroutine
+call or not), but the ones provided here are (if any), and the permanent
+tracespecs provided here are added to the ones currently in force for the
+duration of this subroutine call.")
+     (abort
+      trace-abort-p
+      "If set, then if a matching subroutine call is encountered, execution ends
+producing an @('ev_error') result with special descriptor \"Trace abort\"
+either before executing that statement (if set to @(':before')) or after (if
+set to @(':after')). An error encountered during execution of the call takes
+precedence over an @(':after') abort."))
     :measure (acl2::two-nats-measure (acl2-count x) 3)
     :layout :list)
 
   (fty::deflist call-tracespeclist :elt-type call-tracespec
+    :parents (tracespec)
     :true-listp t :elementp-of-nil nil
     :measure (acl2::two-nats-measure (acl2-count x) 0)))
 
@@ -287,6 +347,9 @@ the given column number (note: not character number as in a @(see posn)."
 (define combine-tracespecs ((callp booleanp)
                             (new-ts maybe-tracespec-p)
                             (x tracespec-p))
+  :parents (tracespec)
+  :short "Returns a new tracespec formed by combining an ambient tracespec @('x') with an
+interior tracespec @('new-ts') from some matching call or statement tracespec."
   :Returns (new tracespec-p)
   (b* (((unless new-ts)
         (if callp
@@ -503,7 +566,8 @@ asl-interpreter-mutual-recursion-*t) for overview."
                                        :otherwise res)
                                    (ev_error "Not tracing result" nil nil))
                          :pos pos)))
-           ((when (eq ts-entry.abort :after))
+           ((when (and (not (eval_result-case res :ev_error))
+                       (eq ts-entry.abort :after)))
             (pass-error-*t
              (ev_error "Trace abort" ts-entry (list (posn-fix pos))))))
         (mv res orac trace)))))
@@ -556,7 +620,8 @@ asl-interpreter-mutual-recursion-*t) for overview."
                            (and ts-entry.final-vars ;; optimization
                                 env
                                 (env-find-vars ts-entry.final-vars env))))))
-           ((when (eq ts-entry.abort :after))
+           ((when (and (not (eval_result-case res :ev_error))
+                       (eq ts-entry.abort :after)))
             (pass-error-*t
              (ev_error "Trace abort" ts-entry (list (stmt->pos_start s))))))
         (mv res orac trace)))))
@@ -831,24 +896,28 @@ asl-interpreter-mutual-recursion-*t) for overview."
 trace of a specified set of subprogram calls."
            :long "
 <p>This is an automatically generated derived version of the ASL interpreter,
-@(see asl-interpreter-mutual-recursion).  Each function in this mutual
-recursion returns the same two values as the analogous function in the original
-interpreter, and a third value that is an @(see asl-tracelist).</p>
+@(see asl-interpreter-mutual-recursion). Each function in the original mutual
+recursion has an analogous function in this version, suffixed with
+@('-*t') (the \"tracing version\" of the function).  The tracing version of
+each function takes the same arguments as the original version, plus an
+additional keyword argument @('tracespec'), of @(see tracespec) type, which
+determines what events (calls and statements) are traced. The tracing version
+of each function also returns the same (two) values as the original function,
+plus a third of type @(see asl-tracelist) giving the trace data from events
+within that call.</p>
 
-<p>The exception to this rule is that whereas @('eval_subprogram-*t1') is
-derived from @(see eval_subprogram) and returns the tracelist of subprograms
-called within the subprogram call, a wrapper @('eval_subprogram-*t') produces
-the trace for the whole subroutine call; calls of @('eval_subprogram')
-therefore get translated into calls of @('eval_subprogram-*t') because they
-want to collect the trace including the outer subprogram call, not all the
-calls within that call.</p>
+<p>The first two return values of the tracing version of each function are
+provably the same as those from the original function, except when the tracing
+has caused an abort due to the @(':abort') field in a triggered @(see
+call-tracespec) or @(see stmt-tracespec). In that case the result is an
+@('ev_error') with descriptor \"Trace abort\"; otherwise, the result and @(see
+orac) outputs are the same as from the original functions. This is proved in
+theorems @('eval_expr-*t-equals-original'), etc.</p>
 
-<p>These functions produce a trace as specified by an added @(see tracespec)
-argument. For each subprogram call, if that subprogram has an entry in the
-tracespec, then it produces a trace entry with information populated or elided
-according to the @(see tracespec-entry) it is mapped to. Otherwise, it returns
-the trace of any sub-calls within the body that are traced according to the
-tracespec.</p>")))
+<p>The functions @(see eval_subprogram-*t) and @(see eval_stmt-*t) are special
+in that they perform the collection of trace data for calls and statements,
+respectively. They are implemented as wrappers around the autogenerated
+versions @(see eval_subprogram-*t1) and @(eval_stmt-*t1).</p>")))
 
 
 
@@ -970,3 +1039,57 @@ tracespec.</p>")))
                                                             (list 'ev_normal value.res.vals))
                                                :otherwise value)))
                                :evisc-tuple ',evisc-tuple)))
+
+
+(define asl-trace->name ((x asl-trace-p))
+  :returns (name symbolp :rule-classes :type-prescription)
+  (asl-trace-case x :calltrace x.name :stmttrace x.name))
+
+(define asl-trace->subtraces ((x asl-trace-p))
+  :returns (subtraces asl-tracelist-p)
+  (asl-trace-case x :calltrace x.subtraces :stmttrace x.subtraces)
+  ///
+  (defret asl-tracelist-count-of-asl-trace->subtraces
+    (< (asl-tracelist-count subtraces)
+       (asl-trace-count x))
+    :rule-classes :linear))
+
+
+
+(defines asl-trace-find-by-name
+  (define asl-trace-find-by-name ((name symbolp)
+                                  (x asl-trace-p))
+    :measure (asl-trace-count x)
+    (if (eq (asl-trace->name x) name)
+        (cons (asl-trace-fix x)
+              (asl-tracelist-find-by-name name (asl-trace->subtraces x)))
+      (asl-tracelist-find-by-name name (asl-trace->subtraces x))))
+  (define asl-tracelist-find-by-name ((name symbolp)
+                                      (x asl-tracelist-p))
+    :measure (asl-tracelist-count x)
+    (if (atom x)
+        nil
+      (append (asl-trace-find-by-name name (car x))
+              (asl-tracelist-find-by-name name (cdr x))))))
+
+
+
+
+
+(defines asl-trace-find-calls
+  (define asl-trace-find-calls ((fn identifier-p)
+                                (x asl-trace-p))
+    :measure (asl-trace-count x)
+    (asl-trace-case x
+      :calltrace (let ((rest (asl-tracelist-find-calls fn x.subtraces)))
+                   (if (equal (identifier-fix fn) x.fn)
+                       (cons (asl-trace-fix x) rest)
+                     rest))
+      :stmttrace (asl-tracelist-find-calls fn x.subtraces)))
+  (define asl-tracelist-find-calls ((fn identifier-p)
+                                    (x asl-tracelist-p))
+    :measure (asl-tracelist-count x)
+    (if (atom x)
+        nil
+      (append (asl-trace-find-calls fn (car x))
+              (asl-tracelist-find-calls fn (cdr x))))))
