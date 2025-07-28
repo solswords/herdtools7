@@ -29,6 +29,7 @@
 (include-book "proofs/stdlib/top")
 (include-book "xdoc/save" :dir :system)
 (include-book "oslib/date" :dir :system)
+(include-book "centaur/fty/top" :dir :system)
 (defttag :manual-info)
 
 (value-triple (acl2::tshell-ensure))
@@ -53,4 +54,4 @@
 version @(`(:raw *herdtools-git-hash*)`) and ACL2 git version @(`(:raw
 *acl2-git-hash*)`). See @(see asl) for a starting point.</p>")
 
-(xdoc::save "./manual" :error t)
+(xdoc::save "./manual" :error t :redef-okp t)
