@@ -177,7 +177,7 @@ object's fields."
      (stmttype
       symbolp
       "If NIL, no requirement; otherwise should be one of the possible results of
-@('stmt_desc->kind')."
+@('stmt_desc->kind') (one of the keywords assosiated with @(see stmt_desc))."
       :rule-classes :type-prescription)
      (fname
       maybe-string
@@ -218,12 +218,12 @@ precedence over an @(':after') abort."))
     :layout :list)
 
   (fty::deflist stmt-tracespeclist :elt-type stmt-tracespec
-    :parents (tracespec)
+    :parents (tracespec stmt-tracespec)
     :true-listp t :elementp-of-nil nil
     :measure (acl2::two-nats-measure (acl2-count x) 0))
 
   (defprod call-tracespec
-    :parents (asl-tracing)
+    :parents (tracespec)
     :short "Entry describing the conditions under which a function call should be traced
 and what information should be collected in its trace."
     ((name
@@ -248,9 +248,9 @@ the given line number."
       "If NIL, no requirement; otherwise, the code position of the statement must have
 the given column number (note: not character number as in a @(see posn)."
       :rule-classes :type-prescription)
-     (paramsp booleanp)
-     (argsp booleanp)
-     (resultp booleanp)
+     (paramsp booleanp "If t, trace parameters")
+     (argsp booleanp "If t, trace arguments")
+     (resultp booleanp "If t, trace result")
      (interior-tracespec
       maybe-tracespec-p
       "New tracespec used while inside this subroutine call. This is combined with the
@@ -271,7 +271,7 @@ precedence over an @(':after') abort."))
     :layout :list)
 
   (fty::deflist call-tracespeclist :elt-type call-tracespec
-    :parents (tracespec)
+    :parents (tracespec call-tracespec)
     :true-listp t :elementp-of-nil nil
     :measure (acl2::two-nats-measure (acl2-count x) 0)))
 
