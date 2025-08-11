@@ -25,10 +25,20 @@
 (include-book "ast")
 (include-book "centaur/fty/visitor" :dir :system)
 (include-book "centaur/fty/multicase" :dir :system)
+(local (include-book "std/util/defretgen" :dir :system))
+
+(defxdoc asl-finding-code-positions
+  :parents (asl)
+  :short "Umbrella topic for utilities that help find positions of particular bits of ASL code.")
 
 
 
-
+;; --------------------------- FIND-POSN-OF-CALL-<type> ------------------------------------
+;; Finds the position of the first call of a specified function/procedure within the given
+;; ASL code structure.
+;; Find-posn-of-call-in-function looks up a function in a static env and finds the position
+;; of the first call of another function in the function's body.
+;; -----------------------------------------------------------------------------------------
 (acl2::def-b*-binder find-posn-return
   :decls ((declare (ignore acl2::args)))
   :body `(or ,@acl2::forms ,acl2::rest-expr))
@@ -46,6 +56,9 @@
 (fty::defvisitor-multi find-posn-of-call-expr
   (define find-posn-of-call-expr ((fn identifier-p)
                                   (x expr-p))
+    :parents (asl-finding-code-positions)
+    :short "Find the position of the first call of the given function in the given
+expression, or NIL if there are no such calls."
     :returns (call-pos (iff (posn-p call-pos) call-pos))
     :measure (acl2::nat-list-measure (list (expr-count x) 1))
     (b* (((expr x))
@@ -73,6 +86,9 @@
 (fty::defvisitor-multi find-posn-of-call-stmt
   (define find-posn-of-call-stmt ((fn identifier-p)
                                   (x stmt-p))
+    :parents (asl-finding-code-positions)
+    :short "Find the position of the first call of the given function/procedure in the
+given statement, or NIL if there are no such calls."
     :returns (call-pos (iff (posn-p call-pos) call-pos))
     :measure (acl2::nat-list-measure (list (stmt-count x) 1))
     (b* (((stmt x))
@@ -90,6 +106,9 @@
 (define find-posn-of-call-in-function ((called-function identifier-p)
                                        (context-function identifier-p)
                                        (static-env static_env_global-p))
+    :parents (asl-finding-code-positions)
+    :short "Find the position of the first call of the given called-function in the body of
+the context-function, or NIL if there are no such calls."  
   :returns (call-pos (iff (posn-p call-pos) call-pos))
   (B* (((static_env_global static-env))
        (fn-look (hons-assoc-equal (identifier-fix context-function)
@@ -103,6 +122,13 @@
        ((sb_asl body) func.fn.body))
     (find-posn-of-call-stmt called-function body.stmt)))
 
+
+;; -------------------------- FIND-POSNS-OF-CALLS-<type> -----------------------------------
+;; Finds the positions of all calls of a specified function/procedure within the given
+;; ASL code structure.
+;; Find-posn-of-calls-in-function looks up a function in a static env and finds the positions
+;; of all calls of another function in the function's body.
+;; -----------------------------------------------------------------------------------------
 
 (local (include-book "std/lists/append" :dir :system))
 (fty::deflist posnlist :elt-type posn :true-listp t :elementp-of-nil nil)
@@ -122,6 +148,9 @@
 (fty::defvisitor-multi find-posns-of-calls-expr
   (define find-posns-of-calls-expr ((fn identifier-p)
                                   (x expr-p))
+    :parents (asl-finding-code-positions)
+    :short "Find the positions of all calls of the given function in the given expression,
+or NIL if there are no such calls."
     :returns (call-posns posnlist-p)
     :measure (acl2::nat-list-measure (list (expr-count x) 1))
     (b* (((expr x))
@@ -150,6 +179,9 @@
 (fty::defvisitor-multi find-posns-of-calls-stmt
   (define find-posns-of-calls-stmt ((fn identifier-p)
                                   (x stmt-p))
+    :parents (asl-finding-code-positions)
+    :short "Find the positions of all calls of the given function/procedure in the given
+statement, or NIL if there are no such calls."
     :returns (call-posns posnlist-p)
     :measure (acl2::nat-list-measure (list (stmt-count x) 1))
     (b* (((stmt x))
@@ -168,6 +200,9 @@
 (define find-posns-of-calls-in-function ((called-function identifier-p)
                                        (context-function identifier-p)
                                        (static-env static_env_global-p))
+    :parents (asl-finding-code-positions)
+    :short "Find the positions of all calls of the given called-function in the body of the
+context-function, or NIL if there are no such calls."  
   :returns (call-posns posnlist-p)
   (B* (((static_env_global static-env))
        (fn-look (hons-assoc-equal (identifier-fix context-function)
@@ -183,7 +218,9 @@
 
 
 
-
+;; ----------------------------------- LEXPR-WRITES-VAR ------------------------------------
+;; Determines whether the given lexpr writes a given variable.
+;; -----------------------------------------------------------------------------------------
 (local (table fty::deftagsum-defaults :short-names t))
 
 (acl2::def-b*-binder writes-var-return
@@ -222,6 +259,16 @@
 
 (fty::deftypes expr-matcher
   (deftagsum expr-matcher
+    :parents (asl-finding-code-positions)
+    :short "A pattern specification that matches certain expressions."
+    :long "<p>The struture of the expr-matcher type mostly matches that of the @(see
+expr_desc) type, except that in each product some fields may be missing and the
+ones that are present are optional. The function @(see expr-match) checks
+whether a given @(see expr) matches an expr-matcher object.</p>
+
+<p>The only product of the expr-matcher type that doesn't have a parallel in
+the expr_desc type is @('em_contains'), which signifies that the expression is
+supposed to have some subexpression that matches the given expr-matcher.</p>"
     (:em_contains     ((matcher expr-matcher)))
     (:em_literal      ((val maybe-literal-p)))
     (:em_var          ((name maybe-identifier-p)))
@@ -294,7 +341,8 @@
                        exprlist-p)
   :renames ((expr find-matching-exprs-in-expr-aux))
   :type-fns ((expr find-matching-exprs-in-expr))
-  :fnname-template find-matching-exprs-in-<type>)
+  :fnname-template find-matching-exprs-in-<type>
+  :defines-args (:flag-local nil))
 
 
 
@@ -307,8 +355,11 @@
 (with-output
   :evisc (:gag-mode '(nil 7 10 nil))
   (fty::defvisitor-multi expr-match
+    :defines-args (:flag-local nil)
     (define expr-match ((matcher expr-matcher-p)
                         (x expr-p))
+      :parents (asl-finding-code-positions)
+      :short "Determine whether the given @(see expr) matches the given @(see expr-matcher)."
       :measure (acl2::nat-list-measure (list (expr-count x) (expr-matcher-count matcher) 0))
       (b* (((expr x)))
         (fty::multicase
@@ -384,6 +435,8 @@
 
     (define find-matching-exprs-in-expr ((matcher expr-matcher-p)
                                          (x expr-p))
+      :parents (asl-finding-code-positions)
+      :short "Find all subexpressions of the given @(see expr) that match the given @(see expr-matcher)."
       :measure (acl2::nat-list-measure (list (expr-count x) (expr-matcher-count matcher) 1))
       :returns (exprs exprlist-p)
       (if (expr-match matcher x)
@@ -394,16 +447,120 @@
       :types (expr)
       :measure (acl2::nat-list-measure (list :count 0 0)))))
 
+
+(defthmd expr-kind-when-expr-match
+  (implies (and (expr-match matcher x)
+                (equal match-kind (expr-matcher-kind matcher))
+                (syntaxp (quotep match-kind))
+                (not (equal match-kind :em_contains)))
+           (equal (expr_desc-kind (expr->desc x))
+                  (case match-kind
+                    (:em_literal             :e_literal)
+                    (:em_var                 :e_var)
+                    (:em_atc                 :e_atc)
+                    (:em_binop               :e_binop)
+                    (:em_unop                :e_unop)
+                    (:em_call                :e_call)
+                    (:em_slice               :e_slice)
+                    (:em_cond                :e_cond)
+                    (:em_getarray            :e_getarray)
+                    (:em_getfield            :e_getfield)
+                    (:em_getfields           :e_getfields)
+                    (:em_getcollectionfields :e_getcollectionfields)
+                    (:em_getitem             :e_getitem)
+                    (:em_record              :e_record)
+                    (:em_tuple               :e_tuple)
+                    (:em_array               :e_array)
+                    (:em_enumarray           :e_enumarray)
+                    (:em_arbitrary           :e_arbitrary)
+                    (t ;; :em_pattern
+                     :e_pattern))))
+  :hints(("Goal" :in-theory (enable expr-match))))
+
+
+
+(define exprs-match ((matcher expr-matcher-p)
+                     (x exprlist-p))
+  (if (atom x)
+      t
+    (and (expr-match matcher (car x))
+         (exprs-match matcher (cdr x))))
+  ///
+  (defthm exprs-match-of-singleton
+    (iff (exprs-match matcher (list x))
+         (expr-match matcher x)))
+  (defthm exprs-match-of-nil
+    (exprs-match mathcer nil))
+  (defthm exprs-match-of-append
+    (implies (and (exprs-match matcher x)
+                  (exprs-match matcher y))
+             (exprs-match matcher (append x y)))))
+
+;; (std::defret-mutual-generate exprs-match-of-<fn>
+;;   :return-concls (((exprlist-p r) (exprs-match matcher r)))
+;;   :rules ((t (:add-keyword :hints ('(:expand (<call>))))))
+;;   :mutual-recursion expr-match)
+
+(defxdoc find-matching-exprs-in-stmt
+  :parents (asl-finding-code-positions)
+  :short "Find all subexpressions in the given @(see stmt) that match the given @(see expr-matcher).")
+
+
 (fty::defvisitors find-matching-exprs-in-stmt
   :template find-matching-exprs
   :types (stmt)
   :measure (acl2::nat-list-measure (list :count 0 0)))
 
+(local (in-theory (enable maybe-[expr*maybe-ty]-some->val)))
+
+(with-output
+  :evisc (:gag-mode '(nil 7 10 nil))
+  (std::defretgen exprs-match-of-<fn>
+    :return-concls (((exprlist-p r) (exprs-match matcher r)))
+    :rules ((t (:add-keyword :hints ('(:expand (<call>))
+                                     (and stable-under-simplificationp
+                                          '(:expand ((:free (x) <call>))))))))
+    :functions (find-matching-exprs-in-stmt
+                find-matching-exprs-in-lexpr
+                find-matching-exprs-in-maybe-[expr*maybe-ty]
+                find-matching-exprs-in-expr*maybe-ty
+                find-matching-exprs-in-maybe-ty
+                find-matching-exprs-in-maybe-expr
+                expr-match)))
+
+
 (fty::deftypes stmt-matcher
   (deftagsum stmt-matcher
+    :parents (asl-finding-code-positions)
+    :short "A pattern specification that matches certain statements."
+    :long "<p>The struture of the stmt-matcher type mostly matches that of the @(see
+stmt_desc) type, except that in each product some fields may be missing, the
+ones that are present are optional, and @(see expr) typed fields are replaced
+by @(see maybe-expr_matcher) fields. The function @(see stmt-match) checks
+whether a given @(see stmt) matches a stmt-matcher object.</p>
+
+<p>The four products of the stmt-matcher type that don't have a parallel in
+the stmt_desc type:</p>
+
+<ul>
+<li>@('sm_contains'), which signifies that the statement is
+supposed to have some substatement that matches the given stmt-matcher</li>
+
+<li> @('sm_seq_first'), which signifies that the statement either matches the given stmt-matcher or is a nesting of sequences in which traversing the first elements eventually finds a a matching statement</li>
+
+<li> @('sm_seq_last'), which signifies that the statement either matches the given stmt-matcher or is a nesting of sequences in which traversing the second elements eventually finds a matching statement</li>
+
+<li>@(see sm_hasexpr), which
+signifies that the statement is supposed to have some subexpression that
+matches the given expr-matcher.</li>
+</ul>"
     (:sm_contains ((matcher stmt-matcher-p)))
+    (:sm_seq_first ((matcher stmt-matcher-p)))
+    (:sm_seq_last ((matcher stmt-matcher-p)))
     (:sm_hasexpr  ((matcher expr-matcher-p)))
     (:sm_pass ())
+    (:sm_seq ((first maybe-stmt-matcher-p)
+              (second maybe-stmt-matcher-p)))
     (:sm_decl ((name maybe-identifier-p)
                (ty maybe-expr-matcher)
                (expr maybe-expr-matcher)))
@@ -478,7 +635,8 @@
   :returns (stmts (:join (append stmts stmts1)
                         :tmp-var stmts1
                         :initial nil)
-                       stmtlist-p)
+                  stmtlist-p)
+  :defines-args (:flag-local nil)
   :renames ((stmt find-matching-stmts-in-stmt-aux))
   :type-fns ((stmt find-matching-stmts-in-stmt))
   :fnname-template find-matching-stmts-in-<type>)
@@ -494,16 +652,28 @@
 (with-output
   :evisc (:gag-mode '(nil 7 10 nil))
   (fty::defvisitor-multi stmt-match
+    :defines-args (:flag-local nil)
     (define stmt-match ((matcher stmt-matcher-p)
                         (x stmt-p))
+      :parents (asl-finding-code-positions)
+      :short "Determine whether the given @(see stmt) matches the given @(see stmt-matcher)."
       :measure (acl2::nat-list-measure (list (stmt-count x) (stmt-matcher-count matcher) 0))
       (b* (((stmt x)))
         (fty::multicase
           ((stmt-matcher-case matcher)
            (stmt_desc-case x.desc))
           ((:sm_contains            -)              (consp (find-matching-stmts-in-stmt matcher.matcher x)))
+          ((:sm_seq_first           -)
+           :when (stmt-match matcher.matcher x)     t)
+          ((:sm_seq_first           :s_seq)         (stmt-match matcher x.desc.first))
+          ((:sm_seq_last            -)
+           :when (stmt-match matcher.matcher x)     t)
+          ((:sm_seq_last            :s_seq)         (stmt-match matcher x.desc.second))
+          ;; ((:sm_contains_seq        -)              (stmt-match matcher.matcher x))
           ((:sm_hasexpr             -)              (consp (find-matching-exprs-in-stmt matcher.matcher x)))
           ((:sm_pass                :s_pass)        t)
+          ((:sm_seq                 :s_seq)         (and (stmt-maybe-match matcher.first x.desc.first)
+                                                         (stmt-maybe-match matcher.second x.desc.second)))
           ((:sm_decl                :s_decl)        (and (or (not matcher.name)
                                                              (local_decl_item-case x.desc.item
                                                                :ldi_var (equal matcher.name x.desc.item.name)
@@ -564,6 +734,8 @@
 
     (define find-matching-stmts-in-stmt ((matcher stmt-matcher-p)
                                          (x stmt-p))
+      :parents (asl-finding-code-positions)
+      :short "Find all substatements of the given @(see stmt) that match the given @(see stmt-matcher)."
       :measure (acl2::nat-list-measure (list (stmt-count x) (stmt-matcher-count matcher) 1))
       :returns (stmts stmtlist-p)
       (if (stmt-match matcher x)
@@ -573,4 +745,338 @@
     (fty::defvisitors :template find-matching-stmts
       :types (stmt)
       :measure (acl2::nat-list-measure (list :count 0 0)))))
-  
+
+
+(defthmd stmt-kind-when-stmt-match
+  (implies (and (stmt-match matcher x)
+                (equal match-kind (stmt-matcher-kind matcher))
+                (syntaxp (quotep match-kind))
+                (not (equal match-kind :sm_contains))
+                (not (equal match-kind :sm_seq_first))
+                (not (equal match-kind :sm_seq_last))
+                (not (equal match-kind :sm_hasexpr)))
+           (equal (stmt_desc-kind (stmt->desc x))
+                  (case match-kind
+                    (:sm_pass                :s_pass)
+                    (:sm_seq                 :s_seq)
+                    (:sm_decl                :s_decl)
+                    (:sm_assign              :s_assign)
+                    (:sm_call                :s_call)
+                    (:sm_return              :s_return)
+                    (:sm_cond                :s_cond)
+                    (:sm_assert              :s_assert)
+                    (:sm_for                 :s_for)
+                    (:sm_while               :s_while)
+                    (:sm_repeat              :s_repeat)
+                    (:sm_throw               :s_throw)
+                    (:sm_try                 :s_try)
+                    (:sm_print               :s_print)
+                    (:sm_unreachable         :s_unreachable)
+                    (t ;; :sm_pragma
+                     :s_pragma))))
+  :hints(("Goal" :in-theory (enable stmt-match))))
+
+(define stmts-match ((matcher stmt-matcher-p)
+                     (x stmtlist-p))
+  (if (atom x)
+      t
+    (and (stmt-match matcher (car x))
+         (stmts-match matcher (cdr x))))
+  ///
+  (defthm stmts-match-of-singleton
+    (iff (stmts-match matcher (list x))
+         (stmt-match matcher x)))
+  (defthm stmts-match-of-nil
+    (stmts-match mathcer nil))
+  (defthm stmts-match-of-append
+    (implies (and (stmts-match matcher x)
+                  (stmts-match matcher y))
+             (stmts-match matcher (append x y)))))
+
+(with-output
+  :evisc (:gag-mode '(nil 7 10 nil))
+  (std::defretgen stmts-match-of-<fn>
+    :return-concls (((stmtlist-p r) (stmts-match matcher r)))
+    :rules ((t (:add-keyword :hints ('(:expand (<call>))
+                                     (and stable-under-simplificationp
+                                          '(:expand ((:free (x) <call>))))))))
+    :functions (stmt-match)))
+
+
+(local (defthm car-stmtlist
+         (implies (stmtlist-p x)
+                  (iff (car x) (consp x)))))
+                  
+
+
+
+(define find-unique-matching-stmt-in-stmt ((matcher stmt-matcher-p)
+                                           (x stmt-p))
+  :parents (asl-finding-code-positions)
+  :short "If there is exactly one substatement matching the given @(see stmt-matcher) in
+the given @(see stmt), return it; otherwise, return NIL."
+  :returns (stmt (iff (stmt-p stmt) stmt))
+  (let ((matches (find-matching-stmts-in-stmt matcher x)))
+    (and (consp matches)
+         (atom (cdr matches))
+         (car matches)))
+  ///
+  (defret stmt-match-of-<fn>
+    (implies stmt
+             (stmt-match matcher stmt))
+    :hints(("Goal"
+            :use ((:instance stmts-match-of-find-matching-stmts-in-stmt))
+            :in-theory (e/d (stmts-match)
+                            (stmts-match-of-find-matching-stmts-in-stmt)))))
+  (defret stmt-kind-of-<fn>
+    (implies (and stmt
+                  (equal match-kind (stmt-matcher-kind matcher))
+                  (syntaxp (quotep match-kind))
+                  (not (equal match-kind :sm_contains))
+                  (not (equal match-kind :sm_seq_first))
+                  (not (equal match-kind :sm_seq_last))
+                  (not (equal match-kind :sm_hasexpr)))
+           (equal (stmt_desc-kind (stmt->desc stmt))
+                  (case match-kind
+                    (:sm_pass                :s_pass)
+                    (:sm_seq                 :s_seq)
+                    (:sm_decl                :s_decl)
+                    (:sm_assign              :s_assign)
+                    (:sm_call                :s_call)
+                    (:sm_return              :s_return)
+                    (:sm_cond                :s_cond)
+                    (:sm_assert              :s_assert)
+                    (:sm_for                 :s_for)
+                    (:sm_while               :s_while)
+                    (:sm_repeat              :s_repeat)
+                    (:sm_throw               :s_throw)
+                    (:sm_try                 :s_try)
+                    (:sm_print               :s_print)
+                    (:sm_unreachable         :s_unreachable)
+                    (t ;; :sm_pragma
+                     :s_pragma))))
+    :hints(("Goal"
+            :use ((:instance stmts-match-of-find-matching-stmts-in-stmt))
+            :in-theory (e/d (stmts-match
+                             stmt-kind-when-stmt-match)
+                            (stmts-match-of-find-matching-stmts-in-stmt))))))
+
+(local (defthm car-exprlist
+         (implies (exprlist-p x)
+                  (iff (car x) (consp x)))))
+
+
+(define find-unique-matching-expr-in-stmt ((matcher expr-matcher-p)
+                                           (x stmt-p))
+  :parents (asl-finding-code-positions)
+  :short "If there is exactly one subexpression matching the given @(see expr-matcher) in
+the given @(see stmt), return it; otherwise, return NIL."
+  :returns (expr (iff (expr-p expr) expr))
+  (let ((matches (find-matching-exprs-in-stmt matcher x)))
+    (and (consp matches)
+         (atom (cdr matches))
+         (car matches)))
+  ///
+  (defret expr-match-of-<fn>
+    (implies expr
+             (expr-match matcher expr))
+    :hints(("Goal"
+            :use ((:instance exprs-match-of-find-matching-exprs-in-stmt))
+            :in-theory (e/d (exprs-match)
+                            (exprs-match-of-find-matching-exprs-in-stmt)))))
+  (defret expr-kind-of-<fn>
+    (implies (and expr
+                  (equal match-kind (expr-matcher-kind matcher))
+                  (syntaxp (quotep match-kind))
+                  (not (equal match-kind :em_contains)))
+           (equal (expr_desc-kind (expr->desc expr))
+                  (case match-kind
+                    (:em_literal             :e_literal)
+                    (:em_var                 :e_var)
+                    (:em_atc                 :e_atc)
+                    (:em_binop               :e_binop)
+                    (:em_unop                :e_unop)
+                    (:em_call                :e_call)
+                    (:em_slice               :e_slice)
+                    (:em_cond                :e_cond)
+                    (:em_getarray            :e_getarray)
+                    (:em_getfield            :e_getfield)
+                    (:em_getfields           :e_getfields)
+                    (:em_getcollectionfields :e_getcollectionfields)
+                    (:em_getitem             :e_getitem)
+                    (:em_record              :e_record)
+                    (:em_tuple               :e_tuple)
+                    (:em_array               :e_array)
+                    (:em_enumarray           :e_enumarray)
+                    (:em_arbitrary           :e_arbitrary)
+                    (t ;; :em_pattern
+                     :e_pattern))))
+    :hints(("Goal"
+            :use ((:instance exprs-match-of-find-matching-exprs-in-stmt)
+                  (:instance expr-matcher-kind-possibilities
+                   (x matcher)))
+            :in-theory (e/d (exprs-match
+                             expr-kind-when-expr-match)
+                            (exprs-match-of-find-matching-exprs-in-stmt
+                             expr-matcher-kind-possibilities))))))
+
+(define find-unique-matching-expr-in-expr ((matcher expr-matcher-p)
+                                           (x expr-p))
+  :parents (asl-finding-code-positions)
+  :short "If there is exactly one subexpression matching the given @(see expr-matcher) in
+the given @(see expr), return it; otherwise, return NIL."
+  :returns (expr (iff (expr-p expr) expr))
+  (let ((matches (find-matching-exprs-in-expr matcher x)))
+    (and (consp matches)
+         (atom (cdr matches))
+         (car matches)))
+  ///
+  (defret expr-match-of-<fn>
+    (implies expr
+             (expr-match matcher expr))
+    :hints(("Goal"
+            :use ((:instance exprs-match-of-find-matching-exprs-in-expr))
+            :in-theory (e/d (exprs-match)
+                            (exprs-match-of-find-matching-exprs-in-expr)))))
+  (defret expr-kind-of-<fn>
+    (implies (and expr
+                  (equal match-kind (expr-matcher-kind matcher))
+                  (syntaxp (quotep match-kind))
+                  (not (equal match-kind :em_contains)))
+           (equal (expr_desc-kind (expr->desc expr))
+                  (case match-kind
+                    (:em_literal             :e_literal)
+                    (:em_var                 :e_var)
+                    (:em_atc                 :e_atc)
+                    (:em_binop               :e_binop)
+                    (:em_unop                :e_unop)
+                    (:em_call                :e_call)
+                    (:em_slice               :e_slice)
+                    (:em_cond                :e_cond)
+                    (:em_getarray            :e_getarray)
+                    (:em_getfield            :e_getfield)
+                    (:em_getfields           :e_getfields)
+                    (:em_getcollectionfields :e_getcollectionfields)
+                    (:em_getitem             :e_getitem)
+                    (:em_record              :e_record)
+                    (:em_tuple               :e_tuple)
+                    (:em_array               :e_array)
+                    (:em_enumarray           :e_enumarray)
+                    (:em_arbitrary           :e_arbitrary)
+                    (t ;; :em_pattern
+                     :e_pattern))))
+    :hints(("Goal"
+            :use ((:instance exprs-match-of-find-matching-exprs-in-expr)
+                  (:instance expr-matcher-kind-possibilities
+                   (x matcher)))
+            :in-theory (e/d (exprs-match
+                             expr-kind-when-expr-match)
+                            (exprs-match-of-find-matching-exprs-in-expr
+                             expr-matcher-kind-possibilities))))))
+
+(define find-unique-matching-stmt-in-function ((matcher stmt-matcher-p)
+                                               (fn identifier-p)
+                                               (static-env static_env_global-p))
+  :parents (asl-finding-code-positions)
+  :short "If there is exactly one statement matching the given @(see stmt-matcher) in the
+body of the given function, return it; otherwise, return NIL."
+  :returns (stmt (iff (stmt-p stmt) stmt))
+  (b* (((static_env_global static-env))
+       (fn-look (hons-assoc-equal (identifier-fix fn)
+                                  static-env.subprograms))
+       ((unless fn-look)
+        nil)
+       ((func-ses func) (cdr fn-look))
+       ((func func.fn))
+       ((unless (subprogram_body-case func.fn.body :sb_asl))
+        nil)
+       ((sb_asl body) func.fn.body))
+    (find-unique-matching-stmt-in-stmt matcher body.stmt))
+  ///
+  (defret stmt-match-of-<fn>
+    (implies stmt
+             (stmt-match matcher stmt)))
+  (defret stmt-kind-of-<fn>
+    (implies (and stmt
+                  (equal match-kind (stmt-matcher-kind matcher))
+                  (syntaxp (quotep match-kind))
+                  (not (equal match-kind :sm_contains))
+                  (not (equal match-kind :sm_seq_first))
+                  (not (equal match-kind :sm_seq_last))
+                  (not (equal match-kind :sm_hasexpr)))
+           (equal (stmt_desc-kind (stmt->desc stmt))
+                  (case match-kind
+                    (:sm_pass                :s_pass)
+                    (:sm_seq                 :s_seq)
+                    (:sm_decl                :s_decl)
+                    (:sm_assign              :s_assign)
+                    (:sm_call                :s_call)
+                    (:sm_return              :s_return)
+                    (:sm_cond                :s_cond)
+                    (:sm_assert              :s_assert)
+                    (:sm_for                 :s_for)
+                    (:sm_while               :s_while)
+                    (:sm_repeat              :s_repeat)
+                    (:sm_throw               :s_throw)
+                    (:sm_try                 :s_try)
+                    (:sm_print               :s_print)
+                    (:sm_unreachable         :s_unreachable)
+                    (t ;; :sm_pragma
+                     :s_pragma))))))
+
+
+(define find-unique-matching-expr-in-function ((matcher expr-matcher-p)
+                                               (fn identifier-p)
+                                               (static-env static_env_global-p))
+  :parents (asl-finding-code-positions)
+  :short "If there is exactly one expression matching the given @(see expr-matcher) in
+the
+body of the given function, return it; otherwise, return NIL."
+  :returns (expr (iff (expr-p expr) expr))
+  (b* (((static_env_global static-env))
+       (fn-look (hons-assoc-equal (identifier-fix fn)
+                                  static-env.subprograms))
+       ((unless fn-look)
+        nil)
+       ((func-ses func) (cdr fn-look))
+       ((func func.fn))
+       ((unless (subprogram_body-case func.fn.body :sb_asl))
+        nil)
+       ((sb_asl body) func.fn.body))
+    (find-unique-matching-expr-in-stmt matcher body.stmt))
+  ///
+  (defret expr-match-of-<fn>
+    (implies expr
+             (expr-match matcher expr)))
+  (defret expr-kind-of-<fn>
+    (implies (and expr
+                  (equal match-kind (expr-matcher-kind matcher))
+                  (syntaxp (quotep match-kind))
+                  (not (equal match-kind :em_contains)))
+           (equal (expr_desc-kind (expr->desc expr))
+                  (case match-kind
+                    (:em_literal             :e_literal)
+                    (:em_var                 :e_var)
+                    (:em_atc                 :e_atc)
+                    (:em_binop               :e_binop)
+                    (:em_unop                :e_unop)
+                    (:em_call                :e_call)
+                    (:em_slice               :e_slice)
+                    (:em_cond                :e_cond)
+                    (:em_getarray            :e_getarray)
+                    (:em_getfield            :e_getfield)
+                    (:em_getfields           :e_getfields)
+                    (:em_getcollectionfields :e_getcollectionfields)
+                    (:em_getitem             :e_getitem)
+                    (:em_record              :e_record)
+                    (:em_tuple               :e_tuple)
+                    (:em_array               :e_array)
+                    (:em_enumarray           :e_enumarray)
+                    (:em_arbitrary           :e_arbitrary)
+                    (t ;; :em_pattern
+                     :e_pattern))))
+    :hints(("Goal"
+            :use ((:instance expr-matcher-kind-possibilities
+                   (x matcher)))
+            :in-theory (e/d ()
+                            (expr-matcher-kind-possibilities))))))
