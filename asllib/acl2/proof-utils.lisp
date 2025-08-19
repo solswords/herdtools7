@@ -4,7 +4,7 @@
 ;;
 ;; SPDX-FileCopyrightText: Copyright 2025 Arm Limited and/or its affiliates <open-source-office@arm.com>
 ;; SPDX-License-Identifier: BSD-3-Clause
-;; 
+;;
 ;;****************************************************************************;;
 ;; Disclaimer:                                                                ;;
 ;; This material covers both ASLv0 (viz, the existing ASL pseudocode language ;;
@@ -78,7 +78,7 @@
     (for-induct env2 index_name limit step dir end body)))
 (in-theory (enable (:i for-induct)))
 
-    
+
 
 (define spmatch-force-exec (x) x
   ///
@@ -183,8 +183,8 @@
 
 
 
-                    
-                       
+
+
 (program)
 
 (defun loop-local-var-bindings (local-vars)
@@ -260,7 +260,7 @@
        (<looptype>->body *<name>*))
 
      <prepwork>
-     
+
      (local (in-theory (acl2::e/d* (<defloop-enables>
                                     <user-enables>)
                                    (<defloop-disables>
@@ -319,12 +319,12 @@
          ;; early, we need to know the return condition and return values.
          (return-cond 'nil)
          return-values
-         
+
          enable
          disable
          hints
          prepwork
-         
+
          (invariants 't)
          bindings
          (static-env '(stdlib-static-env)))
@@ -363,7 +363,7 @@
         (er soft 'defloop "Index var must be specified for for loops"))
        ((when (and index-var (not (eq looptype :s_for))))
         (er soft 'defloop "Index var specified for non-for loop"))
-       
+
        (local-vars (if (eq looptype :s_for)
                        (cons `((v_int ,index-var)
                                ,(s_for->index_name form)
@@ -373,7 +373,7 @@
                                    `(+ -1 ,end-var))))
                              local-vars)
                      local-vars))
-                               
+
        (local-var-bindings (loop-local-var-bindings local-vars))
        (local-var-hyps (loop-local-var-hyps local-vars))
        (local-var-hyps (if (eq looptype :s_for)
@@ -384,7 +384,7 @@
                                           `(<= ,start-var (+ 1 ,end-var))
                                         `(<= (+ -1 ,end-var) ,start-var))))
                          local-var-hyps))
-        
+
        (local-var-final-env (loop-local-vars-final-env local-vars))
 
        (continuing-concl
@@ -414,8 +414,8 @@
                             returning-concl
                           `(implies ,return-cond
                                     ,returning-concl))))))
-                       
-              
+
+
        ((acl2::tmplsubst template)
         (acl2::make-tmplsubst
          :atoms `((<name> . ,name)
@@ -441,7 +441,7 @@
 
        (body-const (acl2::template-subst-top '*<name>-body* template))
        (test-const (acl2::template-subst-top '*<name>-test* template))
-       
+
        ((mv loop-form expand induction)
         (case looptype
           (:s_for
@@ -469,8 +469,8 @@
                                     (<induction> . ,induction)
                                     (<loop-form-expand> . ,expand)
                                     . ,template.atoms)))
-                      
-                      
+
+
        (event
         (acl2::template-subst-top *defloop-template* template)))
     (value event)))
@@ -486,35 +486,35 @@
    :looptype :s_for                 ;; or :s_while, :s_repeat
    :nth 0                           ;; which occurence of this type of loop in the function -- default 0
    :index-var i                     ;; ACL2 variable corresponding to the index of a for loop
- 
+
    :static-env (stdlib-static-env)  ;; Expression for static environment in which the function
                                     ;; and its dependencies are defined -- default (stdlib-static-env)
- 
+
    :local-vars ((n \"asl_var_n\")   ;; ACL2 variable n corresponds to ASL variable \"asl_var_n\", read only
-                (res \"result\"     ;; ACL2 variable res corresponds to ASL variable \"res\", which is updated
+                (res \"result\"     ;; ACL2 variable res corresponds to ASL variable \"result\", which is updated
                  (v_int spec)))     ;; such that its final value is (v_int (my-spec n.val))
- 
+
    :bindings ((spec (my-spec n.val))) ;; B* bindings using the local-vars and accessors for their
                                       ;; respective value types. May be used in the final value arguments
                                       ;; (as above for res).
- 
+
    :invariants (and (<= 0 n.val)    ;; Hypotheses/inductive invariants about the loop
-                    (equal end 10)  
+                    (equal end 10)
                     (equal res.val (v_int (my-partial-spec i.val n.val))))
- 
+
    :start-var my-start    ;; Name for start and end variables -- default start, end
    :end-var   end
- 
+
    :return-cond (>= n.val 10)      ;; Condition under which the loop causes a return at some point
                                    ;; instead of finishing
    :return-values (list (v_int (- n.val i.val))) ;; Values that are returned when early returning
- 
+
    :enable (foo bar)               ;; rules to enable
    :disable (baz)                  ;; rules to disable
    :hints ((and stable-under-simplificationp
             '(:expand ((:free (n) (my-partial-spec start n))))))
                                    ;; computed hints to add to the default induction hint
- 
+
    :prepwork ((local (defthm lemma ...))) ;; events to do before the proof
    )
  })
@@ -551,7 +551,7 @@ as follows, more or less following the above made-up example:</p>
 
                    ;; user-specified invariant assumptions:
                    (and (<= 0 n.val)
-                        (equal end 10)  
+                        (equal end 10)
                         (equal res.val (v_int (my-partial-spec i.val n.val))))
 
                    ;; additional invariant about well formedness of local storage alist:
@@ -688,7 +688,7 @@ as follows, more or less following the above made-up example:</p>
   ///
   (verify-guards ty-remove-parameters)
   (fty::deffixequiv-mutual ty-remove-parameters))
-                          
+
 
 (program)
 
@@ -709,7 +709,7 @@ as follows, more or less following the above made-up example:</p>
 
 (define subprogram-arg-hyp ((var symbolp)
                             (type ty-p)
-                            hyps 
+                            hyps
                             (local-storage-term)
                             state)
   (b* ((env-term `(change-env
@@ -762,8 +762,8 @@ as follows, more or less following the above made-up example:</p>
                              hyps
                            (cons first hyps))
                          new-local-storage-term state)))
-    
-    
+
+
 
 
 
@@ -825,7 +825,7 @@ as follows, more or less following the above made-up example:</p>
                 (union-equal (car look) acc)
               acc)))
     (collect-transitive-subprograms (cdr lst) table acc)))
-    
+
 
 
 (define maximize-const-clocks (subprogram-lst table const-acc)
@@ -840,7 +840,7 @@ as follows, more or less following the above made-up example:</p>
                            (if (integerp look-clk)
                                (max look-clk const-acc)
                              const-acc))))
-    
+
 
 
 (define cleanup-hyps (hyplist)
@@ -889,8 +889,8 @@ as follows, more or less following the above made-up example:</p>
           tree
         (cons (sublis-subtrees subst (car tree))
               (sublis-subtrees subst (cdr tree)))))))
-    
-         
+
+
 
 
 (define def-asl-subprogram-fn (name args state)
@@ -902,10 +902,10 @@ as follows, more or less following the above made-up example:</p>
          params
          args
          safe-clock
-         
+
          return-values
          (hyps 't)
-         
+
          enable
          disable
          hints
@@ -921,11 +921,11 @@ as follows, more or less following the above made-up example:</p>
          error-res
          throwing-cond
          throwing-res
-         
+
          bindings
          (static-env '(stdlib-static-env)))
         args)
-       
+
        ((when bad-args)
         (er soft 'def-asl-subprogram "Bad arguments: ~x0" bad-args))
        ((unless (stringp function))
@@ -1099,14 +1099,14 @@ as follows, more or less following the above made-up example:</p>
        (make-event (def-asl-subprogram-stdlib-fn ',name ',args state)))))
 
 
-                             
-                             
-                             
 
-       
-       
-       
-        
+
+
+
+
+
+
+
 
 
 
