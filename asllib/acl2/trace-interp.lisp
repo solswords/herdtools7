@@ -535,7 +535,7 @@ interior tracespec @('new-ts') from some matching call or statement tracespec."
       :short "Tracing version of @(see eval_subprogram); see @(see
 asl-interpreter-mutual-recursion-*t) for overview."
       :measure (nats-measure clk 1 0 1)
-      :returns (mv (eval func_eval_result-p) new-orac
+      :returns (mv (res func_eval_result-p) new-orac
                    (trace asl-tracelist-p))
       (b* ((ts-entry (find-call-tracespec name pos tracespec))
            ((when (and ts-entry (eq (call-tracespec->abort ts-entry) :before)))
@@ -586,7 +586,7 @@ asl-interpreter-mutual-recursion-*t) for overview."
       :short "Tracing version of @(see eval_stmt); see @(see
 asl-interpreter-mutual-recursion-*t) for overview."
       :measure (nats-measure clk 0 (stmt-count* s) 1)
-      :returns (mv (eval stmt_eval_result-p) new-orac
+      :returns (mv (res stmt_eval_result-p) new-orac
                    (trace asl-tracelist-p))
       (b* ((ts-entry (find-stmt-tracespec s tracespec))
            ((when (and ts-entry (eq (stmt-tracespec->abort ts-entry) :before)))
@@ -752,7 +752,9 @@ asl-interpreter-mutual-recursion-*t) for overview."
          (eval_stmt-mod (intern-in-package-of-symbol
                          (concatenate 'string "EVAL_STMT-" (symbol-name suffix))
                          'eval_stmt)))
-     `(std::defret-mutual
+     `(encapsulate nil
+        (local (deflabel before-equals-original))
+        (std::defret-mutual
         ,(intern-in-package-of-symbol
           (concatenate 'string (symbol-name suffix) "-EQUALS-ORIGINAL")
           'asl-pkg)
@@ -836,7 +838,10 @@ asl-interpreter-mutual-recursion-*t) for overview."
                                           (not (equal desc "Trace abort")))
                                      (equal (ev_error->desc res-orig) desc)))))
            :fn ,eval_stmt-mod)
-        . ,(eval-return-equiv-thms *asl-interp-fns* suffix wrld)))))
+        . ,(eval-return-equiv-thms *asl-interp-fns* suffix wrld))
+        (acl2::def-ruleset! asl-*t-equals-original-rules
+          (set-difference-theories (current-theory :here)
+                                 (current-theory 'before-equals-original)))))))
 
 (local
  (defun insert-after-/// (forms x)

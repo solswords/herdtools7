@@ -435,24 +435,20 @@ function in the environment's stack_size field."
                       stack_size)))
     :hints(("Goal" :in-theory (enable increment-stack stack_size-lookup)))))
              
-       
 
 (define env-push-stack ((name identifier-p)
                         (env env-p))
   :short "Prepare to call a given function: produce a new env in which the function's
 stack size entry is incremented and the local environment is empty. Fails if
 the function is not a declared subprogram."
-  :returns (new-env env_eval_result-p)
+  :returns (new-env env-p)
   (b* (((env env))
        ((global-env g) env.global)
        ((static_env_global s) g.static)
        (name (identifier-fix name))
-       (look (assoc-equal name s.subprograms))
-       ((unless look)
-        (ev_error "Unrecognized subprogram" name nil))
        (stack_size (increment-stack name g.stack_size))
        (new-g (change-global-env g :stack_size stack_size)))
-    (ev_normal (make-env :global new-g :local (empty-local-env)))))
+    (make-env :global new-g :local (empty-local-env))))
 
 (define env-pop-stack ((name identifier-p)
                        (prev-env env-p)
@@ -1496,7 +1492,7 @@ from evaluating the expression and a new @('env'). The global environment may
 be updated since expressions can include function calls."
        :long "@(def eval_expr-fn)"
        :verify-guards nil
-       :returns (mv (eval expr_eval_result-p)
+       :returns (mv (res expr_eval_result-p)
                     new-orac)
        :measure (nats-measure clk 0 (expr-count e) 0)
        (b* ((desc (expr->desc e))
@@ -1841,7 +1837,7 @@ evaluation of @('e_arbitrary') expressions."
        ;; :returns (val val-p)
        ;; Note: this isn't supposed to produce any side effects so we'll omit
        ;; the environment and just return the value
-       :returns (mv (eval val_result-p) new-orac)
+       :returns (mv (res val_result-p) new-orac)
        (b* ((desc (pattern->desc p))
             (pos (pattern->pos_start p)))
          (pattern_desc-case desc
@@ -1883,7 +1879,7 @@ evaluation of @('e_arbitrary') expressions."
        :short "Evaluate whether the @(see patternlist) @('p') matches the values @('vals')."
        :guard (eql (len vals) (len p))
        :measure (nats-measure clk 0 (patternlist-count p) 0)
-       :returns (mv (eval val_result-p) new-orac)
+       :returns (mv (res val_result-p) new-orac)
        (b* (((when (atom p)) (evo_normal (v_bool t)))
             ((evoo first) (eval_pattern env (car vals) (car p)))
             ;; short circuit?
@@ -1901,7 +1897,7 @@ evaluation of @('e_arbitrary') expressions."
                                (orac 'orac))
        :short "Evaluate whether any pattern in @(see patternlist) @('p') matches the value @('val')."
        :measure (nats-measure clk 0 (patternlist-count p) 0)
-       :returns (mv (eval val_result-p) new-orac)
+       :returns (mv (res val_result-p) new-orac)
        (if (atom p)
            (evo_normal (v_bool nil))
          (b* (((evoo v1) (eval_pattern env val (car p))))
@@ -1921,7 +1917,7 @@ evaluation of @('e_arbitrary') expressions."
 the @('ev_normal') case the eval_result contains an @(see exprlist_result)
 containing the list of values of the expressions and the final env resulting
 from the evaluations."
-       :returns (mv (eval exprlist_eval_result-p) new-orac)
+       :returns (mv (res exprlist_eval_result-p) new-orac)
        :measure (nats-measure clk 0 (exprlist-count e) 0)
        (b* (((when (atom e))
              (evo_normal (exprlist_result nil env)))
@@ -1947,13 +1943,13 @@ recursion limit and global recursion limit @('clk'), and pushes/pops the new
 local scope from the environment."
        :measure (nats-measure clk 0 (+ (exprlist-count params)
                                        (exprlist-count args)) 0)
-       :returns (mv (eval exprlist_eval_result-p) new-orac)
+       :returns (mv (res exprlist_eval_result-p) new-orac)
        (b* (((evoo (exprlist_result vargs)) (eval_expr_list env args))
             ((evoo (exprlist_result vparams)) (eval_expr_list vargs.env params))
             (env vparams.env)
             ;; note: we check our fixed recursion limit here because this is where
             ;; the measure will decrease provided that they haven't been exceeded
-            ((evo sub-env) (env-push-stack name env))
+            (sub-env (env-push-stack name env))
             ((when (zp clk))
              (evo_error "Recursion limit ran out" (identifier-fix name) (list (posn-fix pos))))
             ((evbind sub-res)
@@ -1996,7 +1992,7 @@ see the local environment in any returned object.</p>
 
 @(def eval_subprogram-fn)"
        :measure (nats-measure clk 1 0 0)
-       :returns (mv (eval func_eval_result-p) new-orac)
+       :returns (mv (res func_eval_result-p) new-orac)
        (b* ((look (assoc-equal (identifier-fix name)
                                (static_env_global->subprograms
                                 (global-env->static
@@ -2061,7 +2057,7 @@ pattern for assigning @('<base>.<field>') is:</p>
 <li>Evaluate @('rbase') using @(see eval_expr), resuting in value @('rbv')</li>
 <li>Modify @('rbv') to replace its @('<field>') field with @('v'), resulting in value @('newbase')</li>
 <li>Recursively call @('eval_lexpr') to assign @('<base>') the value @('newbase').</li></nl>"
-       :returns (mv (eval env_eval_result-p) new-orac)
+       :returns (mv (res env_eval_result-p) new-orac)
        :measure (nats-measure clk 0 (lexpr-count* lx) 0)
        (b* ((pos (lexpr->pos_start lx))
             (lx (lexpr->desc lx)))
@@ -2137,7 +2133,7 @@ pattern for assigning @('<base>.<field>') is:</p>
        :short "Assign a list of LHS expressions (@(see lexprlist)) @('lx') a corresponding
 list of values @('v') using @('eval_lexpr')."
        :guard (eql (len lx) (len v))
-       :returns (mv (eval env_eval_result-p) new-orac)
+       :returns (mv (res env_eval_result-p) new-orac)
        :measure (nats-measure clk 0 (lexprlist-count* lx) 0)
        (b* (((when (atom lx)) (evo_normal (env-fix env)))
             ((evoo env1) (eval_lexpr env (car lx) (car v))))
@@ -2175,7 +2171,7 @@ environment, otherwise if not returning it gives the updated (full, local and
 global) environment."
        :long "@(def eval_stmt-fn)"
        :measure (nats-measure clk 0 (stmt-count* s) 0)
-       :returns (mv (eval stmt_eval_result-p) new-orac)
+       :returns (mv (res stmt_eval_result-p) new-orac)
        (b* ((pos (stmt->pos_start s))
             (s (stmt->desc s)))
          (stmt_desc-case s
@@ -2291,7 +2287,7 @@ global) environment."
                             (orac 'orac))
        :short "Given data from a thrown exception, determines whether any of the catchers or
 otherwise block from a try statement apply and calls the appropriate block."
-       :returns (mv (eval stmt_eval_result-p) new-orac)
+       :returns (mv (res stmt_eval_result-p) new-orac)
        :measure (nats-measure clk 0 (+ (catcherlist-count* catchers)
                                        (maybe-stmt-count* otherwise))
                               0)
@@ -2324,7 +2320,7 @@ otherwise block from a try statement apply and calls the appropriate block."
 @('ev_normal') case contains an @(see intpair/env) object: an @(see intpair)
 where the first element gives the LSB of the slice and the second gives the
 width of the slice, and an updated environment."
-       :returns (mv (eval slice_eval_result-p) new-orac)
+       :returns (mv (res slice_eval_result-p) new-orac)
        :measure (nats-measure clk 0 (slice-count s) 0)
        (slice-case s
          :slice_single (b* (((evoo (expr_result v)) (eval_expr env s.index)))
@@ -2375,7 +2371,7 @@ width of the slice, and an updated environment."
                               (orac 'orac))
        :short "Evaluate a list of slices with @(see eval_slice). Produces a list of @(see
 intpair) objects and a final environment."
-       :returns (mv (eval slices_eval_result-p) new-orac)
+       :returns (mv (res slices_eval_result-p) new-orac)
        :measure (nats-measure clk 0 (slicelist-count sl) 0)
        (b* (((when (atom sl))
              (evo_normal (intpairlist/env nil env)))
@@ -2401,7 +2397,7 @@ beginning (except for the cases of returns and exceptions/errors)."
        :measure (nats-measure clk 0
                               (stmt-count* body)
                               (+ 1 (for_loop-measure v_start v_end dir)))
-       :returns (mv (eval stmt_eval_result-p) new-orac)
+       :returns (mv (res stmt_eval_result-p) new-orac)
        (b* (((evo limit1) (tick_loop_limit limit))
             ((when (for_loop-test v_start v_end dir))
              (evo_normal (continuing env)))
@@ -2423,7 +2419,7 @@ the body and then call the loop again."
        :measure (nats-measure clk 0 (+ (expr-count e_cond)
                                        (stmt-count* body))
                               2)
-       :returns (mv (eval stmt_eval_result-p) new-orac)
+       :returns (mv (res stmt_eval_result-p) new-orac)
        (b* (((evoo (expr_result cres)) (eval_expr env e_cond))
             (pos (expr->pos_start e_cond))
             ((evob cbool) (v_to_bool cres.val))
@@ -2443,7 +2439,7 @@ the body and then call the loop again."
        :short "Evaluate a statement in a new local scope frame. Local variables declared
 within this statement will then disappear after the statement is completed."
        :measure (nats-measure clk 0 (stmt-count* x) 2)
-       :returns (mv (eval stmt_eval_result-p) new-orac)
+       :returns (mv (res stmt_eval_result-p) new-orac)
        (b* ((env (push_scope env))
             ((evbind stmtres) (eval_stmt env x)))
          (eval_result-case stmtres
@@ -2482,7 +2478,7 @@ within this statement will then disappear after the statement is completed."
                                     &key ((clk natp) 'clk) (orac 'orac))
        :short "At least one constraint needs to be satisfied"
        :long "<p>We assume that any expr eval is side-effect free, therefore there is no need to return env</p>"
-       :returns (mv (sat bool_eval_result-p) new-orac)
+       :returns (mv (res bool_eval_result-p) new-orac)
        :measure (nats-measure clk 0 (int_constraintlist-count constrs) 0)
        (if (atom constrs)
            (evo_normal nil)
@@ -2570,8 +2566,8 @@ ASLRef we don't return the environment.</p>"
     
      (std::defret-mutual len-of-eval_expr_list
        (defret len-of-eval_expr_list
-         (implies (eval_result-case eval :ev_normal)
-                  (equal (len (exprlist_result->val (ev_normal->res eval)))
+         (implies (eval_result-case res :ev_normal)
+                  (equal (len (exprlist_result->val (ev_normal->res res)))
                          (len e)))
          :hints ('(:expand ((eval_expr_list env e))))
          :fn eval_expr_list)
