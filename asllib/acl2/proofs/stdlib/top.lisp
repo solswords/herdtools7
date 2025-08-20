@@ -33,7 +33,7 @@
 (include-book "sqrtrounded")
 (include-book "uint")
 (include-book "shift")
-
+(include-book "no-trace")
 
 ;; Make sure there's a theorem for every stdlib function.
 

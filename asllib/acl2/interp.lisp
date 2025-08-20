@@ -444,7 +444,6 @@ the function is not a declared subprogram."
   :returns (new-env env-p)
   (b* (((env env))
        ((global-env g) env.global)
-       ((static_env_global s) g.static)
        (name (identifier-fix name))
        (stack_size (increment-stack name g.stack_size))
        (new-g (change-global-env g :stack_size stack_size)))
@@ -1465,6 +1464,10 @@ functions in the mutual recursion:</p>
 <li>There is exactly one occurrence of @('///'), for the mutual recursion (none
 for the individual define forms)</li>
 <li>No auxiliary functions are defined in :prepwork.</li>
+<li>All accesses of the static environment are done by calling (literally)
+  @('(global-env->static (env->global env))') where env can be any term.
+  Note this means you can't, e.g., bind @('(env->global env)') to a variable
+  and then call @('global-env->static') on it.</li>
 </ul>
 ")
 
