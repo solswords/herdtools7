@@ -281,7 +281,8 @@
 
 
 (defmacro force? (x)
-  `(force ,x))
+  ;; `(force ,x)
+  x)
 
 (defconst *def-asl-no-trace-template*
   '(progn
@@ -527,7 +528,7 @@
 
 
 
-(defthm eval_stmt-*t1-avoid-merging-s_cond-branches
+(defthm eval_stmt-*t1-s_cond-redef
   (implies (and (syntaxp (quotep s))
                 (stmt_desc-case (stmt->desc s) :s_cond))
            (equal (eval_stmt-*t1 env s)
@@ -547,7 +548,7 @@
                       (evtailcall-*t (eval_block-*t test.env s.else))))))
   :hints (("goal" :expand ((eval_stmt-*t1 env s)))))
 
-(defthm eval_expr-*t-avoid-merging-e_cond-branches
+(defthm eval_expr-*t-e_cond-redef
   (implies (and (syntaxp (quotep e))
                 (expr_desc-case (expr->desc e) :e_cond))
            (equal (eval_expr-*t env e)
