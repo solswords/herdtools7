@@ -200,7 +200,15 @@
                     :expand ((logrepeat 1 w x))))))))
 
 
+(define foo ()
+  :returns (foo eval_result-p)
+  (ev_error "x" nil nil)
+  ///
+  (defret foo-error
+    (equal (eval_result-kind foo) :ev_error))
 
+  (in-theory (disable (foo))))
+  
 
 (def-asl-subprogram-stdlib replicate-1-correct
   :function "Replicate-1"
@@ -208,7 +216,23 @@
   :args (x)
   :hyps (and (<= 0 n.val)
              (< 0 m.val)
-             (integerp (/ n.val m.val)))
+             ;; (integerp (/ n.val m.val))
+             )
+  :normal-cond (integerp (/ n.val m.val))
+  :nonnormal-res (b* ((err0 (EV_ERROR "Unsupported binop"
+                                      (LIST :DIV (VAL-FIX N) (VAL-FIX M))
+                                      NIL))
+                      (err1 (INIT-BACKTRACE err0
+                                            ;; FIXME
+                                            '((FNAME . "ASL Standard Library")
+                                              (LNUM . 402)
+                                              (BOL . 9550)
+                                              (CNUM . 9566)))))
+                   (change-ev_error err1 :backtrace (cons (list "Replicate-1"
+                                                               (list (val-fix n) (val-fix m))
+                                                               (list (val-fix x)))
+                                                         (ev_error->backtrace err1))))
+                                                               
   :return-values ((v_bitvector n.val
                                (logrepeat (/ n.val m.val) m.val x.val)))
   :prepwork

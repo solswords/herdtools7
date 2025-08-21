@@ -284,6 +284,8 @@
   ;; `(force ,x)
   x)
 
+(acl2::add-to-ruleset asl-code-proof-enables env-find-vars)
+
 (defconst *def-asl-no-trace-template*
   '(progn
      (LOCAL (IN-THEORY (ACL2::E/D* (
@@ -392,7 +394,9 @@
        ((unless (stringp function))
         (er soft 'def-asl-no-trace "Function name must be a string"))
 
-       (name (intern-in-package-of-symbol (str::upcase-string function) 'asl-pkg))
+       (name (if (equal static-env '(stdlib-static-env))
+                 (intern-in-package-of-symbol (str::upcase-string function) 'asl-pkg)
+               (intern-in-package-of-symbol (concatenate 'string (str::upcase-string function) "-PRIM") 'asl-pkg)))
        
        ((when bad-args)
         (er soft 'def-asl-no-trace "Bad arguments: ~x0" bad-args))
@@ -473,6 +477,7 @@
                                   omap::assoc-when-assoc-tail
                                   logapp
                                   loghead
+                                  logand logior ash logtail lognot logbitp
                                   append)))
 
 
@@ -825,6 +830,10 @@
             (omap::mfix x))
      :hints(("Goal" :in-theory (enable omap::update))))))
 
+(local (in-theory (disable logand)))
+
+(include-book "bits")
+(include-book "align")
 
 (def-asl-no-trace "Zeros-1")
 (def-asl-no-trace "Ones-1")
@@ -839,9 +848,20 @@
 (def-asl-no-trace "Replicate")
 
 
+(local (in-theory (disable mv-nth)))
 
-(include-book "bits")
-(include-book "align")
+(defloop-no-trace uint-loop
+  :function "UInt"
+  :looptype :s_for)
+
+
+
+(def-asl-no-trace "UInt")
+
+(def-asl-no-trace "UInt" :static-env (stdlib-prim-static-env))
+
+(def-asl-no-trace "AlignDownSize")
+(def-asl-no-trace "AlignDownSize" :static-env (stdlib-prim-static-env))
 
 
 (local (in-theory (enable eval_subprogram-*t-equals-original)))
@@ -919,7 +939,7 @@
        '("Replicate-1" "Ones-1" "Zeros-1") tracespec)
       (<= 0 N.VAL)
       (< 0 M.VAL)
-      (INTEGERP (* (/ M.VAL) N.VAL))
+      
       (EQUAL (VAL-KIND N) :V_INT)
       (EQUAL (VAL-KIND M) :V_INT)
       (EQUAL (VAL-KIND X) :V_BITVECTOR)
@@ -937,7 +957,22 @@
                                            M.VAL X.VAL)))
              (ENV->GLOBAL ENV)))))
        (AND (EQUAL NEW-ORAC ORAC)
-            (EQUAL RES SPEC)
+            (EQUAL RES
+                   (if (INTEGERP (* (/ M.VAL) N.VAL))
+                       spec
+                     (b* ((err0 (EV_ERROR "Unsupported binop"
+                                          (LIST :DIV (VAL-FIX N) (VAL-FIX M))
+                                          NIL))
+                          (err1 (INIT-BACKTRACE err0
+                                                ;; FIXME
+                                                '((FNAME . "ASL Standard Library")
+                                                  (LNUM . 402)
+                                                  (BOL . 9550)
+                                                  (CNUM . 9566)))))
+                       (change-ev_error err1 :backtrace (cons (list "Replicate-1"
+                                                                    (list (val-fix n) (val-fix m))
+                                                                    (list (val-fix x)))
+                                                              (ev_error->backtrace err1))))))
             (equal traces nil))))))
 
 (DEFTHM REPLICATE-CORRECT-*t
@@ -973,6 +1008,144 @@
             (equal traces nil))))))
 
 
+(DEFTHM ALIGNDOWNSIZE-1-CORRECT-*t
+  (B* (((V_INT X)) ((V_INT SIZE)))
+    (IMPLIES
+     (AND
+      (SUBPROGRAMS-MATCH '("AlignDownSize-1")
+                         (GLOBAL-ENV->STATIC (ENV->GLOBAL ENV))
+                         (STDLIB-STATIC-ENV))
+      (tracespec-excludes-stdlib-fns
+           '("AlignDownSize-1") tracespec)
+      (<= 0 X.VAL)
+      (< 0 SIZE.VAL)
+      (EQUAL (VAL-KIND X) :V_INT)
+      (EQUAL (VAL-KIND SIZE) :V_INT)
+      T)
+     (B*
+         (((MV RES NEW-ORAC traces)
+           (EVAL_SUBPROGRAM-*t ENV "AlignDownSize-1" (LIST)
+                            (LIST X SIZE)))
+          (SPEC
+           (EV_NORMAL
+            (FUNC_RESULT
+             (LIST (V_INT (* SIZE.VAL (FLOOR X.VAL SIZE.VAL))))
+             (ENV->GLOBAL ENV)))))
+       (AND (EQUAL NEW-ORAC ORAC)
+            (EQUAL RES SPEC)
+            (equal traces nil))))))
+
+(DEFTHM UINT-CORRECT-*t
+  (B* (((V_INT N)) ((V_BITVECTOR VAL)))
+    (IMPLIES
+     (AND
+      (SUBPROGRAMS-MATCH '("UInt")
+                         (GLOBAL-ENV->STATIC (ENV->GLOBAL ENV))
+                         (STDLIB-STATIC-ENV))
+      (tracespec-excludes-stdlib-fns '("UInt") tracespec)
+      T (EQUAL (VAL-KIND N) :V_INT)
+      (EQUAL (VAL-KIND VAL) :V_BITVECTOR)
+      (EQUAL VAL.LEN N.VAL)
+      T)
+     (B* (((MV RES NEW-ORAC traces)
+           (EVAL_SUBPROGRAM-*t ENV "UInt" (LIST N)
+                            (LIST VAL)))
+          (SPEC (EV_NORMAL (FUNC_RESULT (LIST (V_INT VAL.VAL))
+                                        (ENV->GLOBAL ENV)))))
+       (AND (EQUAL NEW-ORAC ORAC)
+            (EQUAL RES SPEC)
+            (equal traces nil))))))
+
+(DEFTHM UINT-CORRECT-prim-*t
+  (B* (((V_INT N)) ((V_BITVECTOR VAL)))
+    (IMPLIES
+     (AND
+      (SUBPROGRAMS-MATCH '("UInt")
+                         (GLOBAL-ENV->STATIC (ENV->GLOBAL ENV))
+                         (STDLIB-prim-STATIC-ENV))
+      (tracespec-excludes-stdlib-fns '("UInt") tracespec)
+      T (EQUAL (VAL-KIND N) :V_INT)
+      (EQUAL (VAL-KIND VAL) :V_BITVECTOR)
+      (EQUAL VAL.LEN N.VAL)
+      T)
+     (B* (((MV RES NEW-ORAC traces)
+           (EVAL_SUBPROGRAM-*t ENV "UInt" (LIST N)
+                            (LIST VAL)))
+          (SPEC (EV_NORMAL (FUNC_RESULT (LIST (V_INT VAL.VAL))
+                                        (ENV->GLOBAL ENV)))))
+       (AND (EQUAL NEW-ORAC ORAC)
+            (EQUAL RES SPEC)
+            (equal traces nil))))))
+
+
+
+(DEFTHM ALIGNDOWNSIZE-CORRECT-*t
+  (B* (((V_INT N))
+       ((V_BITVECTOR X))
+       ((V_INT SIZE)))
+    (IMPLIES
+     (AND (SUBPROGRAMS-MATCH
+           '("AlignDownSize" "AlignDownSize-1" "UInt")
+           (GLOBAL-ENV->STATIC (ENV->GLOBAL ENV))
+           (STDLIB-STATIC-ENV))
+          (tracespec-excludes-stdlib-fns
+           '("AlignDownSize" "AlignDownSize-1" "UInt") tracespec)
+          T (EQUAL (VAL-KIND N) :V_INT)
+          (EQUAL (VAL-KIND X) :V_BITVECTOR)
+          (EQUAL X.LEN N.VAL)
+          (EQUAL (VAL-KIND SIZE) :V_INT)
+          (<= 1 SIZE.VAL)
+          (<= SIZE.VAL (EXPT 2 X.LEN))
+          (<= 1 (IFIX CLK)))
+     (B*
+         (((MV RES NEW-ORAC traces)
+           (EVAL_SUBPROGRAM-*t ENV "AlignDownSize" (LIST N)
+                            (LIST X SIZE)))
+          (SPEC
+           (EV_NORMAL
+            (FUNC_RESULT
+             (LIST
+              (V_BITVECTOR N.VAL
+                           (* SIZE.VAL (FLOOR X.VAL SIZE.VAL))))
+             (ENV->GLOBAL ENV)))))
+       (AND (EQUAL NEW-ORAC ORAC)
+            (EQUAL RES SPEC)
+            (equal traces nil))))))
+
+(DEFTHM ALIGNDOWNSIZE-CORRECT-prim-*t
+  (B* (((V_INT N))
+       ((V_BITVECTOR X))
+       ((V_INT SIZE)))
+    (IMPLIES
+     (AND (SUBPROGRAMS-MATCH
+           '("AlignDownSize" "AlignDownSize-1" "UInt")
+           (GLOBAL-ENV->STATIC (ENV->GLOBAL ENV))
+           (STDLIB-prim-STATIC-ENV))
+          (tracespec-excludes-stdlib-fns
+           '("AlignDownSize" "AlignDownSize-1" "UInt") tracespec)
+          T (EQUAL (VAL-KIND N) :V_INT)
+          (EQUAL (VAL-KIND X) :V_BITVECTOR)
+          (EQUAL X.LEN N.VAL)
+          (EQUAL (VAL-KIND SIZE) :V_INT)
+          (<= 1 SIZE.VAL)
+          (<= SIZE.VAL (EXPT 2 X.LEN))
+          (<= 1 (IFIX CLK)))
+     (B*
+         (((MV RES NEW-ORAC traces)
+           (EVAL_SUBPROGRAM-*t ENV "AlignDownSize" (LIST N)
+                            (LIST X SIZE)))
+          (SPEC
+           (EV_NORMAL
+            (FUNC_RESULT
+             (LIST
+              (V_BITVECTOR N.VAL
+                           (* SIZE.VAL (FLOOR X.VAL SIZE.VAL))))
+             (ENV->GLOBAL ENV)))))
+       (AND (EQUAL NEW-ORAC ORAC)
+            (EQUAL RES SPEC)
+            (equal traces nil))))))
+
+
 
 
 
@@ -1001,14 +1174,6 @@
 (def-asl-no-trace "ZeroExtend")
 
 
-
-(defloop-no-trace uint-loop
-  :function "UInt"
-  :looptype :s_for)
-
-
-
-(def-asl-no-trace "UInt")
 
 
 

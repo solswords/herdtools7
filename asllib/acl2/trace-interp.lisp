@@ -28,7 +28,7 @@
 (local (include-book "interp-theory"))
 
 (local (in-theory (disable integer-listp))) ;; doubles the time for some deftypes if not disabled
-
+(local (std::add-default-post-define-hook :fix))
 
 ;; Define a new version of the interpreter that additionally collects
 ;; debug/trace information according to a trace specification.
@@ -613,15 +613,15 @@ asl-interpreter-mutual-recursion-*t) for overview."
                                    :ev_normal (ev_normal (control_flow_state-kind res.res))
                                    :otherwise res)
                          :final-vars
-                         (b* ((env (eval_result-case res
-                                     :ev_normal (control_flow_state-case res.res
-                                                  :returning (make-env :global res.res.env :local (empty-local-env))
-                                                  :continuing res.res.env)
-                                     :ev_throwing res.env
-                                     :otherwise nil)))
-                           (and ts-entry.final-vars ;; optimization
-                                env
-                                (env-find-vars ts-entry.final-vars env))))))
+                         (and ts-entry.final-vars ;; optimization
+                              (b* ((env (eval_result-case res
+                                          :ev_normal (control_flow_state-case res.res
+                                                       :returning (make-env :global res.res.env :local (empty-local-env))
+                                                       :continuing res.res.env)
+                                          :ev_throwing res.env
+                                          :otherwise nil)))
+                                (and env
+                                     (env-find-vars ts-entry.final-vars env)))))))
            ((when (and (not (eval_result-case res :ev_error))
                        (eq ts-entry.abort :after)))
             (pass-error-*t
