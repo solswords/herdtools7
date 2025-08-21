@@ -1479,6 +1479,20 @@ for the individual define forms)</li>
    :off (event)
    (defines asl-interpreter-mutual-recursion
      :short "Mutual recursion defining the ASL interpreter"
+     :long "
+<p>All functions take certain common inputs:</p>
+  <ul>
+  <li>@('env'): the environment, of type @(see env), including global storage, the local storage stack, and the static environment containing function and type definitions;</li>
+  <li>@('orac'), the source of nondeterministic values for @('e_arbitrary') expressions (see @(see acl2::orac));</li>
+  <li>@('clk'), the global termination counter.</li>
+  </ul>
+
+<p>All functions return two values:</p>
+ <ul>
+ <li>An @(see eval_result), signifying whether execution proceeded normally or encountered an error or exception</li>
+ <li>The updated @('orac').</li>
+ </ul>
+"
      :parents (asl-interpreter-main-functions asl-interpreter-functions)
      :prepwork ((local (in-theory (disable xor not)))
                 (local (xdoc::set-default-parents asl-interpreter-functions asl-interpreter-mutual-recursion)))
@@ -1489,7 +1503,7 @@ for the individual define forms)</li>
                         (orac 'orac))
        :parents (asl-interpreter-main-functions asl-interpreter-functions asl-interpreter-mutual-recursion)
        :short "Evaluate an ASL expression @('e') under the given environment @('env'). Returns
-an @(see eval_result) and an @('orac'). The eval_result in the @('ev_normal')
+an @(see eval_result) and an @('orac') (see @(see acl2::orac)). The eval_result in the @('ev_normal')
 case contains an @(see expr_result) object, consisting of the value resulting
 from evaluating the expression and a new @('env'). The global environment may
 be updated since expressions can include function calls."

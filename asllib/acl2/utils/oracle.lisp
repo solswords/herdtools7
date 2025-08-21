@@ -184,14 +184,49 @@ correlation with previous values. An example of this is the ACL2 state's oracle
 field, accessed using @(see read-acl2-oracle). Logically, this is some unknown
 object, and every time @('read-acl2-oracle') is called it returns that object's
 @('car') and replaces the oracle field of the state with its @('cdr'), ensuring
-the next object read has no (logical) correlation with any previous ones.</p>
+the next object read has no (logical) correlation with any previous
+ones. However, this isn't convenient for testing; the ACL2 oracle can't
+actually be used in execution, and a similar scheme using car/cdr on another
+object would require all the values read to be listed ahead of time.</p>
+
+<p>The @('orac') is a stobj that offers both logical nondeterminism and
+practical execution. In one mode, it produces values about which nothing can be
+proven, for use in reasoning; in another, it produces pseudorandom values
+useful for testing.</p>
+
+<h3>Stobj Structure and Functions</h3>
+
+<p>The stobj is defined as follows:</p>
+
+@(def orac)
+
+<p>The fields are accessed/updated using the default stobj naming convention,
+e.g. @('(oracle-mode orac)') to access and @('(update-oracle-mode val orac)')
+to update. The fields are used as follows:</p>
+
+<ul>
+<li>@('oracle-mode'): controls the mode of operation of the stobj; see the
+@('Modes') section below.</li>
+
+<li>@('oracle-st'): contains the logical state used by the logically
+nondeterministic modes (see the discussion of modes 2 and 3 below).</li>
+
+<li>@('oracle-xosh'): contains the pseudorandom number generator state (a @(see
+xoshiro) stobj) for use in the pseudorandom mode (see the discussion of mode 0
+below).</li>
+
+<li>@('oracle-xosh-int-low'), @('oracle-xosh-int-width') control the bounds of
+pseudorandom generation of unconstrained integers; see the discussion of
+@('orac-read-int') below.</li>
+
+<li>@('oracle-xosh-string-len'), @('oracle-xosh-char-spec') control
+pseudorandom generation of strings; see the discussion of @('orac-read-string')
+below.</li>
+</ul>
 
 <h3>Modes</h3>
-<p>The @('orac') is a stobj that has several modes, determined by its
-@('oracle-mode') field. Notably, when the mode is 3, it treats its
-@('oracle-st') field as a list and returns subsequent entries every time it is
-called; this provides a similar logical non-correlation to the state's
-oracle. The modes are as follows:</p>
+<p>The @('orac') offers four modes of operation, determined by its
+@('oracle-mode') field. The modes are as follows:</p>
 
 <ul>
 
