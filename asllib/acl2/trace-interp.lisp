@@ -26,7 +26,7 @@
 (include-book "std/util/defconsts" :dir :system)
 (include-book "clause-processors/just-expand" :dir :System)
 (local (include-book "interp-theory"))
-
+(local (include-book "interp-mods"))
 (local (in-theory (disable integer-listp))) ;; doubles the time for some deftypes if not disabled
 (local (std::add-default-post-define-hook :fix))
 
@@ -384,46 +384,6 @@ interior tracespec @('new-ts') from some matching call or statement tracespec."
 
 
 
-(local
- (mutual-recursion
-  (defun find-form-by-car (car x)
-    (declare (xargs :mode :program))
-    (if (atom x)
-        nil
-      (if (equal (car x) car)
-          x
-        (find-form-by-car-list car x))))
-  (defun find-form-by-car-list (car x)
-    (if (atom x)
-        nil
-      (or (find-form-by-car car (car x))
-          (find-form-by-car-list car (cdr x)))))))
-
-(local (defun keep-define-forms-in-list (x)
-         (if (atom x)
-             nil
-           (if (and (consp (car x))
-                    (eq (caar x) 'define))
-               (cons (car x) (keep-define-forms-in-list (cdr x)))
-             (keep-define-forms-in-list (cdr x))))))
-
-(local (defun strip-post-/// (x)
-         (declare (xargs :mode :program))
-         (if (atom x)
-             x
-           (if (eq (car x) '///)
-               '(///)
-             (cons (strip-post-/// (car x))
-                   (strip-post-/// (cdr x)))))))
-
-(local (defun strip-xdoc (x)
-         (if (atom x)
-             x
-           (if (member-eq (car x) '(:short :long :parents))
-               (strip-xdoc (cddr x))
-             (cons (strip-xdoc (car x))
-                   (strip-xdoc (cdr x)))))))
-
 
 
 (defconsts *asl-interp-fns*
@@ -501,17 +461,6 @@ interior tracespec @('new-ts') from some matching call or statement tracespec."
      ,body))
 
 
-
-(local
- (defun pair-suffixed (syms suffix)
-   (if (atom syms)
-       nil
-     (cons (cons (car syms)
-                 (intern-in-package-of-symbol
-                  (concatenate 'string (symbol-name (car syms))
-                               (symbol-name suffix))
-                  (car syms)))
-           (pair-suffixed (cdr syms) suffix)))))
 
 (defconsts *eval-trace-substitution*
   (pair-suffixed (append *asl-interp-fns*
@@ -630,30 +579,6 @@ asl-interpreter-mutual-recursion-*t) for overview."
    
 
 
-(local
- (defun find-def-and-rename (name suffix x)
-   (if (atom x)
-       x
-     (case-match x
-       (('define !name . rest)
-        `(define ,(intern-in-package-of-symbol
-                   (concatenate 'string (symbol-name name) "-" (symbol-name suffix) "1")
-                   'asl-pkg) . ,rest))
-       (& (cons (find-def-and-rename name suffix (car x))
-                (find-def-and-rename name suffix (cdr x))))))))
-
-(local
- (defun add-define-to-defines (def x)
-   (if (atom x)
-       x
-     (case-match x
-       (('defines arg . rest)
-        (if (and (symbolp arg)
-                 (not (keywordp arg)))
-            `(defines ,arg ,def . ,rest)
-          `(defines ,def ,arg . ,rest)))
-       (& (cons (add-define-to-defines def (car x))
-                (add-define-to-defines def (cdr x))))))))
 
 (local
  (defun add-trace-to-returns (x)
@@ -665,18 +590,7 @@ asl-interpreter-mutual-recursion-*t) for overview."
        (& (cons (add-trace-to-returns (car x))
                 (add-trace-to-returns (cdr x))))))))
 
-(local
- (defun wrap-define-bodies (macro x)
-   (if (atom x)
-       x
-     (if (and (eq (car x) 'define)
-              (true-listp x))
-         (let ((len (len x)))
-           (update-nth (1- len)
-                       (list macro (nth (1- len) x))
-                       x))
-       (cons (wrap-define-bodies macro (car x))
-             (wrap-define-bodies macro (cdr x)))))))
+
 
 
 
@@ -843,39 +757,7 @@ asl-interpreter-mutual-recursion-*t) for overview."
           (set-difference-theories (current-theory :here)
                                  (current-theory 'before-equals-original)))))))
 
-(local
- (defun insert-after-/// (forms x)
-   (if (atom x)
-       x
-     (if (eq (car x) '///)
-         (cons '/// forms)
-       (cons (insert-after-/// forms (car x))
-             (insert-after-/// forms (cdr x)))))))
 
-(local
- (defun add-mutrec-xdoc (xdoc x)
-   (if (atom x)
-       x
-     (case-match x
-       (('defines name . rest)
-        `(defines ,name ,@xdoc . ,rest))
-       (& (cons (add-mutrec-xdoc xdoc (car x))
-                (add-mutrec-xdoc xdoc (cdr x))))))))
-
-(local
- (defun add-define-xdoc (short x)
-   (declare (xargs :mode :program))
-   (if (atom x)
-       x
-     (case-match x
-       (('define name formals . rest)
-        `(define ,name ,formals
-           :short ,(acl2::template-subst short
-                                         :string-str-alist
-                                         `(("<NAME>" . ,(symbol-name name))))
-           . ,rest))
-       (& (cons (add-define-xdoc short (car x))
-                (add-define-xdoc short (cdr x))))))))
 
 
 
@@ -927,16 +809,6 @@ respectively. They are implemented as wrappers around the autogenerated
 versions @(see eval_subprogram-*t1) and @(see eval_stmt-*t1).</p>")))
 
 
-
-(local
- (defun add-define-formals (new-formals x)
-   (if (atom x)
-       x
-     (case-match x
-       (('define name formals . rest)
-        `(define ,name ,(append formals new-formals) . ,rest))
-       (& (cons (add-define-formals new-formals (car x))
-                (add-define-formals new-formals (cdr x))))))))
  
 
 
@@ -996,14 +868,6 @@ versions @(see eval_subprogram-*t1) and @(see eval_stmt-*t1).</p>")))
            ,form)))
 ;; ---------------------------------------------------------------------------
 
-
-(define find-define (name x)
-  (if (atom x)
-      nil
-    (case-match x
-      (('define !name . &) x)
-      (& (or (find-define name (car x))
-             (find-define name (cdr x)))))))
 
 
 
