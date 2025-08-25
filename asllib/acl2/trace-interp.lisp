@@ -27,11 +27,54 @@
 (include-book "clause-processors/just-expand" :dir :System)
 (local (include-book "interp-theory"))
 (local (include-book "interp-mods"))
+(include-book "static-env-replace")
+
 (local (in-theory (disable integer-listp))) ;; doubles the time for some deftypes if not disabled
-(local (std::add-default-post-define-hook :fix))
+
+(local (include-book "centaur/vl/util/default-hints" :dir :system))
+
+
 
 ;; Define a new version of the interpreter that additionally collects
 ;; debug/trace information according to a trace specification.
+
+(define nonstatic-global-env-equiv ((x global-env-p) (y global-env-p))
+  :verify-guards nil
+  (equal (change-global-env x :static nil)
+         (change-global-env y :static nil))
+  ///
+  (defequiv nonstatic-global-env-equiv)
+  (defcong nonstatic-global-env-equiv equal (global-env->storage x) 1)
+  (defcong nonstatic-global-env-equiv equal (global-env->stack_size x) 1)
+
+  (defthm global-env-under-nonstatic-global-env-equiv
+    (implies (syntaxp (not (equal static ''nil)))
+             (nonstatic-global-env-equiv (global-env static storage stack_size)
+                                         (global-env nil storage stack_size))))
+
+  (defthm norm-global-env-under-nonstatic-global-env-equiv
+    (nonstatic-global-env-equiv
+     (global-env static (global-env->storage x) (global-env->stack_size x))
+     x)))
+
+(define nonstatic-env-equiv ((x env-p) (y env-p))
+  :verify-guards nil
+  (equal (change-env x :global (change-global-env (env->global x) :static nil))
+         (change-env y :global (change-global-env (env->global y) :static nil)))
+  ///
+  (defequiv nonstatic-env-equiv)
+
+  (defcong nonstatic-env-equiv equal (env->local x) 1)
+
+  (defcong nonstatic-env-equiv nonstatic-global-env-equiv (env->global x) 1
+    :hints(("Goal" :in-theory (enable nonstatic-global-env-equiv))))
+
+  (defcong nonstatic-global-env-equiv nonstatic-env-equiv (env global local) 1
+    :hints(("Goal" :in-theory (enable nonstatic-global-env-equiv)))))
+
+(defcong nonstatic-env-equiv nonstatic-env-equiv (push_scope env) 1
+  :hints(("Goal" :in-theory (enable push_scope))))
+
 
 
 (defxdoc asl-tracing
@@ -480,9 +523,11 @@ interior tracespec @('new-ts') from some matching call or statement tracespec."
                                 ((clk natp) 'clk)
                                 (orac 'orac)
                                 ((pos posn-p) 'pos)
+                                ((static-env static_env_global-p) 'static-env)
                                 ((tracespec tracespec-p) 'tracespec))
       :short "Tracing version of @(see eval_subprogram); see @(see
 asl-interpreter-mutual-recursion-*t) for overview."
+      :guard (equal (global-env->static (env->global env)) static-env)
       :measure (nats-measure clk 1 0 1)
       :returns (mv (res func_eval_result-p) new-orac
                    (trace asl-tracelist-p))
@@ -531,9 +576,11 @@ asl-interpreter-mutual-recursion-*t) for overview."
                           &key
                           ((clk natp) 'clk)
                           (orac 'orac)
+                          ((static-env static_env_global-p) 'static-env)
                           ((tracespec tracespec-p) 'tracespec))
       :short "Tracing version of @(see eval_stmt); see @(see
 asl-interpreter-mutual-recursion-*t) for overview."
+      :guard (equal (global-env->static (env->global env)) static-env)
       :measure (nats-measure clk 0 (stmt-count* s) 1)
       :returns (mv (res stmt_eval_result-p) new-orac
                    (trace asl-tracelist-p))
@@ -562,22 +609,21 @@ asl-interpreter-mutual-recursion-*t) for overview."
                                    :ev_normal (ev_normal (control_flow_state-kind res.res))
                                    :otherwise res)
                          :final-vars
-                         (and ts-entry.final-vars ;; optimization
-                              (b* ((env (eval_result-case res
-                                          :ev_normal (control_flow_state-case res.res
-                                                       :returning (make-env :global res.res.env :local (empty-local-env))
-                                                       :continuing res.res.env)
-                                          :ev_throwing res.env
-                                          :otherwise nil)))
-                                (and env
-                                     (env-find-vars ts-entry.final-vars env)))))))
+                         (b* ((env (eval_result-case res
+                                     :ev_normal (control_flow_state-case res.res
+                                                  :returning (make-env :global res.res.env :local (empty-local-env))
+                                                  :continuing res.res.env)
+                                     :ev_throwing res.env
+                                     :otherwise nil)))
+                           (and ts-entry.final-vars ;; optimization
+                                env
+                                (env-find-vars ts-entry.final-vars env))))))
            ((when (and (not (eval_result-case res :ev_error))
                        (eq ts-entry.abort :after)))
             (pass-error-*t
              (ev_error "Trace abort" ts-entry (list (stmt->pos_start s))))))
         (mv res orac trace)))))
    
-
 
 
 (local
@@ -593,43 +639,52 @@ asl-interpreter-mutual-recursion-*t) for overview."
 
 
 
+(local
+ (defun replace-static-envs (x)
+   (if (atom x)
+       x
+     (case-match x
+       (('global-env->static ('env->global . &) . &) 'static-env)
+       (& (cons (replace-static-envs (car x))
+                (replace-static-envs (cdr x))))))))
 
+
+;; (defund-nx is-trace-abort (x)
+;;   (equal (ev_error->desc (mv-nth 0 x)) "Trace abort"))
+
+;; (defthm is-trace-abort-when-not-error
+;;   (implies (not (eval_result-case (mv-nth 0 x) :ev_error))
+;;            (not (is-trace-abort x)))
+;;   :hints(("Goal" :in-theory (enable is-trace-abort
+;;                                     ev_error->desc-when-wrong-kind))))
+
+;; (defthm is-trace-abort-when-not-error
+;;   (implies (not (equal (ev_error->desc (mv-nth 0 x)) "Trace abort"))
+;;            (not (is-trace-abort x)))
+;;   :hints(("Goal" :in-theory (enable is-trace-abort))))
   
 
 
-
-
-
-
-(local
- (defun eval-return-equiv-thms (names suffix wrld)
-   (if (atom names)
-       nil
-     (cons
-      (let* ((name (car names))
-             (name-mod (intern-in-package-of-symbol
-                        (concatenate 'string (symbol-name name) "-"
-                                     (if (or (eq name 'eval_subprogram)
-                                             (eq name 'eval_stmt))
-                                         (concatenate 'string (symbol-name suffix) "1")
-                                       (symbol-name suffix)))
-                        name))
-             (macro-args (macro-args name wrld))
-             (nonkey-formals (take (- (len macro-args)
-                                      (len (member '&key macro-args)))
-                                   macro-args)))
-        `(defret ,(intern-in-package-of-symbol
-                   (concatenate 'string "<FN>" "-EQUALS-ORIGINAL")
-                   'asl-pkg)
+(defun return-equiv-thm-and-corollaries (name name-mod nonkey-formals no-expand-name)
+  (let ((thmname (intern-in-package-of-symbol
+                  (concatenate 'string "<FN>" "-EQUALS-ORIGINAL")
+                  'asl-pkg))
+        (name-mod-fn (intern-in-package-of-symbol
+                      (concatenate 'string (symbol-name name-mod) "-FN")
+                      'asl-pkg))
+        (key-formals '(CLK ORAC STATIC-ENV TRACESPEC)))
+    (mv `(defret ,thmname
            (b* (((mv res-mod orac-mod &) (,name-mod . ,nonkey-formals))
-                ((mv res orac) (,name . ,nonkey-formals)))
+                ((mv res orac) ;; (let ((env (env-replace-static static-env env)))
+                 (,name . ,nonkey-formals)))
              (implies (not (and (eval_result-case res-mod :ev_error)
                                 (equal (ev_error->desc res-mod) "Trace abort")))
                       (and (equal res-mod res)
                            (equal orac-mod orac))))
            :hints ((let ((expand (acl2::just-expand-cp-parse-hints
                                   '((:free (,@nonkey-formals clk orac) (,name-mod . ,nonkey-formals))
-                                    (:free (,@nonkey-formals clk orac) (,name . ,nonkey-formals)))
+                                    ,@(and (not no-expand-name)
+                                           `((:free (,@nonkey-formals clk orac) (,name . ,nonkey-formals)))))
                                   world)))
                      `(:computed-hint-replacement
                        ((acl2::expand-marked))
@@ -639,125 +694,108 @@ asl-interpreter-mutual-recursion-*t) for overview."
                                             t ;; lambdas
                                             ,expand))
                        :do-not-induct t)))
-          :rule-classes ((:rewrite)
-                         (:forward-chaining
-                          :corollary
-                          (b* (((mv res-mod & &) (,name-mod . ,nonkey-formals))
-                               ((mv res-orig &) (,name . ,nonkey-formals)))
-                            (implies (and (equal (eval_result-kind res-mod) key)
-                                          (not (equal key :ev_error)))
-                                     (equal (eval_result-kind res-orig) key))))
-                         (:forward-chaining
-                          :corollary
-                          (b* (((mv res-mod & &) (,name-mod . ,nonkey-formals))
-                               ((mv res-orig &) (,name . ,nonkey-formals)))
-                            (implies (and (equal (ev_error->desc res-mod) desc)
-                                          (not (equal desc "Trace abort")))
-                                     (equal (ev_error->desc res-orig) desc))))
-                         )
-           :fn ,name-mod))
-      (eval-return-equiv-thms (cdr names) suffix wrld)))))
+           ;; :rule-classes nil
+           :fn ,name-mod)
+        `((defret ,(intern-in-package-of-symbol
+                    (concatenate 'string "<FN>" "-EQUALS-ORIGINAL-KIND")
+                    'asl-pkg)
+            (b* (((mv res-mod orac-mod &) (,name-mod . ,nonkey-formals))
+                 ((mv res orac) ;; (let ((env (env-replace-static static-env env)))
+                  (,name . ,nonkey-formals)))
+              (implies (and (syntaxp (or (acl2::rewriting-negative-literal-fn
+                                          `(equal (eval_result-kind$inline (mv-nth '0 (,',name-mod-fn . ,,(xxxjoin 'cons (append nonkey-formals key-formals '('nil)))))) ,kind) mfc state)
+                                         (acl2::rewriting-negative-literal-fn
+                                          `(equal ,kind (eval_result-kind$inline (mv-nth '0 (,',name-mod-fn . ,,(xxxjoin 'cons (append nonkey-formals key-formals '('nil))))))) mfc state)))
+                            (not (equal kind :ev_error)))
+                       (iff (equal (eval_result-kind res-mod) kind)
+                            (and (equal (eval_result-kind res) kind)
+                                 (equal res-mod res)
+                                 (equal orac-mod orac)
+                                 (equal (eval_result-kind (hide res-mod)) kind)))))
+            :hints (("goal" :use ,thmname
+                     :in-theory (disable ,thmname)
+                     :expand ((:free (x) (hide x)))))
+            ;; :rule-classes nil
+            :fn ,name-mod)
+
+          (defret ,(intern-in-package-of-symbol
+                    (concatenate 'string "<FN>" "-EQUALS-ORIGINAL-DESC")
+                    'asl-pkg)
+            (b* (((mv res-mod orac-mod &) (,name-mod . ,nonkey-formals))
+                 ((mv res orac) ;; (let ((env (env-replace-static static-env env)))
+                  (,name . ,nonkey-formals)))
+              (implies (and (syntaxp (or (acl2::rewriting-positive-literal-fn
+                                          `(equal (ev_error->desc$inline (mv-nth '0 (,',name-mod-fn . ,,(xxxjoin 'cons (append nonkey-formals key-formals '('nil)))))) '"Trace abort") mfc state)
+                                         (acl2::rewriting-positive-literal-fn
+                                          `(equal '"Trace abort" (ev_error->desc$inline (mv-nth '0 (,',name-mod-fn . ,,(xxxjoin 'cons (append nonkey-formals key-formals '('nil))))))) mfc state))))
+                       (iff (equal (ev_error->desc res-mod) "Trace abort")
+                            (not (and (equal res-mod res)
+                                      (equal orac-mod orac)
+                                      (not (equal (ev_error->desc (hide res-mod)) "Trace abort")))))))
+            :hints (("goal" :use ,thmname
+                     :in-theory (disable ,thmname)
+                     :expand ((:free (x) (hide x)))))
+            :fn ,name-mod)))))
+
+
+(local
+ (defun eval-return-equiv-thms (names suffix wrld)
+   (if (atom names)
+       (mv nil nil)
+     (b* (((mv main-thms corollaries)
+           (eval-return-equiv-thms (cdr names) suffix wrld))
+          (name (car names))
+          (name1 (intern-in-package-of-symbol
+                  (concatenate 'string (symbol-name name) "-*STATICRO")
+                  name))
+          (name-mod (intern-in-package-of-symbol
+                     (concatenate 'string (symbol-name name) "-"
+                                  (if (or (eq name 'eval_subprogram)
+                                          (eq name 'eval_stmt))
+                                      (concatenate 'string (symbol-name suffix) "1")
+                                    (symbol-name suffix)))
+                     name))
+          (macro-args (macro-args name1 wrld))
+          (nonkey-formals (take (- (len macro-args)
+                                   (len (member '&key macro-args)))
+                                macro-args))
+          ((mv thm corrs)
+           (return-equiv-thm-and-corollaries name1 name-mod nonkey-formals nil)))
+       (mv (cons
+            thm main-thms)
+           (append corrs corollaries))))))
 
 (local
  (defun equals-original-thm (suffix wrld)
-   (let ((eval_subprogram-mod (intern-in-package-of-symbol
-                               (concatenate 'string "EVAL_SUBPROGRAM-" (symbol-name suffix))
-                               'eval_subprogram))
-         (eval_stmt-mod (intern-in-package-of-symbol
-                         (concatenate 'string "EVAL_STMT-" (symbol-name suffix))
-                         'eval_stmt)))
+   (b* ((eval_subprogram-mod (intern-in-package-of-symbol
+                              (concatenate 'string "EVAL_SUBPROGRAM-" (symbol-name suffix))
+                              'eval_subprogram))
+        (eval_stmt-mod (intern-in-package-of-symbol
+                        (concatenate 'string "EVAL_STMT-" (symbol-name suffix))
+                        'eval_stmt))
+        ((mv main-thms corollaries)
+         (eval-return-equiv-thms *asl-interp-fns* suffix wrld))
+        ((mv eval_sub-main-thm eval_sub-corrs)
+         (return-equiv-thm-and-corollaries
+          'eval_subprogram-*staticro eval_subprogram-mod '(env name vparams vargs) t))
+        ((mv eval_stmt-main-thm eval_stmt-corrs)
+         (return-equiv-thm-and-corollaries
+          'eval_stmt-*staticro eval_stmt-mod '(env s) t)))
      `(encapsulate nil
         (local (deflabel before-equals-original))
         (std::defret-mutual
-        ,(intern-in-package-of-symbol
-          (concatenate 'string (symbol-name suffix) "-EQUALS-ORIGINAL")
-          'asl-pkg)
-        (defret ,(intern-in-package-of-symbol
-                  (concatenate 'string "EVAL_SUBPROGRAM-" (symbol-name suffix)
-                               "-EQUALS-ORIGINAL")
-                  'asl-pkg)
-          (b* (((mv res-mod orac-mod &) (,eval_subprogram-mod env name vparams vargs))
-               ((mv res orac) (eval_subprogram env name vparams vargs)))
-            (implies (not (and (eval_result-case res-mod :ev_error)
-                               (equal (ev_error->desc res-mod) "Trace abort")))
-                     (and (equal res-mod res)
-                          (equal orac-mod orac))))
-          :hints ((let ((expand (acl2::just-expand-cp-parse-hints
-                                 '((:free (env name vparams vargs clk orac)
-                                    (,eval_subprogram-mod env name vparams vargs)))
-                                 world)))
-                    `(:computed-hint-replacement
-                      ((acl2::expand-marked))
-                      :clause-processor (acl2::mark-expands-cp
-                                         clause
-                                         '(t ;; last-only
-                                           t ;; lambdas
-                                           ,expand))
-                      :do-not-induct t)))
-          :rule-classes ((:rewrite)
-                         (:forward-chaining
-                          :corollary
-                          (b* (((mv res-mod & &) (,eval_subprogram-mod
-                                                         env name vparams vargs))
-                               ((mv res-orig &) (eval_subprogram env name vparams vargs)))
-                            (implies (and (equal (eval_result-kind res-mod) key)
-                                          (not (equal key :ev_error)))
-                                     (equal (eval_result-kind res-orig) key))))
-                         (:forward-chaining
-                          :corollary
-                          (b* (((mv res-mod & &) (,eval_subprogram-mod
-                                                         env name vparams vargs))
-                               ((mv res-orig &) (eval_subprogram env name vparams vargs)))
-                            (implies (and (equal (ev_error->desc res-mod) desc)
-                                          (not (equal desc "Trace abort")))
-                                     (equal (ev_error->desc res-orig) desc)))))
-          :fn ,eval_subprogram-mod)
-        (defret ,(intern-in-package-of-symbol
-                  (concatenate 'string "EVAL_STMT-" (symbol-name suffix)
-                               "-EQUALS-ORIGINAL")
-                  'asl-pkg)
-          (b* (((mv res-mod orac-mod &) (,eval_stmt-mod env s))
-               ((mv res orac) (eval_stmt env s)))
-            (implies (not (and (eval_result-case res-mod :ev_error)
-                               (equal (ev_error->desc res-mod) "Trace abort")))
-                     (and (equal res-mod res)
-                          (equal orac-mod orac))))
-          :hints ((let ((expand (acl2::just-expand-cp-parse-hints
-                                 '((:free (env s clk orac)
-                                    (,eval_stmt-mod env s)))
-                                 world)))
-                    `(:computed-hint-replacement
-                      ((acl2::expand-marked))
-                      :clause-processor (acl2::mark-expands-cp
-                                         clause
-                                         '(t ;; last-only
-                                           t ;; lambdas
-                                           ,expand))
-                      :do-not-induct t)))
-          :rule-classes ((:rewrite)
-                         (:forward-chaining
-                          :corollary
-                          (b* (((mv res-mod & &) (,eval_stmt-mod
-                                                         env s))
-                               ((mv res-orig &) (eval_stmt env s)))
-                            (implies (and (equal (eval_result-kind res-mod) key)
-                                          (not (equal key :ev_error)))
-                                     (equal (eval_result-kind res-orig) key))))
-                         (:forward-chaining
-                          :corollary
-                          (b* (((mv res-mod & &) (,eval_stmt-mod
-                                                         env s))
-                               ((mv res-orig &) (eval_stmt env s)))
-                            (implies (and (equal (ev_error->desc res-mod) desc)
-                                          (not (equal desc "Trace abort")))
-                                     (equal (ev_error->desc res-orig) desc)))))
-           :fn ,eval_stmt-mod)
-        . ,(eval-return-equiv-thms *asl-interp-fns* suffix wrld))
+          ,(intern-in-package-of-symbol
+            (concatenate 'string (symbol-name suffix) "-EQUALS-ORIGINAL")
+            'asl-pkg)
+          ,eval_sub-main-thm
+          ,eval_stmt-main-thm
+          . ,main-thms)
+        ,@eval_sub-corrs
+        ,@eval_stmt-corrs
+        ,@corollaries
         (acl2::def-ruleset! asl-*t-equals-original-rules
           (set-difference-theories (current-theory :here)
-                                 (current-theory 'before-equals-original)))))))
-
-
+                                   (current-theory 'before-equals-original)))))))
 
 
 
@@ -809,7 +847,6 @@ respectively. They are implemented as wrappers around the autogenerated
 versions @(see eval_subprogram-*t1) and @(see eval_stmt-*t1).</p>")))
 
 
- 
 
 
 (local (xdoc::set-default-parents asl-interpreter-mutual-recursion-*t))
@@ -827,48 +864,72 @@ versions @(see eval_subprogram-*t1) and @(see eval_stmt-*t1).</p>")))
                    (ev_error->desc blkres)))
    :hints(("Goal" :in-theory (enable rethrow_implicit)))))
 
+
+(local (defthm if-t-nil
+         (and (equal (if t x y) x)
+              (equal (if nil x y) y))))
+
 ;; ---------------------------------------------------------------------------
 ;; Definition of the Tracing ASL Interpreter (suffixed with *t)
-(make-event
- (b* ((form *asl-interpreter-mutual-recursion-command*)
-      ;; Strip out the events after the /// (theorem about resolved-p-of-resolve-ty)
-      (form (strip-post-/// form))
-      ;; Strip out xdoc
-      (form (strip-xdoc form))
-      ;; Add xdoc topic for mutual recursion
-      (form (add-mutrec-xdoc *asl-*t-xdoc* form))
-      ;; Add xdoc topic for each function
-      (form (add-define-xdoc
-             "Tracing version of @(see <NAME>); see @(see asl-interpreter-mutual-recursion-*t) for overview."
-             form))
-      ;; Replace '(define eval_subprogram ...' with '(define eval_subprogram-*ft1'
-      ;; since it's going to be wrapped in a call that deals with collecting the trace data.
-      (form (find-def-and-rename 'eval_subprogram '*t form))
-      (form (find-def-and-rename 'eval_stmt '*t form))
-      ;; Substitute function names with their -*t suffixed forms.
-      (form (sublis *eval-trace-substitution* form))
-      ;; Wrap each define body in a call of evbody-*t.
-      (form (wrap-define-bodies 'evbody-*t form))
-      ;; Add (trace asl-tracelist-p) to all the :returns forms.
-      (form (add-trace-to-returns form))
-      ;; Add the tracespec formal to each define form.
-      (form (add-define-formals '(((tracespec tracespec-p) 'tracespec)) form))
-      ;; Add the definition of eval_subprogram-*t which wraps around eval_subprogram-*t1.
-      (form (add-define-to-defines *eval_subprogram-*t-def* form))
-      (form (add-define-to-defines *eval_stmt-*t-def* form))
-      ;; Disable the functions, prove the non-trace return values equal to the originals, and verify guards.
-      (form (insert-after-///
-             (list
-              '(make-event
-                `(in-theory (disable . ,(fgetprop 'eval_expr-*t-fn 'acl2::recursivep nil (w state)))))
-              (equals-original-thm '*t (w state))
-              '(verify-guards eval_expr-*t-fn))
-             form)))
-   `(progn (defconst *asl-interpreter-mutual-recursion-*t-form* ',form)
-           ,form)))
+(with-output
+  :off (event)
+  (make-event
+   (b* ((form *asl-interpreter-mutual-recursion-command*)
+        ;; Strip out the events after the /// (theorem about resolved-p-of-resolve-ty)
+        (form (strip-post-/// form))
+        ;; Strip out xdoc
+        (form (strip-xdoc form))
+        ;; Add xdoc topic for mutual recursion
+        (form (add-mutrec-xdoc *asl-*t-xdoc* form))
+        ;; Add xdoc topic for each function
+        (form (add-define-xdoc
+               "Tracing version of @(see <NAME>); see @(see asl-interpreter-mutual-recursion-*t) for overview."
+               form))
+        ;; Replace '(define eval_subprogram ...' with '(define eval_subprogram-*ft1'
+        ;; since it's going to be wrapped in a call that deals with collecting the trace data.
+        (form (find-def-and-rename 'eval_subprogram '*t form))
+        (form (find-def-and-rename 'eval_stmt '*t form))
+        ;; Substitute function names with their -*t suffixed forms.
+        (form (sublis *eval-trace-substitution* form))
+        ;; Replace all invocations of (global-env->static (env->global env)) with the variable static-env.
+        (form (replace-static-envs form))
+        ;; Add guard saying static-env equals the one in env.
+        (form (add-define-guard '(equal (global-env->static (env->global env)) static-env) form))
+        ;; Wrap each define body in a call of evbody-*t.
+        (form (wrap-define-bodies 'evbody-*t form))
+        (form (wrap-define-bodies 'bind-env-with-static form))
+        ;; Add (trace asl-tracelist-p) to all the :returns forms.
+        (form (add-trace-to-returns form))
+        ;; Replace all invocations of (global-env->static (env->global env)) with the variable static-env.
+        ;; (form (replace-static-envs form))
+        ;; Add the tracespec formal to each define form.
+        (form (add-define-formals '(((static-env static_env_global-p) 'static-env)
+                                    ((tracespec tracespec-p) 'tracespec)) form))
+        ;; Add the definition of eval_subprogram-*t which wraps around eval_subprogram-*t1.
+        (form (add-define-to-defines *eval_subprogram-*t-def* form))
+        (form (add-define-to-defines *eval_stmt-*t-def* form))
+        ;; Disable the functions, prove the non-trace return values equal to the originals, and verify guards.
+        (form (insert-after-///
+               (list
+                '(make-event
+                  `(in-theory (disable . ,(fgetprop 'eval_expr-*t-fn 'acl2::recursivep nil (w state)))))
+                (equals-original-thm '*t (w state))
+                ;; '(verify-guards eval_expr-*t-fn)
+                )
+               form)))
+     `(progn (defconst *asl-interpreter-mutual-recursion-*t-form* ',form)
+             ,form))))
 ;; ---------------------------------------------------------------------------
 
+;; (local (acl2::use-trivial-ancestors-check))
 
+(encapsulate nil
+  (local (in-theory (disable xor not)))
+
+  (with-output
+    :off (event)
+    (verify-guards eval_expr-*t-fn
+      :guard-debug t)))
 
 
 

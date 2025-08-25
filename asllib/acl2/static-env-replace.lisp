@@ -135,8 +135,6 @@ the static env as a separate, read-only argument."
                "Version of @(see <NAME>) with static env passed as a separate read-only argument;
                 see @(see asl-interpreter-mutual-recursion-*staticro) for overview."
                form))
-        ;; Add :flag-local nil to defines so we'll save the flag function.
-        (form (add-keyval-to-defines '(:flag-local nil) form))
         ;; Substitute function names with their -*t suffixed forms.
         (form (sublis *eval-staticro-substitution* form))
         ;; Replace all invocations of (global-env->static (env->global env)) with the variable static-env.

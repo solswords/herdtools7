@@ -1496,6 +1496,7 @@ for the individual define forms)</li>
      :parents (asl-interpreter-main-functions asl-interpreter-functions)
      :prepwork ((local (in-theory (disable xor not)))
                 (local (xdoc::set-default-parents asl-interpreter-functions asl-interpreter-mutual-recursion)))
+     :flag-local nil
      (define eval_expr ((env env-p)
                         (e expr-p)
                         &key
