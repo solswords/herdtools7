@@ -29,7 +29,7 @@ Understanding What Is Proved
 ----------------------------
 
 The theorems about the stdlib functions are generated via a macro named
-`def-asl-subprogram`. For example:
+`def-asl-subprogram-stdlib`. For example:
 
 ```
 (def-asl-subprogram-stdlib LowestSetBitNZ-correct
@@ -42,7 +42,7 @@ The theorems about the stdlib functions are generated via a macro named
 ```
 
 The above form generates an ACL2 `defthm` command, that is, a request
-to ACL2 to prove a theorem. The `def-asl-subprogram` form can be read
+to ACL2 to prove a theorem. The `def-asl-subprogram-stdlib` form can be read
 as follows to get a general understanding of what the theorem says:
 
 > The theorem `LowestSetBitNZ-correct` says that if the ASL function

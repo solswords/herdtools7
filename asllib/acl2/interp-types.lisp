@@ -4,7 +4,7 @@
 ;;
 ;; SPDX-FileCopyrightText: Copyright 2025 Arm Limited and/or its affiliates <open-source-office@arm.com>
 ;; SPDX-License-Identifier: BSD-3-Clause
-;; 
+;;
 ;;****************************************************************************;;
 ;; Disclaimer:                                                                ;;
 ;; This material covers both ASLv0 (viz, the existing ASL pseudocode language ;;
@@ -58,7 +58,7 @@
     :short "Mapping from identifiers to ASL values. Used both for the values of
 records (see @(see val)) as well as the storage of local and global variables.")
   ///
-  
+
   (defthm vallist-p-of-update-nth
     (implies (and (vallist-p x)
                   (val-p v)
@@ -99,7 +99,7 @@ records (see @(see val)) as well as the storage of local and global variables.")
 
 (fty::defmap val-alist :key-type identifier :Val-type val :true-listp t
   ///
-  
+
   (defthm val-alist-p-of-pairlis$
     (implies (and (identifierlist-p keys)
                   (vallist-p vals)
@@ -280,4 +280,3 @@ error/throwing results."
 
 (defxdoc ev
   :short "@(csee B*) binder: see @(see patbind-ev)")
-

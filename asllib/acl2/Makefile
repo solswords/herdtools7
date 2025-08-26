@@ -29,6 +29,6 @@ git_status :
 	    --quiet --no-build \
 	    --write-sources tmp/git_source_deps \
 	    --write-otherdeps tmp/git_other_deps
-	@cat git_source_deps git_other_deps \
+	@cat tmp/git_source_deps tmp/git_other_deps \
 	  | fgrep -v '/acl2/books/' | tr '\n' '\0' \
 	  | xargs -0 git status -u --

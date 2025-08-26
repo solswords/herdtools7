@@ -4,7 +4,7 @@
 ;;
 ;; SPDX-FileCopyrightText: Copyright 2025 Arm Limited and/or its affiliates <open-source-office@arm.com>
 ;; SPDX-License-Identifier: BSD-3-Clause
-;; 
+;;
 ;;****************************************************************************;;
 ;; Disclaimer:                                                                ;;
 ;; This material covers both ASLv0 (viz, the existing ASL pseudocode language ;;
@@ -92,7 +92,7 @@ that value.</p>
              (int_constraintlist-satisfied val x))
     :hints(("Goal" :in-theory (enable int_constraintlist-width
                                       int_constraintlist-satisfied)))))
-      
+
 
 
 (define int_constraintlist-oracle-val ((x int_constraintlist-p)
@@ -206,7 +206,7 @@ can be produced by this function if the oracle is set up appropriately (see
                                  (v_record vals))
                             orac))
         :t_named (mv nil orac))))
-  
+
   (define tylist-oracle-val ((x tylist-p) orac)
     :guard (tylist-resolved-p x)
     :measure (acl2::two-nats-measure (tylist-count x) 0)
@@ -262,7 +262,7 @@ can be produced by this function if the oracle is set up appropriately (see
       :hints ('(:expand (<call>)))
       :fn ty-oracle-vals)
     :skip-others t)
-  
+
   (verify-guards ty-oracle-val)
 
 
@@ -377,7 +377,7 @@ can be produced by this function if the oracle is set up appropriately (see
   ///
   (verify-guards int_constraintlist-val-to-oracle
     :hints (("goal" :in-theory (enable int_constraintlist-satisfied))))
-  
+
   (defret <fn>-correct-aux
     (implies (int_constraintlist-satisfied val x)
              (equal (int_constraintlist-oracle-val-aux orac-offset x)
@@ -419,7 +419,7 @@ can be produced by this function if the oracle is set up appropriately (see
                                       acl2::orac-read-int
                                       acl2::orac-st-read
                                       acl2::orac-st-read-int)))))
-  
+
 
 
 (defines typed-val-to-oracle
@@ -509,7 +509,7 @@ field and its mode set appropriately, makes @('(ty-oracle-val x orac)') produce
                     (acl2::set-equiv x y))
            :hints(("Goal" :in-theory (disable acl2::set-equiv)))
            :rule-classes :forward-chaining))
-  
+
   (verify-guards typed-val-to-oracle
     :hints (("goal" :expand ((ty-satisfied val x)
                              (array-type-satisfied vals x)
@@ -734,8 +734,8 @@ field and its mode set appropriately, makes @('(ty-oracle-val x orac)') produce
                     (equal (val-fix x) (v_record nil)))
            :hints(("Goal" :in-theory (e/d (val-fix-when-v_record)
                                           (v_record-of-fields))))))
-  
-  
+
+
   (local
    (std::defret-mutual <fn>-correct-lemma
      (defret <fn>-correct-lemma
@@ -793,7 +793,7 @@ field and its mode set appropriately, makes @('(ty-oracle-val x orac)') produce
                                          omap::restrict-of-insert-split)
                       :do-not-induct t)))
        :fn typed-val-record-to-oracle)))
-  
+
   (std::defret-mutual <fn>-correct
     :no-induction-hint t
     (defret <fn>-correct
@@ -840,4 +840,3 @@ field and its mode set appropriately, makes @('(ty-oracle-val x orac)') produce
       :hints ('(:use <fn>-correct-lemma
                 :in-theory (disable <fn>-correct-lemma)))
       :fn typed-val-record-to-oracle)))
-

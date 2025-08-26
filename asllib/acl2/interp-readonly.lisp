@@ -72,8 +72,8 @@
      (defret <fn>-readonly-preserves-env-and-orac
        (implies (readonly-expr-p e)
                 (and (equal new-orac orac)
-                     (implies (eval_result-case eval :ev_normal)
-                              (equal (expr_result->env (ev_normal->res eval))
+                     (implies (eval_result-case res :ev_normal)
+                              (equal (expr_result->env (ev_normal->res res))
                                      (env-fix env)))))
        :hints ('(:do-not-induct t
                  :expand ((readonly-expr-p e)
@@ -84,8 +84,8 @@
      (defret <fn>-readonly-preserves-env-and-orac
        (implies (readonly-exprlist-p e)
                 (and (equal new-orac orac)
-                     (implies (eval_result-case eval :ev_normal)
-                              (equal (exprlist_result->env (ev_normal->res eval))
+                     (implies (eval_result-case res :ev_normal)
+                              (equal (exprlist_result->env (ev_normal->res res))
                                      (env-fix env)))))
        :hints ('(:do-not-induct t
                  :expand ((readonly-exprlist-p e)
@@ -94,8 +94,8 @@
      (defret <fn>-readonly-preserves-env-and-orac
        (implies (readonly-slicelist-p sl)
                 (and (equal new-orac orac)
-                     (implies (eval_result-case eval :ev_normal)
-                              (equal (intpairlist/env->env (ev_normal->res eval))
+                     (implies (eval_result-case res :ev_normal)
+                              (equal (intpairlist/env->env (ev_normal->res res))
                                      (env-fix env)))))
        :hints ('(:do-not-induct t
                  :expand ((readonly-slicelist-p sl)
@@ -104,8 +104,8 @@
      (defret <fn>-readonly-preserves-env-and-orac
        (implies (readonly-slice-p s)
                 (and (equal new-orac orac)
-                     (implies (eval_result-case eval :ev_normal)
-                              (equal (intpair/env->env (ev_normal->res eval))
+                     (implies (eval_result-case res :ev_normal)
+                              (equal (intpair/env->env (ev_normal->res res))
                                      (env-fix env)))))
        :hints ('(:do-not-induct t
                  :expand ((readonly-slice-p s)
