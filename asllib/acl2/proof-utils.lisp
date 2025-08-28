@@ -796,7 +796,7 @@ as follows, more or less following the above made-up example:</p>
                <hints>))
 
      (:@ :table-update
-      (table asl-subprogram-table
+      (table <table-name>
              <fn> (list '<subprograms>
                         '<direct-subprograms>
                         '<clk-expr>
@@ -964,7 +964,10 @@ as follows, more or less following the above made-up example:</p>
        (hyps (sublis-subtrees binding-subst (cleanup-hyps (reverse hyp-list))))
 
        (direct-subprograms (collect-direct-subprograms f.body nil))
-       (table  (table-alist 'asl-subprogram-table (w state)))
+       (table-name (if (equal static-env '(stdlib-static-env))
+                       'asl-subprogram-table
+                     'asl-prim-subprogram-table))
+       (table  (table-alist table-name (w state)))
        (subprograms (cons function (collect-transitive-subprograms direct-subprograms table nil)))
 
        (clk-val
@@ -977,7 +980,7 @@ as follows, more or less following the above made-up example:</p>
                          t
                        `(<= ,clk-val (ifix clk))))
 
-       (table-update (equal static-env '(stdlib-static-env)))
+       (table-update t)
        (concl (if normal-cond
                   (if nonnormal-res
                       `(equal res (if ,normal-cond
@@ -1025,7 +1028,8 @@ as follows, more or less following the above made-up example:</p>
                            (<params> . (list . ,params))
                            (<args>   . (list . ,args))
                            (<retvals> . (list . ,return-values))
-                           (<concl> . ,concl))
+                           (<concl> . ,concl)
+                           (<table-name> . ,table-name))
                   :splices `((<subprogram-enables> . (asl-code-proof-enables))
                              (<subprogram-disables> . (asl-code-proof-disables))
                              (<user-enables> . ,enable)
@@ -1054,6 +1058,14 @@ as follows, more or less following the above made-up example:</p>
           ((keywordp (car args)) (assoc-keyword-permissive k (cddr args)))
           (t (assoc-keyword-permissive k (cdr args))))))
 
+(defun remove-keys-permissive (keys args)
+  (if (atom args)
+      nil
+    (cond ((member-eq (car args) keys) (cddr args))
+          ((keywordp (car args)) (list* (car args) (cadr args)
+                                        (remove-keys-permissive keys (cddr args))))
+          (t (cons (car args) (remove-keys-permissive keys (cddr args)))))))
+
 (define def-asl-subprogram-stdlib-fn (name args state)
   ;; Wraps def-asl-subprogram. Checks whether we need to do a separate proof
   ;; for the stdlib version with and without primitives.
@@ -1081,16 +1093,21 @@ as follows, more or less following the above made-up example:</p>
        (direct-subprograms (collect-direct-subprograms f.body nil))
        (table  (table-alist 'asl-subprogram-table (w state)))
        (subprograms (cons function (collect-transitive-subprograms direct-subprograms table nil)))
-       ((when (subprograms-match subprograms prim-static-env-val static-env-val))
-        ;; The function and all its transitive callees are the same in both
-        ;; versions, so just prove it for one and the theorems will apply to
-        ;; the other.
-        (def-asl-subprogram-fn name args state))
-       ;; Otherwise tweak the name and arguments and duplicate the proof in the primitive static env.
+       (same-in-both-static-envs (subprograms-match subprograms prim-static-env-val static-env-val))
        (name-prim (intern-in-package-of-symbol (concatenate 'string (symbol-name name) "-PRIM") name))
        ((er thms1) (def-asl-subprogram-fn name args state))
-       ((er thms2) (def-asl-subprogram-fn name-prim (list* :static-env '(stdlib-prim-static-env) args) state)))
-    (value `(progn ,thms1 ,thms2))))
+       ;; If same-in-both-static-envs, then we can use the theorem about the
+       ;; non-primitive version to prove the primitive one.
+       (prim-args (list* :static-env '(stdlib-prim-static-env) args))
+       (prim-args (if same-in-both-static-envs
+                      (list* :no-expand-hint t
+                             :hints `(("goal" 
+                                       :in-theory (enable ,name)))
+                             (remove-keys-permissive
+                              '(:hints :no-expand-hint :enable :disable) prim-args))
+                    prim-args))
+       ((er thms2) (def-asl-subprogram-fn name-prim prim-args state)))
+    (value `(progn (encapsulate nil ,thms1) (encapsulate nil ,thms2)))))
 
 (defmacro def-asl-subprogram-stdlib (name &rest args)
   (let* ((prepwork (cadr (assoc-keyword :prepwork args))))
