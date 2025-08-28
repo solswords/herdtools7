@@ -4,7 +4,7 @@
 ;;
 ;; SPDX-FileCopyrightText: Copyright 2025 Arm Limited and/or its affiliates <open-source-office@arm.com>
 ;; SPDX-License-Identifier: BSD-3-Clause
-;; 
+;;
 ;;****************************************************************************;;
 ;; Disclaimer:                                                                ;;
 ;; This material covers both ASLv0 (viz, the existing ASL pseudocode language ;;
@@ -68,7 +68,7 @@
     :l_label (v_label x.val)))
 
 ;; (fty::defmap int-imap :key-type identifier :val-type integerp :true-listp t)
-  
+
 ;; (local
 ;;  (defthm alistp-when-int-imap-p-rw
 ;;    (implies (int-imap-p x)
@@ -78,7 +78,7 @@
 
 
 
-  
+
 (local
  (defthm alistp-when-pos-imap-p-rw
    (implies (pos-imap-p x)
@@ -209,7 +209,7 @@ locally, globally, or not at all"
 
   (defthm val-imaplist-assoc-of-nil
     (equal (val-imaplist-assoc key nil) nil))
-  
+
   (fty::deffixequiv val-imaplist-assoc))
 
 (define env-find ((x identifier-p)
@@ -286,7 +286,7 @@ value if the variable was not already present."
   (fty::deffixequiv val-imaplist-assign)
 
   (local
-   
+
    (defthm put-assoc-equal-normalize
      (implies (and ;; (syntaxp (and (not (equal k k1))
                ;;               (member-equal k (put-assoc-equal-term-keys x))))
@@ -295,7 +295,7 @@ value if the variable was not already present."
               (equal (put-assoc-equal k v (put-assoc-equal k1 v1 x))
                      (put-assoc-equal k1 v1 (put-assoc-equal k v x))))
      :hints(("Goal" :in-theory (enable put-assoc-equal)))))
-  
+
   (defthm val-imaplist-assign-alternate
     (implies (val-imaplist-assoc k1 x)
              (equal (val-imaplist-assign k1 v1 (val-imaplist-assign k2 v2 (val-imaplist-assign k1 v3 x)))
@@ -372,7 +372,7 @@ function in the environment's stack_size field."
        (stack_size (pos-imap-fix stack_size))
        (look (assoc-equal name stack_size)))
     (if look (cdr look) 0)))
-  
+
 
 (define increment-stack ((name identifier-p)
                          (stack_size pos-imap-p))
@@ -383,7 +383,7 @@ function in the environment's stack_size field."
        (val (stack_size-lookup name stack_size)))
     (put-assoc-equal name (+ 1 val) stack_size))
   ///
-  
+
   (defret stack_size-lookup-of-increment-stack
     (equal (stack_size-lookup name2 res)
            (if (identifier-equiv name name2)
@@ -393,7 +393,7 @@ function in the environment's stack_size field."
 
   (local (include-book "std/lists/sets" :dir :system))
   (local (include-book "std/alists/alist-keys" :dir :system))
-  
+
   (local (defthm no-duplicatesp-equal-of-append
            (implies (and (no-duplicatesp-equal x)
                          (no-duplicatesp-equal y)
@@ -405,7 +405,7 @@ function in the environment's stack_size field."
            (iff (intersectp-equal x (list k))
                 (member-equal k x))
            :hints(("Goal" :in-theory (enable intersectp-equal)))))
-  
+
   (defret no-duplicate-keys-of-<fn>
     (implies (no-duplicatesp-equal (acl2::alist-keys (pos-imap-fix stack_size)))
              (no-duplicatesp-equal (acl2::alist-keys res)))
@@ -427,14 +427,14 @@ function in the environment's stack_size field."
                          (hons-assoc-equal k x))
                     (posp (cdr (hons-assoc-equal k x))))
            :rule-classes :type-prescription))
-  
+
   (defthm decrement-stack-of-increment-stack
     (b* ((incr-result (increment-stack name stack_size)))
       (implies (pos-imap-p stack_size)
                (equal (decrement-stack name incr-result)
                       stack_size)))
     :hints(("Goal" :in-theory (enable increment-stack stack_size-lookup)))))
-             
+
 
 (define env-push-stack ((name identifier-p)
                         (env env-p))
@@ -475,12 +475,12 @@ call)."
   (b* (((env env))
        ((global-env g) env.global))
     (stack_size-lookup name g.stack_size)))
-    
-       
-    
-    
 
-  
+
+
+
+
+
 
 
 
@@ -560,7 +560,7 @@ corresponding values in the topmost scope."
     (ev_normal nil))
   ///
   (local (in-theory (enable acl2::maybe-integerp-fix))))
-       
+
 
 
 (defthm call-count-linear
@@ -705,7 +705,7 @@ values are not of v_bitvector type."
     (implies (eval_result-case v :ev_normal)
              (equal (val-kind (ev_normal->res v))
                     :v_bitvector)))
-  
+
   (verify-guards concat_bitvectors))
 
 (local (in-theory (disable loghead logtail)))
@@ -740,8 +740,8 @@ values are not of v_bitvector type."
     (bitvec_fields_to_record! (cdr fields) (cdr slices) new-rec bv width))
   ///
   (local (in-theory (enable acl2::maybe-integerp-fix))))
-       
-       
+
+
 
 (define bitvec_fields_to_record ((fields identifierlist-p)
                                  (slices intpairlist-p)
@@ -766,7 +766,7 @@ values are not of v_bitvector type."
                              :v_bitvector (mv bv.val bv.len)
                              :otherwise (mv (v_int->val bv) nil))))
     (bitvec_fields_to_record! fields slices rec.rec bv-val bv-len)))
-       
+
 
 (define for_loop-test ((v_start integerp)
                        (v_end integerp)
@@ -811,7 +811,7 @@ start and end indices."
     :otf-flg t
     :rule-classes :linear))
 
-  
+
 
 
 (define eval_for_step ((env env-p)
@@ -899,7 +899,7 @@ where the first is the total width and the second is the concatenated value."
          (start (nfix first_vslice.first))
          (len   (nfix first_vslice.second))
          (srcpart (bitops::part-select srcval :low start :width len))
-         (val (logapp dstval_rest.first dstval_rest.second srcpart)) 
+         (val (logapp dstval_rest.first dstval_rest.second srcpart))
          )
       (intpair (+ len dstval_rest.first) val))))
 
@@ -1169,7 +1169,7 @@ passed down from a context where a code position wasn't available.</p>"
        :ev_normal (b* ,(and (not (eq (car acl2::args) '&))
                            `((,(car acl2::args) evresult.res)))
                     ,acl2::rest-expr)
-       
+
        :otherwise (pass-error (init-backtrace evresult pos) orac))))
 
 (defxdoc evob
@@ -1208,7 +1208,7 @@ evaluates the rest of the bindings/body."
     :long "<p>This is defined with @('acl2::def-tr') to create a function that doesn't
 necessarily terminate, e.g. if we encounter a cycle in the subtypes
 relation. In this case it returns NIL (not a subtype).</p>")
-  
+
   (acl2::def-tr subtypes_names (tenv name1 name2)
     (declare (xargs :guard (and (static_env_global-p tenv)
                                 (identifier-p name1)
@@ -1240,7 +1240,7 @@ relation. In this case it returns NIL (not a subtype).</p>")
                     (& nil))))))
   (fty::deffixcong static_env_global-equiv iff (subtypes_names-terminates tenv name1 name2) tenv
     :hints ((terminates-hint stable-under-simplificationp clause)))
-  
+
   (fty::deffixequiv subtypes_names :args ((tenv static_env_global-p)
                                           (name1 identifier-p)
                                           (name2 identifier-p))))
@@ -1282,7 +1282,7 @@ accepted by the catcher."
     :hints (("goal" :induct (len catchers)
              :expand ((catcherlist-count* catchers))))
     :rule-classes :linear))
-    
+
 
 (define rethrow_implicit ((throw throwdata-p)
                           (blkres stmt_eval_result-p)
@@ -1775,7 +1775,7 @@ or produce an error if this can't be done."
             ((evoo first) (resolve-ty env x1.type))
             ((evoo rest) (resolve-typed_identifierlist env (cdr x))))
          (evo_normal (cons (typed_identifier x1.name first) rest))))
-    
+
      (define resolve-ty ((env env-p)
                          (x ty-p)
                          &key ((clk natp) 'clk) (orac 'orac))
@@ -1842,7 +1842,7 @@ evaluation of @('e_arbitrary') expressions."
                        (evtailcall (resolve-ty env type :clk (1- clk))))
            :otherwise (evo_normal (ty ty pos)))))
 
-    
+
      (define eval_pattern ((env env-p)
                            (val val-p)
                            (p pattern-p)
@@ -1904,8 +1904,8 @@ evaluation of @('e_arbitrary') expressions."
              (evo_normal first))
             ((evoo rest) (eval_pattern_tuple env (cdr vals) (cdr p))))
          (evo-return (eval_binop :band first rest))))
-        
-    
+
+
      (define eval_pattern-any ((env env-p)
                                (val val-p)
                                (p patternlist-p)
@@ -1942,7 +1942,7 @@ from the evaluations."
             (env first.env)
             ((evoo (exprlist_result rest)) (eval_expr_list env (cdr e))))
          (evo_normal (exprlist_result (cons first.val rest.val) rest.env))))
-  
+
      (define eval_call ((name identifier-p)
                         (env env-p)
                         (params exprlist-p)
@@ -2029,7 +2029,7 @@ see the local environment in any returned object.</p>
                                               (list (len vargs) (len f.args))
                                             (list (len vparams) (len f.parameters))))
                         (list (identifier-fix name) vparams vargs)))
-         
+
             ;; probably redundant but in the document
             (env1 (change-env env :local (empty-local-env)))
             ((evoo limit) (eval_limit env1 f.recurse_limit))
@@ -2234,7 +2234,7 @@ global) environment."
                            (evo_normal (returning (list (v_array xr.val)) (env->global xr.env))))
                          :otherwise (b* (((evoo (expr_result xr)) (eval_expr env s.expr)))
                                       (evo_normal (returning (list xr.val) (env->global xr.env))))))
-                         
+
            :s_cond (b* (((evoo (expr_result test)) (eval_expr env s.test))
                         ((evo testval) (val-case test.val
                                          :v_bool (ev_normal test.val.val)
@@ -2262,7 +2262,7 @@ global) environment."
                                   startv s.dir endv s.body))
                        (env3 (pop_scope env2)))
                     (evo_normal (continuing env3)))
-                      
+
            :s_while (b* (((evoo limit) (eval_limit env s.limit)))
                       (evtailcall (eval_loop env t limit s.test s.body)))
            :s_repeat (b* (((evoo limit) (eval_limit env s.limit))
@@ -2286,7 +2286,7 @@ global) environment."
                     ;; but then uses it just for the static env, combining its static env with the dynamic env from the throw.
                     ;; But it seems the static env shouldn't ever change so why bother?
                     (evtailcall (eval_catchers try.env s.catchers s.otherwise try.throwdata try.backtrace)))
-                      
+
            :s_print (b* (((evoo (exprlist_result e)) (eval_expr_list env s.args))
                          (str (vallist-to-string e.val))
                          (- (cw (if s.newline "~s0~%" "~s0") str)))
@@ -2325,9 +2325,9 @@ otherwise block from a try statement apply and calls the appropriate block."
                   (env3 (remove_local_identifier blkenv c.name)))
                (evo_normal (continuing env3)))))
          (evo-return (rethrow_implicit throw blkres backtrace))))
-           
-    
-   
+
+
+
      (define eval_slice ((env env-p)
                          (s slice-p)
                          &key
@@ -2380,7 +2380,7 @@ width of the slice, and an updated environment."
                          :otherwise (evo_error "Bad factor in factor slice"
                                                (slice-fix s) (list (expr->pos_start s.factor)))))
          ))
-     
+
      (define eval_slice_list ((env env-p)
                               (sl slicelist-p)
                               &key
@@ -2447,7 +2447,7 @@ the body and then call the loop again."
             ((when (zp clk))
              (evo_error "Loop limit ran out" (stmt-fix body) (list (stmt->pos_start body)))))
          (evtailcall (eval_loop env2 is_while limit1 e_cond body :clk (1- clk)))))
-           
+
      (define eval_block ((env env-p)
                          (x stmt-p)
                          &key
@@ -2467,8 +2467,8 @@ within this statement will then disappear after the statement is completed."
                                          (pop_scope stmtres.env)
                                          stmtres.backtrace)
            :otherwise (evo-return stmtres))))
-           
-    
+
+
      (define is_val_of_type_tuple ((env env-p) (vals vallist-p) (types tylist-p)
                                    &key ((clk natp) 'clk)
                                    (orac 'orac))
@@ -2488,9 +2488,9 @@ within this statement will then disappear after the statement is completed."
               ((evoo rest_ok) (is_val_of_type_tuple env (cdr vals) (cdr types)))
               )
            (evo_normal rest_ok))))
-                        
-      
-    
+
+
+
      (define check_int_constraints ((env env-p) (i integerp) (constrs int_constraintlist-p)
                                     &key ((clk natp) 'clk) (orac 'orac))
        :short "At least one constraint needs to be satisfied"
@@ -2520,7 +2520,7 @@ within this statement will then disappear after the statement is completed."
                                                       (evtailcall (check_int_constraints env i (cdr constrs)))))
                                    (- (evo_error "Constraint_range evaluated to unexpected type" constr (list (expr->pos_start constr.from))))))
              ))))
-    
+
      (define is_val_of_type ((env env-p) (v val-p) (ty ty-p)
                              &key ((clk natp) 'clk)
                              (orac 'orac))
@@ -2568,8 +2568,8 @@ ASLRef we don't return the environment.</p>"
               (equal (xor (acl2::bool-fix x) y) (xor x y))
               :hints(("Goal" :in-theory (enable xor)))))
 
-    
-                              
+
+
      (encapsulate nil
        (local (in-theory (e/d (maybe-expr-fix-when-some
                                maybe-expr-some
@@ -2580,7 +2580,7 @@ ASLRef we don't return the environment.</p>"
                                hons-assoc-equal
                                nth update-nth))))
        (fty::deffixequiv-mutual asl-interpreter-mutual-recursion))
-    
+
      (std::defret-mutual len-of-eval_expr_list
        (defret len-of-eval_expr_list
          (implies (eval_result-case res :ev_normal)
@@ -2633,6 +2633,6 @@ ASLRef we don't return the environment.</p>"
                       '(:expand ((ty-resolved-p x)))))
          :fn resolve-ty)
        :skip-others t)
-    
+
      (verify-guards eval_expr-fn :guard-debug t
        :hints (("goal" :do-not-induct t))))))

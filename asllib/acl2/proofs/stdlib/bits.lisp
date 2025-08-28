@@ -4,7 +4,7 @@
 ;;
 ;; SPDX-FileCopyrightText: Copyright 2025 Arm Limited and/or its affiliates <open-source-office@arm.com>
 ;; SPDX-License-Identifier: BSD-3-Clause
-;; 
+;;
 ;;****************************************************************************;;
 ;; Disclaimer:                                                                ;;
 ;; This material covers both ASLv0 (viz, the existing ASL pseudocode language ;;
@@ -60,7 +60,7 @@
          :hints(("Goal" :in-theory (enable nfix ifix)))))
 
 
-  
+
 (local (defthmd equal-when-v_int
          (implies (and (val-case x :v_int)
                        (val-case y :v_int)
@@ -166,7 +166,7 @@
             :hints(("Goal" :in-theory (acl2::e/d* (bitops::ihsext-recursive-redefs))
                     :induct (bits-ind rl sh rv xv)))))
 
-  
+
    (local (defthm logtail-of-logrepeat
             (implies (>= (nfix m) (* (nfix n) (nfix w)))
                      (equal (logtail m (logrepeat n w x))
@@ -188,7 +188,7 @@
                             (logrepeat (+ n (nfix m)) w x)))
             :hints (("goal" :induct (logrepeat n w x)
                      :in-theory (enable logrepeat bitops::logapp-right-assoc)))))
-  
+
    (local (defthm logapp-of-equal-to-logrepeat
             (implies (and (natp n) (natp w)
                           (equal y (logrepeat n w x))
@@ -375,7 +375,7 @@
 
    (local (defthm trailing-0-count-of-loghead
             (implies (not (equal (loghead n x) 0))
-                     (Equal (bitops::trailing-0-count (loghead n x))
+                     (equal (bitops::trailing-0-count (loghead n x))
                             (bitops::trailing-0-count x)))
             :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-recursive-redefs
                                                      bitops::trailing-0-count
@@ -600,5 +600,3 @@
                      (Equal (logext n x) 0))
             :hints(("Goal" :in-theory (acl2::enable* bitops::ihsext-inductions
                                                      bitops::ihsext-recursive-redefs)))))))
-
-

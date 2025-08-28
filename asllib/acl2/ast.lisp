@@ -4,7 +4,7 @@
 ;;
 ;; SPDX-FileCopyrightText: Copyright 2025 Arm Limited and/or its affiliates <open-source-office@arm.com>
 ;; SPDX-License-Identifier: BSD-3-Clause
-;; 
+;;
 ;;****************************************************************************;;
 ;; Disclaimer:                                                                ;;
 ;; This material covers both ASLv0 (viz, the existing ASL pseudocode language ;;
@@ -24,7 +24,7 @@
 
 (include-book "centaur/fty/deftypes" :dir :system)
 (include-book "centaur/fty/basetypes" :dir :system)
-(include-book "std/util/defenum" :dir :System)
+(include-book "std/util/defenum" :dir :system)
 (include-book "std/basic/two-nats-measure" :dir :system)
 (local (in-theory (disable (tau-system))))
 
@@ -68,27 +68,27 @@ never used in the interpreter")
 (defenum binop-p
   (:and
    :band
-   :beq 
-   :bor 
-   :div 
+   :beq
+   :bor
+   :div
    :divrm
-   :xor 
+   :xor
    :eq_op
-   :gt  
-   :geq 
+   :gt
+   :geq
    :impl
-   :lt  
-   :leq 
-   :mod 
+   :lt
+   :leq
+   :mod
    :minus
-   :mul 
-   :neq 
-   :or  
+   :mul
+   :neq
+   :or
    :plus
-   :pow 
+   :pow
    :rdiv
-   :shl 
-   :shr 
+   :shl
+   :shr
    :concat)
   :short "Type of ASL binary operators")
 
@@ -219,7 +219,7 @@ the given type.")
   (deflist exprlist :elt-type expr :true-listp t
     :short "List of ASL expressions"
     :measure (acl2::two-nats-measure (acl2-count x) 10))
-  
+
   (deftagsum pattern_desc
     :short "ASL pattern expression (main body)"
     (:pattern_all ())
@@ -243,7 +243,7 @@ the given type.")
   (deflist patternlist :elt-type pattern :true-listp t
     :short "List of ASL patterns"
     :measure (acl2::two-nats-measure (acl2-count x) 10))
-  
+
   (deftagsum slice
     :short "ASL bitvector slice expression"
     (:slice_single ((index expr))
@@ -263,7 +263,7 @@ the given type.")
   (deflist slicelist :elt-type slice :true-listp t
     :short "List of ASL bitvector slices"
     :measure (acl2::two-nats-measure (acl2-count x) 10))
-  
+
   (defprod call
     :short "ASL function or procedure call"
     ((name identifier)
@@ -319,7 +319,7 @@ to them are removed by the typechecker.")
   (deflist int_constraintlist :elt-type int_constraint :true-listp t
     :short "List of integer constraints used in ASL types (see @(see constraint_kind))"
     :measure (acl2::two-nats-measure (acl2-count x) 10))
-  
+
   (deftagsum constraint_kind
     :short "Integer constraint used in ASL types (see @(see type_desc))"
     (:unconstrained ())
@@ -438,7 +438,7 @@ a bitvector slice"
     :short "ASL left-hand-side expression (wrapper for @(see lexpr_desc))"
     :layout :alist
     :measure (acl2::two-nats-measure (acl2-count x) 11))
-  
+
   (deflist lexprlist :elt-type lexpr :true-listp t
     :short "List of left-hand-side expressions"
     :measure (acl2::two-nats-measure (acl2-count x) 12)))
@@ -741,6 +741,3 @@ AST in state globals (respectively) @('(@ :static-env)') and @('(@ :ast)')."
        (state (f-put-global ':static-env static-env state))
        (state (f-put-global ':ast ast state)))
     (value :ok)))
-
-
-       
