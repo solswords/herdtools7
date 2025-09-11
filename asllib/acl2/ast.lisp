@@ -73,23 +73,24 @@ never used in the interpreter")
    :div
    :divrm
    :xor
-   :eq_op
+   :eq
    :gt
-   :geq
+   :ge
    :impl
    :lt
-   :leq
+   :le
    :mod
-   :minus
+   :sub
    :mul
-   :neq
+   :ne
    :or
-   :plus
+   :add
    :pow
    :rdiv
    :shl
    :shr
-   :concat)
+   :bv_concat
+   :str_concat)
   :short "Type of ASL binary operators")
 
 (deftagsum literal
