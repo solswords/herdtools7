@@ -107,6 +107,7 @@ type error_desc =
   | PrecisionLostDefining
   | UnexpectedCollection
   | BadPrimitiveArgument of identifier * string
+  | NoEntryPoint
 
 type error = error_desc annotated
 
@@ -217,6 +218,7 @@ let error_label = function
   | PrecisionLostDefining -> "PrecisionLostDefining"
   | UnexpectedCollection -> "UnexpectedCollection"
   | BadPrimitiveArgument _ -> "BadPrimitiveArgument"
+  | NoEntryPoint -> "NoEntryPoint"
 
 let warning_label = function
   | NoLoopLimit -> "NoLoopLimit"
@@ -259,7 +261,10 @@ open struct
       if end_bol > start_bol then really_input_string chan (end_bol - start_bol)
       else ""
     in
-    let last_line = input_line chan in
+    let last_line =
+      (* [input_line] raises [End_of_file] if EOF is at the start of the line *)
+      try input_line chan with End_of_file -> ""
+    in
     let () =
       if false then
         Format.eprintf "Got prev_lines = %S and last_line = %S.@." prev_lines
@@ -578,6 +583,10 @@ module PPrint = struct
           (pp_print_list pp_pos) impdefs
     | BadPrimitiveArgument (name, reason) ->
         pp_err dynamic "%s (primitive) expected an argument %s" name reason
+    | NoEntryPoint ->
+        pp_err dynamic "%a" pp_print_text
+          "no entrypoint supplied. Have you defined `func main() => integer`, \
+           or did you mean to pass `--no-exec`?"
 
   let pp_warning_desc f w =
     match w.desc with
@@ -667,7 +676,15 @@ let pp_csv pp_desc label =
 let pp_error_csv f e = pp_csv pp_error_desc error_label f e
 let pp_warning_csv f w = pp_csv pp_warning_desc warning_label f w
 
-type output_format = HumanReadable | CSV
+let pp_gnu pp_desc =
+  let pos_in_line pos = Lexing.(pos.pos_cnum - pos.pos_bol) in
+  fun f pos ->
+    Printf.fprintf f "aslref: %s:%d:%d: %s" pos.pos_start.pos_fname
+      pos.pos_start.pos_lnum
+      (pos_in_line pos.pos_start)
+      (desc_to_string_inf pp_desc pos)
+
+type output_format = HumanReadable | CSV | GNU
 
 module type ERROR_PRINTER_CONFIG = sig
   val output_format : output_format
@@ -678,11 +695,13 @@ module ErrorPrinter (C : ERROR_PRINTER_CONFIG) = struct
     match C.output_format with
     | HumanReadable -> Format.eprintf "@[<2>%a@]@." pp_error e
     | CSV -> Printf.eprintf "%a\n" pp_error_csv e
+    | GNU -> Printf.eprintf "%a\n" (pp_gnu pp_error_desc) e
 
   let warn w =
     match C.output_format with
     | HumanReadable -> Format.eprintf "@[<2>%a@]@." pp_warning w
     | CSV -> Printf.eprintf "%a\n" pp_warning_csv w
+    | GNU -> Printf.eprintf "%a\n" (pp_gnu pp_warning_desc) w
 
   let warn_from ~loc w = ASTUtils.add_pos_from loc w |> warn
 end

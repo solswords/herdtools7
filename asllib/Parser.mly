@@ -574,8 +574,7 @@ let stmt :=
           { if Config.allow_function_like_statements then S_Unreachable
             else Error.fatal_here $startpos $endpos @@ Error.ObsoleteSyntax "Function-like unreachable statement." }
       | REPEAT; ~=stmt_list; UNTIL; ~=expr; ~=loop_limit;    < S_Repeat >
-      | THROW; e=expr;                                       { S_Throw (Some (e, None)) }
-      | THROW;                                               { S_Throw None             }
+      | THROW; e=expr;                                       { S_Throw (e, None) }
       | PRAGMA; x=IDENTIFIER; e=clist0(expr);                 < S_Pragma >
     )
   )
@@ -737,8 +736,9 @@ let opn [@internal true] := body=stmt; EOF;
             args = [];
             parameters = [];
             body = SB_ASL body;
-            return_type = None;
-            subprogram_type = ST_Procedure;
+            return_type =
+              Some (T_Int UnConstrained |> add_dummy_annotation ~version);
+            subprogram_type = ST_Function;
             recurse_limit = None;
             qualifier = None;
             override = None;

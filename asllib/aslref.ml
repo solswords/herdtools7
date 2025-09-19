@@ -49,10 +49,18 @@ type args = {
   use_conflicting_side_effects_extension : bool;
   override_mode : override_mode;
   no_primitives : bool;
+  no_stdlib : bool;
   control_flow_analysis : bool;
   allow_empty_structured_type_declarations : bool;
   allow_function_like_statements : bool;
 }
+
+exception Exit of int
+
+let running_in_jsoo : bool =
+  match Sys.backend_type with
+  | Sys.Other s when s = "js_of_ocaml" -> true
+  | _ -> false
 
 let parse_args () =
   let show_rules = ref false in
@@ -79,6 +87,7 @@ let parse_args () =
   let override_mode = ref Permissive in
   let set_override_mode m () = override_mode := m in
   let no_primitives = ref false in
+  let no_stdlib = ref false in
   let use_fine_grained_side_effects = ref false in
   let use_conflincting_side_effects_extension = ref false in
   let control_flow_analysis = ref true in
@@ -130,6 +139,9 @@ let parse_args () =
       ( "--format-csv",
         Arg.Unit (fun () -> output_format := Error.CSV),
         " Output the errors in a CSV format." );
+      ( "--gnu-errors",
+        Arg.Unit (fun () -> output_format := Error.GNU),
+        " Output the errors using the GNU convention." );
       ( "--opn",
         Arg.Set_string opn,
         "OPN_FILE Parse the following opn file as main." );
@@ -189,6 +201,9 @@ let parse_args () =
       ( "--no-primitives",
         Arg.Set no_primitives,
         " Do not use internal definitions for standard library subprograms." );
+      ( "--no-stdlib",
+        Arg.Set no_stdlib,
+        " Do not use ASL's standard library. Implies `--no-primitives`." );
       ( "--no-control-flow-analysis",
         Arg.Clear control_flow_analysis,
         " Do not use control-flow analysis to check that subprograms \
@@ -241,7 +256,8 @@ let parse_args () =
       use_conflicting_side_effects_extension =
         !use_conflincting_side_effects_extension;
       override_mode = !override_mode;
-      no_primitives = !no_primitives;
+      no_primitives = !no_primitives || !no_stdlib;
+      no_stdlib = !no_stdlib;
       control_flow_analysis = !control_flow_analysis;
       allow_empty_structured_type_declarations =
         !allow_empty_structured_type_declarations;
@@ -251,7 +267,8 @@ let parse_args () =
 
   let () =
     let ensure_exists s =
-      if Sys.file_exists s then ()
+      if running_in_jsoo then ()
+      else if Sys.file_exists s then ()
       else
         let () = Printf.eprintf "%s cannot find file %S\n%!" prog s in
         (* Arg.usage speclist usage_msg; *)
@@ -262,26 +279,24 @@ let parse_args () =
   in
 
   let () =
+    if ASTUtils.list_is_empty args.files && Option.is_none args.opn then
+      let () =
+        Printf.eprintf
+          "No files supplied! Run `aslref --help` for information on usage."
+      in
+      raise (Exit 1)
+  in
+
+  let () =
     if !show_version then
       let () =
         Printf.printf "aslref version %s rev %s\n%!" Version.version Version.rev
       in
-      exit 0
+      raise (Exit 0)
   in
   args
 
-let or_exit f =
-  if Printexc.backtrace_status () then f ()
-  else
-    match Error.intercept f () with
-    | Ok res -> res
-    | Error e ->
-        Format.eprintf "%a@." Error.pp_error e;
-        exit 1
-
-let () =
-  let args = parse_args () in
-
+let run_with (args : args) : unit =
   let parser_config =
     let allow_no_end_semicolon = args.allow_no_end_semicolon in
     let allow_expression_elsif = args.allow_expression_elsif in
@@ -310,6 +325,19 @@ let () =
       allow_empty_structured_type_declarations;
       allow_function_like_statements;
     }
+  in
+
+  let or_exit f =
+    if Printexc.backtrace_status () then f ()
+    else
+      match Error.intercept f () with
+      | Ok res -> res
+      | Error e ->
+          let module EP = Error.ErrorPrinter (struct
+            let output_format = args.output_format
+          end) in
+          EP.eprintln e;
+          raise (Exit 1)
   in
 
   let extra_main =
@@ -345,7 +373,7 @@ let () =
 
   let ast =
     let open Builder in
-    let added_stdlib = with_stdlib ast in
+    let added_stdlib = if args.no_stdlib then ast else with_stdlib ast in
     if args.no_primitives then added_stdlib
     else with_primitives Native.DeterministicBackend.primitives added_stdlib
   in
@@ -358,29 +386,27 @@ let () =
         Printf.eprintf
           {|"File","Start line","Start col","End line","End col","Exception label","Exception"
 |}
-    | Error.HumanReadable -> ()
+    | Error.HumanReadable | Error.GNU -> ()
   in
 
-  let typed_ast, static_env =
-    let module C = struct
-      let output_format = args.output_format
-      let check = args.strictness
-      let print_typed = args.print_typed || args.print_lisp
-      let use_field_getter_extension = args.use_field_getter_extension
-      let override_mode = args.override_mode
+  let module C = struct
+    let output_format = args.output_format
+    let check = args.strictness
+    let print_typed = args.print_typed || args.print_lisp
+    let use_field_getter_extension = args.use_field_getter_extension
+    let override_mode = args.override_mode
 
-      let fine_grained_side_effects =
-        args.use_fine_grained_side_effects
-        || args.use_conflicting_side_effects_extension
+    let fine_grained_side_effects =
+      args.use_fine_grained_side_effects
+      || args.use_conflicting_side_effects_extension
 
-      let use_conflicting_side_effects_extension =
-        args.use_conflicting_side_effects_extension
+    let use_conflicting_side_effects_extension =
+      args.use_conflicting_side_effects_extension
 
-      let control_flow_analysis = args.control_flow_analysis
-    end in
-    let module T = Annotate (C) in
-    or_exit @@ fun () -> T.type_check_ast ast
-  in
+    let control_flow_analysis = args.control_flow_analysis
+  end in
+  let module T = Annotate (C) in
+  let typed_ast, static_env = or_exit @@ fun () -> T.type_check_ast ast in
 
   let () =
     if args.print_typed then
@@ -399,7 +425,8 @@ let () =
     if args.exec then
       let instrumentation = if args.show_rules then true else false in
       or_exit @@ fun () ->
-      Native.interpret ~instrumentation static_env typed_ast
+      let main_name = T.find_main static_env in
+      Native.interpret ~instrumentation static_env main_name typed_ast
     else (0, [])
   in
 
@@ -410,5 +437,10 @@ let () =
         (pp_print_list ~pp_sep:pp_print_cut Instrumentation.SemanticsRule.pp)
         used_rules
   in
+  if exit_code != 0 then raise (Exit exit_code)
 
-  exit exit_code
+let () =
+  try
+    let args = parse_args () in
+    run_with args
+  with Exit n -> if running_in_jsoo then () else exit n

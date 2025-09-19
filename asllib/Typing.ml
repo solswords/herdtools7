@@ -149,6 +149,7 @@ end
 module type S = sig
   val type_check_ast : AST.t -> AST.t * global
   val type_check_ast_in_env : global -> AST.t -> AST.t * global
+  val find_main : global -> identifier
 end
 
 module Property (C : ANNOTATE_CONFIG) = struct
@@ -295,8 +296,23 @@ module FunctionRenaming (C : ANNOTATE_CONFIG) = struct
         (new_env, new_name) |: TypingRule.AddNewFunc
   (* End *)
 
-  (* Begin SubprogramForName *)
-  let subprogram_for_name ~loc env version name caller_arg_types =
+  (* Begin CallTypeMatches *)
+  let call_type_matches func call_type =
+    func.subprogram_type = call_type
+    ||
+    match (func_version func, func.subprogram_type, call_type) with
+    (* Getters are syntactically identical to functions in V1 - so what
+       looks like a function call may really be a getter call *)
+    | _, ST_Getter, ST_Function -> true
+    (* V0 compatibility: support for calling empty getters/setters *)
+    | V0, ST_EmptyGetter, (ST_Getter | ST_Function) -> true
+    | V0, ST_EmptySetter, ST_Setter -> true
+    | _ -> false
+  (* End *)
+
+  (* Begin SubprogramForSignature *)
+  let subprogram_for_signature ~loc env version name caller_arg_types call_type
+      =
     let () =
       if false then Format.eprintf "Trying to rename call to %S@." name
     in
@@ -307,7 +323,8 @@ module FunctionRenaming (C : ANNOTATE_CONFIG) = struct
     let get_func_sig name' =
       match IMap.find_opt name' env.global.subprograms with
       | Some (func_sig, ses)
-        when has_arg_clash env caller_arg_types func_sig.args ->
+        when has_arg_clash env caller_arg_types func_sig.args
+             && call_type_matches func_sig call_type ->
           Some (name', func_sig, ses)
       | _ -> None
     in
@@ -325,12 +342,14 @@ module FunctionRenaming (C : ANNOTATE_CONFIG) = struct
         assert false
   (* End *)
 
-  let try_subprogram_for_name =
+  let try_subprogram_for_signature =
     match C.check with
-    | TypeCheckNoWarn | TypeCheck -> subprogram_for_name
+    | TypeCheckNoWarn | TypeCheck -> subprogram_for_signature
     | Warn | Silence -> (
-        fun ~loc env version name caller_arg_types ->
-          try subprogram_for_name ~loc env version name caller_arg_types
+        fun ~loc env version name caller_arg_types call_type ->
+          try
+            subprogram_for_signature ~loc env version name caller_arg_types
+              call_type
           with Error.ASLException _ as error -> (
             try
               match IMap.find_opt name env.global.subprograms with
@@ -1631,24 +1650,9 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
     let arg_types, args, sess_args = list_split3 args in
     let ses_args = ses_non_conflicting_unions ~loc sess_args in
     let _, name, func_sig, ses_call =
-      Fn.try_subprogram_for_name ~loc env V1 name arg_types
+      Fn.try_subprogram_for_signature ~loc env V1 name arg_types call_type
     in
     let ses = SES.union ses_args ses_call in
-    (* Check call and subprogram types match *)
-    let+ () =
-      check_true
-        (func_sig.subprogram_type = call_type
-        ||
-        match (func_version func_sig, func_sig.subprogram_type, call_type) with
-        (* Getters are syntactically identical to functions in V1 - so what
-           looks like a function call may really be a getter call *)
-        | _, ST_Getter, ST_Function -> true
-        (* V0 compatibility: support for calling empty getters/setters *)
-        | V0, ST_EmptyGetter, (ST_Getter | ST_Function) -> true
-        | V0, ST_EmptySetter, ST_Setter -> true
-        | _ -> false)
-      @@ fun () -> fatal_from ~loc (MismatchedReturnValue (Static, name))
-    in
     (* Insert omitted parameter for standard library call *)
     let params = insert_stdlib_param ~loc env func_sig ~params ~arg_types in
     (* Check correct number of parameters/arguments supplied *)
@@ -1731,7 +1735,8 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
     let caller_arg_types, args1, sess = list_split3 caller_args_typed in
     let ses1 = ses_non_conflicting_unions ~loc sess in
     let eqs1, name1, callee, ses2 =
-      Fn.try_subprogram_for_name ~loc env V0 name caller_arg_types
+      Fn.try_subprogram_for_signature ~loc env V0 name caller_arg_types
+        call_type
     in
     let ses3 = SES.union ses1 ses2 in
     let () =
@@ -3137,19 +3142,15 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
     (* SDecl.None) *)
     (* End *)
     (* Begin SThrow *)
-    | S_Throw (Some (e, _)) ->
+    | S_Throw (e, _) ->
         let t_e, e', ses1 = annotate_expr env e in
         let+ () = check_structure_exception ~loc env t_e in
         let exn_name =
           match t_e.desc with T_Named s -> s | _ -> assert false
         in
         let ses2 = SES.add_thrown_exception exn_name ses1 in
-        (S_Throw (Some (e', Some t_e)) |> here, env, ses2) |: TypingRule.SThrow
-    | S_Throw None ->
-        (* TODO: verify that this is allowed? *)
-        (s, env, SES.throws_exception "TODO") |: TypingRule.SThrow
-        (* End *)
-        (* Begin STry *)
+        (S_Throw (e', Some t_e) |> here, env, ses2) |: TypingRule.SThrow
+    (* Begin STry *)
     | S_Try (s', catchers, otherwise) ->
         let s'', ses1 = try_annotate_block env s' in
         let ses2, catchers_and_ses =
@@ -3268,7 +3269,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
     assert (loc.version = V0 && C.use_field_getter_extension);
     let ( let* ) = Option.bind in
     let _, _, callee, _ =
-      try Fn.try_subprogram_for_name ~loc env V0 x []
+      try Fn.try_subprogram_for_signature ~loc env V0 x [] ST_EmptySetter
       with Error.ASLException _ -> assert false
     in
     let* ty = callee.return_type in
@@ -3751,9 +3752,12 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
             let configs1 = approx_stmt tenv s1 in
             let configs2 = approx_stmt tenv s2 in
             union abs_of_expr (union configs1 configs2)
-        | S_Repeat (body, _, _) | S_For { body } | S_While (_, _, body) ->
+        | S_Repeat (body, _, _) ->
             let body_configs = approx_stmt tenv body in
             union abs_of_expr body_configs
+        | S_For { body } | S_While (_, _, body) ->
+            let body_configs = approx_stmt tenv body in
+            union continuing (union abs_of_expr body_configs)
         | S_Try (body, catchers, otherwise) ->
             let body_abs_configs = approx_stmt tenv body in
             let try_abs_configs =
@@ -3874,7 +3878,9 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
           | (_, ret_type) :: args -> (ret_type, List.map snd args)
         in
         let _, _, func_sig', _ =
-          try Fn.subprogram_for_name ~loc env V1 func_sig.name arg_types
+          try
+            Fn.subprogram_for_signature ~loc env V0 func_sig.name arg_types
+              ST_Getter
           with Error.(ASLException { desc = NoCallCandidate _ }) -> fail ()
         in
         (* Check that func_sig' is a getter *)
@@ -4447,6 +4453,19 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
       (List.rev ast_rev, env)
 
   let type_check_ast ast = type_check_ast_in_env empty_global ast
+
+  (* Note: produces a *dynamic* error if the main function cannot be found *)
+  let find_main env =
+    let env = with_empty_local env in
+    let _, main_name, func, _ =
+      try
+        Fn.subprogram_for_signature ~loc:dummy_annotated env V1 "main" []
+          ST_Function
+      with Error.(ASLException _) -> Error.(fatal_unknown_pos NoEntryPoint)
+    in
+    match func.return_type with
+    | Some { desc = T_Int UnConstrained } -> main_name
+    | _ -> Error.(fatal_unknown_pos NoEntryPoint)
 end
 (* End *)
 
@@ -4467,4 +4486,5 @@ let type_and_run ?instrumentation ast =
     |> Builder.with_primitives Native.DeterministicBackend.primitives
     |> TypeCheckDefault.type_check_ast
   in
-  Native.interpret ?instrumentation static_env ast
+  let main_name = TypeCheckDefault.find_main static_env in
+  Native.interpret ?instrumentation static_env main_name ast

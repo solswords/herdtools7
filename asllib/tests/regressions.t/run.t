@@ -444,6 +444,11 @@ Required tests:
   $ aslref constrained-types-example.asl
   $ aslref division.asl
   $ aslref exceptions.asl
+  File exceptions.asl, line 73, characters 32 to 37:
+          when COUNTING => assert FALSE;
+                                  ^^^^^
+  ASL Dynamic error: Assertion failed: FALSE.
+  [1]
   $ aslref func1.asl
   $ aslref func2.asl
   $ aslref func3.asl
@@ -478,6 +483,13 @@ Required tests:
   $ aslref approx-expr-binop.asl
   $ aslref asciistr.asl
   $ aslref asl1-calls-asl0-accessor.asl -0 asl0-accessor.asl
+  $ aslref --no-exec accessor-overloading-1.asl
+  $ aslref accessor-overloading-2.asl
+  nullary setter
+  unary getter
+  unary getter
+  unary getter
+  unary setter
   $ aslref empty-function.asl
   File empty-function.asl, line 3, characters 0 to 3:
   end;
@@ -505,6 +517,28 @@ Required tests:
                            ^^^^^^^^^^^^^^^^^^^^^^^^^
   ASL Grammar error: Obsolete syntax: Expression-level 'elsif'.
   [1]
+
+  $ aslref --gnu-errors gnu-errors.asl
+  aslref: gnu-errors.asl:1:0: ASL Warning: the recursive function fact has no recursive limit annotation.
+  aslref: :0:-1: ASL Dynamic error: Mismatch type: value 11 does not belong to type integer {0..9}.
+  [1]
+
+  $ aslref
+  No files supplied! Run `aslref --help` for information on usage.
+  [1]
+
+  $ aslref no-main.asl
+  ASL Dynamic error: no entrypoint supplied. Have you defined `func main() =>
+    integer`, or did you mean to pass `--no-exec`?
+  [1]
+
+  $ aslref main-wrong-type.asl
+  ASL Dynamic error: no entrypoint supplied. Have you defined `func main() =>
+    integer`, or did you mean to pass `--no-exec`?
+  [1]
+
+  $ aslref overloaded-main.asl
+  correct main executed
 
 Base values
   $ aslref base_values.asl
