@@ -76,8 +76,8 @@
   :short "CAT unary operators")
 
 (deftagsum konst
-  (:empty (setrel set_or_rln))
-  (:universe (setrel set_or_rln)))
+  (:empty ((setrel set_or_rln)))
+  (:universe ((setrel set_or_rln))))
 
 
 ;; ??
@@ -126,7 +126,9 @@
                      (body exp)))
     (:e_fun         ((loc)
                      (formals pat)
-                     (body exp)))
+                     (body exp)
+                     (name var)
+                     (free varlist)))
     (:e_explicitset ((loc)
                      (elems explist)))
     (:e_match       ((loc)
@@ -171,7 +173,7 @@
                    (arg2 exp)))
     (:cond_in     ((arg1 exp)
                    (arg2 exp)))
-    :base-case-override :cond_eq
+    (:cond_variant ((c variant_cond)))
     :measure (acl2::two-nats-measure (acl2-count x) 20))
 
   (defprod clause
@@ -196,7 +198,7 @@
    
 
 
-(defenum do_test (:acyclic :irreflexiv :testempty))
+(defenum do_test (:acyclic :irreflexive :testempty))
 
 (deftagsum test
   (:t_yes ((test do_test)))
@@ -238,8 +240,7 @@
                   ;;  But of course our option types don't distinguish between a None and an empty list.
                   ;;  Is a None here different than an empty list?
                   (otherwise inslist)))
-    (:i_test ((loc)
-              (test app_test)
+    (:i_test ((test app_test)
               (type test_type)))
     (:i_unshow ((loc)
                 (lst string-listp)))
@@ -294,3 +295,38 @@
                    
 
   
+(define read-ast-file ((fname stringp) &key (state 'state))
+  :short "Reads the file produced by @('cat2lisp'), returning the AST."
+  :returns (mv err
+               (ast "should be an @(see inslist)")
+               state)
+  :mode :program
+  (b* (((mv err contents state) (acl2::read-file fname state))
+       ((when err) (mv err nil state))
+       ((unless (and (consp contents) (not (cdr contents))))
+        (mv "Unexpected file contents" nil state)))
+    (mv nil (car contents) state)))
+
+
+
+(define read-ast-file-into-global ((fname stringp)
+                                   &key (state 'state))
+  :short "Reads the file produced by @('cat2lisp'), storing the AST in state global @('(@
+:ast)')."
+  ;; Reads a Lisp AST file as dumped by aslref, and stores its static env and AST in state globals :static-env and :ast.
+  :returns (mv err ok state)
+  :mode :program
+  (b* (((mv err ast state) (read-ast-file fname))
+       ((when err)
+        (er soft 'read-ast-file-into-global "~@0" err))
+       (state (f-put-global ':ast ast state)))
+    (value :ok)))
+
+
+(define find-first-non-ins (x)
+  (if (atom x)
+      nil
+    (if (ins-p (car x))
+        (let ((rest (find-first-non-ins (cdr x))))
+          (and rest (+ 1 rest)))
+      0)))
