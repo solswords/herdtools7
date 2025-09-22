@@ -57,23 +57,46 @@
 (defenum set_or_rln (:set :rln))
 
 (defenum op2
-  (:union
-   :inter
-   :diff
-   :seq
-   :cartesian
-   :add
+  (:union 
+   :inter 
+   :diff 
+   :seq   
+   :cartesian 
+   :add    
    :tuple)
-  :short "CAT binary operators")
+  :short "CAT binary operators"
+  :long "
+<ul>
+  <li><i>union</i> Applicable to sets or relations</li>
+  <li><i>inter</i> Applicable to sets or relations</li>
+  <li><i>diff</i>  Applicable to sets or relations</li>
+  <li><i>seq</i>   Sequential composition of relations</li>
+  <li><i>cartesian</i> Creates relations from two sets</li>
+  <li><i>add</i>   Adds element to a set</li>
+  <li><i>tuple</i></li>
+</ul>
+")
 
+;; ?? Missing reflexive closure
 (defenum op1
   (:plus
    :star
    :opt
-   :comp
-   :inv
+   :comp "Applicable to a set or relation"
+   :inv  "Applicable to a relation"
    :toid)
-  :short "CAT unary operators")
+  :short "CAT unary operators"
+  :long "
+<ul>
+  <li><i>plus</i> Transitive closure of a realtion. </li>
+  <li><i>star</i> Reflexive and transitive closure of a relation.</li>
+  <li><i>opt</i></li>
+  <li><i>comp</i> Complement. Applicable to sets and relations.</li>
+  <li><i>inv</i> Inversion of a relation.</li>
+  <li><i>toid</i></li>
+</ul>
+"
+  )
 
 (deftagsum konst
   (:empty (setrel set_or_rln))
