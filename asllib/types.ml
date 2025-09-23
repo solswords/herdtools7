@@ -32,7 +32,7 @@ module TypingRule = Instrumentation.TypingRule
 let ( |: ) = Instrumentation.TypingNoInstr.use_with
 
 let undefined_identifier pos x =
-  Error.fatal_from pos (Error.UndefinedIdentifier x)
+  Error.fatal_from pos (Error.UndefinedIdentifier (Static, x))
 
 let thing_equal astutil_equal env = astutil_equal (StaticModel.equal_in_env env)
 let expr_equal = thing_equal expr_equal
@@ -153,19 +153,11 @@ let rec is_non_primitive ty =
 let is_primitive ty = (not (is_non_primitive ty)) |: TypingRule.PrimitiveType
 (* End *)
 
-let parameterized_constraints =
-  let next_uid = ref 0 in
-  fun var ->
-    let uid = !next_uid in
-    incr next_uid;
-    Parameterized (uid, var)
-
-let parameterized_ty ~loc var =
-  T_Int (parameterized_constraints var) |> add_pos_from loc
+let parameterized_ty ~loc var = T_Int (Parameterized var) |> add_pos_from loc
 
 let to_well_constrained ty =
   match ty.desc with
-  | T_Int (Parameterized (_uid, var)) -> var_ var |> integer_exact
+  | T_Int (Parameterized var) -> var_ var |> integer_exact
   | _ -> ty
 
 let get_well_constrained_structure env ty =
@@ -237,7 +229,7 @@ module Domain = struct
     let ty = make_anonymous env ty in
     match ty.desc with
     | T_Int UnConstrained -> Top
-    | T_Int (Parameterized (_uid, var)) ->
+    | T_Int (Parameterized var) ->
         Subdomains [ ConstrainedDom (Constraint_Exact (var_ var)) ]
     | T_Int (WellConstrained (constraints, _)) ->
         Subdomains (List.map (symdom_of_constraint env) constraints)
@@ -260,7 +252,7 @@ module Domain = struct
     exception CannotUnderApproximate
     (** Raised if under approximation is not possible. *)
 
-    (** Return bottom for Under approximation, top for over approximation. *)
+    (** Return bottom for Under approximation, or raise CannotOverApproximate for over approximation. *)
     let bottom_top approx =
       if approx = Over then raise CannotOverApproximate else IntSet.empty
 
@@ -280,17 +272,19 @@ module Domain = struct
       let warn_from ~loc:_ _ = ()
     end)
 
-    module UnderOp = StaticOperations.Make (struct
+    module UnderSOp = StaticOperations.Make (struct
       let fail _ = raise CannotUnderApproximate
       let warn_from ~loc:_ _ = ()
     end)
 
-    let constraint_binop = function
+    (* Begin ApproxConstraintBinop *)
+    let approx_constraint_binop = function
       | Over -> OverSOp.annotate_constraint_binop
       | Under -> (
           fun ~loc env op s1 s2 ->
-            try UnderOp.annotate_constraint_binop ~loc env op s1 s2
+            try UnderSOp.annotate_constraint_binop ~loc env op s1 s2
             with CannotUnderApproximate -> ([], Precision_Lost []))
+    (* End *)
 
     (** [intset_to_constraints s] converts each interval in [s] into a constraint for that interval. *)
     let intset_to_constraints s =
@@ -318,7 +312,7 @@ module Domain = struct
       | E_Binop ((#StaticOperations.int3_binop as op), e1, e2) -> (
           let s1 = approx_expr approx env e1 |> intset_to_constraints in
           let s2 = approx_expr approx env e2 |> intset_to_constraints in
-          let s', plf = constraint_binop approx ~loc:e env op s1 s2 in
+          let s', plf = approx_constraint_binop approx ~loc:e env op s1 s2 in
           match (plf, approx) with
           | Precision_Full, _ | Precision_Lost _, Under ->
               approx_constraints approx env s'

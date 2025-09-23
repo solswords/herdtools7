@@ -1,4 +1,4 @@
-\chapter{Type Inference and Typechecking Definitions\label{chap:TypeChecking}}
+\chapter{Type System Definitions\label{chap:TypeChecking}}
 
 The purpose of the ASL type system is to describe, in a formal and authoritative way,
 which ASL specifications are considered \emph{well-typed}.
@@ -16,7 +16,7 @@ When an ASL specification is successfully parsed, we refer to the resulting AST 
 A \emph{typechecker} is an implementation of the ASL type system, which accepts an untyped AST and applies the
 rules of the type system to the untyped AST. If it is successful, the specification
 is considered \emph{well-typed} and the result is a pair consisting of
-a \emph{static environment} and a \emph{typed AST},
+a \emph{\staticenvironmentterm{}} and a \emph{typed AST},
 which are used in defining the ASL semantics (\chapref{Semantics}).
 Otherwise, the typechecker returns a \typingerrorterm{}.
 
@@ -25,12 +25,17 @@ The type system of ASL is given by the relation $\annotaterel$, which is defined
 of the functions and relations defined in this reference.
 The functions and relations in this reference are defined, in turn, via type system rules.
 
-Types are represented by respective Abstract Syntax Trees derived from the non-terminal $\ty$.
+Types are represented by respective \typedast{} nodes, derived from the non-terminal $\ty$.
 Throughout this document we use $\tty$ to denote a type variable, which should not be confused with the abstract syntax variable $\ty$.
 
-\section{Static Environments \label{sec:StaticEnvironments}}
+\ChapterOutline
+\begin{itemize}
+  \item \secref{StaticEnvironments} defines static environments; and
+  \item \secref{Typing Rule Configurations} defines the configurations used in typing rules.
+\end{itemize}
 
-A \emph{static environment} (also called a \emph{type environment}) is what the typing rules operate over:
+\section{Static Environments\label{sec:StaticEnvironments}}
+A \emph{\staticenvironmentterm{}} (also called a \emph{type environment}) is what the typing rules operate over:
 a structure, which amongst other things, associates types to variables.
 Intuitively, the typing of a specification makes an initial environment evolve, with new types as given by the
 variable declarations of the specification.
@@ -44,8 +49,7 @@ Static environments, denoted as $\staticenvs$, are defined as follows (referring
 \\
 \globalstaticenvs &\triangleq& \left[
 \begin{array}{lcl}
-  \declaredtypes        &\mapsto& \identifier \partialto \ty \times \TTimeFrame\\
-  \constantvalues       &\mapsto& \identifier \partialto \literal,\\
+  \declaredtypes        &\mapsto& \identifier \partialto \ty \times \TPurity\\
   \globalstoragetypes   &\mapsto& \identifier \partialto \ty \times \globaldeclkeyword,\\
   \exprequiv            &\mapsto& \identifier \partialto \expr,\\
   \subtypes             &\mapsto& \identifier \partialto \identifier,\\
@@ -56,7 +60,6 @@ Static environments, denoted as $\staticenvs$, are defined as follows (referring
 \hypertarget{def-localstaticenvs}{}\\
 \localstaticenvs &\triangleq& \left[
 \begin{array}{lcl}
-  \constantvalues       &\mapsto& \identifier \partialto \literal,\\
   \localstoragetypes    &\mapsto& \identifier \partialto \ty \times \globaldeclkeyword,\\
   \exprequiv            &\mapsto& \identifier \partialto \expr,\\
   \returntype           &\mapsto& \langle \ty \rangle
@@ -68,20 +71,18 @@ Static environments, denoted as $\staticenvs$, are defined as follows (referring
 
 We use $\tenv$ and similar variable names (for example, $\tenvone$ and $\newtenv$) to range over static environments.
 
-A static environment $\tenv=(G^\tenv, L^\tenv)$ consists of two
-distinct components: the global environment $G^\tenv \in \globalstaticenvs$ --- pertaining to AST nodes
-appearing outside of a given subprogram, and the local environment
+A \staticenvironmentterm{} $\tenv=(G^\tenv, L^\tenv)$ consists of two
+distinct components: the \emph{\globalstaticenvironmentterm} $G^\tenv \in \globalstaticenvs$ --- pertaining to AST nodes
+appearing outside of a given subprogram, and the \emph{\localstaticenvironmentterm}
 $L^\tenv \in \localstaticenvs$ --- pertaining to AST nodes appearing inside a given subprogram.
 This separation allows us to typecheck subprograms by using an empty local environment.
 
 The intuitive meaning of each component is as follows:
 \begin{itemize}
   \hypertarget{def-declaredtypes}{}
-  \item $\declaredtypes$ assigns types to their declared names and \timeframeterm\
-  (the \hyperlink{def-maxtimeframe}{maximal time frame} of any \sideeffectdescriptorterm\ inferred for
-  the type definition);
+  \item $\declaredtypes$ assigns types to their declared names and \purity{};
   \hypertarget{def-constantvalues}{}
-  \item $\constantvalues$ assigns literals to their declaring (constant) names;
+  \item $\constantvalues$ assigns literals to their declaring (global constant) identifiers;
   \hypertarget{def-globalstoragetypes}{}
   \item $\globalstoragetypes$ associates names of global storage elements to their inferred type
   and how they were declared --- as constants, configuration variables, \texttt{let} variables,
@@ -107,7 +108,7 @@ The intuitive meaning of each component is as follows:
 
 \hypertarget{def-emptytenv}{}
 \begin{definition}[Empty Static Environment]
-The \emph{empty static environment}, \\ denoted as $\emptytenv$, is defined as follows:
+The \emph{empty \staticenvironmentterm{}}, \\ denoted as $\emptytenv$, is defined as follows:
 \[
 \emptytenv \triangleq \left(
   \overname{
@@ -125,7 +126,6 @@ The \emph{empty static environment}, \\ denoted as $\emptytenv$, is defined as f
 \overname{
  \left[
 \begin{array}{lcl}
-  \constantvalues       &\mapsto& \emptyfunc,\\
   \localstoragetypes    &\mapsto& \emptyfunc,\\
   \exprequiv            &\mapsto& \emptyfunc,\\
   \returntype           &\mapsto& \None
@@ -143,7 +143,7 @@ with a new mapping $x \mapsto v$, we use the notation $\tenv.f[x \mapsto v]$ to 
 
 \identd{JRXM} \identi{ZTMQ}
 
-\section{Typing Rule Configurations}
+\section{Typing Rule Configurations\label{sec:Typing Rule Configurations}}
 The output configurations of type system assertions have two flavors:
 \begin{description}
   \item[Normal Outputs.]
@@ -162,30 +162,10 @@ We define the mathematical type of \typingerrorterm{} configurations
 as follows:
 \hypertarget{def-ttypeerror}{}
 \[
-  \TTypeError \triangleq \{\TypeErrorVal{\vs} \;|\; \vs \in \Strings \} \enspace.
+  \TTypeError \triangleq \{\TypeErrorVal{\vs} \;|\; \vs \in \Strings \}
 \]
-
 \hypertarget{def-typeerrorconfig}{}
-and the shorthand $\TypeErrorConfig \triangleq \TypeError(\vs)$ for \typingerrorterm{} configurations.
+as well as define the shorthand $\TypeErrorConfig \triangleq \TypeError(\vs)$ for \typingerrorterm{} configurations.
 
-% Specifically,\ProseOrTypeError\ means: ``or a \typingerrorterm{} configuration $\TypeErrorConfig$, which short-circuits the rule,
-% making it transition into the \typingerrorterm{} configuration $\TypeErrorConfig$.''.
-%
 When several \hyperlink{def-caserules}{case rules} for the same function use the same short-circuiting transition assertion,
 we do not repeat the\ProseOrTypeError, but rather include it only in the first rule.
-
-% \subsection*{Rule Example}
-% The following rule is used to type a sequence of two statements:
-% \[
-% \inferrule{
-%   \annotatestmt{\tenv, \vs1} = (\newsone, \tenvone)\\
-%   \annotatestmt{\tenvone, \vs2} = (\newstwo, \tenvtwo)\\
-% }
-% {
-%   \annotatestmt{\tenv, \SSeq(\vsone, \vstwo)} = (\SSeq(\newsone, \newstwo), \tenvtwo)
-% }
-% \]
-% The rule uses the annotation function $\annotatestmt{\cdot}$, which
-% accepts an environment $\tenv$ and two statements and returns a new statement and a new environment.
-% The function returns a new statement in order to implement certain code transformations, such as
-% inlining setter functions.

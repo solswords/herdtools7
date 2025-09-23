@@ -74,6 +74,7 @@ let add_dummy_annotation ?(version = default_version) desc =
 
 let dummy_annotated = add_dummy_annotation ()
 let to_pos pos = { pos with desc = () }
+let is_dummy_annotated x = x.pos_end == dummy_pos || x.pos_start == dummy_pos
 
 let add_pos_from_st pos desc =
   if pos.desc == desc then pos else { pos with desc }
@@ -90,7 +91,7 @@ let add_pos_range_from pos_from pos_to desc =
   }
 
 let map_desc f thing = f thing |> add_pos_from thing
-let map_desc_st' thing f = f thing.desc |> add_pos_from thing
+let map_annotated thing f = f thing.desc |> add_pos_from thing
 
 let add_maybe_loc ?loc thing =
   match loc with
@@ -409,7 +410,7 @@ and type_equal eq t1 t2 =
   | T_String, T_String
   | T_Int UnConstrained, T_Int UnConstrained ->
       true
-  | T_Int (Parameterized (i1, _)), T_Int (Parameterized (i2, _)) -> i1 == i2
+  | T_Int (Parameterized x1), T_Int (Parameterized x2) -> String.equal x1 x2
   | T_Int (WellConstrained (c1, _)), T_Int (WellConstrained (c2, _)) ->
       constraints_equal eq c1 c2
   | T_Bits (w1, bf1), T_Bits (w2, bf2) ->
@@ -456,6 +457,7 @@ and bitfield_equal eq bf1 bf2 =
   | BitField_Type _, BitField_Simple _ ->
       false
 
+let qualifier_equal (q1 : func_qualifier option) q2 = Option.equal ( = ) q1 q2
 let var_ x = E_Var x |> add_dummy_annotation
 let binop op = map2_desc (fun e1 e2 -> E_Binop (op, e1, e2))
 let unop op = map_desc (fun e -> E_Unop (op, e))
@@ -484,7 +486,7 @@ let pow_expr e = function
 let div_expr e z = if Z.equal z Z.one then e else binop `DIV e (expr_of_z z)
 
 let add_expr e1 (s, e2) =
-  if s = 0 then e1 else if s > 0 then binop `PLUS e1 e2 else binop `MINUS e1 e2
+  if s = 0 then e1 else if s > 0 then binop `ADD e1 e2 else binop `SUB e1 e2
 
 let conj_expr e1 e2 =
   let lit_true = literal (L_Bool true) in
@@ -549,6 +551,9 @@ let local_ignored_prefix = "__ldi_discard"
 let local_ignored () = fresh_var local_ignored_prefix
 let is_local_ignored s = string_starts_with ~prefix:local_ignored_prefix s
 let slice_is_single = function Slice_Single _ -> true | _ -> false
+
+let is_noreturn (f : func) =
+  match f.qualifier with Some Noreturn -> true | _ -> false
 
 let slice_as_single = function
   | Slice_Single e -> e
@@ -696,7 +701,7 @@ let find_bitfields_slices_opt name bitfields =
 let rename_locals map_name ast =
   (* Begin RenameLocalsExpr *)
   let rec map_e e =
-    map_desc_st' e @@ function
+    map_annotated e @@ function
     | E_Literal _ -> e.desc
     | E_Arbitrary t -> E_Arbitrary (map_t t)
     | E_Var x -> E_Var (map_name x)
@@ -719,7 +724,7 @@ let rename_locals map_name ast =
         E_Array { length = map_e length; value = map_e value }
     | E_EnumArray { enum; labels; value } ->
         E_EnumArray { enum; labels; value = map_e value }
-    | E_Pattern (_, _) -> failwith "Not yet implemented: obfuscate patterns"
+    | E_Pattern (e1, p) -> E_Pattern (map_e e1, map_pattern p)
   (* End *)
   and map_es li = List.map map_e li
   and map_slices slices = List.map map_slice slices
@@ -732,18 +737,17 @@ let rename_locals map_name ast =
   (* End *)
   (* Begin RenameLocalsType *)
   and map_t t =
-    map_desc_st' t @@ function
+    map_annotated t @@ function
     | T_Real | T_String | T_Bool | T_Enum _ | T_Named _
     | T_Int (UnConstrained | PendingConstrained) ->
         t.desc
-    | T_Int (Parameterized _) ->
-        failwith "Not yet implemented: obfuscate parametrized types"
+    | T_Int (Parameterized param_name) ->
+        T_Int (Parameterized (map_name param_name))
     | T_Int (WellConstrained (cs, p)) -> T_Int (WellConstrained (map_cs cs, p))
     | T_Bits (e, bitfields) -> T_Bits (map_e e, bitfields)
     | T_Tuple li -> T_Tuple (List.map map_t li)
-    | T_Array (_, _) -> failwith "Not yet implemented: obfuscate array types"
-    | T_Collection _ ->
-        failwith "Not yet implemented: obfuscate collection types"
+    | T_Array (index, elem_ty) -> T_Array (map_array_index index, map_t elem_ty)
+    | T_Collection li -> T_Collection (List.map (fun (f, t) -> (f, map_t t)) li)
     | T_Record li -> T_Record (List.map (fun (f, t) -> (f, map_t t)) li)
     | T_Exception li -> T_Exception (List.map (fun (f, t) -> (f, map_t t)) li)
   (* End *)
@@ -755,7 +759,7 @@ let rename_locals map_name ast =
   (* End *)
   (* Begin RenameLocalsStmt *)
   and map_s s =
-    map_desc_st' s @@ function
+    map_annotated s @@ function
     | S_Pass -> s.desc
     | S_Seq (s1, s2) -> S_Seq (map_s s1, map_s s2)
     | S_Decl (ldk, ldi, ty, e) ->
@@ -777,9 +781,12 @@ let rename_locals map_name ast =
         S_While (map_e e, Option.map map_e limit, map_s body)
     | S_Repeat (s, e, limit) ->
         S_Repeat (map_s s, map_e e, Option.map map_e limit)
-    | S_Throw (Some (e, t)) -> S_Throw (Some (map_e e, Option.map map_t t))
-    | S_Throw None -> s.desc
-    | S_Try (_, _, _) -> failwith "Not yet implemented: obfuscate try"
+    | S_Throw (e, t) -> S_Throw (map_e e, Option.map map_t t)
+    | S_Try (s1, catchers, otherwise_opt) ->
+        S_Try
+          ( map_s s1,
+            List.map map_catcher catchers,
+            Option.map map_s otherwise_opt )
     | S_Print { args; newline; debug } ->
         S_Print { args = List.map map_e args; newline; debug }
     | S_Unreachable -> S_Unreachable
@@ -789,7 +796,7 @@ let rename_locals map_name ast =
   (* End *)
   (* Begin RenameLocalsLexpr *)
   and map_le le =
-    map_desc_st' le @@ function
+    map_annotated le @@ function
     | LE_Discard -> le.desc
     | LE_Var x -> LE_Var (map_name x)
     | LE_Slice (le1, slices) -> LE_Slice (map_le le1, map_slices slices)
@@ -826,12 +833,34 @@ let rename_locals map_name ast =
       return_type = Option.map map_t f.return_type;
     }
   (* End *)
+  (* Begin RenameLocalsPattern *)
+  and map_pattern p =
+    map_annotated p @@ function
+    | Pattern_All -> Pattern_All
+    | Pattern_Any pl -> Pattern_Any (List.map map_pattern pl)
+    | Pattern_Geq p_e -> Pattern_Geq (map_e p_e)
+    | Pattern_Leq p_e -> Pattern_Leq (map_e p_e)
+    | Pattern_Mask _ -> p.desc
+    | Pattern_Not sub_p -> Pattern_Not (map_pattern sub_p)
+    | Pattern_Range (e1, e2) -> Pattern_Range (map_e e1, map_e e2)
+    | Pattern_Single p_e -> Pattern_Single (map_e p_e)
+    | Pattern_Tuple pl -> Pattern_Tuple (List.map map_pattern pl)
+  (* End *)
+  (* Begin RenameCatcher *)
+  and map_catcher (opt_exn_name, exn_ty, when_stmt) =
+    (Option.map map_name opt_exn_name, map_t exn_ty, map_s when_stmt)
+  (* End *)
+  (* Begin RenameLocalsArrayIndex *)
+  and map_array_index = function
+    | ArrayLength_Enum _ as i -> i
+    | ArrayLength_Expr e_length -> ArrayLength_Expr (map_e e_length)
+  (* End *)
   (* Begin RenameLocals *)
   and map_decl d =
-    map_desc_st' d @@ function D_Func f -> D_Func (map_func f) | d -> d
+    map_annotated d @@ function D_Func f -> D_Func (map_func f) | d -> d
+    (* End *)
   in
   List.map map_decl ast
-(* End *)
 
 (* Taken from lib/innerRel.ml *)
 let rec transitive_closure m0 =

@@ -41,16 +41,17 @@ Tests using ASLRef OCaml primitives for some stdlib functions
   ROL_C(V,4) = ('001', '1')
   
 
+
   $ aslref misc.asl
 
 Checking that --no-primitives option actually removes OCaml primitives
 (different errors are produced)
   $ aslref no-primitives-test.asl
-  ASL Execution error: Mismatch type: value -1 does not belong to type integer.
+  ASL Dynamic error: FloorLog2 (primitive) expected an argument greater than 0
   [1]
   $ aslref --no-primitives no-primitives-test.asl
-  File ASL Standard Library, line 60, characters 11 to 16:
-  ASL Execution error: Assertion failed: (__stdlib_local_a > 0).
+  File ASL Standard Library, line 57, characters 11 to 16:
+  ASL Dynamic error: Assertion failed: (__stdlib_local_a > 0).
   [1]
 
 Tests using ASL stdlib only
@@ -95,6 +96,7 @@ Tests using ASL stdlib only
   ROL_C(V,3) = ('100', '0')
   ROL_C(V,4) = ('001', '1')
   
+
 
   $ aslref --no-primitives misc.asl
 

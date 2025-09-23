@@ -41,11 +41,12 @@ module DeterministicBackend :
      and type 'a m = 'a
      and module Scope = NoScope
 
-module DeterministicInterpreter (C : Interpreter.Config) :
+module DeterministicInterpreter (I : Instrumentation.SEMINSTR) :
   Interpreter.S with module B = DeterministicBackend
 
 val interpret :
   ?instrumentation:bool ->
   StaticEnv.global ->
+  AST.identifier ->
   AST.t ->
   int * Instrumentation.semantics_rule list

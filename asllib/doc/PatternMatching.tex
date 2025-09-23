@@ -1,14 +1,43 @@
 \chapter{Pattern Matching\label{chap:PatternMatching}}
-Patterns are grammatically derived from $\Npattern$ and represented as an AST by $\pattern$.
 
-\hypertarget{build-pattern}{}
-The function
+The construct \texttt{$e$ IN $p$} tests whether the value calculated by the expression $e$,
+which is referred to as the \emph{discriminant},
+matches a value specified by the \emph{pattern} $p$.
+
+\ExampleDef{Patterns}
+\listingref{Patterns} shows examples of some patterns.
+\ASLListing{Examples of patterns}{Patterns}{\definitiontests/Patterns.asl}
+
+\ChapterOutline
+\begin{itemize}
+  \item \FormalRelationsRef{Patterns} defines the formal relations for patterns;
+  \item \secref{MatchingAllValues} defines the match-all-values pattern;
+  \item \secref{MatchingASingleValue} defines the match-a-single-value pattern;
+  \item \secref{MatchingARangeOfIntegers} defines the match-a-range-of-integers pattern;
+  \item \secref{MatchingAnUpperBoundedRangeOfIntegers} defines the match-integers-less-than pattern;
+  \item \secref{MatchingALowerBoundedRangeOfIntegers} defines the match-integers-greater-than pattern;
+  \item \secref{MatchingABitmask} defines the bitmask pattern;
+  \item \secref{MatchingATupleOfPatterns} defines the match-a-tuple pattern;
+  \item \secref{MatchingAnyPatternInASetOfPatterns} defines the match-any pattern;
+  \item \secref{MatchingANegatedPattern} defines the negation pattern;
+  \item \secref{ASTRulesForPatternExpressions} defines the expressions that may appear inside patterns.
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\FormalRelationsDef{Patterns}
+\paragraph{Syntax:} Patterns are grammatically derived from $\Npattern$.
+
+\paragraph{Abstract Syntax:} Patterns are derived in the abstract grammar from $\pattern$
+  and generated from $\buildpattern$.
+  \hypertarget{build-pattern}{}
+  The function
 \[
   \buildpattern(\overname{\parsenode{\Npattern}}{\vparsednode}) \;\aslto\;
   \overname{\pattern}{\vastnode}
 \]
 transforms a pattern parse node $\vparsednode$ into a pattern AST node $\vastnode$.
 
+\paragraph{Typing:} Patterns are annotated by $\annotatepattern$.
 \hypertarget{def-annotatepattern}{}
 The function
 \[
@@ -18,45 +47,26 @@ The function
     \overname{\pattern}{\vp}) \aslto
     (\overname{\pattern}{\newp} \times \overname{\TSideEffectSet}{\vses}) \cup \overname{\TTypeError}{\TypeErrorConfig}
 \]
-annotates a pattern $\vp$ in a static environment $\tenv$ given a type $\vt$,
+annotates a pattern $\vp$ in a \staticenvironmentterm{} $\tenv$ given a type $\vt$,
 resulting in $\newp$, which is the typed AST node for $\vp$
 and the inferred \sideeffectsetterm\ $\vses$.
 \ProseOtherwiseTypeError.
 
+\paragraph{Semantics:} Patterns are evaluated by $\evalpattern$.
 The relation
 \hypertarget{def-evalpattern}{}
 \[
   \evalpattern{\overname{\envs}{\env} \aslsep \overname{\vals}{\vv} \aslsep \overname{\pattern}{\vp}} \;\aslrel\;
-  \Normal(\overname{\tbool}{\vb}, \overname{\XGraphs}{\newg})
+  \left(
+  \begin{array}{ll}
+  \ResultPattern(\overname{\tbool}{\vb}, \overname{\XGraphs}{\newg}) & \cup\\
+  \overname{\TDynError}{\DynErrorConfig} & \cup\\
+  \overname{\TDiverging}{\DivergingConfig} &
+  \end{array}
+  \right)
 \]
 determines whether a value $\vv$ matches the pattern $\vp$ in an environment $\env$
-resulting in either $\Normal(\vb, \newg)$ or an abnormal configuration.
-
-The rest of this chapter defines the syntax, abstract syntax, typing rules,
-and semantics rules for the following kinds of patterns:
-\begin{itemize}
-\item Matching All Values (\secref{MatchingAllValues})
-\item Matching a Single Value (\secref{MatchingASingleValue})
-\item Matching a Range of Integers (\secref{MatchingARangeOfIntegers})
-\item Matching an Upper Bounded Range of Integers (\secref{MatchingAnUpperBoundedRangeOfIntegers})
-\item Matching a Lower Bounded Range of Integers (\secref{MatchingALowerBoundedRangeOfIntegers})
-\item Matching a Bitmask (\secref{MatchingABitmask})
-\item Matching a Tuple of Patterns (\secref{MatchingATupleOfPatterns})
-\item Matching Any Pattern in a Set of Patterns (\secref{MatchingAnyPatternInASetOfPatterns})
-\item Matching a Negated Pattern (\secref{MatchingANegatedPattern})
-\end{itemize}
-
-Finally, expressions appearing in patterns are grammatically derived from \\
-$\Nexprpattern$.
-The grammar is almost identical to that of $\Nexpr$, except that pattern expressions
-for matching a single values and for matching a range of values, exclude tuples
-(for which the tuple expression is used).
-The AST for these expressions is $\expr$ --- same as the AST for $\Nexpr$.
-The builders for $\Nexprpattern$ are identical to those of $\Nexpr$. For completeness,
-we list those in \secref{ASTRulesForPatternExpressions}.
-Those expressions are side-effect-free, as guaranteed by the checks to
-$\checksymbolicallyevaluable$, and thus in the semantics we can use
-$\evalexprsef\empty$.
+resulting in either $\ResultPattern(\vb, \newg)$ or an abnormal configuration.
 
 \section{Matching All Values\label{sec:MatchingAllValues}}
 \ASLListing{Matching any value}{semantics-pall}{\semanticstests/SemanticsRule.PAll.asl}
@@ -117,7 +127,7 @@ since \texttt{-} matches any value and \texttt{42} in particular.
 \begin{mathpar}
 \inferrule{}
 {
-  \evalpattern{\env, \Ignore, \PatternAll} \evalarrow \Normal(\nvbool(\True), \emptygraph)
+  \evalpattern{\env, \Ignore, \PatternAll} \evalarrow \ResultPattern(\nvbool(\True), \emptygraph)
 }
 \end{mathpar}
 \CodeSubsection{\EvalPAllBegin}{\EvalPAllEnd}{../Interpreter.ml}
@@ -192,7 +202,7 @@ since \texttt{-} matches any value and \texttt{42} in particular.
 \FormallyParagraph
 \begin{mathpar}
 \inferrule[t\_bool, t\_real, t\_int, t\_string]{
-  \annotateexpr{\tenv, \ve} \typearrow (\vte, \vep, \vses) \OrTypeError\\\\
+  \annotateexpr(\tenv, \ve) \typearrow (\vte, \vep, \vses) \OrTypeError\\\\
   \checksymbolicallyevaluable(\vses) \typearrow \True \OrTypeError\\\\
   \makeanonymous(\tenv, \vt) \typearrow \vtstruct \OrTypeError\\\\
   \makeanonymous(\tenv, \vte) \typearrow \testruct \OrTypeError\\\\
@@ -206,7 +216,7 @@ since \texttt{-} matches any value and \texttt{42} in particular.
 
 \begin{mathpar}
 \inferrule[t\_bits]{
-  \annotateexpr{\tenv, \ve} \typearrow (\vte, \vep, \vses) \OrTypeError\\\\
+  \annotateexpr(\tenv, \ve) \typearrow (\vte, \vep, \vses) \OrTypeError\\\\
   \checksymbolicallyevaluable(\vses) \typearrow \True \OrTypeError\\\\
   \makeanonymous(\tenv, \vt) \typearrow \vtstruct \OrTypeError\\\\
   \makeanonymous(\tenv, \vte) \typearrow \vtestruct \OrTypeError\\\\
@@ -222,7 +232,7 @@ since \texttt{-} matches any value and \texttt{42} in particular.
 
 \begin{mathpar}
 \inferrule[t\_enum]{
-  \annotateexpr{\tenv, \ve} \typearrow (\vte, \vep, \vses) \OrTypeError\\\\
+  \annotateexpr(\tenv, \ve) \typearrow (\vte, \vep, \vses) \OrTypeError\\\\
   \checksymbolicallyevaluable(\vses) \typearrow \True \OrTypeError\\\\
   \makeanonymous(\tenv, \vt) \typearrow \vtstruct \OrTypeError\\\\
   \makeanonymous(\tenv, \vte) \typearrow \vtestruct \OrTypeError\\\\
@@ -239,7 +249,7 @@ since \texttt{-} matches any value and \texttt{42} in particular.
 
 \begin{mathpar}
 \inferrule[error]{
-  \annotateexpr{\tenv, \ve} \typearrow (\vte, \vep, \vses) \OrTypeError\\\\
+  \annotateexpr(\tenv, \ve) \typearrow (\vte, \vep, \vses) \OrTypeError\\\\
   \checksymbolicallyevaluable(\vses) \typearrow \True \OrTypeError\\\\
   \makeanonymous(\tenv, \vt) \typearrow \vtstruct \OrTypeError\\\\
   \makeanonymous(\tenv, \vte) \typearrow \testruct \OrTypeError\\\\
@@ -267,17 +277,17 @@ whereas \\
   \item $\vp$ is the condition corresponding to being equal to the
     side-effect-free expression $\ve$, $\PatternSingle(\ve)$;
   \item the side-effect-free evaluation of $\ve$ in
-    environment $\env$ is \\ $\Normal(\vvone, \newg)$\ProseOrError;
+    environment $\env$ is \\ $\ResultExprSEF(\vvone, \newg)$\ProseOrDynErrorDiverging;
   \item $\vb$ is the Boolean value corresponding to whether $\vv$
     is equal to $\vvone$.
 \end{itemize}
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
-  \evalexprsef{\env, \ve} \evalarrow \Normal(\vvone, \newg) \OrDynError\\\\
+  \evalexprsef{\env, \ve} \evalarrow \ResultExprSEF(\vvone, \newg) \OrDynErrorDiverging\\\\
   \binoprel(\EQOP, \vv, \vvone) \evalarrow \vb
 }{
-  \evalpattern{\env, \vv, \overname{\PatternSingle(\ve)}{\vp}} \evalarrow \Normal(\vb, \newg)
+  \evalpattern{\env, \vv, \overname{\PatternSingle(\ve)}{\vp}} \evalarrow \ResultPattern(\vb, \newg)
 }
 \end{mathpar}
 \CodeSubsection{\EvalPSingleBegin}{\EvalPSingleEnd}{../Interpreter.ml}
@@ -369,8 +379,8 @@ range given by \texttt{3..42}.
   \item $\vp$ is the condition corresponding to being greater than or equal
     to $\veone$, and lesser or equal to $\vetwo$, that is, $\PatternRange(\veone, \vetwo)$;
   \item $\veone$ and $\vetwo$ are side-effect-free expressions;
-  \item the side-effect-free evaluation of $\veone$ in $\env$ is $\Normal(\vvone, \vgone)$\ProseOrError;
-  \item the side-effect-free evaluation of $\vetwo$ in $\env$ is $\Normal(\vvtwo, \vgtwo)$\ProseOrError;
+  \item the side-effect-free evaluation of $\veone$ in $\env$ is $\ResultExprSEF(\vvone, \vgone)$\ProseOrDynErrorDiverging;
+  \item the side-effect-free evaluation of $\vetwo$ in $\env$ is $\ResultExprSEF(\vvtwo, \vgtwo)$\ProseOrDynErrorDiverging;
   \item $\vbone$ is the Boolean value corresponding to whether
     $\vv$ is greater than or equal to $\vvone$;
     \item $\vbtwo$ is the Boolean value corresponding to whether
@@ -382,14 +392,14 @@ range given by \texttt{3..42}.
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
-  \evalexprsef{\env, \veone} \evalarrow \Normal(\vvone, \vgone) \OrDynError\\\\
+  \evalexprsef{\env, \veone} \evalarrow \ResultExprSEF(\vvone, \vgone) \OrDynErrorDiverging\\\\
   \binoprel(\GEQ, \vv, \vvone) \evalarrow \vbone\\
-  \evalexprsef{\env, \veone} \evalarrow \Normal(\vvtwo, \vgtwo) \OrDynError\\\\
+  \evalexprsef{\env, \veone} \evalarrow \ResultExprSEF(\vvtwo, \vgtwo) \OrDynErrorDiverging\\\\
   \binoprel(\LEQ, \vv, \vvtwo) \evalarrow \vbtwo\\
   \binoprel(\BAND, \vbone, \vbtwo) \evalarrow \vb\\
   \newg \eqdef \vgone \parallelcomp \vgtwo
 }{
-  \evalpattern{\env, \vv, \PatternRange(\veone, \vetwo)} \evalarrow \Normal(\vb, \newg)
+  \evalpattern{\env, \vv, \PatternRange(\veone, \vetwo)} \evalarrow \ResultPattern(\vb, \newg)
 }
 \end{mathpar}
 \CodeSubsection{\EvalPRangeBegin}{\EvalPRangeEnd}{../Interpreter.ml}
@@ -441,7 +451,7 @@ that is, $\PatternLeq(\ve)$;
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
-  \annotateexpr{\tenv, \ve} \typearrow (\vte, \vep, \vses) \OrTypeError\\\\
+  \annotateexpr(\tenv, \ve) \typearrow (\vte, \vep, \vses) \OrTypeError\\\\
   \checksymbolicallyevaluable(\vses) \typearrow \True \OrTypeError\\\\
   \makeanonymous(\tenv, \vt) \typearrow \vtstruct \OrTypeError\\\\
   \makeanonymous(\tenv, \vte) \typearrow \testruct \OrTypeError\\\\
@@ -469,20 +479,21 @@ whereas \texttt{match\_false} evaluates to \False, since \texttt{42} is not less
 \ProseParagraph
 \AllApply
 \begin{itemize}
-  \item $\vp$ is the condition corresponding to being less than or equal
-    to the side-effect-free expression $\ve$, $\PatternLeq(\ve)$;
-  \item the side-effect-free evaluation of $\ve$ is either
-  $\Normal(\vvone, \newg)$\ProseOrError;
-  \item $\vb$ is the Boolean value corresponding to whether $\vv$
-    is less than or equal to $\vvone$.
+\item $\vp$ is the condition corresponding to being less than or equal
+      to the side-effect-free expression $\ve$, $\PatternLeq(\ve)$;
+\item the side-effect-free evaluation of $\ve$ is
+      $\ResultExprSEF(\vvone, \newg)$\ProseOrDynErrorDiverging;
+\item $\vb$ is the Boolean value corresponding to whether $\vv$
+      is less than or equal to $\vvone$.
 \end{itemize}
+
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
-  \evalexprsef{\env, \ve} \evalarrow \Normal(\vvone, \newg) \OrDynError\\\\
+  \evalexprsef{\env, \ve} \evalarrow \ResultExprSEF(\vvone, \newg) \OrDynErrorDiverging\\\\
   \binoprel(\LEQ, \vv, \vvone) \evalarrow \vb
 }{
-  \evalpattern{\env, \vv, \PatternLeq(\ve)} \evalarrow \Normal(\vb, \newg)
+  \evalpattern{\env, \vv, \PatternLeq(\ve)} \evalarrow \ResultPattern(\vb, \newg)
 }
 \end{mathpar}
 \CodeSubsection{\EvalPLeqBegin}{\EvalPLeqEnd}{../Interpreter.ml}
@@ -533,7 +544,7 @@ whereas \texttt{match\_false} evaluates to \False, since \texttt{42} is not less
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
-  \annotateexpr{\tenv, \ve} \typearrow (\vte, \vep, \vses) \OrTypeError\\\\
+  \annotateexpr(\tenv, \ve) \typearrow (\vte, \vep, \vses) \OrTypeError\\\\
   \checksymbolicallyevaluable(\vses) \typearrow \True \OrTypeError\\\\
   \makeanonymous(\tenv, \vt) \typearrow \vtstruct \OrTypeError\\\\
   \makeanonymous(\tenv, \vte) \typearrow \testruct \OrTypeError\\\\
@@ -561,20 +572,21 @@ whereas \texttt{match\_false} evaluates to \False, since \texttt{3} is not great
 \ProseParagraph
 \AllApply
 \begin{itemize}
-  \item $\vp$ is the condition corresponding to being greater than or equal
-    than the side-effect-free expression $\ve$, $\PatternGeq(\ve)$;
-  \item the side-effect-free evaluation of $\ve$ is either
-  $\Normal(\vvone, \newg)$\ProseOrError;
-  \item $\vb$ is the Boolean value corresponding to whether $\vv$
-    is greater than or equal to $\vvone$.
+\item $\vp$ is the condition corresponding to being greater than or equal
+      than the side-effect-free expression $\ve$, $\PatternGeq(\ve)$;
+\item the side-effect-free evaluation of $\ve$ is either
+      $\ResultExprSEF(\vvone, \newg)$\ProseOrDynErrorDiverging;
+\item $\vb$ is the Boolean value corresponding to whether $\vv$
+      is greater than or equal to $\vvone$.
 \end{itemize}
+
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
-  \evalexprsef{\env, \ve} \evalarrow \Normal(\vvone, \newg) \OrDynError\\\\
+  \evalexprsef{\env, \ve} \evalarrow \ResultExprSEF(\vvone, \newg) \OrDynErrorDiverging\\\\
   \binoprel(\GEQ, \vv, \vvone) \evalarrow \vb
 }{
-  \evalpattern{\env, \vv, \PatternGeq(\ve)} \evalarrow \Normal(\vb, \newg)
+  \evalpattern{\env, \vv, \PatternGeq(\ve)} \evalarrow \ResultPattern(\vb, \newg)
 }
 \end{mathpar}
 \CodeSubsection{\EvalPGeqBegin}{\EvalPGeqEnd}{../Interpreter.ml}
@@ -681,7 +693,7 @@ is defined by the following table:
 
 \begin{mathpar}
 \inferrule[empty]{}{
-  \evalpattern{\env, \overname{\nvbitvector(\emptylist)}{\vv}, \PatternMask(\emptylist)} \evalarrow \Normal(\True, \emptygraph)
+  \evalpattern{\env, \overname{\nvbitvector(\emptylist)}{\vv}, \PatternMask(\emptylist)} \evalarrow \ResultPattern(\True, \emptygraph)
 }
 \end{mathpar}
 
@@ -691,7 +703,7 @@ is defined by the following table:
   \vv = \nvbitvector(\vu_{1..n})\\
   \vb \eqdef \nvbool(\bigwedge_{i=1..n} \maskmatch(\vm_i, \vu_i))
 }{
-  \evalpattern{\env, \vv, \PatternMask(\vm)} \evalarrow \Normal(\vb, \emptygraph)
+  \evalpattern{\env, \vv, \PatternMask(\vm)} \evalarrow \ResultPattern(\vb, \emptygraph)
 }
 \end{mathpar}
 \CodeSubsection{\EvalPMaskBegin}{\EvalPMaskEnd}{../Interpreter.ml}
@@ -774,21 +786,22 @@ the tuple of expression \texttt{(3, '1101010')} does not match the tuple of patt
   \item $\vp$ gives a list of patterns $\vps$ of length $k$, $\PatternTuple(\vps)$;
   \item $\vv$ gives a tuple of values $\vvs$ of length $k$;
   \item for all $1 \leq i \leq n$, $\vb_i$ is the evaluation result
-    of $\vp_i$ with respect to the value $\vv_i$ in
-    environment $\env$;
+        of $\vp_i$ with respect to the value $\vv_i$ in
+        environment $\env$\ProseOrDynErrorDiverging;
   \item $\vbs$ is the list of all $\vb_i$ for $1 \leq i \leq k$;
   \item $\vb$ is the conjunction of the Boolean values of $\vbs$.
 \end{itemize}
+
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \vps \eqname \vp_{1..k}\\
   i=1..k: \getindex(i, \vv) \evalarrow \vvs_i\\
-  i=1..k: \evalpattern{\env, \vvs_i, \vp_i} \evalarrow \Normal(\nvbool(\vbs_i), \vg_i) \OrDynError\\\\
+  i=1..k: \evalpattern{\env, \vvs_i, \vp_i} \evalarrow \ResultPattern(\nvbool(\vbs_i), \vg_i) \OrDynErrorDiverging\\\\
   \vres \eqdef \nvbool(\bigwedge_{i=1..k} \vbs_i)\\
   \vg \eqdef \vg_1 \parallelcomp \ldots \parallelcomp \vg_k
 }{
-  \evalpattern{\env, \vv, \PatternTuple(\vps)} \evalarrow \Normal(\vres, \emptygraph)
+  \evalpattern{\env, \vv, \PatternTuple(\vps)} \evalarrow \ResultPattern(\vres, \emptygraph)
 }
 \end{mathpar}
 \CodeSubsection{\EvalPTupleBegin}{\EvalPTupleEnd}{../Interpreter.ml}
@@ -899,19 +912,20 @@ any pattern in \verb|{3, 4}|.
 \begin{itemize}
   \item $\vp$ is a list of patterns, $\PatternAny(\vps)$;
   \item $\vps$ is $\vp_{1..k}$;
-  \item evaluating each pattern $\vp_i$ in $\env$ results in $\Normal(\nvbool(\vb_i), \vg_i)$\ProseOrAbnormal;
+  \item evaluating each pattern $\vp_i$ in $\env$ results in $\ResultPattern(\nvbool(\vb_i), \vg_i)$\ProseOrDynErrorDiverging;
   \item $\vb$ is the native Boolean which is the disjunction of $\vb_i$, for $i=1..k$;
   \item $\newg$ is the parallel composition of all execution graphs $\vg_i$, for $i=1..k$.
 \end{itemize}
+
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
   \vps \eqname \vp_{1..k}\\
-  i=1..k : \evalpattern{\env, \vv, \vp_i} \evalarrow \Normal(\nvbool(\vb_i), \vg_i) \OrDynError\\\\
+  i=1..k : \evalpattern{\env, \vv, \vp_i} \evalarrow \ResultPattern(\nvbool(\vb_i), \vg_i) \OrDynErrorDiverging\\\\
   \vb \eqdef \nvbool(\bigvee_{i=1..k} \vb_i)\\
   \newg \eqdef \vg_1 \parallelcomp \ldots \parallelcomp \vg_k
 }{
-  \evalpattern{\env, \vv, \PatternAny(\vps)} \evalarrow \Normal(\vb, \newg)
+  \evalpattern{\env, \vv, \PatternAny(\vps)} \evalarrow \ResultPattern(\vb, \newg)
 }
 \end{mathpar}
 \CodeSubsection{\EvalPAnyBegin}{\EvalPAnyEnd}{../Interpreter.ml}
@@ -962,23 +976,44 @@ whereas \texttt{match\_false} evaluates to \False, since \texttt{42} does match 
 \ProseParagraph
 \AllApply
 \begin{itemize}
-  \item $\vp$ is a negation pattern, $\PatternNot(\vpone)$;
-  \item evaluating that pattern $\vpone$ in an environment $\env$ is \\
-  $\Normal(\vbone, \newg)$\ProseOrError;
-  \item $\vb$ is the Boolean negation of $\vbone$.
+\item $\vp$ is a negation pattern, $\PatternNot(\vpone)$;
+\item evaluating the pattern $\vpone$ in an environment $\env$ is \\
+      $\ResultPattern(\vbone, \newg)$\ProseOrDynErrorDiverging;
+\item $\vb$ is the Boolean negation of $\vbone$.
 \end{itemize}
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
-  \evalexprsef{\env, \vpone} \evalarrow \Normal(\vbone, \newg) \OrDynError\\\\
+  \evalexprsef{\env, \vpone} \evalarrow \ResultExprSEF(\vbone, \newg) \OrDynErrorDiverging\\\\
   \unoprel(\BNOT, \vbone) \evalarrow \vb
 }{
-  \evalpattern{\env, \vv, \PatternNot(\vpone)} \evalarrow \Normal(\vb, \newg)
+  \evalpattern{\env, \vv, \PatternNot(\vpone)} \evalarrow \ResultPattern(\vb, \newg)
 }
 \end{mathpar}
 \CodeSubsection{\EvalPNotBegin}{\EvalPNotEnd}{../Interpreter.ml}
 
-\section{AST Rules for Pattern Expressions\label{sec:ASTRulesForPatternExpressions}}
+\section{Pattern Expressions\label{sec:ASTRulesForPatternExpressions}}
+The set of expressions appearing inside patterns are grammatically derived
+from \\
+$\Nexprpattern$.
+These are slightly restricted with respect to the set of all expressions,
+which are grammatically derived from $\Nexpr$.
+%
+The grammar is almost identical to that of $\Nexpr$, except that pattern expressions
+for matching a single value and for matching a range of values, exclude tuples
+(for which the tuple expression is used).
+
+The AST for these expressions is $\expr$ --- same as the AST for $\Nexpr$.
+The builders for $\Nexprpattern$ are identical to those of $\Nexpr$. For completeness,
+we list them below.
+
+The type rules and dynamic semantics rules for both sets of expressions is the same,
+as the same AST is generated for both.
+
+Pattern expressions are side-effect-free, as guaranteed by the checks to \\
+$\checksymbolicallyevaluable$, and thus in the dynamic semantics
+they are evaluated via $\evalexprsef$.
+
 \subsection{ASTRule.ExprPattern\label{sec:ASTRule.ExprPattern}}
 \hypertarget{build-exprpattern}{}
 The function
@@ -1127,7 +1162,7 @@ transforms a pattern expression parse node $\vparsednode$ into a pattern AST nod
 \inferrule[pattern\_eq]{}{
   {
     \begin{array}{r}
-      \buildexprpattern(\overname{\Nexprpattern(\punnode{\Nexprpattern}, \Teq, \Tmasklit(\vm))}{\vparsednode}) \astarrow\\
+      \buildexprpattern(\overname{\Nexprpattern(\punnode{\Nexprpattern}, \Teqop, \Tmasklit(\vm))}{\vparsednode}) \astarrow\\
       \overname{\EPattern(\astof{\vexprpattern}, \PatternMask(\vm))}{\vastnode}
     \end{array}
   }

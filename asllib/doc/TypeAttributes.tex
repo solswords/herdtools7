@@ -188,7 +188,7 @@ A named type is a type that is declared by using the \texttt{type ... of ...} sy
 
 \TypingRuleDef{AnonymousType}
 \hypertarget{def-isanonymous}{}
-\identd{VMZX}%
+\identd{VMZX} \identi{SBCK}%
 The predicate
 \[
   \isanonymous(\overname{\ty}{\tty}) \;\aslto\; \Bool
@@ -196,7 +196,9 @@ The predicate
 tests whether the type $\tty$ is an \anonymoustype.
 
 \ExampleDef{Anonymous Types}
-The \tupletypeterm{} \texttt{(integer, integer)} is an \anonymoustype.
+The well-typed specification in \listingref{AnonymousType} illustrates the use
+of anonymous types as permitted by \TypingRuleRef{TypeSatisfaction}.
+\ASLListing{Well-typed anonymous types}{AnonymousType}{\typingtests/TypingRule.AnonymousType.asl}
 
 \ProseParagraph
 \Anonymoustypes\ are types that are not declared using the \texttt{type ... of ...} syntax:
@@ -221,7 +223,7 @@ The predicate
   \issingular(\overname{\staticenvs}{\tenv} \aslsep \overname{\ty}{\tty}) \;\aslto\;
   \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
 \]
-tests whether the type $\tty$ is a \emph{\Prosesingulartype} in the static environment $\tenv$,
+tests whether the type $\tty$ is a \emph{\Prosesingulartype} in the \staticenvironmentterm{} $\tenv$,
 yielding the result in $\vb$.
 \ProseOtherwiseTypeError
 
@@ -236,7 +238,7 @@ type C of B;
 \ProseParagraph
 \AllApply
 \begin{itemize}
-  \item obtaining the \underlyingtype\ of $\tty$ in the static environment $\tenv$ yields $\vtone$\ProseOrTypeError;
+  \item obtaining the \underlyingtype\ of $\tty$ in the \staticenvironmentterm{} $\tenv$ yields $\vtone$\ProseOrTypeError;
   \item applying $\isbuiltinsingular$ to $\vtone$ yields $\vb$.
 \end{itemize}
 
@@ -258,7 +260,7 @@ The predicate
   \isaggregate(\overname{\staticenvs}{\tenv} \aslsep \overname{\ty}{\tty}) \;\aslto\;
   \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
 \]
-tests whether the type $\tty$ is an \emph{aggregate type} in the static environment $\tenv$,
+tests whether the type $\tty$ is an \emph{aggregate type} in the \staticenvironmentterm{} $\tenv$,
 yielding the result in $\vb$.
 
 \ExampleDef{Aggregate Types}
@@ -459,7 +461,7 @@ The function
   \tstruct(\overname{\staticenvs}{\tenv} \aslsep \overname{\ty}{\tty}) \aslto \overname{\ty}{\vt} \cup \overname{\TTypeError}{\TypeErrorConfig}
 \]
 assigns a type to its \hypertarget{def-tstruct}{\emph{\structure}}, which is the type formed by
-recursively replacing named types by their type definition in the static environment $\tenv$.
+recursively replacing named types by their type definition in the \staticenvironmentterm{} $\tenv$.
 If a named type is not associated with a declared type in $\tenv$, a \typingerrorterm{} is returned.
 
 \TypingRuleRef{TypeCheckAST} ensures the absence of circular type definitions,
@@ -467,28 +469,8 @@ which ensures that \TypingRuleRef{Structure} terminates\footnote{In mathematical
 this ensures that \TypingRuleRef{Structure} is a proper \emph{structural induction.}}.
 
 \ExampleDef{The Structure of a Type}
-In this example:
-\texttt{type T1 of integer;}, \texttt{T1}, is the named type \texttt{T1}
-whose structure is \texttt{integer}.
-
-In this example:
-\texttt{type T2 of (integer, T1);}, \texttt{T2},
-is the named type \texttt{T2} whose structure is (integer, integer). In this
-example, \texttt{(integer, T1)} is non-primitive since it uses \texttt{T1}, which is builtin aggregate.
-
-In this example:
-\texttt{var x: T1;}
-the type of $\vx$ is the named (hence non-primitive) type \texttt{T1}, whose structure
-is \texttt{integer}.
-
-In this example:
-\texttt{var y: integer;}
-the type of \texttt{y} is the anonymous primitive type \texttt{integer}.
-
-In this example:
-\texttt{var z: (integer, T1);}
-the type of \texttt{z} is the anonymous non-primitive type
-\texttt{(integer, T1)} whose structure is \texttt{(integer, integer)}.
+\listingref{Structure} shows examples of types and their structures.
+\ASLListing{Types and their structure}{Structure}{\typingtests/TypingRule.Structure.asl}
 
 \ProseParagraph
 \OneApplies
@@ -496,8 +478,8 @@ the type of \texttt{z} is the anonymous non-primitive type
 \item \AllApplyCase{named}
   \begin{itemize}
   \item $\tty$ is a named type $\vx$;
-  \item obtaining the declared type associated with $\vx$ in the static environment $\tenv$ yields $\vtone$\ProseOrTypeError;
-  \item obtaining the structure of $\vtone$ static environment $\tenv$ yields $\vt$\ProseOrTypeError;
+  \item obtaining the declared type associated with $\vx$ in the \staticenvironmentterm{} $\tenv$ yields $\vtone$\ProseOrTypeError;
+  \item obtaining the structure of $\vtone$ \staticenvironmentterm{} $\tenv$ yields $\vt$\ProseOrTypeError;
   \end{itemize}
 \item \AllApplyCase{builtin\_singular}
   \begin{itemize}
@@ -508,7 +490,7 @@ the type of \texttt{z} is the anonymous non-primitive type
   \begin{itemize}
   \item $\tty$ is a \tupletypeterm{} with list of types $\tys$;
   \item the types in $\tys$ are indexed as $\vt_i$, for $i=1..k$;
-  \item obtaining the structure of each type $\vt_i$, for $i=1..k$, in $\tys$ in the static environment $\tenv$,
+  \item obtaining the structure of each type $\vt_i$, for $i=1..k$, in $\tys$ in the \staticenvironmentterm{} $\tenv$,
   yields $\vtp_i$\ProseOrTypeError;
   \item $\vt$ is a \tupletypeterm{} with the list of types $\vtp_i$, for $i=1..k$.
   \end{itemize}
@@ -580,7 +562,7 @@ The function
 \[
   \makeanonymous(\overname{\staticenvs}{\tenv} \aslsep \overname{\ty}{\tty}) \aslto \overname{\ty}{\vt} \cup \overname{\TTypeError}{\TypeErrorConfig}
 \]
-returns the \emph{\underlyingtype} --- $\vt$ --- of the type $\tty$ in the static environment $\tenv$ or a \typingerrorterm{}.
+returns the \emph{\underlyingtype} --- $\vt$ --- of the type $\tty$ in the \staticenvironmentterm{} $\tenv$ or a \typingerrorterm{}.
 Intuitively, $\tty$ is the first non-named type that is used to define $\tty$. Unlike $\tstruct$,
 $\makeanonymous$ replaces named types by their definition until the first non-named type is found but
 does not recurse further.

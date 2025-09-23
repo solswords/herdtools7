@@ -1,5 +1,14 @@
 \chapter{Block Statements\label{chap:BlockStatements}}
-Block statements are statements executing in their own scope within the scope of their enclosing subprogram.
+Block statements are statements executing in their own scope when they appear
+in one of the following:
+\begin{itemize}
+  \item the body of a \whilestatementterm,
+  \item the body of a \repeatstatementsterm,
+  \item the body of a \forstatementterm,
+  \item one of the branches of a \conditionalstatementterm,
+  \item the body of a \trystatementterm, or
+  \item the statement executed by an exception catcher.
+\end{itemize}
 
 \ExampleDef{Block Statements}
 In \listingref{block},
@@ -12,14 +21,34 @@ variable~\texttt{x} persists after block end. However, observe that \texttt{x}
 is defined before the block and hence still exists after the block.
 \ASLListing{A conditional statement defining a block structure}{block}{\semanticstests/SemanticsRule.Block.asl}
 
-\section{Typing\label{sec:BlockStatementsTyping}}
+\ChapterOutline
+\begin{itemize}
+  \item \FormalRelationsRef{Block Statements} defines the formal relations for block statements;
+  \item \TypeRulesRef{Block Statements} defines the type rule for block statements; and
+  \item \SemanticsRulesRef{Block Statements} defines the semantics of block statements.
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\FormalRelationsDef{Block Statements}
+\paragraph{Syntax:} Block statements are grammatically the same as other statements
+derived from $\Nstmt$.
+
+\paragraph{Abstract Syntax:} Block statements appear in the abstract syntax
+as statements $\stmt$.
+
+\paragraph{Typing:} Block statements are annotated by $\annotateblock$.
+
+\paragraph{Semantics:} Block statements are evaluated by $\evalblock$.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\TypeRulesDef{Block Statements}
 \hypertarget{def-annotateblock}{}
 The function
 \[
-  \annotateblock{\overname{\staticenvs}{\tenv} \aslsep \overname{\stmt}{\vs}} \aslto
+  \annotateblock(\overname{\staticenvs}{\tenv} \aslsep \overname{\stmt}{\vs}) \aslto
   (\overname{\stmt}{\newstmt} \times \overname{\TSideEffectSet}{\vses}) \cup \overname{\TTypeError}{\TypeErrorConfig}
 \]
-annotates a block statement $\vs$ in static environment $\tenv$ and returns the annotated
+annotates a block statement $\vs$ in \staticenvironmentterm{} $\tenv$ and returns the annotated
 statement $\newstmt$ and inferred \sideeffectsetterm\ $\vses$.
 \ProseOtherwiseTypeError
 
@@ -36,7 +65,7 @@ See \ExampleRef{Block Statements}.
 \inferrule{
   \annotatestmt(\tenv, \vs) \typearrow (\newstmt, \Ignore, \vses) \OrTypeError
 }{
-  \annotateblock{\tenv, \vs} \typearrow (\newstmt, \vses)
+  \annotateblock(\tenv, \vs) \typearrow (\newstmt, \vses)
 }
 \end{mathpar}
 \CodeSubsection{\BlockBegin}{\BlockEnd}{../Typing.ml}
@@ -50,19 +79,25 @@ an enclosing block, which has the effect of dropping bindings of the identifiers
 \identr{JBXQ}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section{Semantics\label{sec:BlockStatementsSemantics}}
+\SemanticsRulesDef{Block Statements}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 The relation
 \hypertarget{def-evalblock}{}
 \[
-  \evalblock{\overname{\envs}{\env} \times \overname{\stmt}{\stm}} \;\aslrel\;
-  \overname{\TContinuing}{\Continuing(\newg, \newenv)} \cup
-  \overname{\TReturning}{\ReturningConfig} \cup
-  \overname{\TThrowing}{\ThrowingConfig} \cup
-  \overname{\TDynError}{\DynErrorConfig}
+  \evalblock(\overname{\envs}{\env} \times \overname{\stmt}{\stm}) \;\aslrel\;
+  \left(
+  \begin{array}{cl}
+  \overname{\TContinuing}{\Continuing(\newg, \newenv)} &\cup\\
+  \overname{\TReturning}{\ReturningConfig} &\cup\\
+  \overname{\TThrowing}{\ThrowingConfig} &\cup\\
+  \overname{\TDynError}{\DynErrorConfig} &\cup\\
+  \overname{\TDiverging}{\DivergingConfig} &\cup\\
+  \end{array}
+  \right)
 \]
 evaluates a statement $\stm$ as a \emph{block}. That is, $\stm$ is evaluated in a fresh local environment,
 which drops back to the original local environment of $\env$ when the evaluation terminates.
+\ProseOtherwiseAbnormal
 
 \SemanticsRuleDef{Block}
 See \ExampleRef{Block Statements}.
@@ -82,7 +117,7 @@ The $\poplocalscope$ function is used below to effectively discard the bindings 
 \AllApply
 \begin{itemize}
     \item evaluating $\stm$ in $\env$, as per \chapref{Statements},
-          is $\vres$;
+          is $\vres$\ProseOrDynErrorDiverging;
     \item \OneApplies
       \begin{itemize}
         \item \AllApplyCase{returning}
@@ -101,9 +136,9 @@ The $\poplocalscope$ function is used below to effectively discard the bindings 
 
         \item \AllApplyCase{throwing}
         \begin{itemize}
-          \item $\vres$ is $\Throwing((\vv, \newg), \envthrow)$;
+          \item $\vres$ is $\Throwing(\vv, \vt, \newg, \envthrow)$;
           \item \Proseeqdef{$\newenv$}{\Prosepoplocalscope{$\env$}{$\envthrow$}}.
-          \item the result of the entire evaluation is $\Throwing((\vv, \newg), \newenv)$.
+          \item the result of the entire evaluation is $\Throwing(\vv, \vt, \newg, \newenv)$.
         \end{itemize}
       \end{itemize}
 \end{itemize}
@@ -112,39 +147,39 @@ The $\poplocalscope$ function is used below to effectively discard the bindings 
 \begin{mathpar}
 \inferrule[returning]{
   \env \eqname (\tenv,\denv)\\
-  \evalstmt{\env, \stm} \evalarrow \vres \\\\
+  \evalstmt(\env, \stm) \evalarrow \vres \OrDynErrorDiverging\\\\
   \commonprefixline \\\\
   \vres = \Returning((\vvs, \newg), \envret) \\
   \envret \eqname (\tenvone, \denvone) \\
   \newenv \eqdef (\tenv, \poplocalscope(\denv,\denvone))
 }{
-  \evalblock{\env, \stm} \evalarrow \Returning((\vvs, \newg), \newenv)
+  \evalblock(\env, \stm) \evalarrow \Returning((\vvs, \newg), \newenv)
 }
 \end{mathpar}
 
 \begin{mathpar}
 \inferrule[continuing]{
   \env \eqname (\tenv,\denv)\\
-  \evalstmt{\env, \stm} \evalarrow \vres \\\\
+  \evalstmt(\env, \stm) \evalarrow \vres \OrDynErrorDiverging\\\\
   \commonprefixline \\\\
   \vres = \Continuing(\newg, \envcont) \\
   \envcont \eqname (\tenvone, \denvone) \\
   \newenv \eqdef (\tenv, \poplocalscope(\denv,\denvone))
 }{
-  \evalblock{\env, \stm} \evalarrow \Continuing(\newg, \newenv)
+  \evalblock(\env, \stm) \evalarrow \Continuing(\newg, \newenv)
 }
 \end{mathpar}
 
 \begin{mathpar}
 \inferrule[throwing]{
   \env \eqname (\tenv,\denv)\\
-  \evalstmt{\env, \stm} \evalarrow \vres \\\\
+  \evalstmt(\env, \stm) \evalarrow \vres \OrDynErrorDiverging\\\\
   \commonprefixline \\\\
-  \vres = \Throwing((\vv,\newg), \envthrow) \\
+  \vres = \Throwing(\vv,\vt,\newg, \envthrow) \\
   \envthrow \eqname (\tenvone, \denvone) \\
   \newenv \eqdef (\tenv, \poplocalscope(\denv,\denvone))
 }{
-  \evalblock{\env, \stm} \evalarrow \Throwing((\vv,\newg), \newenv)
+  \evalblock(\env, \stm) \evalarrow \Throwing(\vv,\vt,\newg, \newenv)
 }
 \end{mathpar}
 \CodeSubsection{\EvalBlockBegin}{\EvalBlockEnd}{../Interpreter.ml}

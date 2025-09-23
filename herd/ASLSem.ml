@@ -114,6 +114,7 @@ module Make (C : Config) = struct
     let output_format = Asllib.Error.HumanReadable
     let print_typed = false
     let use_field_getter_extension = false
+    let fine_grained_side_effects = false
     let use_conflicting_side_effects_extension = false
     let override_mode = Asllib.Typing.Permissive
     let control_flow_analysis = true
@@ -124,6 +125,10 @@ module Make (C : Config) = struct
       match C.unroll with None -> Opts.unroll_default `ASL | Some u -> u
 
     let error_handling_time = Asllib.Error.Dynamic
+    let empty_branching_effects_optimization = false
+    let log_nondet_choice = C.debug.Debug_herd.asl_symb
+    let display_call_stack_on_error = C.debug.Debug_herd.asl_symb
+    let track_symbolic_path = true
 
     module Instr = Asllib.Instrumentation.SemanticsNoInstr
   end
@@ -331,20 +336,20 @@ module Make (C : Config) = struct
       | `MOD -> M.op Op.Rem
       | `DIVRM -> M.op (Op.ArchOp ASLOp.Divrm)
       | `XOR -> M.op Op.Xor
-      | `EQ_OP -> M.op Op.Eq
+      | `EQ -> M.op Op.Eq
       | `GT -> M.op Op.Gt
-      | `GEQ -> M.op Op.Ge
+      | `GE -> M.op Op.Ge
       | `LT -> M.op Op.Lt
-      | `LEQ -> M.op Op.Le
-      | `MINUS -> M.op Op.Sub
+      | `LE -> M.op Op.Le
+      | `SUB -> M.op Op.Sub
       | `MUL -> M.op Op.Mul
-      | `NEQ -> M.op Op.Ne
+      | `NE -> M.op Op.Ne
       | `OR -> logor
-      | `PLUS -> M.op Op.Add
+      | `ADD -> M.op Op.Add
       | `SHL -> M.op Op.ShiftLeft
       | `SHR -> M.op Op.ShiftRight
-      | `CONCAT -> concat
-      | (`POW | `IMPL | `RDIV) as op ->
+      | `BV_CONCAT -> concat
+      | (`POW | `IMPL | `RDIV | `STR_CONCAT) as op ->
           Warn.fatal "ASL operation %s not yet implement in ASLSem."
             (Asllib.PP.binop_to_string op)
 
@@ -607,6 +612,7 @@ module Make (C : Config) = struct
       let subprogram_type =
         match returns with None -> ST_Procedure | _ -> ST_Function
       and body = SB_Primitive side_effecting
+      and qualifier = if side_effecting then None else Some Pure
       and recurse_limit = None
       and return_type = returns in
       ( {
@@ -618,6 +624,7 @@ module Make (C : Config) = struct
           subprogram_type;
           recurse_limit;
           builtin = true;
+          qualifier;
           override = None;
         }
         [@warning "-40-42"],
@@ -732,7 +739,7 @@ module Make (C : Config) = struct
       let bv_lit x = bv @@ lit x in
       let bv_64 = bv_lit 64 in
       let binop = Asllib.ASTUtils.binop in
-      let minus_one e = binop `MINUS e (lit 1) in
+      let minus_one e = binop `SUB e (lit 1) in
       let pow_2 = binop `POW (lit 2) in
       let t_named x = T_Named x |> with_pos in
       let side_effecting = true in
@@ -922,7 +929,10 @@ module Make (C : Config) = struct
             | _ -> env)
           t.Test_herd.init_state []
       in
-      let exec () = ASLInterpreter.run_typed_env env tenv ast in
+      let exec () =
+        let main_name = TypeCheck.find_main tenv in
+        ASLInterpreter.run_typed_env env tenv main_name ast
+      in
       let* i =
         match Asllib.Error.intercept exec () with
         | Ok m -> m

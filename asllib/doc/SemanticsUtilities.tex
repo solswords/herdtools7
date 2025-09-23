@@ -5,23 +5,26 @@
 This chapter defines the following helper relations for operating on \nativevalues,
 \hyperlink{def-envs}{environments}, and operations involving values and types:
 \begin{itemize}
-  \item \SemanticsRuleRef{GetStackSize}
-  \item \SemanticsRuleRef{SetStackSize}
-  \item \SemanticsRuleRef{IncrStackSize}
-  \item \SemanticsRuleRef{DecrStackSize}
-  \item \SemanticsRuleRef{RemoveLocal};
-  \item \SemanticsRuleRef{ReadIdentifier};
-  \item \SemanticsRuleRef{WriteIdentifier};
-  \item \SemanticsRuleRef{ConcatBitvectors};
-  \item \SemanticsRuleRef{ReadFromBitvector};
-  \item \SemanticsRuleRef{WriteToBitvector};
-  \item \SemanticsRuleRef{GetIndex};
-  \item \SemanticsRuleRef{SetIndex};
-  \item \SemanticsRuleRef{GetField};
-  \item \SemanticsRuleRef{SetField};
-  \item \SemanticsRuleRef{DeclareLocalIdentifier};
-  \item \SemanticsRuleRef{DeclareLocalIdentifierM};
-  \item \SemanticsRuleRef{DeclareLocalIdentifierMM};
+  \item \SemanticsRuleRef{GetStackSize} retrieves the value of the $\stacksize$ value from an environment;
+  \item \SemanticsRuleRef{SetStackSize} updates the value of the $\stacksize$ value in an environment;
+  \item \SemanticsRuleRef{IncrStackSize} updates the value of the $\stacksize$ value in an environment by incrementing it by one;
+  \item \SemanticsRuleRef{DecrStackSize} updates the value of the $\stacksize$ value in an environment by decrementing it by one;
+  \item \SemanticsRuleRef{RemoveLocal} removes a local storage element from a given environment;
+  \item \SemanticsRuleRef{ReadIdentifier} creates an \executiongraph{} representing a Read Effect for a given identifier;
+  \item \SemanticsRuleRef{WriteIdentifier} creates an \executiongraph{} representing a Write Effect for a given identifier;
+  \item \SemanticsRuleRef{ConcatBitvectors} concatenates a list of bitvector \nativevalues;
+  \item \SemanticsRuleRef{ReadFromBitvector} slices a bitvector \nativevalue{};
+  \item \SemanticsRuleRef{WriteToBitvector} updates a slice of a bitvector \nativevalue{};
+  \item \SemanticsRuleRef{GetIndex} reads a vector \nativevalue{} at a given index;
+  \item \SemanticsRuleRef{SetIndex} updates a vector \nativevalue{} at a given index;
+  \item \SemanticsRuleRef{GetField} reads a given field in a \nativevalue{} record;
+  \item \SemanticsRuleRef{SetField} updates a given field in a \nativevalue{} record;
+  \item \SemanticsRuleRef{DeclareLocalIdentifier} updates an environment by associating an identifier with a given \nativevalue{}
+        and also generating an \executiongraph{} with a corresponding Write Effect;
+  \item \SemanticsRuleRef{DeclareLocalIdentifierM} updates an environment by associating an identifier with a given \nativevalue{}
+        and also updating a given \executiongraph{} with a corresponding Write Effect and an $\asldata$ edge;
+  \item \SemanticsRuleRef{DeclareLocalIdentifierMM} updates an environment by associating an identifier with a given \nativevalue{}
+        and also updating a given \executiongraph{} with a corresponding Write Effect and an $\aslpo$ edge.
 \end{itemize}
 
 \SemanticsRuleDef{GetStackSize}
@@ -158,7 +161,7 @@ yielding the environment $\newenv$.
 
 This relation is used to maintain the invariant that the dynamic environment
 maintains bindings only for identifiers that are in scope. That is, only identifiers
-that would be in the local static environment.
+that would be in the local dynamic environment.
 %
 This invariant is not necessary for correctness.
 Removing identifiers from the dynamic environment does not have any
@@ -180,8 +183,8 @@ exn=TRUE
 
 \AllApply
 \begin{itemize}
-  \item $\env$ consists of the static environment $\tenv$ and dynamic environment $\denv$;
-  \item $\newenv$ consists of the static environment $\tenv$ and the dynamic environment
+  \item $\env$ consists of the \staticenvironmentterm{} $\tenv$ and dynamic environment $\denv$;
+  \item $\newenv$ consists of the \staticenvironmentterm{} $\tenv$ and the dynamic environment
   with the same global component as $\denv$ --- $G^\denv$, and local component $L^\denv$,
   with the identifier $\name$ removed from its domain.
 \end{itemize}
@@ -322,7 +325,7 @@ The relation
   (\overname{\N^*}{\positions} \cup\ \overname{\TDynError}{\BadIndex})
 \]
 returns the list of positions (indices) specified by the slices $\slices$,
-if all slices are consist of only non-negative integers.
+if all slices consist of only non-negative integers.
 \ProseOtherwiseDynamicError
 
 \ExampleDef{Converting Slices to Lists of Indices}
@@ -377,6 +380,53 @@ is illegal for a slice.
 }
 \end{mathpar}
 
+\SemanticsRuleDef{MaxPosOfSlice}
+\hypertarget{def-maxposofslice}{}
+The relation
+\[
+  \maxposofslice(\overname{\tint}{\vs}\times\overname{\tint}{\vl}) \;\aslrel\;
+  (\overname{\tint}{\maxpos})
+\]
+returns the maximum position specified by the slices $\slices$,
+assuming that all slices consist only of non-negative integers.
+
+\ExampleDef{Maximum positions of slices}
+The slice \verb|1+:3| has maximum position 3.
+The slice \verb|42+:0| has maximum position 42.
+
+\ProseParagraph
+\OneApplies
+\begin{itemize}
+  \item \AllApplyCase{zero\_width}
+  \begin{itemize}
+    \item $\vl$ is zero;
+    \item \Proseeqdef{$\maxpos$}{$\vs$}.
+  \end{itemize}
+
+  \item \AllApplyCase{non\_zero\_width}
+  \begin{itemize}
+    \item $\vl$ is not zero;
+    \item \Proseeqdef{$\maxpos$}{$\vs + \vl - 1$}.
+  \end{itemize}
+\end{itemize}
+
+\FormallyParagraph
+\begin{mathpar}
+\inferrule[zero\_width]{
+  \vl = 0
+}{
+  \maxposofslice(\vs, \vl) \evalarrow \vs
+}
+\end{mathpar}
+
+\begin{mathpar}
+\inferrule[non\_zero\_width]{
+  \vl \neq 0
+}{
+  \maxposofslice(\vs, \vl) \evalarrow \vs + \vl - 1
+}
+\end{mathpar}
+
 \SemanticsRuleDef{ReadFromBitvector}
 \hypertarget{def-readfrombitvector}{}
 The relation
@@ -424,7 +474,7 @@ bv = 0xfdf0, bv_i = 0xfdf0
   \begin{itemize}
     \item $\vv$ is a native bitvector for the list of bits $\bv$;
     \item applying $\slicestopositions$ to $\slices$ yields the list $\positions$\ProseOrError;
-    \item \Proseeqdef{$\maxpos$}{the maximal index in $\positions$};
+    \item \Proseeqdef{$\maxpos$}{the maximal position in $\slices$};
     \item let $\bits$ be the sequence of bits $\bv[n] ... \bv[1]$;
     \item checking that $\maxpos$ is less than $n$ yields $\True$\ProseTerminateAs{\BadIndex};
     \item \Proseeqdef{$\newbits$}{the list of bits $\bits[j]$ for every \Proselistrange{$j$}{$\bits$}};
@@ -435,9 +485,8 @@ bv = 0xfdf0, bv_i = 0xfdf0
   \begin{itemize}
     \item $\vv$ is a native integer for the integer $\vi$;
     \item applying $\slicestopositions$ to $\slices$ yields the list $\positions$\ProseOrError;
-    \item \Proseeqdef{$\maxpos$}{the maximal index in $\positions$};
+    \item \Proseeqdef{$\maxpos$}{the maximal position in $\slices$};
     \item \Proseeqdef{$\bits$}{$\vi$  given as two's complement little endian form of $\maxpos + 1$ bits};
-    \item checking that $\maxpos$ is less than $n$ yields $\True$\ProseTerminateAs{\BadIndex};
     \item \Proseeqdef{$\newbits$}{the list of bits $\bits[j]$ for every \Proselistrange{$j$}{$\bits$}};
     \item \Proseeqdef{$\vv$}{the native bitvector for the list of bits $\newbits$}.
   \end{itemize}
@@ -447,7 +496,8 @@ bv = 0xfdf0, bv_i = 0xfdf0
 \begin{mathpar}
 \inferrule[bitvector]{
   \slicestopositions(\slices) \evalarrow \positions \OrDynError\\\\
-  \maxpos \eqdef \max(\ \{ \vj\in\listrange(\positions) : \positions[\vj] \}\ )\\\\
+  \vi \in \listrange(\slices): \maxposofslice(\slice[\vi]) \evalarrow \vp_\vi\\\\
+  \maxpos \eqdef \max(\ \{ \vi\in\listrange(\slices) : \vp_\vi \}\ )\\\\
   \commonprefixline\\\\
   \bits \eqname \bv[n] ... \bv[1]\\
   \checktrans{\maxpos < n}{\BadIndex} \checktransarrow \OrDynError\\\\
@@ -462,7 +512,8 @@ bv = 0xfdf0, bv_i = 0xfdf0
 \begin{mathpar}
 \inferrule[integer]{
   \slicestopositions(\slices) \evalarrow \positions \OrDynError\\\\
-  \maxpos \eqdef \max(\ \{ \vj\in\listrange(\positions) : \positions[\vj] \}\ )\\\\
+  \vi \in \listrange(\slices): \maxposofslice(\slice[\vi]) \evalarrow \vp_\vi\\\\
+  \maxpos \eqdef \max(\ \{ \vi\in\listrange(\slices) : \vp_\vi \}\ )\\\\
   \commonprefixline\\\\
   \bits \eqdef \vi\text{ given as two's complement little endian form of }(\maxpos + 1)\text{ bits}\\
   \commonsuffixline\\\\
@@ -484,14 +535,15 @@ overwrites the bits of $\dst$ at the positions given by $\slices$ with the bits 
 
 See \ExampleRef{Writing to a Bitvector}, following the definition of $\writetobitvector$.
 
-\newcommand\bitfunc[0]{\textfunc{bit}}
-
 \ProseParagraph
 \AllApply
 \begin{itemize}
   \item $\src$ is a native bitvector consisting of bits $\vs_m \ldots \vs_0$;
   \item $\dst$ is a native bitvector consisting of bits $\vd_n \ldots \vd_0$;
   \item applying $\slicestopositions$ to $\slices$ yields the list of indices $\positions$;
+  \item checking that the length of $\positions$ is equal to the length of $\src$ yields $\True$\ProseTerminateAs{\BadIndex};
+  \item \Proseeqdef{$\maxpos$}{the maximal position in $\slices$};
+  \item checking that $\maxpos$ is less than the length of $\dst$ yields $\True$\ProseTerminateAs{\BadIndex};
   \item view $\positions$ as the list $I_m \ldots I_0$;
   \item define the function $\bitfunc$ as mapping an index $i$ in $0$ to $n$ to
         $\vs_j$, if there exists an index $I_j$ in $\positions$ such that $I_j$ is equal to $i$,
@@ -507,6 +559,10 @@ See \ExampleRef{Writing to a Bitvector}, following the definition of $\writetobi
   \src \eqname \nvbitvector(\vs_m \ldots \vs_0)\\
   \dst \eqname \nvbitvector(\vd_n \ldots \vd_0)\\
   \slicestopositions(\slices) \evalarrow \positions \OrDynError\\\\
+  \checktrans{\listlen{\positions} = m + 1}{\BadIndex} \checktransarrow \OrDynError\\\\
+  \vi \in \listrange(\slices): \maxposofslice(\slice[\vi]) \evalarrow \vp_\vi\\\\
+  \maxpos \eqdef \max(\ \{ \vi\in\listrange(\slices) : \vp_\vi \}\ )\\\\
+  \checktrans{\maxpos < n + 1}{\BadIndex} \checktransarrow \OrDynError\\\\
   \positions \eqname I_m \ldots I_0 \\
   {\bitfunc = \lambda i \in 0..n.\left\{ \begin{array}{ll}
     \vs_j & \exists j\in 1..m.\ i = I_j\\
@@ -554,80 +610,119 @@ In reference to \listingref{semantics-leslice}, we have the following applicatio
 \end{mathpar}
 
 \SemanticsRuleDef{GetIndex}
-\ProseParagraph
 The relation
 \hypertarget{def-getindex}{}
 \[
-  \getindex(\overname{\N}{\vi} \aslsep \overname{\tvector}{\vvec}) \;\aslrel\; \overname{\tvector}{\vv_{\vi}}
+  \getindex(\overname{\N}{\vi} \aslsep \overname{\tvector}{\vvec}) \;\aslrel\;
+  (\overname{\tvector}{\vr} \cup \overname{\TDynError}{\DynamicErrorVal{\BadIndex}})
 \]
-reads the value $\vv_i$ from the vector of values $\vvec$ at the index $\vi$.
+reads the value $\vr$ from the vector of values $\vvec$ at the index $\vi$.
+\ProseOtherwiseDynamicError
 
 \ExampleDef{Reading a Vector at an Index}
 The specification in \listingref{GetIndex} shows examples of accessing indices of native vectors:
 \begin{itemize}
   \item evaluating \verb|assert arr[[3]] == 3| involves \\
-        $\getindex(3, \nvvector{\nvint(0), \nvint(3), \nvint(0)}) \evalarrow \nvint(3)$;
+        $\getindex(3, \nvvector(\nvint(0), \nvint(3), \nvint(0))) \evalarrow \nvint(3)$;
   \item evaluating \verb|assert (5, 7).item0 == 5| involves \\
-        $\getindex(0, \nvvector{\nvint(5), \nvint(7)}) \evalarrow \nvint(5)$;
+        $\getindex(0, \nvvector(\nvint(5), \nvint(7))) \evalarrow \nvint(5)$;
   \item evaluating \verb|(5, 7) as (integer, integer)| involves \\
-        $\getindex(0, \nvvector{\nvint(5), \nvint(7)}) \evalarrow \nvint(5)$ and\\
-        $\getindex(1, \nvvector{\nvint(5), \nvint(7)}) \evalarrow \nvint(7)$ to check the asserting type conversion.
+        $\getindex(0, \nvvector(\nvint(5), \nvint(7))) \evalarrow \nvint(5)$ and\\
+        $\getindex(1, \nvvector(\nvint(5), \nvint(7))) \evalarrow \nvint(7)$ to check the asserting type conversion.
 \end{itemize}
 \ASLListing{Reading a vector at an index}{GetIndex}{\semanticstests/SemanticsRule.GetIndex.asl}
 
+\ProseParagraph
+\OneApplies
+\begin{itemize}
+  \item \AllApplyCase{ok}
+  \begin{itemize}
+    \item $\vi$ is greater than or equal to zero and less than the number of elements in $\vvec$;
+    \item \Proseeqdef{$\vr$}{the element of $\vvec$ at index $\vi$}.
+  \end{itemize}
+
+  \item \AllApplyCase{error}
+  \begin{itemize}
+    \item $\vi$ is less than zero or greater than or equal to the number of elements in $\vvec$;
+    \item the result is the \dynamicerrorterm{} for an out of bounds index (\BadIndex).
+  \end{itemize}
+\end{itemize}
+
 \FormallyParagraph
 \begin{mathpar}
-\inferrule{
-  \vvec \eqname \vv_{0..k}\\
-  \vi \leq k\\
+\inferrule[ok]{
+  0 \leq \vi < \listlen{\vvec}\\
 }{
-  \getindex(\vi, \vvec) \evalarrow \vv_{\vi}
+  \getindex(\vi, \vvec) \evalarrow \overname{\vv[\vi]}{\vr}
 }
 \end{mathpar}
 
-Notice that there is no rule to handle the case where the index is out of range ---
-this is guaranteed by the typechecker not to happen. Specifically,
-\begin{itemize}
-  \item \TypingRuleRef{EGetArray} ensures that an index is within the bounds of the array
-  being accessed via a check that the type of the index satisfies the type of the array size.
-  \item Typing rules \TypingRuleRef{LEDestructuring}, \TypingRuleRef{PTuple},
-  and \\ \TypingRuleRef{LDTuple} use the same index sequences for the tuples
-  involved and the corresponding lists of expressions.
-\end{itemize}
-If the rules listed above do not hold the typechecker fails.
+\begin{mathpar}
+\inferrule[error]{
+  \vi < 0 \lor \vi \geq \listlen{\vvec}\\
+}{
+  \getindex(\vi, \vvec) \evalarrow \DynamicErrorVal{\BadIndex}
+}
+\end{mathpar}
 
 \SemanticsRuleDef{SetIndex}
-\ProseParagraph
 The relation
 \hypertarget{def-setindex}{}
 \[
-  \setindex(\overname{\N}{\vi} \aslsep \overname{\vals}{\vv} \aslsep \overname{\tvector}{\vvec}) \;\aslrel\; \overname{\tvector}{\vres}
+  \setindex(\overname{\N}{\vi} \aslsep \overname{\vals}{\vv} \aslsep \overname{\tvector}{\vvec}) \;\aslrel\;
+  (\overname{\tvector}{\vres} \cup \overname{\TDynError}{\DynamicErrorVal{\BadIndex}})
 \]
 overwrites the value at the given index $\vi$ in a vector of values $\vvec$ with the new value $\vv$.
+\ProseOtherwiseDynamicError
 
 \ExampleDef{Writing a Vector at an Index}
 In \listingref{GetIndex}, evaluating the statement \verb|arr[[1]] = 3;|
-involves
+involves the following premise:
 \[
 \begin{array}{r}
-\setindex(1, \nvint(3), \nvvector{\nvint(0), \nvint(0), \nvint(0)}) \evalarrow\\
-\nvvector{\nvint(0), \nvint(3), \nvint(0)} \enspace.
+\setindex(1, \nvint(3), \nvvector(\nvint(0), \nvint(0), \nvint(0))) \evalarrow\\
+\nvvector(\nvint(0), \nvint(3), \nvint(0)) \enspace.
 \end{array}
 \]
 
+\ProseParagraph
+\OneApplies
+\begin{itemize}
+  \item \AllApplyCase{ok}
+  \begin{itemize}
+    \item $\vi$ is greater than or equal to zero and less than the number of elements in $\vvec$;
+    \item $\vvec$ is the sequence $\vu_{0..k}$;
+    \item $\vres$ is the sequence of values identical to $\vvec$,
+          except that at index $\vi$ the value is $\vv$.
+  \end{itemize}
+
+  \item \AllApplyCase{error}
+  \begin{itemize}
+    \item $\vi$ is less than zero or greater than or equal to the number of elements in $\vvec$;
+    \item the result is the \dynamicerrorterm{} for an out of bounds index (\BadIndex).
+  \end{itemize}
+\end{itemize}
+
 \FormallyParagraph
 \begin{mathpar}
-\inferrule{
+\inferrule[ok]{
+  0 \leq \vi < \listlen{\vvec}\\
   \vvec \eqname \vu_{0..k}\\
-  \vi \leq k\\
-  \vres \eqname \vw_{0..k}\\
-  \vv \eqdef \vw_{\vi} \\
+  \vres = \vw_{0..k}\\
+  \vv = \vw_{\vi} \\
   j \in \{0..k\} \setminus \{\vi\}.\ \vw_{j} = \vu_j\\
 }{
   \setindex(\vi, \vv, \vvec) \evalarrow \vres
 }
 \end{mathpar}
-Similar to $\getindex$, there is no need to handle the out-of-range index case.
+
+\begin{mathpar}
+\inferrule[error]{
+  \vi < 0 \lor \vi \geq \listlen{\vvec}
+}{
+  \setindex(\vi, \vv, \vvec) \evalarrow \DynamicErrorVal{\BadIndex}
+}
+\end{mathpar}
 
 \SemanticsRuleDef{GetField}
 \ProseParagraph
@@ -642,16 +737,16 @@ retrieves the value corresponding to the field name $\name$ from the record valu
 In \listingref{GetField}, there are the following examples of reading a record field:
 \begin{itemize}
   \item evaluating the expression \verb|color_to_int[[RED]]| involves\\
-        $\getfield(\RED, \nvrecord{\RED\mapsto \nvint(0), \GREEN\mapsto \nvint(1), \BLUE\mapsto \nvint(2)}) \evalarrow \nvint(0)$;
+        $\getfield(\RED, \nvrecord(\RED\mapsto \nvint(0), \GREEN\mapsto \nvint(1), \BLUE\mapsto \nvint(2))) \evalarrow \nvint(0)$;
   \item evaluating the expression \verb|r.RED| involves\\
-        $\getfield(\RED, \nvrecord{\RED\mapsto \nvint(0), \GREEN\mapsto \nvint(1), \BLUE\mapsto \nvint(2)}) \evalarrow \nvint(0)$.
+        $\getfield(\RED, \nvrecord(\RED\mapsto \nvint(0), \GREEN\mapsto \nvint(1), \BLUE\mapsto \nvint(2))) \evalarrow \nvint(0)$.
 \end{itemize}
 \ASLListing{Reading a record field}{GetField}{\semanticstests/SemanticsRule.GetField.asl}
 
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
-  \record \eqname \nvrecord{\fieldmap}
+  \record \eqname \nvrecord(\fieldmap)
 }{
   \getfield(\name, \record) \evalarrow \fieldmap(\name)
 }
@@ -677,10 +772,10 @@ In \listingref{GetField}, there are the following examples of writing to a recor
           \begin{array}{l}
           \GREEN, \\
           \nvint(1),\\
-          \nvrecord{\RED\mapsto \nvint(0), \GREEN\mapsto \nvint(0), \BLUE\mapsto \nvint(0)}
+          \nvrecord(\RED\mapsto \nvint(0), \GREEN\mapsto \nvint(0), \BLUE\mapsto \nvint(0))
           \end{array}
           \right) \evalarrow\\
-        \nvrecord{\RED\mapsto \nvint(0), \GREEN\mapsto \nvint(1), \BLUE\mapsto \nvint(0)} \enspace;
+        \nvrecord(\RED\mapsto \nvint(0), \GREEN\mapsto \nvint(1), \BLUE\mapsto \nvint(0)) \enspace;
         \end{array}
         $
   \item evaluating the statement \verb|r.BLUE = -1;| involves\\
@@ -690,10 +785,10 @@ In \listingref{GetField}, there are the following examples of writing to a recor
           \begin{array}{l}
           \BLUE, \\
           \nvint(-1),\\
-          \nvrecord{\RED\mapsto \nvint(0), \GREEN\mapsto \nvint(1), \BLUE\mapsto \nvint(2)}
+          \nvrecord(\RED\mapsto \nvint(0), \GREEN\mapsto \nvint(1), \BLUE\mapsto \nvint(2))
           \end{array}
           \right) \evalarrow\\
-        \nvrecord{\RED\mapsto \nvint(0), \GREEN\mapsto \nvint(1), \BLUE\mapsto \nvint(-1)} \enspace.
+        \nvrecord(\RED\mapsto \nvint(0), \GREEN\mapsto \nvint(1), \BLUE\mapsto \nvint(-1)) \enspace.
         \end{array}
         $
 \end{itemize}
@@ -701,10 +796,10 @@ In \listingref{GetField}, there are the following examples of writing to a recor
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
-  \record \eqname \nvrecord{\fieldmap}\\
+  \record \eqname \nvrecord(\fieldmap)\\
   \fieldmapp \eqdef \fieldmap[\name\mapsto\vv]
 }{
-  \setfield(\name, \vv, \record) \evalarrow \nvrecord{\fieldmapp}
+  \setfield(\name, \vv, \record) \evalarrow \nvrecord(\fieldmapp)
 }
 \end{mathpar}
 The typechecker ensures that the field $\name$ exists in $\record$.

@@ -47,28 +47,28 @@ module Make (C : Config.S) = struct
 
   let binops : binop enum =
     [
-      (if C.Syntax.plus then Some `PLUS else None);
+      (if C.Syntax.plus then Some `ADD else None);
       (if C.Syntax.and_ then Some `AND else None);
       (if C.Syntax.band then Some `BAND else None);
       (if C.Syntax.beq then Some `BEQ else None);
       (if C.Syntax.bor then Some `BOR else None);
       (if C.Syntax.div then Some `DIV else None);
       (if C.Syntax.xor then Some `XOR else None);
-      (if C.Syntax.eq_op then Some `EQ_OP else None);
+      (if C.Syntax.eq_op then Some `EQ else None);
       (if C.Syntax.gt then Some `GT else None);
-      (if C.Syntax.geq then Some `GEQ else None);
+      (if C.Syntax.geq then Some `GE else None);
       (if C.Syntax.impl then Some `IMPL else None);
       (if C.Syntax.lt then Some `LT else None);
-      (if C.Syntax.leq then Some `LEQ else None);
+      (if C.Syntax.leq then Some `LE else None);
       (if C.Syntax.mod_ then Some `MOD else None);
-      (if C.Syntax.minus then Some `MINUS else None);
+      (if C.Syntax.minus then Some `SUB else None);
       (if C.Syntax.mul then Some `MUL else None);
-      (if C.Syntax.neq then Some `NEQ else None);
+      (if C.Syntax.neq then Some `NE else None);
       (if C.Syntax.or_ then Some `OR else None);
       (if C.Syntax.rdiv then Some `RDIV else None);
       (if C.Syntax.shl then Some `SHL else None);
       (if C.Syntax.shr then Some `SHR else None);
-      (if C.Syntax.bv_concat then Some `CONCAT else None);
+      (if C.Syntax.bv_concat then Some `BV_CONCAT else None);
     ]
     |> filter_none |> scaled_finite
 
@@ -226,15 +226,9 @@ module Make (C : Config.S) = struct
     and t_tuple =
       let make_t_tuple li = T_Tuple li in
       list2 tys |> map make_t_tuple
-    and t_record =
-      let make_t_record li = T_Record li in
-      names ** tys |> list |> map make_t_record
     and t_bits =
       let make_t_bits e = T_Bits (e, []) in
       exprs |> map make_t_bits |> pay
-    and t_enum =
-      let make_t_enum ss = T_Enum ss in
-      nonempty_list names |> map make_t_enum
     and t_named =
       let make_t_named s = T_Named s in
       names |> map make_t_named
@@ -246,8 +240,22 @@ module Make (C : Config.S) = struct
       (if C.Syntax.t_real then Some t_real else None);
       (if C.Syntax.t_bits then Some t_bits else None);
       (if C.Syntax.t_tuple then Some t_tuple else None);
-      (if C.Syntax.t_record then Some t_record else None);
       (if C.Syntax.t_named then Some t_named else None);
+    ]
+    |> filter_none |> oneof |> map annot
+
+  let ty_decl =
+    tys
+    ++
+    let t_record =
+      let make_t_record li = T_Record li in
+      names ** tys |> list |> map make_t_record
+    and t_enum =
+      let make_t_enum ss = T_Enum ss in
+      nonempty_list names |> map make_t_enum
+    in
+    [
+      (if C.Syntax.t_record then Some t_record else None);
       (if C.Syntax.t_enum then Some t_enum else None);
     ]
     |> filter_none |> oneof |> map annot
@@ -324,6 +332,7 @@ module Make (C : Config.S) = struct
             subprogram_type;
             recurse_limit;
             override = None;
+            qualifier = None;
             builtin = false;
           }
         |> annot;
@@ -369,7 +378,7 @@ module Make (C : Config.S) = struct
       block ** exprs |> map make_s_repeat |> pay
     and s_throw =
       let make_s_throw opt = S_Throw opt in
-      option (exprs ** option tys) |> map make_s_throw |> pay
+      exprs ** option tys |> map make_s_throw |> pay
     and s_try =
       let make_s_try (s, (catchers, s_opt)) = S_Try (s, catchers, s_opt) in
       let catcher = tuple3 (option names) tys block in
@@ -412,6 +421,7 @@ module Make (C : Config.S) = struct
             subprogram_type;
             recurse_limit;
             override = None;
+            qualifier = None;
             builtin = false;
           }
       in
@@ -435,7 +445,7 @@ module Make (C : Config.S) = struct
       gdks ** vars ** no_double_none tys exprs |> map make_global_decl
     and d_type_decl =
       let make_type_decl (name, ty) = D_TypeDecl (name, ty, None) in
-      names ** tys |> map make_type_decl
+      names ** ty_decl |> map make_type_decl
     in
     d_func ++ d_global_storage ++ d_type_decl |> map annot
 

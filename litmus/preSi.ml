@@ -39,8 +39,6 @@ module type Config = sig
   val timelimit : float option
   val check_nstates : string -> int option
   val stdio : bool
-  val pldw : bool
-  val cacheflush : bool
   val exit_cond : bool
   include DumpParams.Config
   val precision : Fault.Handling.t
@@ -155,8 +153,6 @@ module Make
         Cfg.is_tb &&
         (timebase_possible || SkelUtil.no_timebase_error Cfg.sysarch)
 
-      let have_cache = Insert.exists "cache.c"
-
       let do_self = Cfg.variant Variant_litmus.Self
 
 (*************)
@@ -268,6 +264,7 @@ module Make
         if Cfg.variant Variant_litmus.Pac then begin
           O.o "#include \"auth.h\""
         end;
+        O.o "#include \"cache.h\"" ;
         O.o "" ;
         O.o "typedef uint32_t count_t;" ;
         O.o "#define PCTR PRIu32" ;
@@ -511,7 +508,7 @@ module Make
           let no_ok,no_no =
             List.partition
               (ProcsUser.is procs_user)
-              no in             
+              no in
           begin match ok@no_ok with
           | [] ->
              O.o "static void set_fault_vector(int role) { }"
@@ -550,26 +547,6 @@ module Make
         | _::_ ->
             Insert.insert O.o "kvm_user_stacks.c" ;
             O.o ""
-
-(* Cache *)
-      let dump_cache_def () =
-        if have_cache then begin
-          O.o "/* Cache flush/fetch instructions */" ;
-          begin match Cfg.sysarch with
-          | `ARM when Cfg.pldw ->
-              O.o "#define HAS_PLDW 1" ;
-              O.o ""
-          | _ -> ()
-          end ;
-          begin match Cfg.cacheflush with
-          | true ->  O.o "#define CACHE_FLUSH 1" ;
-          | false -> ()
-          end ;
-          Insert.insert O.o "cache.c" ;
-          O.o ""
-        end
-
-
 
 (* Synchronisation barrier *)
       let lab_ext = if Cfg.numeric_labels then "" else "_lab"
@@ -876,21 +853,36 @@ module Make
             end
         end ;
 (* Now physical pages in output *)
-        if Cfg.is_kvm && U.pte_in_outs env test then begin
+          if Cfg.is_kvm &&
+            (U.pte_in_outs env test ||
+            U.parel1_in_outs env test)
+            then begin
           List.iteri
             (fun k (a,_) ->
               O.f "static const int %s = %i;" (SkelUtil.data_symb_id (Misc.add_physical a)) k)
             test.T.globals ;
           O.o "" ;
-          O.o "static int idx_physical(pteval_t v,vars_t *p) {" ;
-          List.iteri
-            (fun k (s,_) ->
-              let pref = if k=0 then "if" else "else if" in
-              O.fi "%s (litmus_same_oa(v,p->saved_pte_%s)) return %s;"
-                pref s (SkelUtil.data_symb_id (Misc.add_physical s)))
-            test.T.globals ;
-          O.oi "else return NVARS;" ;
-          O.o "}" ;
+          if U.pte_in_outs env test then begin
+            O.o "static int idx_physical(pteval_t v,vars_t *p) {" ;
+            List.iteri
+              (fun k (s,_) ->
+                let pref = if k=0 then "if" else "else if" in
+                O.fi "%s (litmus_same_oa(v,p->saved_pte_%s)) return %s;"
+                  pref s (SkelUtil.data_symb_id (Misc.add_physical s)))
+              test.T.globals ;
+            O.oi "else return NVARS;" ;
+            O.o "}" end;
+          if U.parel1_in_outs env test then begin
+            O.o "static int idx_physical_parel1(parel1_t v,vars_t *p) {" ;
+            O.oi "if (v & msk_f) return NVARS;" ;
+            List.iteri
+              (fun k (s,_) ->
+                let pref = if k=0 then "if" else "else if" in
+                O.fi "%s (litmus_same_oa_pte_par(v,p->saved_pte_%s)) return %s;"
+                  pref s (SkelUtil.data_symb_id (Misc.add_physical s)))
+              test.T.globals ;
+            O.oi "else return NVARS;" ;
+            O.o "}" end;
           O.o "" ;
           O.f "static const char *pretty_addr_physical[NVARS+1] = {%s,\"???\"};"
             (String.concat ","
@@ -908,17 +900,17 @@ module Make
             (fun rloc -> match U.find_rloc_type rloc env with
             | Pointer _ when U.is_rloc_label rloc env ->
                 None,
-                [sprintf "instr_symb_name[p->%s]" (dump_rloc_tag_coded rloc)]
+                ([sprintf "instr_symb_name[p->%s]" (dump_rloc_tag_coded rloc)], [])
             | Pointer _ ->
                 None,
-                [sprintf "pretty_addr[p->%s]" (dump_rloc_tag_coded rloc)]
+                ([sprintf "pretty_addr[p->%s]" (dump_rloc_tag_coded rloc)], [])
             | Array (_,sz) ->
                 let tag = A.dump_rloc_tag rloc in
                 let rec pp_rec k =
                   if k >= sz then []
                   else
                     sprintf "p->%s[%i]" tag k::pp_rec (k+1) in
-                None,pp_rec 0
+                None,(pp_rec 0, [])
             | Base "pteval_t" ->
                 let v = sprintf "p->%s" (A.dump_rloc_tag rloc) in
                 let fs =
@@ -926,16 +918,26 @@ module Make
                   List.map
                     (fun f -> sprintf "unpack_%s(%s)" f v)
                     A.V.PteVal.fields in
-                Some v,fs
+                    let ds =A.V.PteVal.default_fields in
+                Some v,(fs, ds)
+            | Base "parel1_t" ->
+              let v = sprintf "p->%s" (A.dump_rloc_tag rloc) in
+              let fs =
+                sprintf "pretty_addr_physical[unpack_oa(%s)]" v::
+                List.map
+                  (fun f -> sprintf "unpack_%s(%s)" f v)
+                  A.V.AddrReg.fields in
+              let ds = A.V.AddrReg.default_fields in
+              Some v,(fs, ds)
             | t ->
                 None,
-                [(if CType.is_ins_t t then sprintf "pretty_opcode(p->%s)"
+                ([(if CType.is_ins_t t then sprintf "pretty_opcode(p->%s)"
                  else sprintf "p->%s")
-                   (A.dump_rloc_tag rloc)])
+                   (A.dump_rloc_tag rloc)], []))
             rlocs in
         let fst = ref true in
         List.iter2
-          (fun (p1,p2) (as_whole,arg) ->
+          (fun (p1,p2) (as_whole,(arg, def_fields)) ->
             let prf = if !fst then "" else " " in
             fst := false ;
             match as_whole with
@@ -951,19 +953,18 @@ module Make
                   | o::oa::rem -> o^oa,rem
                   | _ -> assert false in
                 EPF.fii ~out:"chan" (sprintf "%s%s=%s" prf p1 oa_fmt) [oa] ;
-                let ds = A.V.PteVal.default_fields in
-                let rec do_rec ds fs fmts = match ds,fs,fmts with
+                let rec do_rec def_fields fs fmts = match def_fields,fs,fmts with
                   | [],[],[c] ->
                       let c = sprintf "\"%s\"" (String.escaped c) in
                       EPF.fii ~out:"chan" "%s;" [c]
-                  | d::ds,f::fs,fmt::fmts ->
+                  | d::def_fields,f::fs,fmt::fmts ->
                       O.fii "if (%s != %s) {" f d ;
                       EPF.fiii ~out:"chan" fmt [f] ;
                       O.oii "}" ;
-                      do_rec ds fs fmts
+                      do_rec def_fields fs fmts
                   |_ ->  (* All, defaults, arguments and formats agree *)
                      assert false in
-                do_rec ds rem rem_fmt ;
+                do_rec def_fields rem rem_fmt ;
                 O.oi "}"
             | None ->
                 let p2 = String.concat "" p2 in
@@ -1031,12 +1032,14 @@ module Make
                 A.GetInstr.dump_instr (T.C.V.pp O.hexa) v
 
               let dump_value loc v = match v with
-              | Constant.Symbolic (Constant.Virtual {Constant.pac})
+              | Constant.(Symbolic (Virtual {pac; _}))
                 when not (PAC.is_canonical pac) ->
                   Warn.user_error "PAC not supported in post-conditions in litmus"
               | Constant.Symbolic _ -> SkelUtil.data_symb_id (T.C.V.pp O.hexa v)
               | Constant.PteVal p ->
                  A.V.PteVal.dump_pack SkelUtil.data_symb_id p
+              | Constant.AddrReg a ->
+                A.V.AddrReg.dump_pack SkelUtil.data_symb_id a
               | _ ->
                   begin match loc with
                   | Some loc ->
@@ -1127,14 +1130,12 @@ module Make
 
 
       let get_param_caches test =
-        if have_cache then begin
-          let r =
-            List.map
-              (fun (proc,(out,_)) ->
-                List.map (fun a -> proc,a) (A.Out.get_addrs_only out))
-              test.T.code in
-          List.flatten r
-        end else []
+        let r =
+          List.map
+            (fun (proc,(out,_)) ->
+               List.map (fun a -> proc,a) (A.Out.get_addrs_only out))
+            test.T.code in
+        List.flatten r
 
       let get_tag_caches test = List.map pctag (get_param_caches test)
 
@@ -1543,6 +1544,70 @@ module Make
         let vss = List.map2 (@) rems vs in
         List.combine rems (responsible vss)
 
+      let memattrs_change a pte_init =
+        match Misc.Simple.assoc_opt a pte_init with
+        | Some (V (_,pteval)) ->
+            not (A.V.PteVal.is_default_attrs pteval)
+        | _ -> false
+
+      let init_mem_loc indent clean env test a =
+        let do_clean indent symb =
+          if clean then begin
+            O.fx indent "if (rand_bit(&_c->seed)) cache_flush(&%s);" symb ;
+            O.fx indent "else cache_clean(&%s);" symb
+          end
+        in
+        let at =  find_addr_type a env in
+        let v = A.find_in_state (A.location_of_addr a) test.T.init in
+        let pp_const v =
+          let open Constant in
+          match v with
+          | Concrete i -> A.V.Scalar.pp Cfg.hexa i
+          | ConcreteVector _ ->
+            Warn.fatal "Vector used as scalar"
+          | ConcreteRecord _ ->
+            Warn.fatal "Record used as scalar"
+          | Symbolic (Virtual a) when not (PAC.is_canonical a.pac) ->
+            Warn.user_error "Litmus cannot initialize a virtual address with a non-canonical PAC field"
+          | Symbolic (Virtual {name=s; tag=None; offset=0; _}) ->
+            sprintf "(%s)_vars->%s" (CType.dump at) s
+          | Label (p,lbl) ->
+            sprintf "_vars->labels.%s" (OutUtils.fmt_lbl_var p lbl)
+          | Tag _|Symbolic _ ->
+            Warn.user_error "Litmus cannot handle this initial value %s"
+              (A.V.pp_v v)
+          | PteVal _| AddrReg _| Frozen _ -> assert false
+          | Instruction _ -> Warn.fatal "FIXME: dump_run_thread functionality for -variant self"
+        in
+        match at with
+        | Array (t,sz) ->
+          begin match v with
+            | Constant.ConcreteVector ws ->
+              let rec init_rec k ws =
+                if k < sz then begin
+                  let w,ws = match ws with
+                    | [] -> "0",[]
+                    | w::ws -> pp_const w,ws in
+                  let symb = sprintf "%s[%d]" a k in
+                  O.fx indent "%s;"
+                    (U.do_store (Base t) symb w) ;
+                  do_clean indent symb ;
+                  init_rec (k+1) ws
+                end in
+              init_rec 0 ws
+            | _ ->
+              O.fx indent "for (int _j = 0 ; _j < %i ; _j++) {" sz ;
+              let symb = sprintf "%s[_j]" a in
+              O.fx (Indent.tab indent) "%s;"
+                (U.do_store (Base t) symb (pp_const v)) ;
+              O.oii "}" ;
+              do_clean indent symb
+          end
+        | _ ->
+          let symb = sprintf "*%s" a in
+          O.fx indent "%s;" (U.do_store at symb (pp_const v)) ;
+          do_clean indent symb
+
       let dump_run_thread procs_user faults
           pte_init env test _some_ptr stats global_env
           (_vars,inits) (proc,(out,(_outregs,envVolatile)))  =
@@ -1562,117 +1627,52 @@ module Make
           O.fii "code_init(%s, %s, _vars->%s);" (LangUtils.code_fun_cpy proc)
             (OutUtils.fmt_code proc) (OutUtils.fmt_code_size proc) ;
         (* Initialize them *)
-        List.iter
-          (fun a ->
-            let at =  find_addr_type a env in
-            let v = A.find_in_state (A.location_of_addr a) test.T.init in
-            let pp_const v =
-              let open Constant in
-              match v with
-              | Concrete i -> A.V.Scalar.pp Cfg.hexa i
-              | ConcreteVector _ ->
-                  Warn.fatal "Vector used as scalar"
-              | ConcreteRecord _ ->
-                  Warn.fatal "Record used as scalar"
-              | Symbolic (Virtual {pac})
-                when not (PAC.is_canonical pac) ->
-                  Warn.user_error "Litmus cannot initialize a virtual address with a non-canonical PAC field"
-              | Symbolic (Virtual {name=s; tag=None; offset=0; _}) ->
-                  sprintf "(%s)_vars->%s" (CType.dump at) s
-              | Label (p,lbl) ->
-                  sprintf "_vars->labels.%s" (OutUtils.fmt_lbl_var p lbl)
-              | Tag _|Symbolic _ ->
-                  Warn.user_error "Litmus cannot handle this initial value %s"
-                    (A.V.pp_v v)
-              | PteVal _|Frozen _ -> assert false
-              | Instruction _ -> Warn.fatal "FIXME: dump_run_thread functionality for -variant self"
-              in
-            match at with
-            | Array (t,sz) ->
-                begin match v with
-                | Constant.ConcreteVector ws ->
-                    let rec init_rec k ws =
-                      if k < sz then begin
-                          let w,ws = match ws with
-                            | [] -> "0",[]
-                            | w::ws -> pp_const w,ws in
-                          O.fii "%s;"
-                            (U.do_store (Base t) (sprintf "%s[%d]" a k) w) ;
-                          init_rec (k+1) ws
-                        end in
-                    init_rec 0 ws
-                | _ ->
-                    O.fii "for (int _j = 0 ; _j < %i ; _j++) {" sz ;
-                    O.fiii "%s;"
-                      (U.do_store (Base t)
-                         (sprintf "%s[_j]" a) (pp_const v)) ;
-                    O.oii "}" ;
-                    if Cfg.is_kvm then
-                      O.fii "litmus_flush_tlb((void *)%s);" a
-                end
-            | _ ->
-                O.fii "%s;" (U.do_store at (sprintf "*%s" a) (pp_const v)) ;
-                if Cfg.is_kvm then O.fii "litmus_flush_tlb((void *)%s);" a)
-          inits ;
+        List.iter (init_mem_loc Indent.indent2 Cfg.is_kvm env test) inits ;
 (*        eprintf "%i: INIT {%s}\n" proc (String.concat "," inits) ; *)
         (* And cache-instruct them *)
-        if have_cache then begin
-          O.oii "barrier_wait(_b);" ;
-          List.iter
-            (fun addr ->
-              O.fii "if (_p->%s == ctouch) cache_touch((void *)%s);"
-                (pctag (proc,addr)) addr ;
-              O.fii "else if (_p->%s == cflush) cache_flush((void *)%s);"
-                (pctag (proc,addr)) addr)
-            addrs
-        end ;
-        let mem_map =
-          let open BellInfo in
-          match test.T.bellinfo with
-          | None|Some { regions=None;_} -> []
-          | Some { regions=Some map;_} -> map in
-        begin match pte_init,mem_map with
-        | [],[] -> ()
-        | bds,_ ->
+        O.oii "barrier_wait(_b);" ;
+        List.iter
+          (fun addr ->
+             O.fii "if (_p->%s == ctouch) cache_touch((void *)%s);"
+               (pctag (proc,addr)) addr ;
+             O.fii "else if (_p->%s == cflush) cache_flush((void *)%s);"
+               (pctag (proc,addr)) addr)
+          addrs ;
+        begin match pte_init with
+        | [] -> ()
+        | bds ->
             O.oii "barrier_wait(_b);" ;
             List.iter
               (fun x ->
-                let ok1 = try
+                try
                   begin match Misc.Simple.assoc x bds with
                   | P phy ->
                       O.fii
                         "(void)litmus_set_pte_safe(%s,_vars->pte_%s,_vars->saved_pte_%s);"
-                        x x phy
+                        x x phy ;
+                      O.fii "litmus_flush_tlb((void *)%s);" x
                   | Z ->
-                      O.fii "(void)litmus_set_pte_safe(%s,_vars->pte_%s,litmus_set_pte_invalid(*_vars->pte_%s));" x x x
+                      O.fii "(void)litmus_set_pte(%s,_vars->pte_%s,litmus_set_pte_invalid(*_vars->pte_%s));" x x x ;
+                      O.fii "litmus_flush_tlb((void *)%s);" x
                   | V (o,pteval) ->
                       let is_default = A.V.PteVal.is_default pteval in
                       if not (o = None && is_default) then begin
                         let arg = match o with
-                        | None -> sprintf "_vars->saved_pte_%s" x
-                        | Some s -> sprintf "_vars->saved_pte_%s" s in
-                        O.fii "(void)litmus_set_pte_safe(%s,_vars->pte_%s,%s);"
-                          x x (PU.dump_pteval_flags arg pteval);
+                          | None -> sprintf "_vars->saved_pte_%s" x
+                          | Some s -> sprintf "_vars->saved_pte_%s" s in
+                        O.fii "pteval_t pte_%s = %s;" x (PU.dump_pteval_flags arg pteval) ;
                         List.iter
                           (fun attr ->
-                            let attr = sprintf "attr_%s" (MyName.name_as_symbol attr) in
-                            O.fii "litmus_set_pte_attribute(_vars->pte_%s, %s);"
-                              x attr)
-                          (A.V.PteVal.get_attrs pteval)
+                             O.fii "litmus_set_pte_attribute(&pte_%s, %s);"
+                               x attr)
+                          (A.V.PteVal.attrs_as_kvm_symbols pteval) ;
+                        O.fii "(void)litmus_set_pte_safe(%s,_vars->pte_%s,pte_%s);" x x x ;
+                        O.fii "litmus_flush_tlb((void *)%s);" x
                       end
-                  end ;
-                  true
-                with Not_found ->false in
-                let ok2 = try
-                  let rs = Misc.Simple.assoc x mem_map in
-                  List.iter
-                    (fun r ->
-                      let r = sprintf "attr_%s" (MyName.name_as_symbol r) in
-                      O.fii "litmus_set_pte_attribute(%s,%s);" (OutUtils.fmt_pte_kvm x) r)
-                    rs ;
-                  true
-                with Not_found -> false in
-                if ok1 || ok2 then O.fii "litmus_flush_tlb((void *)%s);" x)
+                  end
+                with Not_found ->
+                  ()
+              )
               inits
         end ;
         (* Synchronise *)
@@ -1709,6 +1709,14 @@ module Make
                 inits in
           List.iter
             (fun a ->
+               (* We check the final value of a location using the
+                  default memory attributes. For locations that might
+                  have been written to with memory attributes other
+                  than the default, we clean the cache to make sure we
+                  don't create the conditions for mismatched memory
+                  attributes accidentally. *)
+              if memattrs_change a pte_init then
+                O.fii "cache_flush((void *)%s);" a ;
               let pte = OutUtils.fmt_pte_kvm a
               and phy = OutUtils.fmt_phy_kvm a in
               let rhs =
@@ -1777,6 +1785,10 @@ module Make
               else if U.is_rloc_pte rloc env then
                 let src = OutUtils.fmt_presi_ptr_index (A.dump_rloc_tag rloc) in
                 O.fii "%s = pack_pte(idx_physical(%s,_vars),%s);"
+                  (OutUtils.fmt_presi_index (A.dump_rloc_tag rloc)) src src
+              else if U.is_rloc_parel1 rloc env then
+                let src = OutUtils.fmt_presi_index (A.dump_rloc_tag rloc) in
+                O.fii "%s = pack_par_el1(idx_physical_parel1(%s,_vars),%s);"
                   (OutUtils.fmt_presi_index (A.dump_rloc_tag rloc)) src src)
             (U.get_displayed_locs test) ;
           (* condition *)
@@ -2192,7 +2204,6 @@ module Make
         dump_delay_def () ;
         dump_read_timebase () ;
         let find_ins_inserted = dump_mbar_def () in
-        dump_cache_def () ;
         dump_barrier_def () ;
         dump_topology doc test ;
         dump_user_stacks procs_user ;

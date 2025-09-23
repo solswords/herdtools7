@@ -1,4 +1,5 @@
 BENTO=../../_build/default/tools/bento.exe
+ASLREF=../../_build/install/default/bin/aslref
 LATEX=pdflatex
 BIBTEX=bibtex
 
@@ -20,17 +21,24 @@ CONTROLS=ifempty.tex ifcode.tex
 .PHONY: control
 control: control.tex $(CONTROLS)
 
+LATEXMK=latexmk
+
 ASLReference.pdf: control\
 				ASLASTLines.tex ASLTypeSatisfactionLines.tex ASLStaticModelLines.tex ASLStaticInterpreterLines.tex\
 				ASLStaticEnvLines.tex ASLEnvLines.tex ASLASTUtilsLines.tex\
 				ASLTypingLines.tex ASLSemanticsLines.tex ASLStaticOperationsLines.tex\
 				desugarLines.tex
-	$(LATEX) ASLReference.tex
-	$(BIBTEX) ASLReference
-	$(LATEX) ASLReference.tex
-	$(BIBTEX) ASLReference
-	$(LATEX) ASLReference.tex
-	python3 doclint.py
+	if command -v $(LATEXMK) >/dev/null 2>&1; \
+	then \
+		$(LATEXMK) -pdf ASLReference.tex; \
+	else \
+		$(LATEX) ASLReference.tex; \
+		$(BIBTEX) ASLReference; \
+		$(LATEX) ASLReference.tex; \
+		$(BIBTEX) ASLReference; \
+		$(LATEX) ASLReference.tex; \
+	fi
+	python3 doclint.py -m --aslref $(ASLREF)
 
 ASLASTLines.tex: ../AST.mli
 	$(BENTO) $< > $@
@@ -68,6 +76,7 @@ ifempty.tex: force
 	@echo "\\\\newif\\ifempty\\\\emptyfalse" >$@
 endif
 
+.PHONY: clean
 clean:
 	/bin/rm -f $(PDFS)
 	/bin/rm -f *Lines.tex

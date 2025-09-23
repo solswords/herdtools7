@@ -68,23 +68,24 @@ let pp_binop : binop -> string = function
   | `DIV -> "DIV"
   | `DIVRM -> "DIVRM"
   | `XOR -> "XOR"
-  | `EQ_OP -> "EQ_OP"
+  | `EQ -> "EQ"
   | `GT -> "GT"
-  | `GEQ -> "GEQ"
+  | `GE -> "GE"
   | `IMPL -> "IMPL"
   | `LT -> "LT"
-  | `LEQ -> "LEQ"
+  | `LE -> "LE"
   | `MOD -> "MOD"
-  | `MINUS -> "MINUS"
+  | `SUB -> "SUB"
   | `MUL -> "MUL"
-  | `NEQ -> "NEQ"
+  | `NE -> "NE"
   | `OR -> "OR"
-  | `PLUS -> "PLUS"
+  | `ADD -> "ADD"
   | `RDIV -> "RDIV"
   | `SHL -> "SHL"
   | `SHR -> "SHR"
   | `POW -> "POW"
-  | `CONCAT -> "CONCAT"
+  | `BV_CONCAT -> "BV_CONCAT"
+  | `STR_CONCAT -> "STR_CONCAT"
 
 let pp_unop = function BNOT -> "BNOT" | NOT -> "NOT" | NEG -> "NEG"
 
@@ -237,7 +238,7 @@ and pp_int_constraints f = function
         (pp_list pp_int_constraint)
         cs pp_precision_loss precision_loss
   | PendingConstrained -> addb f "PendingConstrained"
-  | Parameterized (i, x) -> bprintf f "Parameterized (%d, %S)" i x
+  | Parameterized x -> bprintf f "Parameterized %S" x
 
 and pp_precision_loss f = function
   | Precision_Full -> addb f "PrecisionFull"
@@ -307,10 +308,8 @@ let rec pp_stmt =
         bprintf f "S_Decl (%a, %a, %a, %a)" pp_local_decl_keyboard ldk
           pp_local_decl_item ldi (pp_option pp_ty) ty_opt (pp_option pp_expr)
           e_opt
-    | S_Throw opt ->
-        bprintf f "S_Throw (%a)"
-          (pp_option (pp_pair pp_expr (pp_option pp_ty)))
-          opt
+    | S_Throw expr_ty ->
+        bprintf f "S_Throw (%a)" (pp_pair pp_expr (pp_option pp_ty)) expr_ty
     | S_Try (s, catchers, otherwise) ->
         bprintf f "S_Try (%a, %a, %a)" pp_stmt s (pp_list pp_catcher) catchers
           (pp_option pp_stmt) otherwise

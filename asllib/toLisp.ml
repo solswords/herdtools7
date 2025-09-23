@@ -86,23 +86,24 @@ let of_binop (x : binop) =
     | `DIV -> "DIV"
     | `DIVRM -> "DIVRM"
     | `XOR -> "XOR"
-    | `EQ_OP -> "EQ_OP"
+    | `EQ -> "EQ"
     | `GT -> "GT"
-    | `GEQ -> "GEQ"
+    | `GE -> "GE"
     | `IMPL -> "IMPL"
     | `LT -> "LT"
-    | `LEQ -> "LEQ"
+    | `LE -> "LE"
     | `MOD -> "MOD"
-    | `MINUS -> "MINUS"
+    | `SUB -> "SUB"
     | `MUL -> "MUL"
-    | `NEQ -> "NEQ"
+    | `NE -> "NE"
     | `OR -> "OR"
-    | `PLUS -> "PLUS"
+    | `ADD -> "ADD"
     | `POW -> "POW"
     | `RDIV -> "RDIV"
     | `SHL -> "SHL"
     | `SHR -> "SHR"
-    | `CONCAT -> "CONCAT")
+    | `BV_CONCAT -> "BV_CONCAT"
+    | `STR_CONCAT -> "STR_CONCAT")
 
 (* -------------------------------------------------------------------------
 
@@ -277,8 +278,7 @@ and of_constraint_kind (x : constraint_kind) =
           of_precision_loss_flag flg;
         ]
     | PendingConstrained -> [ key "PENDINGCONSTRAINED" ]
-    | Parameterized (_, i) -> [ key "PARAMETRIZED"; of_identifier i ])
-(* note: removed non-semantically-relevant UID *)
+    | Parameterized i -> [ key "PARAMETRIZED"; of_identifier i ])
 
 and of_bitfield x =
   tagged_list_of_list
@@ -391,11 +391,7 @@ let rec of_stmt_desc x =
         [ key "S_WHILE"; of_expr x; of_option of_expr y; of_stmt s ]
     | S_Repeat (s, x, y) ->
         [ key "S_REPEAT"; of_stmt s; of_expr x; of_option of_expr y ]
-    | S_Throw opt ->
-        [
-          key "S_THROW";
-          of_option (fun (x, t) -> of_list [ of_expr x; of_option of_ty t ]) opt;
-        ]
+    | S_Throw (x, t) -> [ key "S_THROW"; of_expr x; of_option of_ty t ]
     | S_Try (s1, c, s2) ->
         [
           key "S_TRY";
@@ -520,13 +516,11 @@ let of_side_effect (x : SideEffect.t) =
     | ThrowsException i -> [ key "THROWSEXCEPTION"; of_identifier i ]
     | CallsRecursive i -> [ key "CALLSRECURSIVE"; of_identifier i ]
     | PerformsAssertions -> [ key "PERFORMSASSERTIONS" ]
-    | NonDeterministic -> [ key "NONDETERMINISTIC" ])
+    | NonDeterministic -> [ key "NONDETERMINISTIC" ]
+    | Prints -> [ key "PRINTS" ])
 
 let of_ses (x : SideEffect.SES.t) =
   of_list_map of_side_effect (SideEffect.SES.to_side_effect_list x)
-
-let of_storage of_v (x : 'v Storage.t) =
-  of_seq_map (fun (k, v) -> Cons (String k, of_v v)) (Storage.to_seq x)
 
 let of_static_env_global (x : StaticEnv.global) =
   aslsym_alist
@@ -535,7 +529,7 @@ let of_static_env_global (x : StaticEnv.global) =
         of_imap
           (fun (ty, tf) -> Cons (of_ty ty, of_timeframe tf))
           x.declared_types );
-      ("CONSTANT_VALUES", of_storage of_literal x.constant_values);
+      ("CONSTANT_VALUES", of_imap of_literal x.constant_values);
       ( "STORAGE_TYPES",
         of_imap
           (fun (ty, kw) -> Cons (of_ty ty, of_global_decl_keyword kw))
@@ -552,7 +546,7 @@ let of_static_env_global (x : StaticEnv.global) =
 let of_static_env_local (x : StaticEnv.local) =
   aslsym_alist
     [
-      ("CONSTANT_VALUES", of_storage of_literal x.constant_values);
+      ("CONSTANT_VALUES", of_imap of_literal x.constant_values);
       ( "STORAGE_TYPES",
         of_imap
           (fun (ty, kw) -> Cons (of_ty ty, of_local_decl_keyword kw))

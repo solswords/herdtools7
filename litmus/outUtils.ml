@@ -34,6 +34,7 @@ let fmt_pte_tag x = Misc.add_pte x
 let fmt_pte_kvm x = sprintf "_vars->%s" (fmt_pte_tag x)
 let fmt_phy_tag x = "saved_" ^ Misc.add_pte x
 let fmt_phy_kvm x = sprintf "_vars->%s" (fmt_phy_tag x)
+let fmt_parel1 x = sprintf "parel1_%s" x
 
 (* Value (address) output *)
 module type Config = sig
@@ -55,9 +56,18 @@ module Make(O:Config)(V:Constant.S) = struct
   | Direct -> sprintf "&_a->%s[_i]" a
   | Indirect -> sprintf "_a->%s[_i]" a
 
+  let full_dump_addr a o =
+    match o with
+    | 0 ->  dump_addr a
+    | _ ->
+        match O.memory with
+        | Direct -> sprintf "&(_a->%s[_i][%d])" a o
+        | Indirect -> sprintf "&(*(_a->%s[_i]))[%d]"  a o
+
   let dump_v_std v = match v with
   | Concrete _ -> V.pp O.hexa v
-  | Symbolic (Virtual {name=a;tag=None;cap=0L;offset=0;}) -> dump_addr a
+  | Symbolic (Virtual {name=a;tag=None;cap=0L;offset=o; _})
+    -> full_dump_addr a o
   | ConcreteVector _ -> V.pp O.hexa v
   | Instruction _ -> Misc.lowercase (V.pp false v)
   | ConcreteRecord _
@@ -65,6 +75,7 @@ module Make(O:Config)(V:Constant.S) = struct
   | Symbolic _
   | Label _
   | PteVal _
+  | AddrReg _
   | Frozen _
     -> assert false
 

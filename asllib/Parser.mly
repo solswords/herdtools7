@@ -70,12 +70,6 @@ let version = V1
 let t_bit ~loc = T_Bits (E_Literal (L_Int Z.one) |> add_pos_from loc, [])
 let zero ~loc = E_Literal (L_Int Z.zero) |> add_pos_from loc
 
-let make_ldi_vars (xs, ty) =
-  let make_one x =
-    S_Decl (LDK_Var, LDI_Var x.desc, Some ty, None) |> add_pos_from x
-  in
-  List.map make_one xs |> stmt_from_list |> desc
-
 let make_ty_decl_subtype (x, s) =
   let name, _fields = s.desc in
   let ty = ASTUtils.add_pos_from s (T_Named name) in
@@ -84,19 +78,28 @@ let make_ty_decl_subtype (x, s) =
 let prec =
   let open AST in
   function
-  | `BOR | `BAND | `IMPL | `BEQ -> 1
-  | `EQ_OP | `NEQ -> 2
-  | `PLUS | `MINUS | `OR | `XOR | `AND | `CONCAT -> 3
+  | `BOR | `BAND | `IMPL | `BEQ -> 0
+  | `EQ | `NE -> 1
+  | `GT | `GE | `LT | `LE -> 2 (* Non assoc *)
+  | `ADD | `SUB | `OR | `XOR | `AND | `BV_CONCAT | `STR_CONCAT -> 3
   | `MUL | `DIV | `DIVRM | `RDIV | `MOD | `SHL | `SHR -> 4
   | `POW -> 5
-  | `GT | `GEQ | `LT | `LEQ -> 0 (* Non assoc *)
+
+let check_is_associative ~loc (op : AST.binop) =
+  match op with
+  | `ADD | `AND | `BAND | `BEQ | `BOR | `MUL | `OR | `XOR | `BV_CONCAT
+  | `STR_CONCAT ->
+      ()
+  | _ -> Error.(fatal_from loc CannotParse)
 
 let check_not_same_prec loc op op' =
   if prec op = prec op' then Error.(fatal_from loc CannotParse)
 
 let check_not_binop_same_prec op e =
   match e.desc with
-  | E_Binop (op', _, _) when op != op' -> check_not_same_prec e op op'
+  | E_Binop (op', _, _) ->
+      if op = op' then check_is_associative ~loc:e op
+      else check_not_same_prec e op op'
   | _ -> ()
 
 let e_binop (e1, op, e2) =
@@ -217,15 +220,15 @@ let binop ==
   | DIV         ; { `DIV    }
   | DIVRM       ; { `DIVRM  }
   | XOR         ; { `XOR    }
-  | EQ_OP       ; { `EQ_OP  }
-  | NEQ         ; { `NEQ    }
+  | EQ_EQ       ; { `EQ     }
+  | NE          ; { `NE     }
   | GT          ; { `GT     }
-  | GEQ         ; { `GEQ    }
+  | GE          ; { `GE     }
   | IMPL        ; { `IMPL   }
   | LT          ; { `LT     }
-  | LEQ         ; { `LEQ    }
-  | PLUS        ; { `PLUS   }
-  | MINUS       ; { `MINUS  }
+  | LE          ; { `LE     }
+  | PLUS        ; { `ADD    }
+  | MINUS       ; { `SUB    }
   | MOD         ; { `MOD    }
   | MUL         ; { `MUL    }
   | OR          ; { `OR     }
@@ -233,7 +236,8 @@ let binop ==
   | SHL         ; { `SHL    }
   | SHR         ; { `SHR    }
   | POW         ; { `POW    }
-  | COLON_COLON ; { `CONCAT }
+  | COLON_COLON ; { `BV_CONCAT  }
+  | PLUS_PLUS   ; { `STR_CONCAT }
 
 (* ------------------------------------------------------------------------
 
@@ -269,8 +273,8 @@ let expr :=
     | ~=expr; AS; ~=implicit_t_int;                           < E_ATC                >
 
     | ~=expr; IN; ~=pattern_set;                              < E_Pattern            >
-    | ~=expr; EQ_OP; ~=pattern_mask;                          < E_Pattern            >
-    | e=expr; NEQ; p=pattern_mask;                            { E_Pattern (e, Pattern_Not (p) |> add_pos_from p) }
+    | ~=expr; EQ_EQ; ~=pattern_mask;                          < E_Pattern            >
+    | e=expr; NE; p=pattern_mask;                             { E_Pattern (e, Pattern_Not (p) |> add_pos_from p) }
     | ARBITRARY; COLON; ~=ty;                                 < E_Arbitrary        >
     | e=pared(expr);                                          { E_Tuple [ e ]        }
     | t=annotated(IDENTIFIER); LBRACE; MINUS; RBRACE;
@@ -292,7 +296,11 @@ let expr :=
 let constraint_kind_opt := constraint_kind | { UnConstrained }
 let constraint_kind :=
   | cs=braced(clist1(int_constraint)); { WellConstrained (cs, Precision_Full) }
-  | braced(MINUS); { PendingConstrained }
+  | braced(MINUS); {
+    if Config.allow_hyphenated_pending_constraint then PendingConstrained
+      else Error.fatal_here $startpos $endpos @@ Error.ObsoleteSyntax "Hyphenated pending constraint."
+  }
+  | LBRACE; RBRACE; { PendingConstrained }
 
 let int_constraint :=
   | ~=expr;                     < Constraint_Exact >
@@ -318,8 +326,8 @@ let expr_pattern :=
     | ~=expr_pattern; AS; ~=implicit_t_int;                           < E_ATC                >
 
     | ~=expr_pattern; IN; ~=pattern_set;                              < E_Pattern            >
-    | ~=expr_pattern; EQ_OP; ~=pattern_mask;                          < E_Pattern            >
-    | e=expr_pattern; NEQ; p=pattern_mask;                            { E_Pattern (e, Pattern_Not (p) |> add_pos_from p) }
+    | ~=expr_pattern; EQ_EQ; ~=pattern_mask;                          < E_Pattern            >
+    | e=expr_pattern; NE; p=pattern_mask;                             { E_Pattern (e, Pattern_Not (p) |> add_pos_from p) }
 
     | ARBITRARY; COLON; ~=ty;                                         < E_Arbitrary        >
     | e=pared(expr_pattern);                                          { E_Tuple [ e ]        }
@@ -337,8 +345,8 @@ let pattern :=
     | ~=expr_pattern; < Pattern_Single >
     | e1=expr_pattern; SLICING; e2=expr; < Pattern_Range >
     | MINUS; { Pattern_All }
-    | LEQ; ~=expr; < Pattern_Leq >
-    | GEQ; ~=expr; < Pattern_Geq >
+    | LE; ~=expr; < Pattern_Leq >
+    | GE; ~=expr; < Pattern_Geq >
     | ~=plist2(pattern); < Pattern_Tuple >
   )
   | pattern_mask
@@ -353,7 +361,6 @@ let pattern_set :=
 let fields :=
     braced(MINUS); { [] }
   | braced(tclist1(typed_identifier))
-let fields_opt := { [] } | fields
 
 (* Slices *)
 let slices := bracketed(clist1(slice))
@@ -374,14 +381,15 @@ let bitfield :=
 
 (* Also called ty in grammar.bnf *)
 let ty :=
-  annotated (
+  | ~=pared(ty);                                        <>
+  | annotated (
     | INTEGER; c = constraint_kind_opt;                 < T_Int        >
     | REAL;                                             { T_Real       }
     | BOOLEAN;                                          { T_Bool       }
     | STRING;                                           { T_String     }
     | loc=annotated(BIT);                               { t_bit ~loc   }
     | BITS; ~=pared(expr); ~=bitfields_opt;             < T_Bits       >
-    | l=plist0(ty);                                     < T_Tuple      >
+    | ~=plist2(ty);                                     < T_Tuple      >
     | name=IDENTIFIER;                                  < T_Named      >
     | ARRAY; LLBRACKET; e=expr; RRBRACKET; OF; t=ty;    { T_Array (ArrayLength_Expr e, t) }
   )
@@ -389,15 +397,32 @@ let ty :=
 let ty_decl := ty |
   annotated (
     | ENUMERATION; l=braced(tclist1(IDENTIFIER));       < T_Enum       >
-    | RECORD; l=fields_opt;                             < T_Record     >
-    | EXCEPTION; l=fields_opt;                          < T_Exception  >
-    | COLLECTION; l=fields_opt;                         < T_Collection >
+    | RECORD [@internal true];
+      { if Config.allow_empty_structured_type_declarations then T_Record []
+        else Error.fatal_here $startpos $endpos @@ Error.ObsoleteSyntax "Empty record type declaration." }
+    | EXCEPTION [@internal true];
+      { if Config.allow_empty_structured_type_declarations then T_Exception []
+        else Error.fatal_here $startpos $endpos @@ Error.ObsoleteSyntax "Empty exception type declaration." }
+    | RECORD; l=fields;                                 < T_Record     >
+    | EXCEPTION; l=fields;                              < T_Exception  >
   )
 
 (* Constructs on ty *)
 (* Begin AsTy *)
 let as_ty := COLON; ty
 (* End *)
+
+(* Begin TyOrCollection *)
+let ty_or_collection :=
+  | ty
+  | annotated (
+    | COLLECTION [@internal true];
+      { if Config.allow_empty_structured_type_declarations then T_Collection []
+        else Error.fatal_here $startpos $endpos @@ Error.ObsoleteSyntax "Empty collection type declaration." }
+    | COLLECTION; l=fields;                         < T_Collection >
+  )
+(* End *)
+
 
 (* Begin TypedIdentifier *)
 let typed_identifier := pair(IDENTIFIER, as_ty)
@@ -467,16 +492,23 @@ let decl_item :=
 (* ------------------------------------------------------------------------- *)
 (* Statement helpers *)
 
-let local_decl_keyword_non_var :=
+let local_decl_keyword ==
   | LET       ; { LDK_Let       }
-  | CONSTANT  ; { LDK_Constant  }
-  (* Var is inlined inside stmt as it has differing production choices
+  | CONSTANT[@internal true]; {
+    if not Config.allow_local_constants then
+        Error.fatal_here $startpos $endpos @@ Error.ObsoleteSyntax "Local constant declaration."
+    else LDK_Constant
+  }
   | VAR       ; { LDK_Var       }
-  *)
 
-let global_let_or_constant :=
+let global_keyword_non_config ==
   | LET       ; { GDK_Let      }
   | CONSTANT  ; { GDK_Constant }
+  | VAR       ; { GDK_Var }
+
+let global_keyword ==
+  | global_keyword_non_config
+  | CONFIG; { GDK_Config }
 
 let pass == { S_Pass }
 let assign(x, y) == ~=x ; EQ ; ~=y ; < S_Assign >
@@ -498,8 +530,6 @@ let otherwise == OTHERWISE; ARROW; stmt_list
 let otherwise_opt := ioption(otherwise)
 let catcher := WHEN; ~=ioption(terminated(IDENTIFIER, COLON)); ~=ty; ARROW; ~=stmt_list; <>
 let loop_limit := ioption(LOOPLIMIT; expr)
-
-let option_eq_expr := ioption(EQ; expr)
 
 let setter_access :=
   | { [] }
@@ -524,7 +554,7 @@ let stmt :=
       | RETURN; ~=option(expr);                             < S_Return >
       | ~=call;                                              < s_call >
       | ASSERT; e=expr;                                      < S_Assert >
-      | ~=local_decl_keyword_non_var; ~=decl_item; ~=ty_opt; EQ; ~=some(expr); < S_Decl   >
+      | ~=local_decl_keyword; ~=decl_item; ~=ty_opt; EQ; ~=some(expr); < S_Decl   >
       | le=lexpr; EQ; e=expr;                                < S_Assign >
       | call=annotated(call); ~=setter_access; EQ; rhs=expr;
         { desugar_setter call { access=setter_access; slices=add_dummy_annotation ~version [] } rhs }
@@ -532,19 +562,19 @@ let stmt :=
         { desugar_setter call { access=setter_access; slices } rhs }
       | call=annotated(call); DOT; flds=bracketed(clist2(IDENTIFIER)); EQ; rhs=expr;
         { desugar_setter_setfields call flds rhs }
-      | ldk=local_decl_keyword_non_var; lhs=decl_item; ty=as_ty; EQ; call=annotated(elided_param_call);
-        { desugar_elided_parameter ldk lhs ty call}
-      | VAR; ldi=decl_item; ty=ty_opt; e=option_eq_expr;      { S_Decl (LDK_Var, ldi, ty, e) }
-      | VAR; ~=clist2(annotated(IDENTIFIER)); ~=as_ty;        < make_ldi_vars >
-      | VAR; lhs=decl_item; ty=as_ty; EQ; call=annotated(elided_param_call);
-        { desugar_elided_parameter LDK_Var lhs ty call}
-      | PRINTLN; args=plist0(expr);                           { S_Print { args; newline = true; debug = false } }
-      | PRINT; args=plist0(expr);                             { S_Print { args; newline = false; debug = false } }
+      | ldk=local_decl_keyword; lhs=decl_item; ty=as_ty; EQ; call=annotated(elided_param_call);
+        { S_Decl (ldk, lhs, Some ty, desugar_elided_parameter ty call) }
+      | VAR; ldi=decl_item; ty=some(as_ty);                   { S_Decl (LDK_Var, ldi, ty, None) }
+      | VAR; ~=clist2(annotated(IDENTIFIER)); ~=as_ty;        < Desugar.make_local_vars >
+      | PRINTLN; args=clist0(expr);                           { S_Print { args; newline = true; debug = false } }
+      | PRINT; args=clist0(expr);                             { S_Print { args; newline = false; debug = false } }
       | DEBUG; args=plist0(expr);            { S_Print { args; newline = true; debug = true } }
-      | UNREACHABLE; LPAR; RPAR;                             { S_Unreachable }
+      | UNREACHABLE;                                          { S_Unreachable }
+      | UNREACHABLE; LPAR; RPAR [@internal true];
+          { if Config.allow_function_like_statements then S_Unreachable
+            else Error.fatal_here $startpos $endpos @@ Error.ObsoleteSyntax "Function-like unreachable statement." }
       | REPEAT; ~=stmt_list; UNTIL; ~=expr; ~=loop_limit;    < S_Repeat >
-      | THROW; e=expr;                                       { S_Throw (Some (e, None)) }
-      | THROW;                                               { S_Throw None             }
+      | THROW; e=expr;                                       { S_Throw (e, None) }
       | PRAGMA; x=IDENTIFIER; e=clist0(expr);                 < S_Pragma >
     )
   )
@@ -585,8 +615,7 @@ let elided_param_call :=
   | name=IDENTIFIER; LBRACE; COMMA; params=clist1(expr); RBRACE; args=opt_call_args;
     { { name; params; args; call_type = ST_Function } }
 let func_args := plist0(typed_identifier)
-let maybe_empty_stmt_list := stmt_list | annotated({ S_Pass })
-let func_body == delimited(BEGIN, maybe_empty_stmt_list, end_semicolon)
+let func_body == delimited(BEGIN, stmt_list, end_semicolon)
 let recurse_limit := ioption(RECURSELIMIT; expr)
 let ignored_or_identifier :=
   | MINUS [@internal true]; {
@@ -594,23 +623,39 @@ let ignored_or_identifier :=
       else Error.fatal_here $startpos $endpos @@ Error.ObsoleteSyntax "Discarded storage declaration."
     }
   | IDENTIFIER
+
+let qualifier ==
+  ioption(
+    | PURE;     { Pure }
+    | READONLY; { Readonly }
+    | NORETURN; { Noreturn })
+
+let purity_keyword ==
+  ioption(
+    | PURE;     { Pure }
+    | READONLY; { Readonly })
+
+let is_readonly :=
+  |           { false }
+  | READONLY; { true }
+
 let override ==
   ioption(
     | IMPDEF; { Impdef }
     | IMPLEMENTATION; { Implementation })
 
 let accessors :=
-  | GETTER; getter=maybe_empty_stmt_list; end_semicolon;
-    SETTER; setter=maybe_empty_stmt_list; end_semicolon;
-    { { getter; setter } }
-  | SETTER; setter=maybe_empty_stmt_list; end_semicolon;
-    GETTER; getter=maybe_empty_stmt_list; end_semicolon;
-    { { getter; setter } }
+  | ~=is_readonly; GETTER; getter=stmt_list; end_semicolon;
+    SETTER; setter=stmt_list; end_semicolon;
+    { { is_readonly; getter; setter } }
+  | SETTER; setter=stmt_list; end_semicolon;
+    ~=is_readonly; GETTER; getter=stmt_list; end_semicolon;
+    { { is_readonly; getter; setter } }
 
 let decl :=
   | d=annotated (
     (* Begin func_decl *)
-    | ~=override; FUNC; name=IDENTIFIER; ~=params_opt; ~=func_args; ~=return_type; ~=recurse_limit; body=func_body;
+    | ~=purity_keyword; ~=override; FUNC; name=IDENTIFIER; ~=params_opt; ~=func_args; ~=return_type; ~=recurse_limit; body=func_body;
         {
           D_Func {
             name;
@@ -620,13 +665,14 @@ let decl :=
             return_type = Some return_type;
             subprogram_type = ST_Function;
             recurse_limit;
+            qualifier = purity_keyword;
             override;
             builtin = false;
           }
         }
     (* End *)
     (* Begin procedure_decl *)
-    | ~=override; FUNC; name=IDENTIFIER; ~=params_opt; ~=func_args; body=func_body;
+    | ~=qualifier; ~=override; FUNC; name=IDENTIFIER; ~=params_opt; ~=func_args; ~=recurse_limit; body=func_body;
         {
           D_Func {
             name;
@@ -635,7 +681,8 @@ let decl :=
             body = SB_ASL body;
             return_type = None;
             subprogram_type = ST_Procedure;
-            recurse_limit = None;
+            recurse_limit;
+            qualifier;
             override;
             builtin = false;
           }
@@ -649,18 +696,18 @@ let decl :=
       | TYPE; x=IDENTIFIER; s=annotated(subtype);         < make_ty_decl_subtype >
       (* End *)
       (* Begin global_storage *)
-      | keyword=global_let_or_constant; name=ignored_or_identifier;
-        ty=option(as_ty); EQ; initial_value=some(expr);
+      | keyword=global_keyword_non_config; name=ignored_or_identifier;
+        ty=ioption(as_ty); EQ; initial_value=some(expr);
         { D_GlobalStorage { keyword; name; ty; initial_value } }
       | CONFIG; name=ignored_or_identifier;
         ty=as_ty; EQ; initial_value=some(expr);
         { D_GlobalStorage { keyword=GDK_Config; name; ty=Some ty; initial_value } }
-      | VAR; name=ignored_or_identifier;
-        ty=option(as_ty); EQ; initial_value=some(expr);
-        { D_GlobalStorage { keyword=GDK_Var; name; ty; initial_value } }
+      | keyword=global_keyword; name=ignored_or_identifier;
+        ty=as_ty; EQ; call=annotated(elided_param_call);
+        { D_GlobalStorage { keyword; name; ty=Some ty; initial_value=desugar_elided_parameter ty call } }
       (* End *)
       (* Begin global_uninit_var *)
-      | VAR; name=ignored_or_identifier; ty=some(as_ty);
+      | VAR; name=ignored_or_identifier; COLON; ty=some(ty_or_collection);
         { D_GlobalStorage { keyword=GDK_Var; name; ty; initial_value=None}}
       (* End *)
       (* Begin global_pragma *)
@@ -668,7 +715,8 @@ let decl :=
       (* End *)
     )
   ); { [d] }
-  | ~=override; ACCESSOR; name=IDENTIFIER; ~=params_opt; ~=func_args; BIARROW; setter_arg=IDENTIFIER; ~=as_ty;
+  | VAR; ~=clist2(annotated(IDENTIFIER)); ~=as_ty; SEMI_COLON; < Desugar.make_global_vars >
+  | ~=override; ACCESSOR; name=IDENTIFIER; ~=params_opt; ~=func_args; BEQ; setter_arg=IDENTIFIER; ~=as_ty;
     ~=accessor_body;
     { desugar_accessor_pair override name params_opt func_args setter_arg as_ty accessor_body }
 
@@ -688,9 +736,11 @@ let opn [@internal true] := body=stmt; EOF;
             args = [];
             parameters = [];
             body = SB_ASL body;
-            return_type = None;
-            subprogram_type = ST_Procedure;
+            return_type =
+              Some (T_Int UnConstrained |> add_dummy_annotation ~version);
+            subprogram_type = ST_Function;
             recurse_limit = None;
+            qualifier = None;
             override = None;
             builtin = false;
           }

@@ -45,6 +45,10 @@ module Make
     let const_pac_field = C.variant Variant.ConstPacField
     let fpac = C.variant Variant.FPac
 
+    let check_kvm ins =
+      if not kvm then
+        Warn.user_error "%s without -variant vmsa" ins
+
     let check_mixed ins =
       if not mixed then
         Warn.user_error "%s without -variant mixed" ins
@@ -107,6 +111,7 @@ module Make
       module Mixed = M.Mixed(SZ)
 
       let (>>=) = M.(>>=)
+      let (let*) = M.(>>=)
       let (>>==) = M.(>>==)
       let (>>*=) = M.(>>*=)
       let (>>*==) = M.(>>*==)
@@ -833,8 +838,8 @@ module Make
 
           * Without HW-management (on old CPUs, or where TCR_ELx.{HA,HD} == {0,0}):
 
-          A load/store to x where pte_x has the access flag clear will raise a
-          permission fault
+          A load/store to x where pte_x has the access flag clear will raise an
+          Access flag fault
 
           A store to x where pte_x has the dirty bit clear will raise
           a permission fault
@@ -1520,8 +1525,21 @@ module Make
         | None -> false
         | Some rB -> AArch64.reg_compare rA rB=0
 
-      let lift_memop rA (* Base address register *)
-            dir updatedb checked mop perms ma mv an ii =
+
+(*
+Arguments:
+- rA:         Base address register.
+- dir:        Access direction (Dir.R for reads, Dir.W for writes).
+- updatedb:   If true, update the Dirty Bit in table descriptors.
+- checked:    If true, perform memory tagging checks.
+- mop:        Function defining the memory operation.
+- perms:      Required permissions for Morello.
+- ma:         Virtual address to be accessed, represented as the value within the monad.
+- mv:         Value to be stored (for write operations), represented as the value in the monad.
+- an:         Annotation for the event structure.
+- ii:         Instruction metadata.
+*)
+      let lift_memop rA dir updatedb checked mop perms ma mv an ii =
         if morello then
           lift_morello mop perms ma mv dir an ii
         else
@@ -1551,6 +1569,36 @@ module Make
             lift_memtag_virt mop ma dir an ii
           else
             mop Access.VIR ma >>= M.ignore >>= B.next1T
+
+      (* Address translation instruction *)
+      let do_at op rd ii =
+        check_kvm "AT";
+        let open AArch64Base in
+        let dir =
+          match op.AArch64Base.AT.rw with
+          | AArch64Base.AT.W -> Dir.W
+          | AArch64Base.AT.R -> Dir.R in
+        let sreg = SysReg AArch64Base.PAR_EL1 in
+        let mfault ma _ _ =
+            let* a = ma in
+            let* v = M.op1 (Op.ArchOp1 AArch64Op.SetF) a in
+            let set_par_el1 = write_reg AArch64Base.par_el1 v ii in
+            set_par_el1 >>! B.Next [] in
+        let mop _ac ma =
+            let* a = ma in
+            let* v = M.op1 (Op.ArchOp1 AArch64Op.SetOA) a in
+            write_reg_dest sreg v ii in
+        let mphy ma a_virt =
+            let ma = get_oa a_virt ma in
+            mop Access.PHY ma >>= M.ignore >>= B.next1T in
+        let ma = read_reg_ord rd ii in
+        let maccess a ma =
+          check_ptw ii.AArch64.proc dir false false a ma Annot.N ii
+            ((let m = mop Access.PTE ma in
+              fire_spurious_af dir a m) >>= M.ignore >>= B.next1T)
+            mphy
+            mfault in
+        M.delay_kont "at::check_ptw" ma maccess
 
       let do_ldr rA sz an mop ma ii =
 (* Generic load *)
@@ -3257,23 +3305,20 @@ module Make
 
       let ldg rt rn k ii =
         let ma = get_ea rn (AArch64.K k) AArch64.S_NOEXT ii in
-        let do_ldg a_virt ac ma =
-          let ( let* ) = (>>=) in
-          let _do_ldg a =
+        let mv = read_reg_ord rt ii >>= loc_extract in
+        let do_ldg ac ma mv =
+          let _do_ldg (a, v) =
             let* atag = M.op1 Op.TagLoc a in
             let* tag = do_read_tag atag ii in
-            let* v = M.op Op.SetTag a_virt tag in
+            let* v = M.op Op.SetTag v tag in
             let* () = write_reg rt v ii in
             B.nextT in
           if Access.is_physical ac then
-            M.bind_ctrldata ma _do_ldg
+            M.bind_ctrldata (ma >>| mv) _do_ldg
           else
-            ma >>= _do_ldg in
-        M.delay_kont "ldg" ma
-          (fun a_virt ma ->
-             let do_ldg = do_ldg a_virt in
-             lift_memop rn Dir.R false false (fun ac ma _mv -> do_ldg ac ma)
-               (to_perms "w" MachSize.S128) ma mzero Annot.N ii)
+            ma >>| mv >>= _do_ldg in
+        lift_memop rn Dir.R false false (fun ac ma mv -> do_ldg ac ma mv)
+        (to_perms "w" MachSize.S128) ma mv Annot.N ii
 
       type double = Once|Twice
 
@@ -4465,6 +4510,8 @@ module Make
             ldop op (bh_to_sz v) (w_to_rmw w) rs ZR rn ii
         | I_LDOPBH (op,v,rmw,rs,rt,rn) ->
             ldop op (bh_to_sz v) rmw rs rt rn ii
+(* Address translation operation *)
+        | I_AT (op, rd) -> do_at op rd ii
 (* Page tables and TLBs *)
         | I_TLBI (op, rd) ->
             !(read_reg_addr rd ii >>= fun a -> do_inv op a ii)

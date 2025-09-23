@@ -36,7 +36,6 @@
 %token BAND
 %token BEGIN
 %token BEQ
-%token BIARROW
 %token BIT
 %token BITS
 %token BNOT
@@ -61,11 +60,11 @@
 %token ENUMERATION
 %token EOF
 %token EQ
-%token EQ_OP
+%token EQ_EQ
 %token EXCEPTION
 %token FOR
 %token FUNC
-%token GEQ
+%token GE
 %token GETTER
 %token GT
 %token IF
@@ -76,7 +75,7 @@
 %token INTEGER
 %token LBRACE
 %token LBRACKET
-%token LEQ
+%token LE
 %token LET
 %token LLBRACKET
 %token LOOPLIMIT
@@ -85,7 +84,8 @@
 %token MINUS
 %token MOD
 %token MUL
-%token NEQ
+%token NE
+%token NORETURN
 %token NOT
 %token OF
 %token OR
@@ -93,13 +93,16 @@
 %token PASS
 %token PLUS
 %token PLUS_COLON
+%token PLUS_PLUS
 %token POW
 %token PRAGMA
 %token PRINT
 %token PRINTLN
+%token PURE
 %token RBRACE
 %token RBRACKET
 %token RDIV
+%token READONLY
 %token REAL
 %token RECORD
 %token RECURSELIMIT
@@ -187,11 +190,11 @@
 %left BOR BAND IMPL BEQ AS
 
 (* binop_comparison *)
-%left EQ_OP NEQ
-%nonassoc GT GEQ LT LEQ
+%left EQ_EQ NE
+%nonassoc GT GE LT LE
 
 (* binop_add_sub_logic *)
-%left PLUS MINUS OR XOR AND COLON_COLON
+%left PLUS MINUS OR XOR AND COLON_COLON PLUS_PLUS
 
 (* binop_mul_div_shift *)
 %left MUL DIV DIVRM RDIV MOD SHL SHR

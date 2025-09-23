@@ -188,8 +188,6 @@ let opts =
    begin let module P = ParseTag.Make(Archs.System) in
    P.parse_withfun "-carch"
      Option.set_carch "Target architechture (C arch only)" None end ;
-   argbool "-pldw" Option.pldw "use pldw instruction (ARM)" ;
-   argbool "-cacheflush" Option.cacheflush "use cache flush instruction (AArch64)" ;
 (********)
 (* Misc *)
 (********)
@@ -294,8 +292,6 @@ let () =
       let morearch = !morearch
       let carch = !carch
       let xy = !xy
-      let pldw = !pldw
-      let cacheflush = !cacheflush
       let makevar = !makevar
       let gcc = !gcc
       let c11 = !c11
@@ -324,7 +320,7 @@ let () =
       let platform = "_linux"
       let affinity = match !mode with
       | Mode.Std|Mode.PreSi -> !affinity
-      | Mode.Kvm -> Affinity.No (* No effinity ever in kvm mode *)
+      | Mode.Kvm -> Affinity.No (* No affinity ever in kvm mode *)
       let logicalprocs = !logicalprocs
       let linkopt = !linkopt
       let barrier = !barrier
@@ -340,7 +336,12 @@ let () =
              | _,_ -> Alloc.Dynamic
            end
       let doublealloc = !doublealloc
-      let memory = !memory
+      let memory =
+        match !mode with
+        | Mode.Std -> !memory
+        | Mode.(Kvm|PreSi) ->
+            (* Indirect memory does not apply here *)
+            Memory.Direct
       let preload = !preload
       let safer = !safer
       let cautious = !cautious

@@ -51,7 +51,7 @@ module Top
           map : string -> string; }
     end
 
-    module Make(A:ArchBase.S)(Pte:PteVal.S) = struct
+    module Make(A:ArchBase.S)(Pte:PteVal.S)(AddrReg:AddrReg.S) = struct
 
       let zyva name parsed =
 	let tname = name.Name.name in
@@ -70,8 +70,6 @@ module Top
     end
 
     module Z = ToolParse.Top(T)(Make)
-
-    type name = {fname:string; tname:string;}
 
     let do_test name (kh,km as k) =
       try
