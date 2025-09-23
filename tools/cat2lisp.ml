@@ -58,7 +58,7 @@ let of_konst x =
 let of_var x = String x
 let of_tag x = String x
 
-let of_varset x = of_list_map of_tag ( StringSet.to_list x )
+let of_varset x = of_list_map of_tag ( List.of_seq (StringSet.to_seq x) )
 
 let of_pat0 x = of_option of_var x
 let of_pat x =
