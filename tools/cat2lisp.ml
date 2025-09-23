@@ -232,11 +232,11 @@ module Make
       (str, expand_inslist insts)
 
     and expand_inslist x =
-      List.concat_map expand_ins x
+      List.concat (List.map expand_ins x)
 
     and parse fname =
       let (_, _, ast) = P.parse fname in
-      List.concat_map expand_ins ast
+      List.concat (List.map expand_ins ast)
   end
 
 
@@ -277,7 +277,7 @@ let () =
                            let includes = !includes
                            let libdir = !libdir
                          end) in
-  let ast = List.concat_map MyParse.parse cats in
+  let ast = List.concat (List.map MyParse.parse cats) in
   let lisp_ast = of_list_map of_ins ast in
   print_obj Format.std_formatter lisp_ast
 
