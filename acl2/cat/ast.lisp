@@ -330,3 +330,25 @@
         (let ((rest (find-first-non-ins (cdr x))))
           (and rest (+ 1 rest)))
       0)))
+
+
+(define test-ast-file ((fname stringp)
+                       &key (state 'state))
+  :mode :program
+  (b* (((mv err ast state) (read-ast-file fname))
+       ((when err)
+        (cw "@#@#@ Error reading AST file: ~@0~%" err)
+        (exit 2)
+        state)
+       ((unless (consp ast))
+        (cw "@#@#@ Empty AST~%")
+        (exit 2)
+        state)
+       ((unless (inslist-p ast))
+        (cw "@#@#@ Not well-typed. First non-ins: ~x0~%" (find-first-non-ins ast))
+        (exit 1)
+        state))
+    (cw "Well-typed AST, length ~x0~%" (len ast))
+    (exit 43) ;; success
+    state))
+
