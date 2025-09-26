@@ -1,8 +1,5 @@
-(******************************************************************************)
-(*                                ASLRef                                      *)
-(******************************************************************************)
 (*
-  * SPDX-FileCopyrightText: Copyright 2022-2023 Arm Limited and/or its affiliates <open-source-office@arm.com>
+  * SPDX-FileCopyrightText: Copyright 2025 Arm Limited and/or its affiliates <open-source-office@arm.com>
   * SPDX-License-Identifier: BSD-3-Clause
  *)
 (******************************************************************************)
@@ -156,10 +153,7 @@ let rec of_ins x =
            | UnShow (loc, strs)        -> [ key "I_UNSHOW"; of_loc loc; of_list_map of_str strs ]
            | Show (loc, strs)          -> [ key "I_SHOW"; of_loc loc; of_list_map of_str strs ]
            | ShowAs (loc, exp, str)    -> [ key "I_SHOWAS"; of_loc loc; of_exp exp; of_str str ]
-           | Include (loc, str)        ->
-              if false then
-                [ key "I_INCLUDE"; of_loc loc; of_str str ]
-              else raise (Misc.Fatal "Unexpected include after expansion")
+           | Include (_, _)            -> raise (Misc.Fatal "Unexpected include after expansion")
            | Procedure (loc, var, pat, insts, isrec)
              -> [ key "I_PROCEDURE"; of_loc loc; of_var var; of_pat pat; of_list_map of_ins insts; of_is_rec isrec ]
            | Call (loc, var, exp, str) -> [ key "I_CALL"; of_loc loc; of_var var; of_exp exp; of_option of_str str ]
