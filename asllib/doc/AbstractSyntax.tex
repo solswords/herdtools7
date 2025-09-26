@@ -8,51 +8,56 @@ and then continue to operate over that tree.
 The reason for this is that abstract syntax trees abstract away details that are irrelevant to the semantics of the program,
 such as punctuation and scoping syntax, which are useful for readability and parsing.
 
+\begin{definition}[Syntactic Sugar]
+\hypertarget{def-syntacticsugar}
+Some ASL syntax is \emph{\syntacticsugar}. That is, some constructs (statements, expressions, etc.)
+have no explicit corresponding AST nodes, and are rather represented by AST for other constructs.
+We call the constructing the AST for such constructs \emph{\desugaring}.
+\end{definition}
+
 \hypertarget{def-typedast}{}
 \hypertarget{def-untypedast}{}
 \paragraph{Untyped AST vs. Typed AST:}
 Technically, there are two abstract syntaxes:
 an \emph{untyped abstract syntax} and a \emph{typed abstract syntax}.
 The first syntax results from parsing the text of an ASL specification.
-The typechecker checks whether the untyped AST satisfies the rules of the
+The typechecker checks whether the \untypedast{} satisfies the rules of the
 type system. If so, it is considered valid and the type system rules
-produce a typed AST.
+generate a \typedast.
 
-\paragraph{Outline:}
-The outline of this chapter is as follows,
-We first define the type of Abstract Syntax Trees used by ASL (\secref{AbstractSyntaxTrees}).
-We then define the notations for defining the AST grammar used by ASL (\secref{AbstractSyntaxGrammar})
-Finally, we define the AST grammar rules for the different ASL constructs along with examples:
+\ChapterOutline
 \begin{itemize}
-  \item Identifiers (\secref{Identifiers})
-  \item Literal values (\secref{ASTLiterals})
-  \item Basic Operations (\secref{BasicOperations})
-  \item Expressions (\secref{Expressions})
-  \item Patterns (\secref{Patterns})
-  \item Slices (\secref{Slices})
-  \item Subprogram calls (\secref{SubprogramCalls})
-  \item Types (\secref{Types})
-  \item Constraints (\secref{Constraints})
-  \item Bit Fields (\secref{BitFields})
-  \item Array Indices (\secref{ArrayIndices})
-  \item Fields and Typed Identifiers (\secref{FieldsAndTypedIdentifiers})
-  \item Left-hand Side Expressions (\secref{LeftHandSideExpressions})
-  \item Local Declarations (\secref{LocalDeclarations})
-  \item Statements (\secref{Statements})
-  \item Case Alternatives (\secref{CaseAlternatives})
-  \item Exception Catchers (\secref{ExceptionCatchers})
-  \item Subprograms (\secref{Subprograms})
-  \item Global Declarations (\secref{GlobalDeclarations})
-  \item Specifications (\secref{Specifications})
-\end{itemize}
-We then define the following:
-\begin{itemize}
-\item the grammar rules for the \untypedast\ (\secref{UntypedAbstractGrammar})
-\item the grammar rules for the \typedast\ (\secref{TypedAbstractSyntaxGrammar})
-\item how we use inference rules to define the transformation from a parse tree into an \untypedast\ (\secref{BuildingAbstractSyntaxTrees})
-\item rules for building ASTs from parameterized productions (\secref{BuildingParameterizedProductions})
-\item how \assignableexpressions\ can be viewed as corresponding right hand side expressions (\secref{LeftToRight})
-\item finally, we define some useful abbreviations for denoting abstract syntax trees in rules (\secref{AbstractSyntaxAbreviations})
+  \item \secref{AbstractSyntaxTrees} defines the type of Abstract Syntax Trees (ASTs) used by ASL;
+  \item \secref{AbstractSyntaxGrammar} defines notations used to define the ASTs of ASL;
+  \item \secref{UntypedAbstractGrammar} defines the AST nodes for the \untypedast:
+  \begin{itemize}
+    \item \secref{Identifiers} defines the AST for identifiers;
+    \item \secref{ASTLiterals} defines the AST for literal values;
+    \item \secref{BasicOperations} defines the AST for basic operations;
+    \item \secref{Expressions} defines the AST for expressions;
+    \item \secref{Patterns} defines the AST for patterns;
+    \item \secref{Slices} defines the AST for slices;
+    \item \secref{SubprogramCalls} defines the AST for subprogram calls;
+    \item \secref{Types} defines the AST for types;
+    \item \secref{Constraints} defines the AST for constraints;
+    \item \secref{BitFields} defines the AST for bitfields;
+    \item \secref{ArrayIndices} defines the AST for array indices;
+    \item \secref{FieldsAndTypedIdentifiers} defines the AST for fields and typed identifiers;
+    \item \secref{LeftHandSideExpressions} defines the AST for assignable expressions;
+    \item \secref{LocalDeclarations} defines the AST for local declarations;
+    \item \secref{Statements} defines the AST for statements;
+    \item \secref{CaseAlternatives} defines the AST for case alternatives;
+    \item \secref{ExceptionCatchers} defines the AST for exception catchers;
+    \item \secref{Subprograms} defines the AST for subprograms;
+    \item \secref{GlobalDeclarations} defines the AST for global declarations;
+    \item \secref{Specifications} defines the AST for specifications;
+  \end{itemize}
+  \item \secref{UntypedAbstractGrammar} defines the \untypedast;
+  \item \secref{TypedAbstractSyntaxGrammar} defines the \typedast;
+  \item \secref{BuildingAbstractSyntaxTrees} explains how we use inference rules to transform a parse tree into an \untypedast;
+  \item \secref{BuildingParameterizedProductions} presents rules for building ASTs from parameterized productions;
+  \item \secref{LeftToRight} maps \assignableexpressions{} to right hand side expressions;
+  \item \secref{AbstractSyntaxAbreviations} defines AST abbreviations used by inference rules through this reference.
 \end{itemize}
 
 \section{Abstract Syntax Trees\label{sec:AbstractSyntaxTrees}}
@@ -95,13 +100,11 @@ Node types are defined recursively as follows:
 
 An abstract syntax consists of a set of derivation rules and a start non-terminal.
 
-\newcommand\ASTComment[1]{//\quad\textit{#1}\ }
-
 \section{Untyped Abstract Grammar\label{sec:UntypedAbstractGrammar}}
 
 The abstract syntax of ASL is given in terms of the derivation rules below and the start non-terminal $\spec$.
 %
-Some extra details are given by using the notation $\overname{\textit{symbol}}{\text{detail}}$.
+Some extra details are given by using the notation $\overtext{\textit{symbol}}{\text{detail}}$.
 
 \subsection{Identifiers \label{sec:Identifiers}}
 \hypertarget{ast-identifier}{}
@@ -114,21 +117,21 @@ integers, Booleans, real numbers, bitvectors, and strings.
 
 \hypertarget{ast-literal}{} \hypertarget{ast-lint}{}
 \begin{flalign*}
-\literal \derives\ & \lint(\overtext{n}{$\Z$})
+\literal \derives\ & \LInt(\Z)
 & \hypertarget{ast-lbool}{}
 \\
- |\ & \lbool(\overtext{b}{$\Bool$})
+ |\ & \LBool(\Bool)
  & \hypertarget{ast-lreal}{}
 \\
- |\ & \lreal(\overtext{q}{$\Q$})
+ |\ & \LReal(\Q)
  & \hypertarget{ast-lbitvector}{}
 \\
- |\ & \lbitvector(\overtext{B}{$B \in \{0, 1\}^*$})
+ |\ & \LBitvector(\Bit^*)
  & \hypertarget{ast-lstring}{}
 \\
- |\ & \lstring(\overtext{S}{$S \in \{C \;|\; \texttt{"$C$"}\ \in\ \Strings\}$}) &
+ |\ & \LString(\Strings) &
  \hypertarget{ast-llabel}{} \\
- |\ & \llabel(\overtext{l}{enumeration label})
+ |\ & \LLabel(\overtext{\identifier}{enumeration label})
  & \\
 \end{flalign*}
 
@@ -137,32 +140,32 @@ The following rules correspond to unary operations and binary operations that ca
 
 \hypertarget{ast-unop}{} \hypertarget{ast-bnot}{} \hypertarget{ast-neg}{} \hypertarget{ast-not}{}
 \begin{flalign*}
-\unop \derives\ & \overtext{\BNOT}{\texttt{"!"}} \;|\; \overtext{\NEG}{\texttt{"-"}} \;|\; \overtext{\NOT}{\texttt{"NOT"}}
+\unop \derives\ & \overtext{\BNOT}{\Tbnot} \;|\; \overtext{\NEG}{\Tminus} \;|\; \overtext{\NOT}{\Tnot}
 & \hypertarget{ast-binop}{} \hypertarget{ast-bor}{} \hypertarget{ast-impl}{} \hypertarget{ast-beq}{} \hypertarget{ast-band}{}
 \\
-\binop  \derives\ & \overtext{\BAND}{\texttt{"\&\&"}} \;|\; \overtext{\BOR}{\texttt{"||"}} \;|\; \overtext{\IMPL}{\texttt{"-->"}}
-              \;|\; \overtext{\BEQ}{\texttt{"<->"}}
+\binop  \derives\ & \overtext{\BAND}{\Tband} \;|\; \overtext{\BOR}{\Tbor} \;|\; \overtext{\IMPL}{\Tbimpl}
+              \;|\; \overtext{\BEQ}{\Tbeq}
               & \hypertarget{ast-eqop}{} \hypertarget{ast-neq}{} \hypertarget{ast-gt}{} \hypertarget{ast-geq}{} \hypertarget{ast-lt}{} \hypertarget{ast-leq}{}
 \\
-        |\ & \overtext{\EQOP}{\texttt{"=="}} \;|\; \overtext{\NEQ}{\texttt{"!="}} \;|\; \overtext{\GT}{\texttt{">"}}
-        \;|\; \overtext{\GEQ}{\texttt{">="}} \;|\; \overtext{\LT}{\texttt{"<"}} \;|\; \overtext{\LEQ}{\texttt{"<="}}
+        |\ & \overtext{\EQOP}{\Teqop} \;|\; \overtext{\NEQ}{\Tneq} \;|\; \overtext{\GT}{\Tgt}
+        \;|\; \overtext{\GEQ}{\Tgeq} \;|\; \overtext{\LT}{\Tlt} \;|\; \overtext{\LEQ}{\Tleq}
         & \hypertarget{ast-plus}{} \hypertarget{ast-minus}{} \hypertarget{ast-or}{} \hypertarget{ast-xor}{} \hypertarget{ast-and}{}
 \\
-        |\ & \overtext{\PLUS}{\texttt{"+"}} \;|\; \overtext{\MINUS}{\texttt{"-"}} \;|\; \overtext{\OR}{\texttt{"OR"}}
-        \;|\; \overtext{\XOR}{\texttt{"XOR"}} \;|\; \overtext{\AND}{\texttt{"AND"}}
+        |\ & \overtext{\PLUS}{\Tplus} \;|\; \overtext{\MINUS}{\Tminus} \;|\; \overtext{\OR}{\Tor}
+        \;|\; \overtext{\XOR}{\Txor} \;|\; \overtext{\AND}{\Tand}
         & \hypertarget{ast-mul}{} \hypertarget{ast-div}{} \hypertarget{ast-divrm}{} \hypertarget{ast-mod}{} \hypertarget{ast-shl}{} \hypertarget{ast-shr}{}
 \\
-        |\ & \overtext{\MUL}{\texttt{"*"}} \;|\; \overtext{\DIV}{\texttt{"DIV"}} \;|\; \overtext{\DIVRM}{\texttt{"DIVRM"}}
-        \;|\; \overtext{\MOD}{\texttt{"MOD"}} \;|\; \overtext{\SHL}{\shiftleftlexeme}  \;|\; \overtext{\SHR}{\shiftrightlexeme}
-        & \hypertarget{ast-rdiv}{} \hypertarget{ast-pow}{} \hypertarget{ast-concat}{}
+        |\ & \overtext{\MUL}{\Tmul} \;|\; \overtext{\DIV}{\Tdiv} \;|\; \overtext{\DIVRM}{\Tdivrm}
+        \;|\; \overtext{\MOD}{\Tmod} \;|\; \overtext{\SHL}{\shiftleftlexeme}  \;|\; \overtext{\SHR}{\shiftrightlexeme}
+        & \hypertarget{ast-rdiv}{} \hypertarget{ast-pow}{} \hypertarget{ast-bvconcat}{} \hypertarget{ast-strconcat}{}
 \\
-        |\ & \overtext{\RDIV}{\texttt{"/"}} \;|\; \overtext{\POW}{\texttt{"\^{}"}} \;|\; \overtext{\CONCAT}{\texttt{"::"}}
+        |\ & \overtext{\RDIV}{\Trdiv} \;|\; \overtext{\POW}{\Tpow} \;|\; \overtext{\BVCONCAT}{\Tcoloncolon} \;|\; \overtext{\STRCONCAT}{\Tplusplus}
         &
 \end{flalign*}
 
 \subsection{Expressions \label{sec:Expressions}}
 The following rules correspond to various types of expressions:
-literal expressions, variable expressions, typing assertions, binary operation expressions, unary operation expressions,
+literal expressions, variable expressions, type assertions, binary operation expressions, unary operation expressions,
 call expressions, slicing expressions, conditional expressions, array access expressions, single-field access expressions, multiple-field access expressions,
 record and exception construction expressions, tuple expressions, arbitrary-value expressions,
 and pattern matching expressions.
@@ -208,7 +211,7 @@ as indicated by respective comments.
 \begin{itemize}
   \item $\EVar(\vx)$ represents variables (\texttt{E\_Var}).
 
-  \item $\EATC(\ve, \vt)$ represents typing assertions. For example: \texttt{x as integer}.
+  \item $\EATC(\ve, \vt)$ represents type assertions. For example: \texttt{x as integer}.
   Here $\ve$ corresponds to \texttt{x} and $\vt$ corresponds to \texttt{integer}.
 
   \item $\ESlice(\ve, \vslices)$ represents slices of bitvectors (\texttt{E\_Slice 1}),
@@ -250,19 +253,13 @@ as indicated by respective comments.
 
 \hypertarget{ast-slice}{} \hypertarget{ast-slicesingle}{}
 \begin{flalign*}
-% &&\ASTComment{Indexes an array or a bitvector.}\\
-% &&\ASTComment{All positions mentioned below are inclusive}\\
-\slice \derives\ & \SliceSingle(\overname{\expr}{\vi})
+\slice \derives\ & \SliceSingle(\overtext{\expr}{\vi})
   & \hypertarget{ast-slicerange}{}\\
-  % & & \ASTComment{the slice of length \texttt{1} at position \vi.}\\
-  |\ & \SliceRange(\overname{\expr}{\vj}, \overname{\expr}{\vi})
+  |\ & \SliceRange(\overtext{\expr}{\vj}, \overtext{\expr}{\vi})
   & \hypertarget{ast-slicelength}{}\\
-  % & & \ASTComment{the slice from \vi\ to \texttt{j - 1}.}\\
-  |\ & \SliceLength(\overname{\expr}{\vi}, \overname{\expr}{\vn})
+  |\ & \SliceLength(\overtext{\expr}{\vi}, \overtext{\expr}{\vn})
   & \hypertarget{ast-slicestar}{}\\
-  % & & \ASTComment{the slice starting at \vi\ of length \vn.}\\
-  |\ & \SliceStar(\overname{\expr}{\vi}, \overname{\expr}{\vn}) &
-  % & & \ASTComment{the slice starting at \texttt{i*n} of length \vn}
+  |\ & \SliceStar(\overtext{\expr}{\vi}, \overtext{\expr}{\vn}) &
 \end{flalign*}
 
 \subsection{Subprogram calls \label{sec:SubprogramCalls}}
@@ -308,58 +305,43 @@ as indicated by respective comments.
   |\ & \TException(\Field^{*})
   & \hypertarget{ast-tcollection}{}\\
   |\ & \TCollection(\Field^{*})
-% &  & & \ASTComment{This is related to \identi{LDNP}}
 \end{flalign*}
 
 \subsection{Constraints \label{sec:Constraints}}
 
 \hypertarget{ast-constraintkind}{} \hypertarget{ast-unconstrained}{}
 \begin{flalign*}
-  % & & \ASTComment{Constraints that may be assigned to integer types.}  \\
   \constraintkind \derives\ & \unconstrained
-  % & & \ASTComment{The unconstrained integer type.}
   & \hypertarget{ast-wellconstrained}{}\\
   |\ & \wellconstrained(\intconstraint^{+})
-  % & & \ASTComment{An integer type with explicit constraints.}
   & \hypertarget{ast-pendingconstrained}{}\\
   |\ & \pendingconstrained{}
   & \hypertarget{ast-parameterized}{}\\
   |\ & \parameterized(\overtext{\identifier}{parameter}) &
-  % & & \ASTComment{Implicitly constrained integer from function declaration.} \\
-  % & & \ASTComment{Attributes are:} \\
-  % & & \ASTComment{- a unique integer identifier and the variable} \\
-  % & & \ASTComment{- the type was implicitly constructed from.} \\
 \end{flalign*}
 
 \hypertarget{ast-intconstraint}{} \hypertarget{ast-constraintexact}{}
 \begin{flalign*}
-% & & \ASTComment{A constraint on an integer part.}\\
 \intconstraint \derives\ & \ConstraintExact(\expr)
-  % & & \ASTComment{A single value, given by a symbolically evaluable expression.}
   & \hypertarget{ast-constraintrange}{}\\
   |\ & \ConstraintRange(\overtext{\expr}{start}, \overtext{\expr}{end})&
-  % & & \ASTComment{An interval between two symbolically evaluable expression.}\\
 \end{flalign*}
 
 \subsection{Bit Fields \label{sec:BitFields}}
 
 \hypertarget{ast-bitfield}{} \hypertarget{ast-bitfieldsimple}{}
 \begin{flalign*}
-% & & \ASTComment{Represent static slices on a given bitvector type.}\\
 \bitfield \derives\ & \BitFieldSimple(\identifier, \slice^{*})
-  % & & \ASTComment{A name and its corresponding slice.}
   & \hypertarget{ast-bitfieldnested}{}\\
   |\ & \BitFieldNested(\identifier, \slice^{*}, \bitfield^{*})
-  % & & \ASTComment{A name, its corresponding slice and some nested bitfields.}
   & \hypertarget{ast-bitfieldtype}{}\\
   |\ & \BitFieldType(\identifier, \slice^{*}, \ty) &
-  % & & \ASTComment{A name, its corresponding slice, and the type of the bitfield.}\\
 \end{flalign*}
 
 \subsection{Array Indices \label{sec:ArrayIndices}}
 
 \hypertarget{ast-arrayindex}{} \hypertarget{ast-arraylengthexpr}{}
-The type of array indices is given by the following AST type:
+The AST type for array indices is given by the following derivation:
 \begin{flalign*}
 \arrayindex \derives\ &  \ArrayLengthExpr(\overtext{\expr}{array length}) &
 \end{flalign*}
@@ -394,9 +376,9 @@ The following rules define the types of left-hand side of assignments:
 
 \subsection{Local Declarations \label{sec:LocalDeclarations}}
 
-\hypertarget{ast-localdeclkeyword}{} \hypertarget{ast-ldkvar}{} \hypertarget{ast-ldkconstant}{} \hypertarget{ast-ldklet}{}
+\hypertarget{ast-localdeclkeyword}{} \hypertarget{ast-ldkvar}{} \hypertarget{ast-ldklet}{}
 \begin{flalign*}
-\localdeclkeyword \derives\ & \LDKVar \;|\; \LDKConstant \;|\; \LDKLet &
+\localdeclkeyword \derives\ & \LDKVar \;|\; \LDKLet &
 \end{flalign*}
 
 A local declaration item is the left-hand side of a declaration statements.
@@ -414,13 +396,8 @@ the local declaration item is
 \localdeclitem \derives\ &
   & \hypertarget{ast-ldivar}{}\\
   |\ & \LDIVar(\identifier)
-  % & & \ASTComment{\texttt{LDI\_Var x} is the variable declaration of the variable \texttt{x}, used for example in:}\\
-  % & & \ASTComment{\texttt{let x = 42;}.}
   & \hypertarget{ast-ldituple}{}\\
   |\ & \LDITuple(\identifier^*) &
-  % & & \ASTComment{\texttt{LDI\_Tuple ldis} is the tuple declarations of the items in \texttt{ldis},}\\
-  % & & \ASTComment{used for example in: \texttt{let (x, y, -, z) = (1, 2, 3, 4);}}\\
-  % & & \ASTComment{Note that a the list here must be at least 2 items long.}
 \end{flalign*}
 
 \subsection{Statements \label{sec:Statements}}
@@ -460,8 +437,7 @@ the local declaration item is
   \hypertarget{ast-srepeat}{} &\\
   |\ & \SRepeat(\overtext{\stmt}{loop body}, \overtext{\expr}{condition}, \overtext{\expr?}{loop limit})
   \hypertarget{ast-sthrow}{} &\\
-  & \ASTComment{The option represents an implicit throw: \texttt{throw;}.}\\
-  |\ & \SThrow(\expr?) &\\
+  |\ & \SThrow(\expr) &\\
   \hypertarget{ast-stry}{} &\\
   |\ & \STry(\stmt, \catcher^*, \overtext{\stmt?}{otherwise})
   \hypertarget{ast-sprint}{} &\\
@@ -493,6 +469,11 @@ the local declaration item is
                 |\  & \STGetter \;|\; \STSetter &
 \end{flalign*}
 
+\hypertarget{ast-qualifier}{} \hypertarget{ast-pure}{} \hypertarget{ast-readonly}{} \hypertarget{ast-noreturn}{}
+\begin{flalign*}
+\qualifier \derives\ & \Pure \;|\; \Readonly \;|\; \Noreturn &
+\end{flalign*}
+
 \hypertarget{ast-overrideinfo}{} \hypertarget{ast-impdef}{}
 \begin{flalign*}
 \overrideinfo \derives\ & \Impdef \hypertarget{ast-implementation}{} \;|\; \Implementation &
@@ -512,6 +493,7 @@ the local declaration item is
  \funcsubprogramtype &:& \subprogramtype\\
  \funcrecurselimit    &:& \expr?\\
  \funcbuiltin &:& \Bool\\
+ \funcqualifier &:& \Some{\qualifier}\\
  \funcoverride &:& \Some{\overrideinfo}\\
 \end{array}
 \right\}
@@ -603,7 +585,7 @@ The rules for statements exclude \texttt{pragma} statements, since those are tra
 The rules for statements refine the throw statement by annotating it with
 the type of the thrown exception.
 \begin{flalign*}
-\stmt \derives\ & \SThrow((\expr, \overtext{\ty}{exception type})?) &
+\stmt \derives\ & \SThrow(\expr, \overtext{\ty}{exception type}) &
 \end{flalign*}
 
 The rules for slices is replaced by the following:
@@ -611,7 +593,7 @@ The rules for slices is replaced by the following:
 \slice \derives\ & \SliceLength(\expr, \expr) &
 \end{flalign*}
 This reflects the fact that all other slicing constructs are syntactic sugar
-for \SliceLength.
+for $\SliceLength$.
 
 The following extra rule enables expressing array indices based on enumeration:
 \hypertarget{ast-arraylengthenum}{}
@@ -621,8 +603,7 @@ The following extra rule enables expressing array indices based on enumeration:
 
 The rules for constraint kinds refine the well-constrained kind by a precision
 indicator, which indicates whether precision has been lost during the typing of
-binary operations over well-constrained integer types (see
-\TypingRuleRef{IntervalTooLarge}).
+binary operations over well-constrained integer types (see \TypingRuleRef{IntervalTooLarge}).
 \begin{flalign*}
   \hypertarget{ast-precisionlossindicator}{} \hypertarget{precision-full}{}%
   \precisionlossindicator \derives\ & \PrecisionFull & \hypertarget{precision-lost}{}\\
@@ -698,7 +679,7 @@ We define some builders as relations rather than functions. This is due to the n
 in creating identifiers for auxiliary variables that stand in for instances of \discardvar{} on the left-hand-side
 of assignments and declarations.
 For example, \texttt{- = 5;} will effectively create some auxiliary variable, which will result in
-an AST node such as $\SAssign(\EVar(\texttt{aux-1}), \ELiteral(\lint(5)))$.
+an AST node such as $\SAssign(\EVar(\texttt{aux-1}), \ELiteral(\LInt(5)))$.
 Recall that hyphens are not legal characters in ASL identifiers, which avoids potential clashes with
 user-supplied identifiers. An implementation is free however to choose other naming schemes that
 avoid name clashes, for example, by employing counters.
@@ -900,7 +881,7 @@ to terminals.
 \section{Transforming Assignable Expressions to Expressions\label{sec:LeftToRight}}
 \hypertarget{def-rexpr}{}
 The recursive function $\torexpr : \lexpr \rightarrow \expr$ transforms
-left-hand-side expressions to corresponding right-hand-side expressions,
+\assignableexpressions{} to corresponding \rhsexpressions{},
 which is utilized both for the type system and semantics:
 \[
 \begin{array}{lcl}
@@ -923,9 +904,10 @@ We employ the following abbreviations for various AST nodes:
 \begin{tabular}{ll}
 \hline
 \textbf{Abbreviation} & \textbf{Meaning}
-\hypertarget{def-elint}{}\\
+\hypertarget{def-etrue}{}\\
 \hline
-$\ELInt{n}$ & literal integer expression: $\ELiteral(\lint(n))$
+$\ETrue$ & $\ELiteral(\LBool(\True))$ \hypertarget{def-elint}{}\\
+$\ELInt{n}$ & literal integer expression: $\ELiteral(\LInt(n))$
 \hypertarget{def-abbrevevar}{}\\
 $\AbbrevEVar{\vx}$ & $\EVar(\vx)$
 \hypertarget{def-abbrevconstraintexact}{}\\

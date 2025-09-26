@@ -225,9 +225,9 @@
                       (err1 (INIT-BACKTRACE err0
                                             ;; FIXME
                                             '((FNAME . "ASL Standard Library")
-                                              (LNUM . 402)
-                                              (BOL . 9550)
-                                              (CNUM . 9566)))))
+                                              (LNUM . 378)
+                                              (BOL . 9530)
+                                              (CNUM . 9546)))))
                    (change-ev_error err1 :backtrace (cons (list "Replicate-1"
                                                                (list (val-fix n) (val-fix m))
                                                                (list (val-fix x)))

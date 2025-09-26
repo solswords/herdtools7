@@ -7,13 +7,24 @@ and the ASL Reference mandates the different types of errors
 (corresponding to different types of bugs) that implementations must detect,
 including when these errors must be detected and reported to users.
 
-\section{How Implementations Should Handle Errors}
+\ChapterOutline
+\begin{itemize}
+  \item \secref{How Implementations Should Handle Errors} describes how implementations of ASL
+        should handle errors;
+  \item \secref{Error Kinds} defines a classification of ASL errors;
+  \item \secref{ErrorCodesSummary} summarises the error codes used throughout this reference;
+  \item \secref{BuildErrors} details \builderrorsterm;
+  \item \secref{TypingErrors} details \typingerrorsterm;
+  \item \secref{DynamicErrors} details \dynamicerrorsterm.
+\end{itemize}
+
+\section{How Implementations Should Handle Errors\label{sec:How Implementations Should Handle Errors}}
 
 \RequirementDef{StaticErrorCheck} Implementations should detect and report \staticerrorsterm. \\
 Specifically, \staticerrorsterm{} must never cause a \dynamicerrorterm{} or
 cause an exception to be raised.
 %
-\secref{ExampleInterpreter} shows how an interpreter detects \builderrorsterm{}
+\secref{Example Interpreter} shows how an interpreter detects \builderrorsterm{}
 and \typingerrorsterm{}.
 %
 \listingref{typing-error-reporting} shows a specification containing a \typingerrorterm,
@@ -26,7 +37,7 @@ File ../tests/ASLDefinition.t/TypingErrorReporting.asl, line 3,
   characters 11 to 22:
     return 5 + "hello";
            ^^^^^^^^^^^
-ASL Typing error: Illegal application of operator + on types integer {5}
+ASL Type error: Illegal application of operator + on types integer {5}
   and string.
 \end{Verbatim}
 % CONSOLE_END
@@ -74,7 +85,7 @@ File ../tests/ASLDefinition.t/AssertionStatement.asl, line 5,
   characters 11 to 22:
     assert a + b < 256;
            ^^^^^^^^^^^
-ASL Execution error: Assertion failed: ((a + b) < 256).
+ASL Dynamic error: Assertion failed: ((a + b) < 256).
 \end{Verbatim}
 % CONSOLE_END
 
@@ -90,14 +101,14 @@ The report from \aslref{} in a \linuxbashshell{} is shown next:
 \begin{Verbatim}[fontsize=\footnotesize, frame=single]
 diagnostic assertion failed: example message
 File ../tests/ASLDefinition.t/UnreachableStatement.asl, line 5,
-  characters 8 to 22:
-        Unreachable();
-        ^^^^^^^^^^^^^^
-ASL Dynamic error: Unreachable reached.
+  characters 8 to 20:
+        unreachable;
+        ^^^^^^^^^^^^
+ASL Dynamic error: unreachable reached.
 \end{Verbatim}
 % CONSOLE_END
 
-\section{Error Kinds}
+\section{Error Kinds\label{sec:Error Kinds}}
 \hypertarget{def-errorcodeterm}{}
 Each type of error has an \emph{\errorcodeterm}, which uniquely identifies it
 (see \secref{ErrorCodesSummary} for the full list of \errorcodesterm),
@@ -166,13 +177,14 @@ The following table summarises all error codes.
   \hline
   $\UnreachableError$            & Unreachable error              & Dynamic       \\
   $\DynamicTypeAssertionFailure$ & Dynamic type assertion failure & "             \\
-  $\ArbitraryEmptyType$          & \texttt{ARBITRARY} empty type  & "             \\
+  $\ArbitraryEmptyType$          & \ARBITRARY{} empty type        & "             \\
   $\DynamicBadOperands$          & Bad operands                   & "             \\
   $\LimitExceeded$               & Limit exceeded                 & "             \\
   $\UncaughtException$           & Uncaught exception             & "             \\
   $\BadIndex$                    & Bad index                      & "             \\
   $\OverlappingSliceAssignment$  & Overlapping slice assignment   & "             \\
   $\NegativeArrayLength$         & Negative array length          & "             \\
+  $\NoEntryPoint$                & No entry point                 & "             \\
 \end{tabular}
 \end{center}
 
@@ -197,7 +209,7 @@ The following table summarises all error codes.
   \hypertarget{def-binopprecedence}{}
   \item[$\BinopPrecedence$]
     \textit{Binary operation precedence.}
-    A compound binary expression consisting of two associative binary operators of the same precedence was used without sufficient parentheses.
+    A compound \binopexpressionterm{} consisting of two associative binary operators of the same precedence was used without sufficient parentheses.
     See \ASTRuleRef{CheckNotSamePrec}.
 
   \hypertarget{def-buildbaddeclaration}{}
@@ -214,7 +226,7 @@ The following table summarises all error codes.
 \item[$\UndefinedIdentifier$]
   \textit{Undefined identifier.}
   An identifier is missing a definition of the appropriate kind.
-  See \TypingRuleRef{SubprogramForName} for an example.
+  See \TypingRuleRef{SubprogramForSignature} for an example.
 
 \hypertarget{def-identifieralreadydeclared}{}
 \item[$\IdentifierAlreadyDeclared$]
@@ -335,8 +347,8 @@ The following table summarises all error codes.
     \item Clashes with another subprogram (\TypingRuleRef{AddNewFunc})
     \item A procedure or setter returns a value (\TypingRuleRef{SReturn}).
     \item A function contains a control-flow path that does not terminate with either:
-          return of a value, throwing of an exception, or \texttt{Unreachable()} \\
-      (\TypingRuleRef{CheckStmtReturnsOrThrows}).
+          return of a value, throwing of an exception, or an \unreachablestatementterm{} \\
+      (\TypingRuleRef{CheckControlFlow}).
   \end{itemize}
 
 \hypertarget{def-baddeclaration}{}
@@ -352,7 +364,7 @@ The following table summarises all error codes.
   For example:
   \begin{itemize}
     \item The call does not match any defined subprograms \\
-          (\TypingRuleRef{SubprogramForName}).
+          (\TypingRuleRef{SubprogramForSignature}).
     \item An incorrect number of arguments or parameters was passed \\
       (\TypingRuleRef{AnnotateCallActualsTyped}).
     \item The call site expects a function or getter, but instead finds a procedure or setter, or \textit{vice versa} (\TypingRuleRef{AnnotateCallActualsTyped}).
@@ -410,7 +422,7 @@ The following table summarises all error codes.
 
 \hypertarget{def-arbitraryemptytype}{}
 \item[$\ArbitraryEmptyType$]
-  \textit{\texttt{ARBITRARY} empty type.}
+  \textit{\ARBITRARY{} empty type.}
   An expression \texttt{ARBITRARY : $t$} is evaluated and $t$ is an empty type (see \SemanticsRuleRef{EArbitrary}).
 
 \hypertarget{def-dynamicbadoperands}{}
@@ -453,4 +465,10 @@ The following table summarises all error codes.
   \textit{Negative array length.}
   The expression used to determine the length of the array evaluates to a negative integer value
   (see \SemanticsRuleRef{EArray}).
+
+\hypertarget{def-noentrypoint}{}
+\item[$\NoEntryPoint$]
+  \textit{No entry point.}
+  The entry point could not be found
+  (see \SemanticsRuleRef{EvalSpec}).
 \end{description}

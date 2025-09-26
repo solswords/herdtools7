@@ -30,12 +30,11 @@ module type CONFIG = sig
     (** Allow variables starting with a double underscore (__) *)
     val allow_double_underscore : bool
     val allow_unknown : bool
+    val allow_single_arrows : bool
+    val allow_function_like_statements : bool
 end
 
-let reserved_keywords = [
-    "pure";
-    "readonly";
-]
+let reserved_keywords = []
 
 let is_reserved_keyword: string -> bool =
   let tbl: (string, unit) Hashtbl.t = Hashtbl.create (List.length reserved_keywords) in
@@ -60,7 +59,6 @@ let token_of_string =
  | "BAND"               -> s BAND
  | "BEGIN"              -> s BEGIN
  | "BEQ"                -> s BEQ
- | "BIARROW"            -> s BIARROW
  | "BIT"                -> s BIT
  | "BITS"               -> s BITS
  | "BNOT"               -> s BNOT
@@ -87,11 +85,11 @@ let token_of_string =
  | "EOF"                -> s EOF
  | "XOR"                -> s XOR
  | "EQ"                 -> s EQ
- | "EQ_OP"              -> s EQ_OP
+ | "EQ_EQ"              -> s EQ_EQ
  | "EXCEPTION"          -> s EXCEPTION
  | "FOR"                -> s FOR
  | "FUNC"               -> s FUNC
- | "GEQ"                -> s GEQ
+ | "GE"                 -> s GE
  | "GETTER"             -> s GETTER
  | "GT"                 -> s GT
  | "IF"                 -> s IF
@@ -102,7 +100,7 @@ let token_of_string =
  | "INTEGER"            -> s INTEGER
  | "LBRACE"             -> s LBRACE
  | "LBRACKET"           -> s LBRACKET
- | "LEQ"                -> s LEQ
+ | "LE"                 -> s LE
  | "LET"                -> s LET
  | "LOOPLIMIT"          -> s LOOPLIMIT
  | "LPAR"               -> s LPAR
@@ -110,21 +108,25 @@ let token_of_string =
  | "MINUS"              -> s MINUS
  | "MOD"                -> s MOD
  | "MUL"                -> s MUL
- | "NEQ"                -> s NEQ
+ | "NE"                 -> s NE
+ | "NORETURN"           -> s NORETURN
  | "NOT"                -> s NOT
  | "OF"                 -> s OF
  | "OR"                 -> s OR
  | "OTHERWISE"          -> s OTHERWISE
  | "PASS"               -> s PASS
  | "PLUS"               -> s PLUS
+ | "PLUS_PLUS"          -> s PLUS_PLUS
  | "PLUS_COLON"         -> s PLUS_COLON
  | "POW"                -> s POW
  | "PRAGMA"             -> s PRAGMA
  | "PRINTLN"            -> s PRINTLN
  | "PRINT"              -> s PRINT
+ | "PURE"               -> s PURE
  | "RBRACE"             -> s RBRACE
  | "RBRACKET"           -> s RBRACKET
  | "RDIV"               -> s RDIV
+ | "READONLY"           -> s READONLY
  | "REAL"               -> s REAL
  | "RECORD"             -> s RECORD
  | "RECURSELIMIT"       -> s RECURSELIMIT
@@ -163,7 +165,7 @@ let token_to_symbol = function
   | LT                 -> "<"
   | SHR                -> ">>"
   | BAND               -> "&&"
-  | IMPL               -> "-->"
+  | IMPL               -> "==>"
   | SHL                -> "<<"
   | RBRACKET           -> "]"
   | RRBRACKET          -> "]]"
@@ -171,30 +173,30 @@ let token_to_symbol = function
   | SLICING            -> ".."
   | EQ                 -> "="
   | LBRACE             -> "{"
-  | NEQ                -> "!="
+  | NE                -> "!="
   | MINUS              -> "-"
-  | BEQ                -> "<->"
+  | BEQ                -> "<=>"
   | LBRACKET           -> "["
   | LLBRACKET          -> "[["
   | LPAR               -> "("
   | DOT                -> "."
-  | LEQ                -> "<="
+  | LE                -> "<="
   | POW                -> "^"
   | MUL                -> "*"
   | RDIV               -> "/"
-  | EQ_OP              -> "=="
+  | EQ_EQ              -> "=="
   | BOR                -> "||"
   | PLUS               -> "+"
   | COLON              -> ":"
   | ARROW              -> "=>"
-  | BIARROW            -> "<=>"
   | RBRACE             -> "}"
   | COLON_COLON        -> "::"
+  | PLUS_PLUS          -> "++"
   | GT                 -> ">"
   | PLUS_COLON         -> "+:"
   | STAR_COLON         -> "*:"
   | SEMI_COLON         -> ";"
-  | GEQ                -> ">="
+  | GE                -> ">="
   (* Keywords *)
   | ACCESSOR           -> "accessor"
   | AND                -> "AND"
@@ -231,6 +233,7 @@ let token_to_symbol = function
   | LET                -> "let"
   | LOOPLIMIT          -> "looplimit"
   | MOD                -> "MOD"
+  | NORETURN           -> "noreturn"
   | NOT                -> "NOT"
   | OF                 -> "of"
   | OR                 -> "OR"
@@ -239,6 +242,8 @@ let token_to_symbol = function
   | PRAGMA             -> "pragma"
   | PRINTLN            -> "println"
   | PRINT              -> "print"
+  | PURE               -> "pure"
+  | READONLY           -> "readonly"
   | REAL               -> "real"
   | RECORD             -> "record"
   | RECURSELIMIT       -> "recurselimit"
@@ -253,7 +258,7 @@ let token_to_symbol = function
   | TRY                -> "try"
   | TYPE               -> "type"
   | ARBITRARY          -> "ARBITRARY"
-  | UNREACHABLE        -> "Unreachable"
+  | UNREACHABLE        -> "unreachable"
   | UNTIL              -> "until"
   | VAR                -> "var"
   | WHEN               -> "when"
@@ -330,6 +335,7 @@ let tr_name s = match s with
 | "looplimit"     -> LOOPLIMIT
 | "MOD"           -> MOD
 | "NOT"           -> NOT
+| "noreturn"      -> NORETURN
 | "of"            -> OF
 | "OR"            -> OR
 | "otherwise"     -> OTHERWISE
@@ -337,6 +343,8 @@ let tr_name s = match s with
 | "pragma"        -> PRAGMA
 | "println"       -> PRINTLN
 | "print"         -> PRINT
+| "pure"          -> PURE
+| "readonly"      -> READONLY
 | "real"          -> REAL
 | "record"        -> RECORD
 | "recurselimit"  -> RECURSELIMIT
@@ -355,7 +363,10 @@ let tr_name s = match s with
     if Config.allow_unknown then ARBITRARY
     else fatal_unknown_pos (Error.ObsoleteSyntax s)
 | "ARBITRARY"     -> ARBITRARY
-| "Unreachable"   -> UNREACHABLE
+| "Unreachable"   ->
+    if Config.allow_function_like_statements then UNREACHABLE
+    else fatal_unknown_pos (Error.ObsoleteSyntax s)
+| "unreachable"   -> UNREACHABLE
 | "until"         -> UNTIL
 | "var"           -> VAR
 | "when"          -> WHEN
@@ -371,16 +382,25 @@ let tr_name s = match s with
 }
 
 let digit = ['0'-'9']
-let int_lit = digit ('_' | digit)*
+let digit_ = digit | '_'
+let int_lit = digit digit_*
 let hex_alpha = ['a'-'f' 'A'-'F']
-let hex_lit = '0' 'x' (digit | hex_alpha) ('_' | digit | hex_alpha)*
+let hex_digit = digit | hex_alpha
+let hex_digit_ = hex_digit | '_'
+let hex_lit = '0' 'x' hex_digit hex_digit_*
 let real_lit = int_lit '.' int_lit
 let alpha = ['a'-'z' 'A'-'Z']
+let alpha_ = alpha | '_'
 let string_lit = '"' [^ '"']* '"'
 let bit = ['0' '1' ' ']
 let bits = bit*
 let mask = (bit | 'x' | '(' bit+ ')')*
-let identifier = (alpha | '_') (alpha|digit|'_')*
+let identifier = alpha_ (alpha_|digit)*
+
+let forbidden_hex_first = '0' 'x' [^'a'-'f' 'A'-'F' '0'-'9']
+let forbidden_hex_remaining = '0' 'x' hex_digit hex_digit_* ['g'-'z' 'G'-'Z']
+let forbidden_real_first = int_lit '.' [^'0'-'9' '.']
+let forbidden_real_remaining = int_lit '.' digit digit_* alpha
 
 (*
    Lexing of string literals
@@ -449,7 +469,8 @@ and token = parse
     | '<'                      { LT                               }
     | ">>"                     { SHR                              }
     | "&&"                     { BAND                             }
-    | "-->"                    { IMPL                             }
+    | "-->"                    { if Config.allow_single_arrows then IMPL else fatal lexbuf (ObsoleteSyntax "implication with -->") }
+    | "==>"                    { IMPL                             }
     | "<<"                     { SHL                              }
     | ']'                      { RBRACKET                         }
     | "]]"                     { RRBRACKET                        }
@@ -457,34 +478,38 @@ and token = parse
     | ".."                     { SLICING                          }
     | '='                      { EQ                               }
     | '{'                      { LBRACE                           }
-    | "!="                     { NEQ                              }
+    | "!="                     { NE                              }
     | '-'                      { MINUS                            }
-    | "<->"                    { BEQ                              }
+    | "<->"                    { if Config.allow_single_arrows then BEQ else fatal lexbuf (ObsoleteSyntax "equivalence with <->") }
+    | "<=>"                    { BEQ                              }
     | '['                      { LBRACKET                         }
     | "[["                     { LLBRACKET                        }
     | '('                      { LPAR                             }
     | '.'                      { DOT                              }
-    | "<="                     { LEQ                              }
+    | "<="                     { LE                              }
     | '^'                      { POW                              }
     | '*'                      { MUL                              }
     | '/'                      { RDIV                             }
-    | "=="                     { EQ_OP                            }
+    | "=="                     { EQ_EQ                            }
     | "||"                     { BOR                              }
     | '+'                      { PLUS                             }
     | ':'                      { COLON                            }
     | "=>"                     { ARROW                            }
-    | "<=>"                    { BIARROW                          }
     | '}'                      { RBRACE                           }
-    | "++"                     { fatal lexbuf (ObsoleteSyntax "string concatenation with ++") }
+    | "++"                     { PLUS_PLUS                        }
     | "::"                     { COLON_COLON                      }
     | '>'                      { GT                               }
     | "+:"                     { PLUS_COLON                       }
     | "*:"                     { STAR_COLON                       }
     | ';'                      { SEMI_COLON                       }
-    | ">="                     { GEQ                              }
+    | ">="                     { GE                              }
     | "@looplimit"             { fatal lexbuf (ObsoleteSyntax "Loop limits with @looplimit") }
     | identifier as lxm        { tr_name lxm                      }
     | eof                      { EOF                              }
+    | forbidden_real_first     { raise LexerError                 }
+    | forbidden_real_remaining { raise LexerError                 }
+    | forbidden_hex_first      { raise LexerError                 }
+    | forbidden_hex_remaining  { raise LexerError                 }
     | ""                       { raise LexerError                 }
 {
 end

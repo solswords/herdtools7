@@ -39,6 +39,7 @@ module type ANNOTATE_CONFIG = sig
   val output_format : Error.output_format
   val print_typed : bool
   val use_field_getter_extension : bool
+  val fine_grained_side_effects : bool
   val use_conflicting_side_effects_extension : bool
   val override_mode : override_mode
   val control_flow_analysis : bool
@@ -49,6 +50,10 @@ module type S = sig
 
   val type_check_ast_in_env :
     StaticEnv.global -> AST.t -> AST.t * StaticEnv.global
+
+  val find_main : StaticEnv.global -> AST.identifier
+  (** Returns the identifier of the function with the signature fun main() =>
+      integer, if one exists, and otherwise produces a dynamic error. *)
 end
 
 module Annotate : functor (C : ANNOTATE_CONFIG) -> S

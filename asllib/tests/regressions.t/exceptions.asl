@@ -1,4 +1,4 @@
-type BAD_OPCODE of exception;
+type BAD_OPCODE of exception{-};
 
 type UNDEFINED_OPCODE of exception {reason: string, opcode: bits(16)};
 
@@ -33,7 +33,7 @@ begin
   try throw_undefined_opcode(); assert FALSE;
   catch
     when BAD_OPCODE => assert FALSE;
-    when UNDEFINED_OPCODE => opcode_counter = opcode_counter + 1; throw;
+    when e: UNDEFINED_OPCODE => opcode_counter = opcode_counter + 1; throw e;
   end;
   assert FALSE;
 end;
@@ -66,9 +66,9 @@ begin
     assert FALSE;
   catch
     when BAD_OPCODE => assert FALSE;
-    when COUNTING =>
+    when e: COUNTING =>
       try
-        throw;
+        throw e;
       catch
         when COUNTING => assert FALSE;
         otherwise => assert FALSE;
@@ -97,9 +97,9 @@ begin
   try
     try throw_undefined_opcode ();
     catch
-      when UNDEFINED_OPCODE =>
+      when e: UNDEFINED_OPCODE =>
         local_counter = local_counter + 1;
-        throw;
+        throw e;
     end;
     assert FALSE;
   catch
@@ -112,7 +112,8 @@ end;
 
 func main () => integer
 begin
-  assert try_opcode() == 0;
+  let x = try_opcode();
+  assert x == 0;
   try_rethrow ();
   try_imbricated ();
   try_with_local_variable ();

@@ -10,7 +10,7 @@ Deferred to execution ATCs
   File atcs1.asl, line 2, characters 11 to 12:
     let x = (3 as integer {42});
              ^
-  ASL Execution error: Mismatch type:
+  ASL Dynamic error: Mismatch type:
     value 3 does not belong to type integer {42}.
   [1]
 
@@ -79,7 +79,7 @@ ATCs on other types
   File atcs6.asl, line 3, characters 11 to 25:
     let x = ((42, Zeros{4}) as myty);
              ^^^^^^^^^^^^^^
-  ASL Execution error: Mismatch type:
+  ASL Dynamic error: Mismatch type:
     value [42, 0x0] does not belong to type (integer {0..10}, bits(4)).
   [1]
 
@@ -112,10 +112,4 @@ ATCs in types:
   > let bv : bits(1 as integer{2}) = Ones{1};
   > EOF
 
-  $ aslref atcs9.asl
-  File atcs9.asl, line 1, characters 14 to 29:
-  let bv : bits(1 as integer{2}) = Ones{1};
-                ^^^^^^^^^^^^^^^
-  ASL Type error: a pure expression was expected, found 1 as integer {2}, which
-    produces the following side-effects: [PerformsAssertions].
-  [1]
+  $ aslref --no-exec atcs9.asl

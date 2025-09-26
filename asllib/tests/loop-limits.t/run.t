@@ -14,7 +14,7 @@ While loops:
   File while-incorrect.asl, line 4, character 2 to line 7, character 6:
     while (i < 10) looplimit 5 do
       i = i + 1;
-      println(i);
+      println i;
     end;
   ASL Dynamic error: loop limit reached.
   [1]
@@ -49,7 +49,7 @@ Repeat loops:
   File repeat-incorrect.asl, line 4, character 2 to line 7, character 30:
     repeat
       i = i + 1;
-      println(i);
+      println i;
     until (i >= 10) looplimit 5;
   ASL Dynamic error: loop limit reached.
   [1]
@@ -114,13 +114,15 @@ For loops
   ASL Dynamic error: loop limit reached.
   [1]
   $ aslref for-exact.asl
-  File for-exact.asl, line 5, characters 4 to 26:
-      counter = counter + 1;
-      ^^^^^^^^^^^^^^^^^^^^^^
-  ASL Dynamic error: loop limit reached.
-  [1]
   $ aslref for-exact-minus-one.asl
   $ aslref for-no-limit.asl
+  $ aslref while-for-repeat-comparison.asl
+  while loop:
+  1
+  repeat loop:
+  1
+  for loop:
+  1
 
 Recursion limits:
 =================

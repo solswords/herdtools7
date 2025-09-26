@@ -37,22 +37,25 @@
   File println5.asl, line 1, characters 32 to 33:
   constant msg = "Something with \p bad characters.";
                                   ^
-  ASL Error: Unknown symbol.
+  ASL Lexical error: Unknown symbol.
   [1]
   $ cat >println6.asl <<EOF
   > constant msg = "Some unterminated string;
   > func main () => integer begin println(msg); return 0; end;
   > EOF
   $ aslref println6.asl
-  Fatal error: exception End_of_file
-  [2]
+  File println6.asl, line 3, character 0:
+  
+  
+  ASL Lexical error: Unknown symbol.
+  [1]
 
 C-Style comments
   $ cat >comments1.asl <<EOF
   > func /* this is a /* test */ main () => integer
   > begin /*
   > let's try a multi-line comment /*
-  > which finishes here */ constant msg = "/* a comment inside a string? */"; /* another comment
+  > which finishes here */ let msg = "/* a comment inside a string? */"; /* another comment
   > that finishes somewhere **/ println (msg); // but not here! */
   > return 0; /* oh a new one */
   > // /* when in a commented line, it doesn't count!
@@ -80,7 +83,7 @@ C-Style comments
   File comments2.asl, line 11, characters 8 to 9:
   let a = b;
           ^
-  ASL Error: Undefined identifier: 'b'
+  ASL Static error: Undefined identifier: 'b'
   [1]
 
 Some problems with bitvectors and bitmasks:
@@ -125,3 +128,86 @@ Check that variables starting with `__` are reserved:
   0x1
   1
   2
+
+Forbidden patterns
+  $ cat >forbiddenhex01.asl <<EOF
+  > let x = 0xh12;
+  > EOF
+  $ aslref forbiddenhex01.asl
+  File forbiddenhex01.asl, line 1, characters 8 to 11:
+  let x = 0xh12;
+          ^^^
+  ASL Lexical error: Unknown symbol.
+  [1]
+
+  $ cat >forbiddenhex02.asl <<EOF
+  > let x = 0x_12;
+  > EOF
+  $ aslref forbiddenhex02.asl
+  File forbiddenhex02.asl, line 1, characters 8 to 11:
+  let x = 0x_12;
+          ^^^
+  ASL Lexical error: Unknown symbol.
+  [1]
+
+  $ cat >forbiddenhex03.asl <<EOF
+  > let x = 0x12h12;
+  > EOF
+  $ aslref forbiddenhex03.asl
+  File forbiddenhex03.asl, line 1, characters 8 to 13:
+  let x = 0x12h12;
+          ^^^^^
+  ASL Lexical error: Unknown symbol.
+  [1]
+
+  $ cat >forbiddenhex04.asl <<EOF
+  > let x_foo = 213;
+  > let x = 0x_foo;
+  > EOF
+  $ aslref forbiddenhex04.asl
+  File forbiddenhex04.asl, line 2, characters 8 to 11:
+  let x = 0x_foo;
+          ^^^
+  ASL Lexical error: Unknown symbol.
+  [1]
+
+  $ cat >forbiddenreal01.asl <<EOF
+  > let x = 1.h12;
+  > EOF
+  $ aslref forbiddenreal01.asl
+  File forbiddenreal01.asl, line 1, characters 8 to 11:
+  let x = 1.h12;
+          ^^^
+  ASL Lexical error: Unknown symbol.
+  [1]
+
+  $ cat >forbiddenreal02.asl <<EOF
+  > let x = 1._12;
+  > EOF
+  $ aslref forbiddenreal02.asl
+  File forbiddenreal02.asl, line 1, characters 8 to 11:
+  let x = 1._12;
+          ^^^
+  ASL Lexical error: Unknown symbol.
+  [1]
+
+  $ cat >forbiddenreal03.asl <<EOF
+  > let x = 1.12h12;
+  > EOF
+  $ aslref forbiddenreal03.asl
+  File forbiddenreal03.asl, line 1, characters 8 to 13:
+  let x = 1.12h12;
+          ^^^^^
+  ASL Lexical error: Unknown symbol.
+  [1]
+
+  $ cat >forbiddenreal04.asl <<EOF
+  > let x_foo = 213;
+  > let x = 1._foo;
+  > EOF
+  $ aslref forbiddenreal04.asl
+  File forbiddenreal04.asl, line 2, characters 8 to 11:
+  let x = 1._foo;
+          ^^^
+  ASL Lexical error: Unknown symbol.
+  [1]

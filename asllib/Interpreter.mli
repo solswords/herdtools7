@@ -30,21 +30,26 @@ module type S = sig
 
   type 'a maybe_exception =
     | Normal of 'a
-    | Throwing of (value_read_from * AST.ty) option * IEnv.env
+    | Throwing of value_read_from * AST.ty * IEnv.env
+    | Cutoff
 
   val eval_expr :
     IEnv.env -> AST.expr -> (B.value * IEnv.env) maybe_exception B.m
 
   val run_typed_env :
-    (AST.identifier * B.value) list -> StaticEnv.global -> AST.t -> B.value B.m
-  (** [run env0 tenv ast] runs the function main of the ast,
-      in the typing environment [tenv]. However, the (global)
-      identifiers listed in the A-list [env0] will take their
-      initial values from [env0]  and _not_ from [ast]. *)
+    (AST.identifier * B.value) list ->
+    StaticEnv.global ->
+    AST.identifier ->
+    AST.t ->
+    B.value B.m
+  (** [run env0 tenv main_name ast] runs the function main_name of the ast, in
+      the typing environment [tenv]. However, the (global) identifiers listed in
+      the A-list [env0] will take their initial values from [env0]  and _not_
+      from [ast]. *)
 
-  val run_typed : StaticEnv.global -> AST.t -> B.value B.m
-  (** [run_typed ast env] runs the function main of the typed-checked [ast], in
-      typed-checking environment [env]. *)
+  val run_typed : StaticEnv.global -> AST.identifier -> AST.t -> B.value B.m
+  (** [run_typed ast main_name env] runs the function [main_name] of the
+      typed-checked [ast], in typed-checking environment [env]. *)
 end
 
 module type Config = sig
@@ -53,8 +58,25 @@ module type Config = sig
   val unroll : int
   (** Loop unrolling threshold *)
 
+  val recursive_unroll : string -> int option
+  (** Recursive function unrolling threshold.
+
+      Takes the name of the function as argument. *)
+
   val error_handling_time : Error.error_handling_time
   (** When are error filed. *)
+
+  val empty_branching_effects_optimization : bool
+  (** Whether to produce meaningful branching effects. *)
+
+  val log_nondet_choice : bool
+  (** Log to stderr non-deterministic choices. *)
+
+  val display_call_stack_on_error : bool
+  (** Displays call stack on errors or debugs. *)
+
+  val track_symbolic_path : bool
+  (** Keep track of symbolic paths during execution. *)
 end
 
 module Make (B : Backend.S) (C : Config) : S with module B = B

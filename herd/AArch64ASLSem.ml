@@ -83,6 +83,7 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64ASL) :
       end
 
       let variant = function Variant.ASL_AArch64 -> true | c -> variant c
+      let debug = Debug_herd.{ debug with monad = false }
     end
 
     module ASLS = ASLSem.Make (ASLConf)
@@ -681,6 +682,7 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64ASL) :
                   "tagchecked" ^= litb (rn <> SP);
                   "offset" ^= liti 0;
                   "datasize" ^= variant v;
+                  "acquire" ^= litb false;
                 ] )
       | I_LDAR (v, AA, rt, rn) ->
           Some
@@ -692,6 +694,7 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64ASL) :
                   "tagchecked" ^= litb (rn <> SP);
                   "regsize" ^= variant v;
                   "elsize" ^= variant v;
+                  "acquire" ^= litb (rt <> ZR);
                 ] )
       | I_LDAR (v, ((XX | AX) as a), rt, rn) ->
           let acqrel,fname =
@@ -725,6 +728,7 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64ASL) :
                   "regsize" ^= variant v;
                   "elsize" ^= variant v;
                   "datasize" ^= variant v;
+                  "acquirepc" ^= litb (rt <> ZR);
                 ] )
       | I_STXR (v, t, rs, rt, rn) ->
           let acqrel,fname =
@@ -795,6 +799,7 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64ASL) :
     let tr_cst tr =
       Constant.map tr
         (fun _ -> Warn.fatal "Cannot translate PTE")
+        (fun _ -> Warn.fatal "Cannot translate PAR_EL1")
         (fun _ -> Warn.fatal "Cannot translate instruction")
 
     let aarch64_to_asl_bv_cst sz = function
@@ -828,12 +833,12 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64ASL) :
            |> ASLBase.build_ast_from_file ~ast_type:`Ast `ASLv1
            |> List.find (fun d ->
                   match d.desc with
-                  | D_TypeDecl ("ProcState", _ty, None) -> true
+                  | D_GlobalStorage { keyword = GDK_Var; name = "PSTATE"; ty = Some _ ; _ } -> true
                   | _ -> false)
          in
          let proc_state_fields =
            match proc_state_decl.desc with
-           | D_TypeDecl ("ProcState", ty, None) -> (
+           | D_GlobalStorage { keyword = GDK_Var; name = "PSTATE"; ty = Some ty; _ } -> (
                match ty.desc with
                | T_Collection fields -> fields
                | _ -> assert false)

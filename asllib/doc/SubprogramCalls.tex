@@ -1,17 +1,39 @@
 \chapter{Subprogram Calls\label{chap:SubprogramCalls}}
 
-This chapter is concerned with subprogram calls, which appear both in expressions
-and in statements. Specifically:
+Subprograms can be called via an expression or as a statement.
+Subprogram calls include invocations of getters and setters.
+
+\ExampleDef{Recursive Subprogram Calls}
+Subprograms can call each other recursively.
+For example, in \listingref{MutualRecursion},
+the longest possible call path is \verb|foo->bar->foo->bar->foo->bar-foo->bar|.
+The final call to \verb|bar| is a \dynamicerrorterm.
+\ASLListing{Mutual recursion}{MutualRecursion}{\definitiontests/MutualRecursion.bad.asl}
+
+\ExampleDef{Invoking Getters and Setters}
+\listingref{AccessorDeclaration} shows an example of declaring an accessor \verb|X|
+and then invoking its getter and its setter.
+
+\ChapterOutline
 \begin{itemize}
-\item how subprogram calls are represented in syntax (\secref{SubprogramCallsSyntax});
-\item how subprogram calls are represented in abstract syntax (\secref{SubprogramCallsAbstractSyntax});
-\item how subprogram calls are typed (\secref{SubprogramCallsTyping}),
-      including a discussion on parameter elision (\secref{ParameterElision}); and
-\item what is the dynamic semantics of subprogram calls (\secref{SubprogramCallsSemantics}).
+  \item \FormalRelationsRef{Subprogram Calls} defines the formal relations for subprogram calls;
+  \item \SyntaxRef{Subprogram Calls} defines the syntax of subprogram calls;
+  \item \AbstractSyntaxRef{Subprogram Calls} defines the abstract syntax of subprogram calls;
+  \item \TypeRulesRef{Subprogram Calls} defines the type rules for subprogram calls,
+        and includes a discussion on parameter elision (\secref{ParameterElision}); and
+  \item \SemanticsRulesRef{Subprogram Calls} defines the dynamic semantics of subprogram calls.
 \end{itemize}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section{Syntax\label{sec:SubprogramCallsSyntax}}
+\FormalRelationsDef{Subprogram Calls}
+\paragraph{Syntax:} Subprogram calls are grammatically derived from $\Nexpr$ and $\Nstmt$.
+\paragraph{Abstract Syntax:} Subprogram calls are derived in the abstract syntax by
+  $\ECall$ and $\SCall$;
+\paragraph{Typing:} Subprogram calls are annotated by $\annotatecall$;
+\paragraph{Semantics:} Subprogram calls are evaluated by $\evalcall$.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\SyntaxDef{Subprogram Calls}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{flalign*}
 \Nexpr \derives\  & \Tidentifier \parsesep \PlistZero{\Nexpr} &\\
@@ -19,7 +41,7 @@ and in statements. Specifically:
 \end{flalign*}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section{Abstract Syntax\label{sec:SubprogramCallsAbstractSyntax}}
+\AbstractSyntaxDef{Subprogram Calls}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{flalign*}
 \expr \derives\ & \ECall(\call) &\\
@@ -27,7 +49,7 @@ and in statements. Specifically:
 \end{flalign*}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section{Typing\label{sec:SubprogramCallsTyping}}
+\TypeRulesDef{Subprogram Calls}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 The rule for typing calls is \TypingRuleRef{AnnotateCall}.
 
@@ -42,8 +64,9 @@ We also define helper functions via respective rules:
   \item \TypingRuleRef{SubstConstraint}
   \item \TypingRuleRef{CheckArgsTypeSat}
   \item \TypingRuleRef{AnnotateRetTy}
-  \item \TypingRuleRef{SubprogramForName}
+  \item \TypingRuleRef{SubprogramForSignature}
   \item \TypingRuleRef{FilterCallCandidates}
+  \item \TypingRuleRef{CallTypeMatches}
   \item \TypingRuleRef{HasArgClash}
   \item \TypingRuleRef{ExpressionList}
 \end{itemize}
@@ -70,7 +93,30 @@ annotates the call $\vcall$ to a subprogram with call type $\calltype$, resultin
 \end{itemize}
 \ProseOtherwiseTypeError
 
-See \ExampleRef{Annotating Calls with Typed Parameters and Typed Arguments}.
+\ExampleDef{Parameterized Subprogram Calls}
+The specifications in \listingref{AnnotateCall} and \listingref{AnnotateCall2} are well-typed.
+\ASLListing{Well-typed parameterized subprogram calls}{AnnotateCall}{\typingtests/TypingRule.AnnotateCall.asl}
+\ASLListing{Well-typed parameterized subprogram calls}{AnnotateCall2}{\typingtests/TypingRule.AnnotateCall2.asl}
+
+\ExampleDef{A Call with an Illegal Parameter Type}
+The specification in \listingref{AnnotateCall-bad} is illegal since
+the type of \verb|wid| --- \verb|integer{2,4,8}| --- does not \subtypesatisfy{}
+the type of the parameter \verb|N| --- \verb|integer{2,4}|.
+\ASLListing{An illegal parameter type}{AnnotateCall-bad}{\typingtests/TypingRule.AnnotateCall.bad.asl}
+
+The specification in \listingref{AnnotateCall-bad2} is illegal since
+expressions passed as parameters need to be \constrainedintegers.
+\ASLListing{An illegal parameter type}{AnnotateCall-bad2}{\typingtests/TypingRule.AnnotateCall.bad2.asl}
+
+The specification in \listingref{AnnotateCall-bad3} is illegal since
+expressions passed as parameters need to be \constrainedintegers.
+\ASLListing{An illegal parameter type}{AnnotateCall-bad3}{\typingtests/TypingRule.AnnotateCall.bad3.asl}
+
+The specification in \listingref{AnnotateCall-bad4} is illegal since
+the type of \verb|N| --- \verb|integer{N} --- does not \typesatisfy{} \verb|integer{1,2,3}|.
+\ASLListing{An illegal parameter type}{AnnotateCall-bad4}{\typingtests/TypingRule.AnnotateCall.bad4.asl}
+
+For more examples, see \ExampleRef{Annotating Calls with Typed Parameters and Typed Arguments}.
 
 \ProseParagraph
 \AllApply
@@ -148,17 +194,19 @@ That is, \\
 \verb|integer{0..64}|.
 \ASLListing{An ill-typed call expression}{AnnotateCallActualsTyped-bad3}{\typingtests/TypingRule.AnnotateCallActualsTyped.bad3.asl}
 
+In \listingref{AnnotateCallActualsTyped-bad4}, the call expression \verb|ones{myWid}()|
+is ill-typed, since \verb|myWid| has the \unconstrainedintegertype.
+\ASLListing{An ill-typed call expression}{AnnotateCallActualsTyped-bad4}{\typingtests/TypingRule.AnnotateCallActualsTyped.bad4.asl}
+
 \ProseParagraph
 \AllApply
 \begin{itemize}
   \item applying $\unziplistthree$ to $\typedargs$ yields the corresponding list of types $\argtypes$,
         list of expressions $\args$, and a list of \sideeffectdescriptorsetsterm\ $\vsessargs$;
   \item define $\vsesargs$ as the union of $\vsessargs$;
-  \item applying $\subprogramforname$ to match $\name$ and $\argtypes$ in $\tenv$
-        yields \\ $(\namep, \funcsig, \vsescall)$\ProseOrTypeError;
+  \item applying $\subprogramforsignature$ to match $\name$, $\argtypes$, and $\calltype$ in $\tenv$
+        yields $(\namep, \funcsig, \vsescall)$\ProseOrTypeError;
   \item define $\vses$ as the union of $\vsesargs$ and $\vsescall$;
-  \item checking that either the $\subprogramtype$ of $\funcsig$ equals $\calltype$,
-        or the $\subprogramtype$ of $\funcsig$ is $\STGetter$ and $\calltype$ is $\STFunction$ yields $\True$\ProseTerminateAs{\BadCall};
   \item applying $\insertstdlibparam$ to $\funcsig$, $\params$, and $\argtypes$ yields new parameters $\paramsone$;
   \item checking that the lengths of $\funcsig.\funcparameters$ and $\paramsone$ are the same yields $\True$\ProseTerminateAs{\BadCall};
   \item checking that the lengths of $\funcsig.\funcargs$ and $\args$ are the same yields $\True$\ProseTerminateAs{\BadCall};
@@ -181,17 +229,12 @@ That is, \\
 \inferrule{
   \unziplistthree(\typedargs) = (\argtypes, \args, \vsessargs)\\
   \vsesargs \eqdef \bigcup \vsessargs \\
-  \subprogramforname(\tenv, \name, \argtypes) \typearrow
-  (\nameone, \funcsig, \vsescall) \OrTypeError \\
   {
-    \checktrans{
-    \left(
-    \begin{array}{l}
-      \funcsig.\funcsubprogramtype = \calltype \; \lor \\
-      (\funcsig.\funcsubprogramtype = \STGetter \; \land \\ \quad \calltype = \STFunction)
+    \begin{array}{r}
+      \subprogramforsignature(\tenv, \name, \argtypes, \calltype) \typearrow \\
+      (\nameone, \funcsig, \vsescall) \OrTypeError
     \end{array}
-    \right)}{\BadCall} \checktransarrow \True \OrTypeError
-  }\\\\
+  }\\
   \vses \eqdef \vsesargs \cup \vsescall\\
   \insertstdlibparam(\funcsig, \params, \argtypes) \typearrow \paramsone\\\\
   \equallength(\funcsig.\funcparameters, \paramsone) \typearrow \paramaritymatch \\\\
@@ -485,7 +528,7 @@ The function
 ) \aslto
 \overname{\ty}{\newty} \cup \overname{\TTypeError}{\TypeErrorConfig}
 \]
-transforms the type $\tty$ in the static environment $\tenv$,
+transforms the type $\tty$ in the \staticenvironmentterm{} $\tenv$,
 by substituting parameter names with their corresponding expressions in
 $\eqs$, yielding the type $\newty$.
 \ProseOtherwiseTypeError
@@ -592,7 +635,7 @@ The function
   \overname{\expr}{\ve}
 ) \aslto \overname{\newe}{\expr}
 \]
-transforms the expression $\ve$ in the static environment $\tenv$,
+transforms the expression $\ve$ in the \staticenvironmentterm{} $\tenv$,
 by substituting parameter names with their corresponding expressions in
 $\eqs$, and then attempting to symbolically simplify the result, yielding the expression $\newe$.
 \ProseOtherwiseTypeError
@@ -608,7 +651,7 @@ resulting in the expression \verb|(40 + 22) + 2|, which is then normalized into 
 \ProseParagraph
 \AllApply
 \begin{itemize}
-  \item transforming $\ve$ in the static environment $\tenv$, by substituting the parameter expressions
+  \item transforming $\ve$ in the \staticenvironmentterm{} $\tenv$, by substituting the parameter expressions
         $\eqs$, yields $\veone$;
   \item symbolically simplifying $\veone$ in $\tenv$ yields $\newe$.
 \end{itemize}
@@ -633,7 +676,7 @@ The function
   \overname{\expr}{\ve}
 ) \aslto \overname{\expr}{\newe}
 \]
-transforms the expression $\ve$ in the static environment $\tenv$,
+transforms the expression $\ve$ in the \staticenvironmentterm{} $\tenv$,
 by substituting parameter names with their corresponding expressions in
 $\substs$, yielding the expression $\newe$.
 \ProseOtherwiseTypeError
@@ -1001,7 +1044,7 @@ The function
   \overname{\intconstraint}{\vc}
 ) \aslto \overname{\newc}{\intconstraint}
 \]
-transforms the integer constraint $\vc$ in the static environment $\tenv$,
+transforms the integer constraint $\vc$ in the \staticenvironmentterm{} $\tenv$,
 by substituting parameter names with their corresponding expressions in
 $\eqs$, and then attempting to symbolically simplify the result,
 yielding the integer constraint $\newc$.
@@ -1220,34 +1263,31 @@ and functions can only be used in call expressions.
 }
 \end{mathpar}
 
-\TypingRuleDef{SubprogramForName}
-\hypertarget{def-subprogramforname}{}
+\TypingRuleDef{SubprogramForSignature}
+\hypertarget{def-subprogramforsignature}{}
 The function
 \[
   \begin{array}{rl}
-    \subprogramforname(
+    \subprogramforsignature(
     \overname{\staticenvs}{\tenv} \aslsep
     \overname{\Strings}{\name} \aslsep
-    \overname{\ty^*}{\callerargtypes}
+    \overname{\ty^*}{\callerargtypes} \aslsep
+    \overname{\subprogramtype}{\calltype}
     )
-    \aslto &
-    \begin{array}{l}
-      (
-      \overname{\Strings}{\namep} \aslsep
-      \overname{\func}{\callee} \aslsep
-      \overname{\TSideEffectSet}{\vses}
-      )\
-    \\
+    \aslto & \\
+    (
+    \overname{\Strings}{\namep} \aslsep
+    \overname{\func}{\callee} \aslsep
+    \overname{\TSideEffectSet}{\vses}
+    )\
     \cup\ \overname{\TTypeError}{\TypeErrorConfig}
-    \end{array}
   \end{array}
 \]
-looks up the static environment $\tenv$ for a subprogram associated with $\name$
-and the list of argument types $\calleeargtypes$ and determines which one of the following
+looks up the \staticenvironmentterm{} $\tenv$ for a subprogram associated with $\name$, the list of argument types $\calleeargtypes$, and a subprogram type matching $\calltype$, and determines which one of the following
 cases holds:
 \begin{enumerate}
-  \item there is no declared subprogram that matches $\name$ and $\calleeargtypes$;
-  \item there is exactly one subprogram that matches $\name$ and $\calleeargtypes$;
+  \item there is no declared subprogram that matches $\name$, $\calleeargtypes$, and $\calltype$;
+  \item there is exactly one subprogram that matches $\name$, $\calleeargtypes$, and $\calltype$;
 \end{enumerate}
 If more than one subprogram that matches $\name$ and $\calleeargtypes$,
 this is detected by the rule \TypingRuleRef{DeclareSubprograms},
@@ -1266,20 +1306,20 @@ If the second case holds, the function returns a tuple which comprises:
 
 \ExampleDef{Matching a Subprogram to an Identifier}
 
-\listingref{SubprogramForName} shows an example where all subprogram calls
+\listingref{SubprogramForSignature} shows an example where all subprogram calls
 match subprogram declarations.
-\ASLListing{Successfully matching subprogram names to definitions}{SubprogramForName}{\typingtests/TypingRule.SubprogramForName.asl}
+\ASLListing{Successfully matching subprogram signatures to definitions}{SubprogramForSignature}{\typingtests/TypingRule.SubprogramForSignature.asl}
 
-\listingref{SubprogramForName-undefined} shows an example where
+\listingref{SubprogramForSignature-undefined} shows an example where
 the subprogram call \verb|add_10(5)| is illegal, since no subprogram named \verb|add_10|
 is declared.
-\ASLListing{Subprogram name undefined}{SubprogramForName-undefined}{\typingtests/TypingRule.SubprogramForName.bad.undefined.asl}
+\ASLListing{Subprogram signature undefined}{SubprogramForSignature-undefined}{\typingtests/TypingRule.SubprogramForSignature.bad.undefined.asl}
 
-\listingref{SubprogramForName} shows an example where
+\listingref{SubprogramForSignature} shows an example where
 the subprogram call \verb|add_10(5.0)| is illegal, since, although a subprogram named \verb|add_10|
 is declared, it does not match the required signature (the type of the first argument is
 the \integertypeterm{} rather than the \realtypeterm).
-\ASLListing{Subprogram name does not match signature}{SubprogramForName-no-candidates}{\typingtests/TypingRule.SubprogramForName.bad.no_candidates.asl}
+\ASLListing{Subprogram name does not match signature}{SubprogramForSignature-no-candidates}{\typingtests/TypingRule.SubprogramForSignature.bad.no_candidates.asl}
 
 \ProseParagraph
 \OneApplies
@@ -1295,7 +1335,7 @@ the \integertypeterm{} rather than the \realtypeterm).
   \begin{itemize}
     \item $\tenv$ binds $\name$ via $\overloadedsubprograms$ map to $\renamingset$ and $\vses$;
     \item filtering the subprograms in $\renamingset$ with the caller argument types $\callerargtypes$
-          in $\tenv$ (see \TypingRuleRef{FilterCallCandidates}) yields an empty set\ProseOrTypeError;
+          and call type $\calltype$ in $\tenv$ (see \\ \TypingRuleRef{FilterCallCandidates}) yields an empty set\ProseOrTypeError;
     \item the result is a \typingerrorterm{} indicating that the call given by $\name$ and \\ $\callerargtypes$
           does not match any defined subprogram.
   \end{itemize}
@@ -1304,7 +1344,7 @@ the \integertypeterm{} rather than the \realtypeterm).
   \begin{itemize}
     \item $\tenv$ binds $\name$ via $\overloadedsubprograms$ map to $\renamingset$ and $\vses$;
     \item filtering the subprograms in $\renamingset$ with the caller argument types $\callerargtypes$
-          in $\tenv$ (see \TypingRuleRef{FilterCallCandidates}) yields \\
+          and call type $\calltype$ in $\tenv$ (see \\ \TypingRuleRef{FilterCallCandidates}) yields \\
           $\matchingrenamings$\ProseOrTypeError;
     \item $\matchingrenamings$ contains a single element --- $(\namep, \callee)$\ProseOrTypeError;
   \end{itemize}
@@ -1315,7 +1355,7 @@ the \integertypeterm{} rather than the \realtypeterm).
 \inferrule[undefined]{
   G^\tenv.\overloadedsubprograms(\name) = \bot
 }{
-  \subprogramforname(\tenv, \name, \callerargtypes) \typearrow \TypeErrorVal{\UndefinedIdentifier}
+  \subprogramforsignature(\tenv, \name, \callerargtypes, \calltype) \typearrow \TypeErrorVal{\UndefinedIdentifier}
 }
 \end{mathpar}
 
@@ -1324,11 +1364,11 @@ the \integertypeterm{} rather than the \realtypeterm).
   G^\tenv.\overloadedsubprograms(\name) = (\renamingset, \vses)\\
   {
     \begin{array}{r}
-      \filtercallcandidates(\tenv, \callerargtypes, \renamingset) \typearrow \emptyset \OrTypeError
+      \filtercallcandidates(\tenv, \callerargtypes, \calltype, \renamingset) \typearrow \emptyset \OrTypeError
     \end{array}
   }
 }{
-  \subprogramforname(\tenv, \name, \callerargtypes) \typearrow \TypeErrorVal{\BadCall}
+  \subprogramforsignature(\tenv, \name, \callerargtypes, \calltype) \typearrow \TypeErrorVal{\BadCall}
 }
 \end{mathpar}
 
@@ -1337,19 +1377,19 @@ the \integertypeterm{} rather than the \realtypeterm).
   G^\tenv.\overloadedsubprograms(\name) = (\renamingset, \vses)\\
   {
     \begin{array}{r}
-      \filtercallcandidates(\tenv, \callerargtypes, \renamingset) \typearrow \\ \matchingrenamings \OrTypeError
+      \filtercallcandidates(\tenv, \callerargtypes, \renamingset, \calltype) \typearrow \\ \matchingrenamings \OrTypeError
     \end{array}
   }\\\\
   \matchingrenamings = [(\namep, \callee)]
 }{
   {
     \begin{array}{r}
-  \subprogramforname(\tenv, \name, \callerargtypes) \typearrow \\ (\namep, \callee, \vses)
+  \subprogramforsignature(\tenv, \name, \callerargtypes, \calltype) \typearrow \\ (\namep, \callee, \vses)
     \end{array}
   }
 }
 \end{mathpar}
-\CodeSubsection{\SubprogramForNameBegin}{\SubprogramForNameEnd}{../Typing.ml}
+\CodeSubsection{\SubprogramForSignatureBegin}{\SubprogramForSignatureEnd}{../Typing.ml}
 
 \TypingRuleDef{FilterCallCandidates}
 \hypertarget{def-filtercandidates}{}
@@ -1358,25 +1398,26 @@ The helper function
   \filtercallcandidates(
     \overname{\staticenvs}{\tenv} \aslsep
     \overname{\ty^*}{\formaltypes} \aslsep
+    \overname{\subprogramtype}{\calltype}
     \overname{\pow{\Strings}}{\candidates}
     )
   \aslto \overname{(\Strings\times\func)^*}{\matches}
 \]
 iterates over the list of unique subprogram names in $\candidates$ and checks whether
-their lists of arguments clash with the types in $\formaltypes$ in $\tenv$.
+their lists of arguments clash with the types in $\formaltypes$ and their subprogram types match $\calltype$ in $\tenv$.
 The result is the set of pairs consisting of the names and function definitions of the
-subprograms whose arguments clash in $\candidates$.
+subprograms whose arguments clash and subprogram types match in $\candidates$.
 \ProseOtherwiseTypeError
 
 The names $\candidates$ are assumed to exist in $G^\tenv.\subprograms$.
 
 \ExampleDef{Filtering Subprograms Matching a Call}
-In \listingref{SubprogramForName}, filtering the
+In \listingref{SubprogramForSignature}, filtering the
 set of declared subprograms for the call expression \verb|add_10(5)| yields
 the (singleton list containing the) subprogram \\
 \verb|func add_10(x: integer) => integer|.
 In contrast, filtering the set of declared subprograms for the call expression
-\verb|add_10(5.0)| in \listingref{SubprogramForName-no-candidates},
+\verb|add_10(5.0)| in \listingref{SubprogramForSignature-no-candidates},
 yields an empty list.
 
 \ProseParagraph
@@ -1393,9 +1434,10 @@ yields an empty list.
     \item $\candidates$ is a list with \head\ $\name$ and \tail\ $\candidatesone$;
     \item the function definition associated with $\name$ in $\tenv$ is $\funcdef$;
     \item determining whether there is an argument clash between $\formaltypes$ and the arguments in $\funcdef$
-          (that is, $\funcdef.\funcargs$) yields $\vb$\ProseOrTypeError;
-    \item filtering the call candidates in $\candidatesone$ with $\formaltypes$ in $\tenv$ yields $\matchesone$\ProseOrTypeError;
-    \item if $\vb$ is $\True$ then $\matches$ is the list with \head\ $(\name,\funcdef)$ and \tail\ $\matchesone$,
+          (that is, $\funcdef.\funcargs$) yields $\vbone$\ProseOrTypeError;
+  \item determining whether $\funcdef$ is compatible with $\calltype$ via $\calltypematches$ yields $\vbtwo$;
+    \item filtering the call candidates in $\candidatesone$ with $\formaltypes$ and $\calltype$ in $\tenv$ yields $\matchesone$\ProseOrTypeError;
+    \item if $\vbone$ and $\vbtwo$ are both $\True$ then $\matches$ is the list with \head\ $(\name,\funcdef)$ and \tail\ $\matchesone$,
           and otherwise it is $\matchesone$.
   \end{itemize}
 \end{itemize}
@@ -1404,7 +1446,7 @@ yields an empty list.
 \begin{mathpar}
 \inferrule[no\_candidates]
 {}{
-  \filtercallcandidates(\tenv, \formaltypes, \overname{\emptylist}{\candidates}) \typearrow \overname{\emptylist}{\matches}
+  \filtercallcandidates(\tenv, \formaltypes, \calltype, \overname{\emptylist}{\candidates}) \typearrow \overname{\emptylist}{\matches}
 }
 \end{mathpar}
 
@@ -1412,13 +1454,99 @@ yields an empty list.
 \inferrule[candidates\_exist]
 {
   \funcdef \eqdef G^\tenv.\subprograms(\name) \\
-  \hasargclash(\tenv, \formaltypes, \funcdef.\funcargs) \typearrow \vb \OrTypeError\\\\
-  \filtercallcandidates(\tenv, \formaltypes, \candidatesone) \typearrow \matchesone \OrTypeError\\\\
-  \matches \eqdef \choice{\vb}{\;[(\name,\funcdef)] \concat \matchesone}{\;\matchesone}
+  \hasargclash(\tenv, \formaltypes, \funcdef.\funcargs) \typearrow \vbone \OrTypeError\\\\
+  \calltypematches(\funcdef, \calltype) \typearrow \vbtwo \\\\
+  {
+  \begin{array}{r}
+    \filtercallcandidates(\tenv, \formaltypes, \calltype, \candidatesone) \typearrow \\ \matchesone \OrTypeError
+  \end{array}
+  }\\\\
+  \matches \eqdef \choice{\vbone \land \vbtwo}{\;[(\name,\funcdef)] \concat \matchesone}{\;\matchesone}
 }{
-  \filtercallcandidates(\tenv, \formaltypes, \overname{[\name] \concat \candidatesone}{\candidates}) \typearrow \matches
+  {
+    \begin{array}{r}
+      \filtercallcandidates(\tenv, \formaltypes, \calltype, \overname{[\name] \concat \candidatesone}{\candidates}) \\ \typearrow \matches
+    \end{array}
+  }
 }
 \end{mathpar}
+
+\TypingRuleDef{CallTypeMatches}
+\hypertarget{def-calltypematches}{}
+The function
+\[
+  \calltypematches(
+    \overname{\func}{\funcdef} \aslsep
+    \overname{\subprogramtype}{\calltype}
+  )
+  \aslto \overname{\Bool}{\vb}
+\]
+checks whether a function definition $\funcdef$ is compatible with the subprogram type expected by a function call, $\calltype$, yielding the result in $\vb$.
+
+\ExampleDef{Matching call types}
+The table below shows keywords used to define functions, and their possible compatible call types.
+
+\begin{center}
+\begin{tabular}{ll}
+\textbf{Keyword used to define function} & \textbf{Compatible call types} \\
+\hline
+\verb|func|                            & $\STFunction$, $\STProcedure$ \\
+\verb|getter| (inside \verb|accessor|) & $\STFunction$, $\STGetter$    \\
+\verb|setter| (inside \verb|accessor|) & $\STSetter$                   \\
+\end{tabular}
+\end{center}
+
+\ProseParagraph
+\OneApplies
+\begin{itemize}
+  \item \AllApplyCase{equal}
+  \begin{itemize}
+    \item $\funcdef.\funcsubprogramtype$ is equal to $\calltype$;
+    \item $\vb$ is $\True$.
+  \end{itemize}
+
+  \item \AllApplyCase{getter\_func}
+  \begin{itemize}
+    \item $\funcdef.\funcsubprogramtype$ is $\STGetter$;
+    \item $\calltype$ is $\STFunction$;
+    \item $\vb$ is $\True$.
+  \end{itemize}
+
+  \item \AllApplyCase{no\_match}
+  \begin{itemize}
+    \item $\funcdef.\funcsubprogramtype$ is not equal to $\calltype$;
+    \item either $\funcdef.\funcsubprogramtype$ is not $\STGetter$, or $\calltype$ is not $\STFunction$;
+    \item $\vb$ is $\False$.
+  \end{itemize}
+\end{itemize}
+
+\FormallyParagraph
+\begin{mathpar}
+\inferrule[equal]{
+  \funcdef.\funcsubprogramtype = \calltype
+}{
+  \calltypematches(\func, \calltype) \typearrow \overname{\True}{\vb}
+}
+\end{mathpar}
+
+\begin{mathpar}
+\inferrule[getter\_func]{
+  \funcdef.\funcsubprogramtype = \STGetter \\
+  \calltype = \STFunction
+}{
+  \calltypematches(\func, \calltype) \typearrow \overname{\True}{\vb}
+}
+\end{mathpar}
+
+\begin{mathpar}
+\inferrule[no\_match]{
+  \funcdef.\funcsubprogramtype \neq \calltype \\
+  (\funcdef.\funcsubprogramtype \neq \STGetter \lor \calltype \neq \STFunction)
+}{
+  \calltypematches(\func, \calltype) \typearrow \overname{\False}{\vb}
+}
+\end{mathpar}
+\CodeSubsection{\CallTypeMatchesBegin}{\CallTypeMatchesEnd}{../Typing.ml}
 
 \TypingRuleDef{HasArgClash}
 \hypertarget{def-hasargclash}{}
@@ -1484,7 +1612,7 @@ See \ExampleRef{Argument Clashing}
 
 \ExampleDef{Ill-typed Subprogram Declarations}
 In specification \listingref{TypeClash-bad}, the type \verb|SuperRec| \emph{\Prosetypeclashes} \verb|SubRec|
-in the static environment where both types have been annotated,
+in the \staticenvironmentterm{} where both types have been annotated,
 which is why both declarations of \verb|structured_procedure| clash and thus they are ill-typed.
 \ASLListing{Ill-typed Subprogram Declarations}{TypeClash-bad}{\typingtests/TypingRule.TypeClashes.bad.asl}
 
@@ -1603,7 +1731,7 @@ which is why both declarations of \verb|structured_procedure| clash and thus the
   \subtypesrel(\tenv, \vt, \vs) \typearrow \False\\\\
   \tstruct(\tenv, \vt) \typearrow \TTuple(\vt_{1..k}) \\
   \tstruct(\tenv, \vs) \typearrow \TTuple(\vs_{1..n}) \\
-  \booltrans{n = k} \booltransarrow \True \terminateas \False\\
+  \booltrans(n = k) \booltransarrow \True \terminateas \False\\
   i=1..k: \typeclashes(\tenv, \vt_i, \vs_i) \typearrow \vb_i\\
   \vb \eqdef \bigwedge_{\vi=1}^k \vb_i
 }{
@@ -1660,8 +1788,8 @@ is annotated as
 \[
 \left[
 \begin{array}{lll}
-(\TInt(\wellconstrained([\AbbrevConstraintExact{\ELInt{10}}])),& \eliteral{\lint(10)},& \emptyset),\\
-(\TReal,& \eliteral{\lreal(20)},& \emptyset)
+(\TInt(\wellconstrained([\AbbrevConstraintExact{\ELInt{10}}])),& \eliteral{\LInt(10)},& \emptyset),\\
+(\TReal,& \eliteral{\LReal(20)},& \emptyset)
 \end{array}
 \right]
 \]
@@ -1697,7 +1825,7 @@ is annotated as
 
 \begin{mathpar}
 \inferrule[non\_empty]{
-  \annotateexpr{\tenv, \ve} \typearrow \typedexpr \OrTypeError\\\\
+  \annotateexpr(\tenv, \ve) \typearrow \typedexpr \OrTypeError\\\\
   \annotateexprlist(\tenv, \exprsone) \typearrow \typedexprsone \OrTypeError
 }{
   \annotateexprlist(\tenv, \overname{[\ve] \concat \exprsone}{\exprs}) \typearrow \overname{[\typedexpr] \concat \typedexprsone}{\typedexprs}
@@ -1735,7 +1863,7 @@ as an empty parameter list for a standard library function must be entirely omit
 \ASLListing{Erroneous parameter omission}{ParameterOmission-bad}{\definitiontests/ParameterOmission.bad.asl}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section{Semantics\label{sec:SubprogramCallsSemantics}}
+\SemanticsRulesDef{Subprogram Calls}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 The rule for evaluating subprogram calls is \SemanticsRuleRef{Call}.
 
@@ -1751,21 +1879,24 @@ We also define the following helper rules:
 The relation
 \hypertarget{def-evalcall}{}
 \[
-  \begin{array}{c}
-    \evalcall(\overname{\envs}{\env} \aslsep
-    \overname{\Identifiers}{\name} \aslsep
-    \overname{\expr^*}{\params} \aslsep
-    \overname{\expr^*}{\args}) \;\aslrel\; \\
-    \Normal(\overbracket{(\vals\times\XGraphs)^*}^{\vmstwo}, \overname{\envs}{\newenv}) \cup
-    \overname{\TThrowing}{\ThrowingConfig} \cup \overname{\TDynError}{\DynErrorConfig}
+  \evalcall(\overname{\envs}{\env} \aslsep
+  \overname{\Identifiers}{\name} \aslsep
+  \overname{\expr^*}{\params} \aslsep
+  \overname{\expr^*}{\args}) \;\aslrel\;
+  \left(
+  \begin{array}{ll}
+  \ResultCall(\overbracket{(\vals\times\XGraphs)^*}^{\vmstwo}, \overname{\envs}{\newenv}) & \cup \\
+  \overname{\TDynError}{\DynErrorConfig} & \cup \\
+  \overname{\TDiverging}{\DivergingConfig} & \\
   \end{array}
+  \right)
 \]
 evaluates a call to the subprogram named $\name$ in the environment $\env$,
 with the parameter expressions $\params$ and the argument expressions
 $\args$.
 The evaluation results in either a list of returned values, each one associated
-with an execution graph, and a new environment;
-or an abnormal configuration.
+with an execution graph, and a new environment.
+\ProseOtherwiseAbnormal
 
 The evaluation first evaluates the expressions corresponding to the arguments
 and parameters and then passes their values in a resulting configuration
@@ -1773,20 +1904,21 @@ to the helper relation $\evalsubprogram$.
 
 \ExampleDef{Calling Subprograms}
 In \listingref{Call}, calling \verb|non_throwing_func| terminates normally,
-while calling \verb|throwing_func| terminates by throwing an exception.
+while calling \\
+\verb|throwing_func| terminates by throwing an exception.
 \ASLListing{Calling subprograms}{Call}{\semanticstests/SemanticsRule.Call.asl}
 
 \ProseParagraph
 \AllApply
 \begin{itemize}
   \item evaluating each expression in $\params$ separately in $\env$ as per\\
-        \SemanticsRuleRef{EExprListM} is $\Normal(\vvparams, \envone)$\ProseOrAbnormal;
+        \SemanticsRuleRef{EExprListM} is $\ResultExprListM(\vvparams, \envone)$\ProseOrAbnormal;
   \item evaluating each expression in $\args$ separately in $\envone$ as per \\
-        \SemanticsRuleRef{EExprListM} is $\Normal(\vvargs, \envtwo)$\ProseOrAbnormal;
-  \item $\envtwo$ consists of the static environment $\tenv$ and the dynamic environment $\denvtwo$;
-  \item applying $\incrstacksize$ to $G^\denvtwo$ and $\name$ yields $\genv$;
+        \SemanticsRuleRef{EExprListM} is $\ResultExprListM(\vvargs, \envtwo)$\ProseOrAbnormal;
+  \item $\envtwo$ consists of the \staticenvironmentterm{} $\tenv$ and the dynamic environment $\denvtwo$;
+  \item applying $\incrpendingcalls$ to $G^\denvtwo$ and $\name$ yields $\genv$;
   \item the environment $\envtwo'$ is defined as the environment
-  consisting of the static environment $\tenv$ and the dynamic environment with the global component
+  consisting of the \staticenvironmentterm{} $\tenv$ and the dynamic environment with the global component
   $\genv$ and an empty local component (intuitively, this is because the called subprogram does not have access
   to the local environment of the caller);
   \item \OneApplies
@@ -1794,28 +1926,28 @@ while calling \verb|throwing_func| terminates by throwing an exception.
     \item \AllApplyCase{normal}
     \begin{itemize}
       \item evaluating the subprogram named $\name$ with parameters $\vvparams$ and arguments $\vvargs$ in
-      $\denvtwo'$ is $\Normal(\vms, (\vglobal, \Ignore))$ (that is, we ignore the local environment
-      of the callee)\ProseOrError;
+            $\denvtwo'$ is $\ResultSubprogram(\vms, (\vglobal, \Ignore))$ (that is, we ignore the local environment
+            of the callee)\ProseOrDynErrorDiverging;
       \item applying the helper relation $\readvaluefrom$ to each element of the list $\vms$ yields the list $\vmstwo$;
-      \item applying $\decrstacksize$ to $\vglobal$ and $\name$ yields $\genvtwo$;
-      \item define $\newenv$ as the environment where the static environment is $\tenv$ and the dynamic environment consists
+      \item applying $\decrpendingcalls$ to $\vglobal$ and $\name$ yields $\genvtwo$;
+      \item define $\newenv$ as the environment where the \staticenvironmentterm{} is $\tenv$ and the dynamic environment consists
             of the dynamic global environment $\genvtwo$ and the dynamic local environment is taken from $\denvtwo$
             (that is, we restore the local environment to that of the caller and drop the local environment of the callee).
-      \item the entire evaluation results in $\Normal(\vmstwo, \newenv)$.
+      \item the entire evaluation results in $\ResultCall(\vmstwo, \newenv)$.
     \end{itemize}
 
     \item \AllApplyCase{throwing}
     \begin{itemize}
       \item evaluating the subprogram named $\name$ with arguments $\vvargs$ and parameters $\vvparams$ in
-            $\denvtwo'$ is $\Throwing(\vv, \envthrow)$\ProseOrError;
-      \item view $\envthrow$ as the environment consisting of the static environment $\tenv$,
+            $\denvtwo'$ is $\Throwing(\vv, \vt, \vg, \envthrow)$\ProseOrDynErrorDiverging;
+      \item view $\envthrow$ as the environment consisting of the \staticenvironmentterm{} $\tenv$,
             and the dynamic environment whose global component is $\vglobal$;
       \item applying the helper relation $\readvaluefrom$ to $\vms$ yields $\vmstwo$;
-      \item applying $\decrstacksize$ to $\vglobal$ and $\name$ yields $\genvtwo$;
-      \item define $\newenv$ as the environment where the static environment is $\tenv$ and the dynamic environment consists
+      \item applying $\decrpendingcalls$ to $\vglobal$ and $\name$ yields $\genvtwo$;
+      \item define $\newenv$ as the environment where the \staticenvironmentterm{} is $\tenv$ and the dynamic environment consists
             of the dynamic global environment $\genvtwo$ and the dynamic local environment is taken from $\denvtwo$
             (that is, we restore the local environment to that of the caller and drop the local environment of the callee).
-      \item the entire evaluation results in $\Normal(\vmstwo, \newenv)$.
+      \item the entire evaluation results in $\ResultCall(\vmstwo, \newenv)$.
     \end{itemize}
   \end{itemize}
 \end{itemize}
@@ -1823,35 +1955,35 @@ while calling \verb|throwing_func| terminates by throwing an exception.
 \FormallyParagraph
 \begin{mathpar}
 \inferrule[normal]{
-  \evalexprlistm(\env, \params) \evalarrow \Normal(\vvparams, \envone)\OrAbnormal\\
-  \evalexprlistm(\envone, \args) \evalarrow \Normal(\vvargs, \envtwo)\OrAbnormal\\
+  \evalexprlistm(\env, \params) \evalarrow \ResultExprListM(\vvparams, \envone)\OrAbnormal\\\\
+  \evalexprlistm(\envone, \args) \evalarrow \ResultExprListM(\vvargs, \envtwo)\OrAbnormal\\\\
   \envtwo \eqname (\tenv, \denvtwo)\\
-  \incrstacksize(G^\denvtwo, \name) \evalarrow \genv\\\\
+  \incrpendingcalls(G^\denvtwo, \name) \evalarrow \genv\\\\
   \envtwo' \eqdef (\tenv, (\genv, \emptyfunc))\\\\
   \commonprefixline\\\\
-  \evalsubprogram(\envtwo', \name, \vvparams, \vvargs) \evalarrow \Normal(\vms, (\vglobal, \Ignore)) \OrDynError\\\\
+  \evalsubprogram(\envtwo', \name, \vvparams, \vvargs) \evalarrow \ResultSubprogram(\vms, (\vglobal, \Ignore)) \OrDynErrorDiverging\\\\
   \vmstwo \eqdef [\vm \in \vms: \readvaluefrom(\vms)]\\
-  \decrstacksize(\vglobal, \name) \evalarrow \genvtwo\\
+  \decrpendingcalls(\vglobal, \name) \evalarrow \genvtwo\\
   \newenv \eqdef (\tenv, (\genvtwo, L^{\denvtwo}))
 }{
-  \evalcall(\env, \name, \params, \args) \evalarrow \Normal(\vmstwo, \newenv)
+  \evalcall(\env, \name, \params, \args) \evalarrow \ResultCall(\vmstwo, \newenv)
 }
 \end{mathpar}
 
 \begin{mathpar}
 \inferrule[throwing]{
-  \evalexprlistm(\env, \args) \evalarrow \Normal(\vvargs, \envone)\OrAbnormal\\
-  \evalexprlistm(\envone, \params) \evalarrow \Normal(\vvparams, \envtwo)\OrAbnormal\\
+  \evalexprlistm(\env, \args) \evalarrow \ResultExprListM(\vvargs, \envone)\OrAbnormal\\\\
+  \evalexprlistm(\envone, \params) \evalarrow \ResultExprListM(\vvparams, \envtwo)\OrAbnormal\\\\
   \envtwo \eqname (\tenv, \denvtwo)\\
-  \incrstacksize(G^\denvtwo, \name) \evalarrow \genv\\\\
+  \incrpendingcalls(G^\denvtwo, \name) \evalarrow \genv\\\\
   \envtwo' \eqdef (\tenv, (\genv, \emptyfunc))\\\\
   \commonprefixline\\\\
-  \evalsubprogram(\envtwo', \name, \vvparams, \vvargs) \evalarrow \Throwing(\vv, \envthrow) \OrDynError\\\\
+  \evalsubprogram(\envtwo', \name, \vvparams, \vvargs) \evalarrow \Throwing(\vv, \vt, \vg, \envthrow) \OrDynErrorDiverging\\\\
   \envthrow \eqname (\tenv, (\vglobal, \Ignore))\\
-  \decrstacksize(\vglobal, \name) \evalarrow \genvtwo\\
+  \decrpendingcalls(\vglobal, \name) \evalarrow \genvtwo\\
   \newenv \eqdef (\tenv, (\genvtwo, L^{\denvtwo}))
 }{
-  \evalcall(\env, \name, \params, \args) \evalarrow \Throwing(\vv, \newenv)
+  \evalcall(\env, \name, \params, \args) \evalarrow \Throwing(\vv, \vt, \vg, \newenv)
 }
 \end{mathpar}
 \CodeSubsection{\EvalCallBegin}{\EvalCallEnd}{../Interpreter.ml}
@@ -1860,21 +1992,29 @@ while calling \verb|throwing_func| terminates by throwing an exception.
 The relation
 \hypertarget{def-evalsubprogram}{}
 \[
-  \begin{array}{c}
-    \evalsubprogram(\overname{\envs}{\env} \aslsep
-    \overname{\Identifiers}{\name} \aslsep
-    \overname{(\vals \times \XGraphs)^*}{\params} \aslsep
-    \overname{(\vals \times \XGraphs)^*}{\args}) \aslrel \\
-    \Normal(\overname{(\vals^* \aslsep \XGraphs)}{\vvs}, \overname{\envs}{\newenv}) \cup
-    \overname{\TThrowing}{\ThrowingConfig} \cup
-    \overname{\TDynError}{\DynErrorConfig}
+  \evalsubprogram\left(
+  \begin{array}{cl}
+  \overname{\envs}{\env} & \aslsep\\
+  \overname{\Identifiers}{\name} & \aslsep\\
+  \overname{(\vals \times \XGraphs)^*}{\params} & \aslsep\\
+  \overname{(\vals \times \XGraphs)^*}{\args} &
   \end{array}
+  \right)
+  \;\aslrel\;
+  \left(
+  \begin{array}{cl}
+  \ResultSubprogram(\overname{(\vals^* \aslsep \XGraphs)}{\vvs}, \overname{\envs}{\newenv}) & \cup\\
+  \overname{\TThrowing}{\ThrowingConfig} & \cup\\
+  \overname{\TDynError}{\DynErrorConfig} & \cup\\
+  \overname{\TDiverging}{\DivergingConfig} &
+  \end{array}
+  \right)
 \]
 evaluates the subprogram named $\name$ in the environment $\env$, with
 $\actualargs$ the list of actual arguments, and $\params$ the
 list of arguments deduced by type equality.
-The result is either a normal configuration or an abnormal configuration.
-In the case of a normal configuration, it consists of a list of pairs
+The result is either a \Prosenormalconfiguration{} or an abnormal configuration.
+In the case of a \Prosenormalconfiguration{}, it consists of a list of pairs
 with a value and an identifier, and a new environment $\newenv$.
 The values represent values returned by the subprogram call and the
 identifiers are used in generating execution graph constraints for the
@@ -1888,14 +2028,15 @@ the function \texttt{main} calls the function \texttt{foo} and the procedure \te
 \ProseParagraph
 \AllApply
 \begin{itemize}
-  \item $\env$ consists of the static environment $\tenv$ and the dynamic environment with the global
+  \item $\env$ consists of the \staticenvironmentterm{} $\tenv$ and the dynamic environment with the global
         component $\genv$ and an empty local component;
   \item finding the function named $\name$ in $\tenv$ (via the $\subprograms$ component of the static global environment of $\tenv$)
         gives the AST $\func$ node with body
         $\vbody$, parameters $\paramdecls$, arguments $\argdecls$, and optional recursion limit expression $\vrecurselimit$;
-  \item $\envone$ is the environment consisting of the static environment $\tenv$ and the dynamic
+  \item $\envone$ is the environment consisting of the \staticenvironmentterm{} $\tenv$ and the dynamic
         environment consisting of the dynamic component from $\denv$ and an empty local component;
-  \item applying $\checkrecurselimit$ to $\name$ and $\vrecurselimit$ in $\envone$ yields $\vgone$\ProseOrError;
+  \item applying $\checkrecurselimit$ to $\name$ and $\vrecurselimit$ in $\envone$ yields \\
+        $\vgone$\ProseOrDynErrorDiverging;
   \item \Proseeqdef{$\argnames$}{the identifiers appearing as the first component of each pair in $\argdecls$};
   \item assigning the actual arguments with $((\envone, \emptygraph), \argnames, \args)$
         as per \SemanticsRuleRef{AssignArgs} gives $(\envtwo, \vgtwo)$ and ensures that each
@@ -1908,7 +2049,7 @@ the function \texttt{main} calls the function \texttt{foo} and the procedure \te
         locally bound to the corresponding actual value in $\params$;
   \item evaluating the body of the subprogram $\vbody$ as a statement in $\envthree$
         is $\vres$\ProseOrAbnormal;
-  \item matching the result $\vres$ to obtain a normal configuration as per \\
+  \item matching the result $\vres$ to obtain a \Prosenormalconfiguration{} as per \\
         \SemanticsRuleRef{MatchFuncRes} gives $C$;
   \item $\newg$ is the ordered composition of $\vgone$ with the $\asldata$ and $\vgtwo$ and $\vgthree$ with the $\aslpo$ edge;
   \item the result is $C$ with its graph substituted for $\newg$.
@@ -1930,12 +2071,12 @@ the function \texttt{main} calls the function \texttt{foo} and the procedure \te
       \right\}
   }\\
   \envone \eqdef (\tenv, (G^\denv, \emptyfunc))\\
-  \checkrecurselimit(\envone, \name, \vrecurselimit) \evalarrow \vgone \OrDynError\\\\
+  \checkrecurselimit(\envone, \name, \vrecurselimit) \evalarrow \vgone \OrDynErrorDiverging\\\\
   \argnames \eqdef [(\vx, \Ignore) \in \argdecls: \vx]\\
   \assignargs((\envone, \emptygraph), \argnames, \actualargs) \evalarrow (\envtwo, \vgtwo)\\
   \paramnames \eqdef [(\vx, \Ignore) \in \params: \vx]\\
   \assignargs((\envtwo, \vgtwo), \paramnames, \paramdecls) \evalarrow (\envthree, \vgthree)\\
-  \evalstmt{\envthree, \vbody} \evalarrow \vres \OrAbnormal\\
+  \evalstmt(\envthree, \vbody) \evalarrow \vres \OrAbnormal\\
   \matchfuncres(\vres) \evalarrow C\\
   \newg \eqdef \ordered{\vgone}{\asldata}{\ordered{\vgtwo}{\aslpo}{\vgthree}}\\
 }{
@@ -1958,7 +2099,7 @@ The helper relation
 \]
 checks whether the value in the optional expression $\velimitopt$ has reached the limit associated with $\name$
 in $\env$, yielding the execution graph resulting from evaluating the optional expression in $\vg$.
-Otherwise, the result is a dynamic error indicating that the recursion limit has been reached.
+Otherwise, the result is a \DynamicErrorConfigurationTerm{} indicating that the recursion limit has been reached.
 
 \ExampleDef{Checking the Recursion Limit of a Subprogram Call}
 In \listingref{CheckRecurseLimit-nolimit}, the function \verb|factorial| is specified without a limit expression,
@@ -1978,24 +2119,24 @@ and evaluating \verb|main| terminates with a \dynamicerrorterm{} (\LimitExceeded
 \begin{itemize}
   \item \AllApplyCase{none}
   \begin{itemize}
-    \item applying $\evallimit$ to $\velimitopt$ in $\env$ yields $(\None, \vg)$\ProseOrError;
+    \item applying $\evallimit$ to $\velimitopt$ in $\env$ yields $(\None, \vg)$\ProseOrDynErrorDiverging;
     \item define $\vg$ as the empty graph.
   \end{itemize}
 
   \item \AllApplyCase{some\_ok}
   \begin{itemize}
-    \item applying $\evallimit$ to $\velimitopt$ in $\env$ yields $(\langle\vlimit\rangle, \vg)$\ProseOrError;
+    \item applying $\evallimit$ to $\velimitopt$ in $\env$ yields $(\langle\vlimit\rangle, \vg)$\ProseOrDynErrorDiverging;
     \item view $\env$ as $(\tenv, \denv)$;
-    \item applying $\getstacksize$ to $\name$ in $\denv$ yields $\vstacksize$;
-    \item $\vstacksize$ is less than $\vlimit$.
+    \item applying $\getpendingcalls$ to $\name$ in $\denv$ yields $\vpendingcalls$;
+    \item $\vpendingcalls$ is less than $\vlimit$.
   \end{itemize}
 
   \item \AllApplyCase{limit\_exceeded}
   \begin{itemize}
-    \item applying $\evallimit$ to $\velimitopt$ in $\env$ yields $(\langle\vlimit\rangle, \vg)$\ProseOrError;
+    \item applying $\evallimit$ to $\velimitopt$ in $\env$ yields $(\langle\vlimit\rangle, \vg)$\ProseOrDynErrorDiverging;
     \item view $\env$ as $(\tenv, \denv)$;
-    \item applying $\getstacksize$ to $\name$ in $\denv$ yields $\vstacksize$;
-    \item $\vstacksize$ is greater or equal to $\vlimit$;
+    \item applying $\getpendingcalls$ to $\name$ in $\denv$ yields $\vpendingcalls$;
+    \item $\vpendingcalls$ is greater or equal to $\vlimit$;
     \item the result is a \dynamicerrorterm{} (\LimitExceeded).
   \end{itemize}
 \end{itemize}
@@ -2003,7 +2144,7 @@ and evaluating \verb|main| terminates with a \dynamicerrorterm{} (\LimitExceeded
 \FormallyParagraph
 \begin{mathpar}
 \inferrule[none]{
-  \evallimit(\env, \velimitopt) \evalarrow (\None, \vg) \OrDynError
+  \evallimit(\env, \velimitopt) \evalarrow (\None, \vg) \OrDynErrorDiverging
 }{
   \checkrecurselimit(\env, \name, \velimitopt) \evalarrow \overname{\emptygraph}{\vg}
 }
@@ -2011,10 +2152,10 @@ and evaluating \verb|main| terminates with a \dynamicerrorterm{} (\LimitExceeded
 
 \begin{mathpar}
 \inferrule[some\_ok]{
-  \evallimit(\env, \velimitopt) \evalarrow (\langle\vlimit\rangle, \vg) \OrDynError\\\\
+  \evallimit(\env, \velimitopt) \evalarrow (\langle\vlimit\rangle, \vg) \OrDynErrorDiverging\\\\
   \env \eqname (\tenv, \denv)\\
-  \getstacksize(\denv, \name) \evalarrow \vstacksize\\
-  \vstacksize < \vlimit
+  \getpendingcalls(\denv, \name) \evalarrow \vpendingcalls\\
+  \vpendingcalls < \vlimit
 }{
   \checkrecurselimit(\env, \name, \velimitopt) \evalarrow \vg
 }
@@ -2022,10 +2163,10 @@ and evaluating \verb|main| terminates with a \dynamicerrorterm{} (\LimitExceeded
 
 \begin{mathpar}
 \inferrule[limit\_exceeded]{
-  \evallimit(\env, \velimitopt) \evalarrow (\langle\vlimit\rangle, \vg) \OrDynError\\\\
+  \evallimit(\env, \velimitopt) \evalarrow (\langle\vlimit\rangle, \vg) \OrDynErrorDiverging\\\\
   \env \eqname (\tenv, \denv)\\
-  \getstacksize(\denv, \name) \evalarrow \vstacksize\\
-  \vstacksize \geq \vlimit
+  \getpendingcalls(\denv, \name) \evalarrow \vpendingcalls\\
+  \vpendingcalls \geq \vlimit
 }{
   \checkrecurselimit(\env, \name, \velimitopt) \evalarrow \DynamicErrorVal{\LimitExceeded}
 }
@@ -2124,7 +2265,7 @@ The helper relation
 \hypertarget{def-matchfuncres}{}
 \[
     \matchfuncres(\TContinuing \cup \TReturning) \;\aslrel\;
-                  \Normal(((\Identifiers\times\vals)^*\times\XGraphs)\aslsep\envs)
+                  \ResultSubprogram(((\Identifiers\times\vals)^*\times\XGraphs)\aslsep\envs)
 \]
 converts continuing configurations and returning configurations
 into corresponding normal configurations that can be returned by a subprogram evaluation.
@@ -2148,7 +2289,7 @@ with the same value and a fresh identifier for it.
   \begin{itemize}
     \item the given configuration is $\Continuing(\vg, \env)$. This happens when,
     for example, the subprogram called is either a setter or a procedure;
-    \item the result is $\Normal((\emptylist, \vg), \env)$.
+    \item the result is $\ResultSubprogram((\emptylist, \vg), \env)$.
   \end{itemize}
 
   \item \AllApplyCase{returning}
@@ -2157,7 +2298,7 @@ with the same value and a fresh identifier for it.
     \item $\xs$ is the list $\vv_i$, for $i=1..k$;
     \item define the list of fresh identifiers $\id_i$, for $i=1..k$;
     \item define $\vvs$ to be $(\vv_i, \id_i)$, for $i=1..k$;
-    \item the result is $\Normal((\vvs, \emptygraph), \retenv)$.
+    \item the result is $\ResultSubprogram((\vvs, \emptygraph), \retenv)$.
   \end{itemize}
 \end{itemize}
 
@@ -2165,7 +2306,7 @@ with the same value and a fresh identifier for it.
 \begin{mathpar}
   \inferrule[continuing]{}
   {
-    \matchfuncres(\Continuing(\vg, \env)) \evalarrow \Normal((\emptylist, \vg), \env)
+    \matchfuncres(\Continuing(\vg, \env)) \evalarrow \ResultSubprogram((\emptylist, \vg), \env)
   }
   \and
   \inferrule[returning]{
@@ -2174,6 +2315,6 @@ with the same value and a fresh identifier for it.
     \vvs \eqdef [i=1..k: (\vv_i, \id_i)]
   }
   {
-    \matchfuncres(\Returning(\xs, \retenv)) \evalarrow \Normal((\vvs, \emptygraph), \retenv)
+    \matchfuncres(\Returning(\xs, \retenv)) \evalarrow \ResultSubprogram((\vvs, \emptygraph), \retenv)
   }
 \end{mathpar}

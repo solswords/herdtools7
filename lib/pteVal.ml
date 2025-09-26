@@ -22,6 +22,8 @@ module type S = sig
   val default : string -> t
   val of_pte : string -> t
   val is_default : t -> bool
+  (*  Attributes have the default values *)
+  val is_default_attrs : t -> bool
 
   val pp : bool -> t -> string
   val pp_v : t -> string
@@ -49,6 +51,7 @@ module type S = sig
   val dump_pack : (string -> string) -> t -> string
   val as_physical : t -> string option
   val as_flags : t -> string option
+  val attrs_as_kvm_symbols : t -> string list
 end
 
 module No = struct
@@ -57,6 +60,7 @@ module No = struct
     let default _ = ()
     let of_pte _ = ()
     let is_default _ = true
+    let is_default_attrs _ = true
     let pp _ _ = "()"
     let pp_v _ = "()"
     let pp_hash _ = "()"
@@ -77,6 +81,7 @@ module No = struct
     let dump_pack _ _ = "()"
     let as_physical _ = None
     let as_flags _ = None
+    let attrs_as_kvm_symbols _ = assert false
 end
 
 module ASL = No

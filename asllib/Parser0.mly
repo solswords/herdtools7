@@ -65,6 +65,7 @@
         subprogram_type;
         recurse_limit;
         override = None;
+        qualifier = None;
         builtin = false;
       }
 
@@ -72,7 +73,7 @@
       match es with
       | [] -> E_Literal (L_BitVector Bitvector.empty)
       | [ bv ] -> bv |> desc
-      | bv :: bvs -> List.fold_left (binop `CONCAT) bv bvs |> desc
+      | bv :: bvs -> List.fold_left (binop `BV_CONCAT) bv bvs |> desc
 
   end
 
@@ -176,6 +177,7 @@
 %token UNDEFINED
 %token UNKNOWN
 %token UNPREDICTABLE
+%token UNREACHABLE
 %token UNTIL
 %token UU_ARRAY
 %token UU_BUILTIN
@@ -244,10 +246,12 @@ let opn := list(EOL); body=list(stmts); EOF;
           args = [];
           parameters = [];
           body = SB_ASL body;
-          return_type = None;
-          subprogram_type = ST_Procedure;
+          return_type =
+            Some (T_Int UnConstrained |> ASTUtils.add_dummy_annotation ~version);
+          subprogram_type = ST_Function;
           recurse_limit = None;
           override = None;
+          qualifier = None;
           builtin = false;
         } |> ASTUtils.add_pos_from body
       ]
@@ -358,7 +362,7 @@ let expr :=
   | binop_expr(expr, binop)
   | annotated (
       e1=expr; COLON; e2=expr;
-          { AST.E_Binop (`CONCAT, e1, e2) }
+          { AST.E_Binop (`BV_CONCAT, e1, e2) }
   )
 
 let binop_expr(e, b) ==
@@ -475,6 +479,7 @@ let getter_decl ==
           subprogram_type;
           recurse_limit;
           override = None;
+          qualifier = None;
           builtin = false;
         }
       }
@@ -496,6 +501,7 @@ let getter_decl ==
           subprogram_type;
           recurse_limit;
           override = None;
+          qualifier = None;
           builtin = false;
         }
       }
@@ -516,6 +522,7 @@ let getter_decl ==
           subprogram_type;
           recurse_limit;
           override = None;
+          qualifier = None;
           builtin = false;
         }
       }
@@ -545,6 +552,7 @@ let setter_decl ==
           subprogram_type;
           recurse_limit;
           override = None;
+          qualifier = None;
           builtin = false;
         }
       }
@@ -566,6 +574,7 @@ let setter_decl ==
           subprogram_type;
           recurse_limit;
           override = None;
+          qualifier = None;
           builtin = false;
         }
       }
@@ -593,6 +602,7 @@ let procedure_decl ==
             subprogram_type;
             recurse_limit;
             override = None;
+            qualifier = None;
             builtin = false;
           }
         }
@@ -644,6 +654,7 @@ let simple_stmt ==
     | RETURN; ~=ioption(expr);                    < AST.S_Return >
     | ASSERT; ~=expr;                             < AST.S_Assert >
     | DEBUG; e=expr;                              { AST.S_Print { args = [ e ]; newline = true; debug = true } }
+    | UNREACHABLE; LPAREN; RPAREN;                { AST.S_Unreachable }
 
     | unimplemented_stmts (
       | UNPREDICTABLE; ioption(pared(<>)); <>
@@ -782,7 +793,7 @@ let unop ==
   | MINUS ; { AST.NEG }
   | NOT   ; { AST.NOT }
 
-let unimplemented_binop(x) == x ; { `PLUS }
+let unimplemented_binop(x) == x ; { `ADD }
 
 let abinop ==
   | AND        ; { `AND    }
@@ -790,13 +801,13 @@ let abinop ==
   | BAR_BAR    ; { `BOR    }
   | DIV        ; { `DIV    }
   | XOR        ; { `XOR    }
-  | EQ_EQ      ; { `EQ_OP  }
-  | BANG_EQ    ; { `NEQ    }
-  | GT_EQ      ; { `GEQ    }
+  | EQ_EQ      ; { `EQ     }
+  | BANG_EQ    ; { `NE     }
+  | GT_EQ      ; { `GE     }
   | IMPLIES    ; { `IMPL   }
-  | LT_EQ      ; { `LEQ    }
-  | PLUS       ; { `PLUS   }
-  | MINUS      ; { `MINUS  }
+  | LT_EQ      ; { `LE     }
+  | PLUS       ; { `ADD    }
+  | MINUS      ; { `SUB    }
   | MOD        ; { `MOD    }
   | STAR       ; { `MUL    }
   | OR         ; { `OR     }

@@ -79,23 +79,24 @@ type binop =
   | `DIVRM
     (** Inexact integer division, with rounding towards negative infinity. *)
   | `XOR  (** Bitvector bitwise exclusive or *)
-  | `EQ_OP  (** Equality on two base values of same type *)
+  | `EQ  (** Equality on two base values of same type *)
   | `GT  (** Greater than for int or reals *)
-  | `GEQ  (** Greater or equal for int or reals *)
+  | `GE  (** Greater or equal for int or reals *)
   | `IMPL  (** Boolean implication *)
   | `LT  (** Less than for int or reals *)
-  | `LEQ  (** Less or equal for int or reals *)
+  | `LE  (** Less or equal for int or reals *)
   | `MOD  (** Remainder of integer division *)
-  | `MINUS  (** Substraction for int or reals or bitvectors *)
+  | `SUB  (** Subtraction for int or reals or bitvectors *)
   | `MUL  (** Multiplication for int or reals or bitvectors *)
-  | `NEQ  (** Non equality on two base values of same type *)
+  | `NE  (** Non equality on two base values of same type *)
   | `OR  (** Bitvector bitwise or *)
-  | `PLUS  (** Addition for int or reals or bitvectors *)
+  | `ADD  (** Addition for int or reals or bitvectors *)
   | `POW  (** Exponentiation for ints *)
   | `RDIV  (** Division for reals *)
   | `SHL  (** Shift left for ints *)
   | `SHR  (** Shift right for ints *)
-  | `CONCAT  (** Bit vector or string concatenation *) ]
+  | `BV_CONCAT  (** Bit vector concatenation *)
+  | `STR_CONCAT  (** String concatenation *) ]
 (** Operations on base value of arity two. *)
 
 (* -------------------------------------------------------------------------
@@ -273,7 +274,7 @@ and constraint_kind =
           constraint in the list. *)
   | PendingConstrained
       (** An integer type whose constraint will be inferred during type-checking. *)
-  | Parameterized of uid * identifier
+  | Parameterized of identifier
       (** A parameterized integer, the default type for parameters of
           function at compile time, with a unique identifier and the variable
           bearing its name. *)
@@ -377,11 +378,10 @@ type stmt_desc =
     }
   | S_While of expr * expr option * stmt
   | S_Repeat of stmt * expr * expr option
-  | S_Throw of (expr * ty option) option
+  | S_Throw of (expr * ty option)
       (** The ty option is a type annotation added by the type-checker to be
           matched later with the catch guards. It is always None for the untyped
-          AST and never None for the typed AST.
-          The outer option is used to represent the implicit throw, such as [throw;]. *)
+          AST and never None for the typed AST. *)
   | S_Try of stmt * catcher list * stmt option
       (** The stmt option is the optional otherwise guard. *)
   | S_Print of { args : expr list; newline : bool; debug : bool }
@@ -421,6 +421,17 @@ type subprogram_body =
   | SB_ASL of stmt  (** A normal body of a subprogram *)
   | SB_Primitive of bool  (** Whether or not this primitive is side-effecting *)
 
+type func_qualifier =
+  | Pure
+      (** A `pure` subprogram does not read or modify mutable state. It can be
+          called in types. *)
+  | Readonly
+      (** A `readonly` subprogram can read mutable state but not modify it. It
+          can be called in assertions. *)
+  | Noreturn
+      (** A `noreturn` subprogram always terminates by a thrown exception
+          or calling `Unreachable`. *)
+
 type override_info =
   | Impdef  (** A function which can be overridden *)
   | Implementation
@@ -434,6 +445,7 @@ type func = {
   return_type : ty option;
   subprogram_type : subprogram_type;
   recurse_limit : expr option;
+  qualifier : func_qualifier option;
   override : override_info option;
   builtin : bool;
       (** Builtin functions are treated specially when checking parameters at

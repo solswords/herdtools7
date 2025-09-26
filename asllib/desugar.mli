@@ -23,11 +23,20 @@
 open AST
 
 (* -------------------------------------------------------------------------
+    Multiple variable declarations
+   ------------------------------------------------------------------------- *)
+
+val make_local_vars : identifier annotated list * ty -> stmt_desc
+(** Desugar a local declaration of multiple uninitialised variables. *)
+
+val make_global_vars : identifier annotated list * ty -> decl list
+(** Desugar a global declaration of multiple uninitialised variables. *)
+
+(* -------------------------------------------------------------------------
     Elided parameters
    ------------------------------------------------------------------------- *)
 
-val desugar_elided_parameter :
-  local_decl_keyword -> local_decl_item -> ty -> call annotated -> stmt_desc
+val desugar_elided_parameter : ty -> call annotated -> expr option
 (**
   Desugar an elided parameter, in particular:
   {[
@@ -116,6 +125,7 @@ val desugar_case_stmt :
    ------------------------------------------------------------------------- *)
 
 type accessor_pair = {
+  is_readonly : bool;  (** getter is readonly *)
   getter : stmt;  (** getter body *)
   setter : stmt;  (** setter body *)
 }

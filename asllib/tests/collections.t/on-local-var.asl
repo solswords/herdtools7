@@ -1,11 +1,11 @@
-type MyCollection of collection {
+var MyCollection : collection {
   field1: bits(1),
   field2: bits(2),
 };
 
 func main () => integer
 begin
-  var col: MyCollection;
+  var col = MyCollection;
   let bv = col.field1;
 
   return 0;

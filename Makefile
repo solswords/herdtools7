@@ -18,6 +18,7 @@ REGRESSION_TEST_MODE = test
 DUNE_PROFILE = release
 
 DIYCROSS                      = _build/install/default/bin/diycross7
+DIYMICROENUM                  = _build/install/default/bin/diymicroenum7
 HERD                          = _build/install/default/bin/herd7
 LITMUS                        = _build/install/default/bin/litmus7
 LITMUS_LIB_DIR                = $(PWD)/litmus/libdir
@@ -25,6 +26,7 @@ HERD_REGRESSION_TEST          = _build/default/internal/herd_regression_test.exe
 HERD_DIYCROSS_REGRESSION_TEST = _build/default/internal/herd_diycross_regression_test.exe
 HERD_CATALOGUE_REGRESSION_TEST = _build/default/internal/herd_catalogue_regression_test.exe
 BENTO                         = _build/default/tools/bento.exe
+ASLREF                        = _build/default/asllib/aslref.exe
 
 all: build
 
@@ -35,10 +37,10 @@ Version.ml:
 just-build: Version.ml
 	dune build -j $(J) --profile $(DUNE_PROFILE)
 
-build: check-deps | just-build
+build-release: Version.ml
+	dune build -j $(J) -p herdtools7 @install
 
-$(BENTO): Version.ml | check-deps
-	dune build -j $(J) --profile $(DUNE_PROFILE) $@
+build: check-deps | just-build
 
 install:
 	sh ./dune-install.sh $(PREFIX)
@@ -357,9 +359,54 @@ diy-test-aarch64:
 		$(REGRESSION_TEST_MODE)
 	@ echo "herd7 AArch64 diycross7 tests: OK"
 
-test-bnfc:
+diymicro-test:: diymicro-test-aarch64
+diymicro-test-aarch64:
+	$(eval DIYMICRO_EDGES = $(shell $(DIYMICROENUM) -list-iico | sed -n 's/^iico\[\([^ ]*\).*/iico[\1]/p'))
+	$(eval DIYMICRO_EDGES_ARG := $(foreach arg,$(DIYMICRO_EDGES),-diycross-arg $(arg)))
 	@ echo
-	dune build @bnfc_test
+	$(HERD_DIYCROSS_REGRESSION_TEST) \
+		-herd-path $(HERD) \
+		-diycross-path $(DIYMICROENUM) \
+		-libdir-path ./herd/libdir \
+		-expected-dir ./herd/tests/diymicro/AArch64 \
+		$(DIYMICRO_EDGES_ARG) \
+		$(REGRESSION_TEST_MODE)
+	@ echo "herd7 AArch64 diymicro7 tests: OK"
+
+test-all:: diymicro-test-aarch64-asl
+diymicro-test-aarch64-asl: asl-pseudocode
+	$(eval DIYMICRO_EDGES = $(shell $(DIYMICROENUM) -list-iico | sed -n 's/^iico\[\([^ ]*\).*/iico[\1]/p'))
+	$(eval DIYMICRO_EDGES_ARG := $(foreach arg,$(DIYMICRO_EDGES),-diycross-arg $(arg)))
+	@ echo
+	$(HERD_DIYCROSS_REGRESSION_TEST) \
+		-herd-path $(HERD) \
+		-diycross-path $(DIYMICROENUM) \
+		-libdir-path ./herd/libdir \
+		-expected-dir ./herd/tests/diymicro/AArch64 \
+		-conf ./herd/tests/diymicro/AArch64/asl.cfg \
+		-j $(J) \
+		$(DIYMICRO_EDGES_ARG) \
+		$(REGRESSION_TEST_MODE)
+	@ echo "herd7 AArch64 diymicro7 (ASL) tests: OK"
+
+.PHONY: opam-install
+opam-install:
+	@ echo
+	@ echo "Installing herdtools as an opam package"
+	opam install .
+	@ echo "Installed."
+
+ASLLIB_PARSER_CMLY := _build/default/asllib/Parser.cmly
+
+.PHONY: test-bnfc
+test-bnfc: opam-install
+	@ echo
+	dune build --profile $(DUNE_PROFILE) $(ASLLIB_PARSER_CMLY)
+	$(MAKE) \
+		-C asllib/menhir2bnfc \
+		HERDTOOLS_SOURCE=$(CURDIR) \
+		ASLLIB_PARSER_CMLY=$(abspath $(ASLLIB_PARSER_CMLY)) \
+		test
 	@ echo "BNFC tests: OK"
 
 test:: test.pac
@@ -597,8 +644,8 @@ test.vmsa+mte:
 		$(REGRESSION_TEST_MODE)
 	@ echo "herd7 AArch64 VMSA+MTE instructions tests: OK"
 
-test:: diy-test
-test-local:: diy-test
+test:: diy-test diymicro-test
+test-local:: diy-test diymicro-test
 
 LDS:="Amo.Cas,Amo.LdAdd,Amo.LdClr,Amo.LdEor,Amo.LdSet"
 LDSPLUS:="LxSx",$(LDS)
@@ -793,19 +840,24 @@ diy-test-C:
 		$(REGRESSION_TEST_MODE)
 	@ echo "herd7 C diycross7 tests: OK"
 
-.PHONY: asl-pseudocode clean-asl-pseudocode
+.PHONY: asl-pseudocode
 asl-pseudocode: herd/libdir/asl-pseudocode/shared_pseudocode.asl
+
 herd/libdir/asl-pseudocode/shared_pseudocode.asl:
 	@ $(MAKE) -C $(@D) a64 clean-tmp
 
+.PHONY: clean-asl-pseudocode
 clean-asl-pseudocode:
-	@ $(MAKE) -C $(@D)/herd/libdir/asl-pseudocode clean
+	@ $(MAKE) -C herd/libdir/asl-pseudocode clean
 
-asldoc: $(BENTO)
-	@ $(MAKE) $(MFLAGS) -C $(@D)/asllib/doc all
+.PHONY: asldoc
+asldoc: Version.ml
+	@ dune build -j $(J) --profile $(DUNE_PROFILE) $(BENTO) $(ASLREF)
+	@ $(MAKE) $(MFLAGS) -C asllib/doc all BENTO=$(CURDIR)/$(BENTO) ASLREF=$(CURDIR)/$(ASLREF)
 
+.PHONY: clean-asldoc
 clean-asldoc:
-	@ $(MAKE) $(MFLAGS) -C $(@D)/asllib/doc clean
+	@ $(MAKE) $(MFLAGS) -C asllib/doc clean
 
 RUN_TESTS?=false
 $(V).SILENT:

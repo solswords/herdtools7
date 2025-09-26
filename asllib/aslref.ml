@@ -34,6 +34,9 @@ type args = {
   allow_double_underscore : bool;
   allow_unknown : bool;
   allow_storage_discards : bool;
+  allow_hyphenated_pending_constraint : bool;
+  allow_local_constants : bool;
+  allow_single_arrows : bool;
   print_ast : bool;
   print_lisp : bool;
   print_serialized : bool;
@@ -42,13 +45,22 @@ type args = {
   strictness : strictness;
   output_format : Error.output_format;
   use_field_getter_extension : bool;
+  use_fine_grained_side_effects : bool;
   use_conflicting_side_effects_extension : bool;
   override_mode : override_mode;
   no_primitives : bool;
+  no_stdlib : bool;
   control_flow_analysis : bool;
+  allow_empty_structured_type_declarations : bool;
+  allow_function_like_statements : bool;
 }
 
-let push thing ref = ref := thing :: !ref
+exception Exit of int
+
+let running_in_jsoo : bool =
+  match Sys.backend_type with
+  | Sys.Other s when s = "js_of_ocaml" -> true
+  | _ -> false
 
 let parse_args () =
   let show_rules = ref false in
@@ -59,6 +71,8 @@ let parse_args () =
   let allow_double_underscore = ref false in
   let allow_unknown = ref false in
   let allow_storage_discards = ref false in
+  let allow_hyphenated_pending_constraint = ref false in
+  let allow_local_constants = ref false in
   let print_ast = ref false in
   let print_serialized = ref false in
   let print_typed = ref false in
@@ -73,8 +87,13 @@ let parse_args () =
   let override_mode = ref Permissive in
   let set_override_mode m () = override_mode := m in
   let no_primitives = ref false in
-  let use_side_effects_extension = ref false in
+  let no_stdlib = ref false in
+  let use_fine_grained_side_effects = ref false in
+  let use_conflincting_side_effects_extension = ref false in
   let control_flow_analysis = ref true in
+  let allow_single_arrows = ref false in
+  let allow_empty_structured_type_declarations = ref false in
+  let allow_function_like_statements = ref false in
 
   let speclist =
     [
@@ -96,6 +115,15 @@ let parse_args () =
       ( "--allow-storage-discards",
         Arg.Set allow_storage_discards,
         " Allow storage declarations that discard their right-hand sides." );
+      ( "--allow-hyphenated-pending-constraint",
+        Arg.Set allow_hyphenated_pending_constraint,
+        " Allow pending constraints to be denoted by a hyphen." );
+      ( "--allow-local-constants",
+        Arg.Set allow_local_constants,
+        " Allow declarations of local constant storage." );
+      ( "--allow-single-arrows",
+        Arg.Set allow_single_arrows,
+        " Allow single arrows to denote boolean implication or equivalence." );
       ( "--print",
         Arg.Set print_ast,
         " Print the parsed AST to stdout before executing it." );
@@ -111,6 +139,9 @@ let parse_args () =
       ( "--format-csv",
         Arg.Unit (fun () -> output_format := Error.CSV),
         " Output the errors in a CSV format." );
+      ( "--gnu-errors",
+        Arg.Unit (fun () -> output_format := Error.GNU),
+        " Output the errors using the GNU convention." );
       ( "--opn",
         Arg.Set_string opn,
         "OPN_FILE Parse the following opn file as main." );
@@ -133,41 +164,57 @@ let parse_args () =
       ( "--use-field-getter-extension",
         Arg.Set use_field_getter_extension,
         " Instruct the type-checker to use the field getter extension." );
-      ( "--use-conflicting-side-effects-extension",
-        Arg.Set use_side_effects_extension,
-        " Instruct the type-checker to use the conflicting side-effects \
+      ( "--use-fine-grained-side-effects-extension",
+        Arg.Set use_fine_grained_side_effects,
+        " Instruct the type-checker to use the fine-grained side-effects \
          extension." );
+      ( "--use-conflicting-side-effects-extension",
+        Arg.Set use_conflincting_side_effects_extension,
+        " Instruct the type-checker to use the conflicting side-effects \
+         extension. Also implies the fine-grained side-effects extension." );
       ( "--show-rules",
         Arg.Set show_rules,
         " Instrument the interpreter and log to std rules used." );
       ( "--patch",
         Arg.String (push_file PatchV1),
-        "Pass patches to the built AST." );
+        "patch_file Pass patches to the built AST." );
       ( "--patch0",
         Arg.String (push_file PatchV0),
-        "Pass patches to the built AST." );
-      ("-0", Arg.String (push_file NormalV0), "Use ASLv0 parser for this file.");
+        "patch_file Pass patches to the built AST." );
+      ( "-0",
+        Arg.String (push_file NormalV0),
+        "filename Use ASLv0 parser for this file." );
       ( "-1",
         Arg.String (push_file NormalV1),
-        "Use ASLv1 parser for this file. (default)" );
+        "filename Use ASLv1 parser for this file. (default)" );
       ("--version", Arg.Set show_version, " Print version and exit.");
       ( "--overriding-permissive",
         Arg.Unit (set_override_mode Permissive),
         " Allow both `impdef` and `implementation` functions (default)." );
-      ( "--overriding-no-implementations",
+      ( "--overriding-warn-implementations",
         Arg.Unit (set_override_mode NoImplementations),
         " Warn if any `implementation` functions are defined." );
-      ( "--overriding-all-impdefs-overridden",
+      ( "--overriding-warn-all-impdefs-overridden",
         Arg.Unit (set_override_mode AllImpdefsOverridden),
         " Warn if any `impdef` functions are not overridden by corresponding \
          `implementation`s." );
       ( "--no-primitives",
         Arg.Set no_primitives,
         " Do not use internal definitions for standard library subprograms." );
+      ( "--no-stdlib",
+        Arg.Set no_stdlib,
+        " Do not use ASL's standard library. Implies `--no-primitives`." );
       ( "--no-control-flow-analysis",
         Arg.Clear control_flow_analysis,
         " Do not use control-flow analysis to check that subprograms \
          return/throw/execute `Unreachable()`." );
+      ( "--allow-empty-structured-type-declarations",
+        Arg.Set allow_empty_structured_type_declarations,
+        " Allow declarations of structured types with implicitly empty fields."
+      );
+      ( "--allow-function-like-statements",
+        Arg.Set allow_function_like_statements,
+        " Allow function-like unreachable statements and `print`/`println`." );
     ]
     |> Arg.align ?limit:None
   in
@@ -194,6 +241,9 @@ let parse_args () =
       allow_double_underscore = !allow_double_underscore;
       allow_unknown = !allow_unknown;
       allow_storage_discards = !allow_storage_discards;
+      allow_hyphenated_pending_constraint = !allow_hyphenated_pending_constraint;
+      allow_local_constants = !allow_local_constants;
+      allow_single_arrows = !allow_single_arrows;
       print_ast = !print_ast;
       print_serialized = !print_serialized;
       print_typed = !print_typed;
@@ -202,16 +252,23 @@ let parse_args () =
       show_rules = !show_rules;
       output_format = !output_format;
       use_field_getter_extension = !use_field_getter_extension;
-      use_conflicting_side_effects_extension = !use_side_effects_extension;
+      use_fine_grained_side_effects = !use_fine_grained_side_effects;
+      use_conflicting_side_effects_extension =
+        !use_conflincting_side_effects_extension;
       override_mode = !override_mode;
-      no_primitives = !no_primitives;
+      no_primitives = !no_primitives || !no_stdlib;
+      no_stdlib = !no_stdlib;
       control_flow_analysis = !control_flow_analysis;
+      allow_empty_structured_type_declarations =
+        !allow_empty_structured_type_declarations;
+      allow_function_like_statements = !allow_function_like_statements;
     }
   in
 
   let () =
     let ensure_exists s =
-      if Sys.file_exists s then ()
+      if running_in_jsoo then ()
+      else if Sys.file_exists s then ()
       else
         let () = Printf.eprintf "%s cannot find file %S\n%!" prog s in
         (* Arg.usage speclist usage_msg; *)
@@ -222,32 +279,39 @@ let parse_args () =
   in
 
   let () =
+    if ASTUtils.list_is_empty args.files && Option.is_none args.opn then
+      let () =
+        Printf.eprintf
+          "No files supplied! Run `aslref --help` for information on usage."
+      in
+      raise (Exit 1)
+  in
+
+  let () =
     if !show_version then
       let () =
         Printf.printf "aslref version %s rev %s\n%!" Version.version Version.rev
       in
-      exit 0
+      raise (Exit 0)
   in
   args
 
-let or_exit f =
-  if Printexc.backtrace_status () then f ()
-  else
-    match Error.intercept f () with
-    | Ok res -> res
-    | Error e ->
-        Format.eprintf "%a@." Error.pp_error e;
-        exit 1
-
-let () =
-  let args = parse_args () in
-
+let run_with (args : args) : unit =
   let parser_config =
     let allow_no_end_semicolon = args.allow_no_end_semicolon in
     let allow_expression_elsif = args.allow_expression_elsif in
     let allow_double_underscore = args.allow_double_underscore in
     let allow_unknown = args.allow_unknown in
     let allow_storage_discards = args.allow_storage_discards in
+    let allow_hyphenated_pending_constraint =
+      args.allow_hyphenated_pending_constraint
+    in
+    let allow_local_constants = args.allow_local_constants in
+    let allow_single_arrows = args.allow_single_arrows in
+    let allow_empty_structured_type_declarations =
+      args.allow_empty_structured_type_declarations
+    in
+    let allow_function_like_statements = args.allow_function_like_statements in
     let open Builder in
     {
       allow_no_end_semicolon;
@@ -255,7 +319,25 @@ let () =
       allow_double_underscore;
       allow_unknown;
       allow_storage_discards;
+      allow_hyphenated_pending_constraint;
+      allow_local_constants;
+      allow_single_arrows;
+      allow_empty_structured_type_declarations;
+      allow_function_like_statements;
     }
+  in
+
+  let or_exit f =
+    if Printexc.backtrace_status () then f ()
+    else
+      match Error.intercept f () with
+      | Ok res -> res
+      | Error e ->
+          let module EP = Error.ErrorPrinter (struct
+            let output_format = args.output_format
+          end) in
+          EP.eprintln e;
+          raise (Exit 1)
   in
 
   let extra_main =
@@ -291,7 +373,7 @@ let () =
 
   let ast =
     let open Builder in
-    let added_stdlib = with_stdlib ast in
+    let added_stdlib = if args.no_stdlib then ast else with_stdlib ast in
     if args.no_primitives then added_stdlib
     else with_primitives Native.DeterministicBackend.primitives added_stdlib
   in
@@ -304,25 +386,27 @@ let () =
         Printf.eprintf
           {|"File","Start line","Start col","End line","End col","Exception label","Exception"
 |}
-    | Error.HumanReadable -> ()
+    | Error.HumanReadable | Error.GNU -> ()
   in
 
-  let typed_ast, static_env =
-    let module C = struct
-      let output_format = args.output_format
-      let check = args.strictness
-      let print_typed = args.print_typed || args.print_lisp
-      let use_field_getter_extension = args.use_field_getter_extension
-      let override_mode = args.override_mode
+  let module C = struct
+    let output_format = args.output_format
+    let check = args.strictness
+    let print_typed = args.print_typed || args.print_lisp
+    let use_field_getter_extension = args.use_field_getter_extension
+    let override_mode = args.override_mode
 
-      let use_conflicting_side_effects_extension =
-        args.use_conflicting_side_effects_extension
+    let fine_grained_side_effects =
+      args.use_fine_grained_side_effects
+      || args.use_conflicting_side_effects_extension
 
-      let control_flow_analysis = args.control_flow_analysis
-    end in
-    let module T = Annotate (C) in
-    or_exit @@ fun () -> T.type_check_ast ast
-  in
+    let use_conflicting_side_effects_extension =
+      args.use_conflicting_side_effects_extension
+
+    let control_flow_analysis = args.control_flow_analysis
+  end in
+  let module T = Annotate (C) in
+  let typed_ast, static_env = or_exit @@ fun () -> T.type_check_ast ast in
 
   let () =
     if args.print_typed then
@@ -341,7 +425,8 @@ let () =
     if args.exec then
       let instrumentation = if args.show_rules then true else false in
       or_exit @@ fun () ->
-      Native.interpret ~instrumentation static_env typed_ast
+      let main_name = T.find_main static_env in
+      Native.interpret ~instrumentation static_env main_name typed_ast
     else (0, [])
   in
 
@@ -352,5 +437,10 @@ let () =
         (pp_print_list ~pp_sep:pp_print_cut Instrumentation.SemanticsRule.pp)
         used_rules
   in
+  if exit_code != 0 then raise (Exit exit_code)
 
-  exit exit_code
+let () =
+  try
+    let args = parse_args () in
+    run_with args
+  with Exit n -> if running_in_jsoo then () else exit n

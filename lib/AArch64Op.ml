@@ -23,6 +23,8 @@ type 'op1 unop =
   | Valid (* get Valid bit from PTE entry *)
   | EL0 (* get EL0 bit from PTE entry *)
   | OA (* get OA from PTE entry *)
+  | SetOA (* store OA into PAR_EL1 *)
+  | SetF (* set F to 1 in PAR_EL1 *)
   | Tagged (* get Tag attribute from PTE entry *)
   | CheckCanonical (* Check is a virtual address is canonical *)
   | MakeCanonical (* Make a virtual address canonical *)
@@ -42,6 +44,7 @@ module
     and type 'a constr_op = 'a binop
     and type scalar = S.t
     and type pteval = AArch64PteVal.t
+    and type addrreg = AArch64AddrReg.t
     and type instr = AArch64Base.instruction
   = struct
 
@@ -69,6 +72,8 @@ module
       | Valid -> "Valid"
       | EL0 -> "EL0"
       | OA -> "OA"
+      | SetOA -> "SetOA"
+      | SetF -> "SetF"
       | Tagged -> "Tagged"
       | CheckCanonical -> "CheckCanonical"
       | MakeCanonical -> "MakeCanonical"
@@ -76,14 +81,15 @@ module
 
     type scalar = S.t
     type pteval = AArch64PteVal.t
+    type addrreg = AArch64AddrReg.t
     type instr = AArch64Base.instruction
-    type cst = (scalar,pteval,instr) Constant.t
+    type cst = (scalar,pteval,addrreg,instr) Constant.t
 
     let pp_cst hexa v =
       let module InstrPP = AArch64Base.MakePP(struct
         let is_morello = true
       end) in
-      Constant.pp (S.pp hexa) (AArch64PteVal.pp hexa)
+      Constant.pp (S.pp hexa) (AArch64PteVal.pp hexa) (AArch64AddrReg.pp hexa)
       (InstrPP.dump_instruction) v
 
     open AArch64PteVal
@@ -109,8 +115,8 @@ module
     (* Check that the PAC field of a virtual address is canonical *)
     let checkCanonical =
       let open Constant in function
-      | Symbolic (Virtual {pac}) ->
-          Some (boolToCst (PAC.is_canonical pac))
+      | Symbolic (Virtual a) ->
+          Some (boolToCst (PAC.is_canonical a.pac))
       | _ ->
           None
 
@@ -132,7 +138,7 @@ module
 
     let getel0 = op_get_pteval (fun p -> p.el0 <> 0)
 
-    let gettagged = op_get_pteval (fun p -> Attrs.mem "TaggedNormal" p.attrs)
+    let gettagged = op_get_pteval (fun p -> Attrs.is_tagged p.attrs)
 
     let getoa v =
       let open Constant in
@@ -140,9 +146,21 @@ module
       | PteVal {oa;_} -> Some (Symbolic (oa2symbol oa))
       | _ -> None
 
+    let setoa v =
+      let open Constant in
+      match v with
+      | Symbolic (Physical (s,0)) -> Some (AddrReg { AArch64AddrReg.oa = OutputAddress.PHY s; AArch64AddrReg.f = 0 })
+      | _ -> None
+
+    let setf v =
+      let open Constant in
+      match v with
+      | Symbolic (Physical _) -> Some (AddrReg { AArch64AddrReg.oa = OutputAddress.PHY ""; AArch64AddrReg.f = 1 })
+      | _ -> None
+
     let exit _ = raise Exit
-    let toExtra cst = Constant.map Misc.identity exit exit cst
-    and fromExtra cst = Constant.map Misc.identity exit exit cst
+    let toExtra cst = Constant.map Misc.identity exit exit exit cst
+    and fromExtra cst = Constant.map Misc.identity exit exit exit cst
 
     (* Add a PAC field to a virtual address, this function can only add a PAC
        field if the input pointer is canonical, otherwise it raise an error, it is
@@ -150,9 +168,9 @@ module
     let addOnePAC key pointer modifier =
       let open Constant in
       match pointer with
-      | Symbolic (Virtual {pac}) when not (PAC.is_canonical pac) ->
+      | Symbolic (Virtual a) when not (PAC.is_canonical a.pac) ->
           None
-      | Symbolic (Virtual ({pac; offset} as v)) ->
+      | Symbolic (Virtual ({pac; offset; _} as v)) ->
         let modifier = pp_cst true modifier in
         let pac = PAC.add key modifier offset pac in
         Some (Symbolic (Virtual {v with pac}))
@@ -166,7 +184,7 @@ module
     let addPAC key pointer modifier =
       let open Constant in
       match pointer with
-      | Symbolic (Virtual ({pac; offset} as v)) ->
+      | Symbolic (Virtual ({pac; offset; _} as v)) ->
         let modifier = pp_cst true modifier in
         let pac = PAC.add key modifier offset pac in
         Some (Symbolic (Virtual {v with pac}))
@@ -192,6 +210,8 @@ module
       | Valid -> getvalid
       | EL0 -> getel0
       | OA -> getoa
+      | SetOA -> setoa
+      | SetF -> setf
       | Tagged -> gettagged
       | CheckCanonical -> checkCanonical
       | MakeCanonical -> makeCanonical

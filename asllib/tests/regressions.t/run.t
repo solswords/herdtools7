@@ -79,6 +79,13 @@ Global ignored:
   ASL Grammar error: Obsolete syntax: Discarded storage declaration.
   [1]
 
+  $ aslref shadow-banning-bug.asl
+  File shadow-banning-bug.asl, line 5, characters 4 to 16:
+      var g = 0.0;
+      ^^^^^^^^^^^^
+  ASL Type error: cannot declare already declared element "g".
+  [1]
+
 Constrained-type satisfaction:
   $ cat >type-sat1.asl <<EOF
   > func illegal_f1()
@@ -175,7 +182,7 @@ Runtime checks:
   File runtime-type-sat1.asl, line 3, characters 23 to 24:
     let x: integer {1} = 2 as integer {1};
                          ^
-  ASL Execution error: Mismatch type:
+  ASL Dynamic error: Mismatch type:
     value 2 does not belong to type integer {1}.
   [1]
 
@@ -194,7 +201,7 @@ Runtime checks:
   File runtime-type-sat2.asl, line 2, characters 10 to 18:
     let x = Zeros{4} as bits(size);
             ^^^^^^^^
-  ASL Execution error: Mismatch type:
+  ASL Dynamic error: Mismatch type:
     value 0x0 does not belong to type bits(size).
   [1]
 
@@ -225,7 +232,7 @@ Parameterized integers:
   File bad-underconstrained-ctc.asl, line 3, characters 12 to 13:
     return x[(N as integer {N - 1})];
               ^
-  ASL Execution error: Mismatch type:
+  ASL Dynamic error: Mismatch type:
     value 4 does not belong to type integer {(N - 1)}.
   [1]
   $ aslref bad-underconstrained-return.asl
@@ -259,10 +266,10 @@ Parameterized integers:
   0x00
 
   $ aslref unreachable.asl
-  File unreachable.asl, line 3, characters 2 to 17:
-    Unreachable ();
-    ^^^^^^^^^^^^^^^
-  ASL Dynamic error: Unreachable reached.
+  File unreachable.asl, line 3, characters 2 to 14:
+    unreachable;
+    ^^^^^^^^^^^^
+  ASL Dynamic error: unreachable reached.
   [1]
 
   $ aslref assign-to-global-immutable.asl
@@ -275,7 +282,7 @@ Parameterized integers:
   $ aslref equality.asl
   $ aslref bad-equality.asl
   File bad-equality.asl, line 3, characters 10 to 25:
-    println((1, 2) == (1,2));
+    println (1, 2) == (1,2);
             ^^^^^^^^^^^^^^^
   ASL Type error: Illegal application of operator == on types
     (integer {1}, integer {2}) and (integer {1}, integer {2}).
@@ -285,23 +292,23 @@ Parameterized integers:
   File setter_without_getter.asl, line 6, characters 0 to 3:
   end;
   ^^^
-  ASL Error: Cannot parse.
+  ASL Grammar error: Cannot parse.
   [1]
 
   $ aslref getter_without_setter.asl
   File getter_without_setter.asl, line 6, characters 0 to 3:
   end;
   ^^^
-  ASL Error: Cannot parse.
+  ASL Grammar error: Cannot parse.
   [1]
 
   $ aslref tuple_items.asl
   $ aslref cases_where.asl
   $ aslref duplicated-otherwise.asl
   File duplicated-otherwise.asl, line 7, characters 8 to 12:
-          when 0.0 => println("2.0");
+          when 0.0 => println "2.0";
           ^^^^
-  ASL Error: Cannot parse.
+  ASL Grammar error: Cannot parse.
   [1]
   $ aslref duplicate_expr_record.asl
   File duplicate_expr_record.asl, line 5, characters 12 to 27:
@@ -314,14 +321,21 @@ Parameterized integers:
   File same-precedence.asl, line 6, characters 10 to 15:
     let x = a + b - c;
             ^^^^^
-  ASL Error: Cannot parse.
+  ASL Grammar error: Cannot parse.
   [1]
 
   $ aslref same-precedence2.asl
   File same-precedence2.asl, line 6, characters 10 to 17:
-    let d = a --> b <-> c;
+    let d = a ==> b <=> c;
             ^^^^^^^
-  ASL Error: Cannot parse.
+  ASL Grammar error: Cannot parse.
+  [1]
+
+  $ aslref binop-non-assoc.asl
+  File binop-non-assoc.asl, line 3, characters 6 to 11:
+    - = 3 - 2 - 1;
+        ^^^^^
+  ASL Grammar error: Cannot parse.
   [1]
 
   $ aslref rdiv_checks.asl
@@ -347,7 +361,7 @@ Arrays indexed by enumerations
 
   $ aslref array-lca.asl
   $ aslref array-index-error.asl
-  ASL Execution error: Mismatch type:
+  ASL Dynamic error: Mismatch type:
     value 14 does not belong to type integer {0..4}.
   [1]
 
@@ -409,8 +423,9 @@ Required tests:
   File asl0-patterns.asl, line 7, characters 25 to 29:
       if x[0+:4] IN '10x1' then // invalid
                            ^^^^
-  ASL Error: Cannot parse.
+  ASL Grammar error: Cannot parse.
   [1]
+  $ aslref -0 unreachable-v0.asl
   $ aslref assign1.asl
   $ aslref big-ints.asl
   $ aslref bitfields.asl
@@ -420,7 +435,7 @@ Required tests:
   File concat-empty.asl, line 3, characters 45 to 46:
     let empty_concatenation_should_not_parse = [];
                                                ^
-  ASL Error: Cannot parse.
+  ASL Grammar error: Cannot parse.
   [1]
   $ aslref concat01.asl
   $ aslref concat02.asl
@@ -429,6 +444,11 @@ Required tests:
   $ aslref constrained-types-example.asl
   $ aslref division.asl
   $ aslref exceptions.asl
+  File exceptions.asl, line 73, characters 32 to 37:
+          when COUNTING => assert FALSE;
+                                  ^^^^^
+  ASL Dynamic error: Assertion failed: FALSE.
+  [1]
   $ aslref func1.asl
   $ aslref func2.asl
   $ aslref func3.asl
@@ -461,19 +481,34 @@ Required tests:
   $ aslref subprogram-local-name-clash.asl
   $ aslref string_concat.asl
   $ aslref approx-expr-binop.asl
+  $ aslref asciistr.asl
+  $ aslref asl1-calls-asl0-accessor.asl -0 asl0-accessor.asl
+  $ aslref --no-exec accessor-overloading-1.asl
+  $ aslref accessor-overloading-2.asl
+  nullary setter
+  unary getter
+  unary getter
+  unary getter
+  unary setter
+  $ aslref empty-function.asl
+  File empty-function.asl, line 3, characters 0 to 3:
+  end;
+  ^^^
+  ASL Grammar error: Cannot parse.
+  [1]
 
   $ aslref --no-type-check throw-local-env.asl
   File throw-local-env.asl, line 10, characters 13 to 14:
         assert y == 5; // y should not be found in dynamic environment here
                ^
-  ASL Error: Undefined identifier: 'y'
+  ASL Dynamic error: Undefined identifier: 'y'
   [1]
 
   $ aslref undeclared-variable.asl
   File undeclared-variable.asl, line 3, characters 2 to 5:
     bar = (32 - 46) * 0;
     ^^^
-  ASL Error: Undefined identifier: 'bar'
+  ASL Static error: Undefined identifier: 'bar'
   [1]
 
   $ aslref no-expression-elsif.asl
@@ -483,21 +518,43 @@ Required tests:
   ASL Grammar error: Obsolete syntax: Expression-level 'elsif'.
   [1]
 
+  $ aslref --gnu-errors gnu-errors.asl
+  aslref: gnu-errors.asl:1:0: ASL Warning: the recursive function fact has no recursive limit annotation.
+  aslref: :0:-1: ASL Dynamic error: Mismatch type: value 11 does not belong to type integer {0..9}.
+  [1]
+
+  $ aslref
+  No files supplied! Run `aslref --help` for information on usage.
+  [1]
+
+  $ aslref no-main.asl
+  ASL Dynamic error: no entrypoint supplied. Have you defined `func main() =>
+    integer`, or did you mean to pass `--no-exec`?
+  [1]
+
+  $ aslref main-wrong-type.asl
+  ASL Dynamic error: no entrypoint supplied. Have you defined `func main() =>
+    integer`, or did you mean to pass `--no-exec`?
+  [1]
+
+  $ aslref overloaded-main.asl
+  correct main executed
+
 Base values
   $ aslref base_values.asl
   File base_values.asl, line 5, characters 2 to 28:
     var x: integer {N..M, 42};
     ^^^^^^^^^^^^^^^^^^^^^^^^^^
-  ASL Type error: base value of type integer {42, N..M} cannot be statically
-    determined since it consists of N.
+  ASL Type error: base value of type integer {42, N..M} cannot be symbolically
+    reduced since it consists of N.
   [1]
 
   $ aslref base_values_empty.asl
   File base_values_empty.asl, line 3, characters 2 to 24:
     var x: integer {N..M};
     ^^^^^^^^^^^^^^^^^^^^^^
-  ASL Type error: base value of type integer {N..M} cannot be statically
-    determined since it consists of N.
+  ASL Type error: base value of type integer {N..M} cannot be symbolically
+    reduced since it consists of N.
   [1]
 
   $ aslref base_values_tuple.asl
@@ -508,13 +565,13 @@ Getters/setters
   File nonempty-getter-called-without-slices.asl, line 14, characters 10 to 12:
     let x = f1;
             ^^
-  ASL Error: Undefined identifier: 'f1'
+  ASL Static error: Undefined identifier: 'f1'
   [1]
   $ aslref nonempty-setter-called-without-slices.asl
   File nonempty-setter-called-without-slices.asl, line 14, characters 2 to 4:
     f1 = 4;
     ^^
-  ASL Error: Undefined identifier: 'f1'
+  ASL Static error: Undefined identifier: 'f1'
   [1]
   $ aslref setter_subfield.asl
   $ aslref setter_subslice.asl
@@ -533,19 +590,13 @@ Getters/setters
   File pattern-masks-no-braces.asl, line 4, characters 19 to 24:
     assert ('111' IN '1xx') == TRUE;
                      ^^^^^
-  ASL Error: Cannot parse.
+  ASL Grammar error: Cannot parse.
   [1]
 
 ASLRef Field getter extension
   $ aslref --use-field-getter-extension setter_bitfields.asl
   $ aslref --use-field-getter-extension pstate-exp.asl
-  $ aslref atc-in-types.asl
-  File atc-in-types.asl, line 1, characters 14 to 29:
-  let bv : bits(1 as integer{2}) = Ones{1};
-                ^^^^^^^^^^^^^^^
-  ASL Type error: a pure expression was expected, found 1 as integer {2}, which
-    produces the following side-effects: [PerformsAssertions].
-  [1]
+  $ aslref --no-exec atc-in-types.asl
   $ aslref single-slice.asl
 
 Inherit integer constraints on left-hand sides
@@ -570,7 +621,7 @@ Inherit integer constraints on left-hand sides
   File inherit-integer-constraints-bad-type.asl, line 1, character 0 to line 4,
     character 2:
   type badtype of record {
-      a : integer{-},
+      a : integer{},
       c : integer
   };
   ASL Type error: a pending constrained integer is illegal here.
@@ -582,7 +633,89 @@ Left-hand sides
   File lhs-tuple-fields-same-field.asl, line 8, characters 2 to 4:
     bv.(fld, -, fld) = ('11', TRUE, '11');
     ^^
-  ASL Type error: multiple writes to "bv.fld".
+  ASL Grammar error: multiple writes to "bv.fld".
   [1]
   $ aslref lhs-tuple-same-var.asl
   $ aslref lhs-expressivity.asl
+  $ aslref --allow-hyphenated-pending-constraint hyphenated-pending-constraint.asl
+  $ aslref hyphenated-pending-constraint.asl
+  File hyphenated-pending-constraint.asl, line 3, characters 18 to 21:
+      let x: integer{-} = 5;
+                    ^^^
+  ASL Grammar error: Obsolete syntax: Hyphenated pending constraint.
+  [1]
+  $ aslref local_constants.asl
+  File local_constants.asl, line 8, characters 4 to 12:
+      constant x = 32;
+      ^^^^^^^^
+  ASL Grammar error: Obsolete syntax: Local constant declaration.
+  [1]
+  $ aslref --allow-local-constants local_constants.asl
+
+Outdated syntax
+  $ aslref --allow-single-arrows outdated-implication.asl
+  File outdated-implication.asl, line 6, characters 25 to 26:
+    let z: boolean = x --> z;
+                           ^
+  ASL Static error: Undefined identifier: 'z'
+  [1]
+  $ aslref outdated-implication.asl
+  File outdated-implication.asl, line 6, characters 21 to 24:
+    let z: boolean = x --> z;
+                       ^^^
+  ASL Grammar error: Obsolete syntax: implication with -->
+  [1]
+  $ aslref noreturn.asl
+  File noreturn.asl, line 31, character 0 to line 34, character 4:
+  noreturn func rec_noreturning()
+  begin
+      rec_noreturning();
+  end;
+  ASL Warning: the recursive function rec_noreturning has no recursive limit
+  annotation.
+  $ aslref noreturn_function.asl
+  File noreturn_function.asl, line 2, characters 26 to 28:
+  noreturn func returning() => integer
+                            ^^
+  ASL Grammar error: Cannot parse.
+  [1]
+
+Bounds checks
+  $ aslref bounds-checks-read-bitvector-1.asl
+  ASL Dynamic error: Cannot extract from bitvector of length 0 slice -1+:1.
+  [1]
+  $ aslref bounds-checks-read-bitvector-2.asl
+  ASL Dynamic error: Mismatch type:
+    value 4 does not belong to type integer {0..3}.
+  [1]
+  $ aslref bounds-checks-write-bitvector-1.asl
+  ASL Dynamic error: Cannot extract from bitvector of length 0 slice -1+:1.
+  [1]
+  $ aslref bounds-checks-write-bitvector-2.asl
+  ASL Dynamic error: Mismatch type:
+    value 5 does not belong to type integer {0..3}.
+  [1]
+  $ aslref bounds-checks-read-array-1.asl
+  ASL Dynamic error: Mismatch type:
+    value -1 does not belong to type integer {0..3}.
+  [1]
+  $ aslref bounds-checks-read-array-2.asl
+  ASL Dynamic error: Mismatch type:
+    value 4 does not belong to type integer {0..3}.
+  [1]
+  $ aslref bounds-checks-write-array-1.asl
+  ASL Dynamic error: Mismatch type:
+    value -1 does not belong to type integer {0..3}.
+  [1]
+  $ aslref bounds-checks-write-array-2.asl
+  ASL Dynamic error: Mismatch type:
+    value 4 does not belong to type integer {0..3}.
+  [1]
+  $ aslref bounds-checks-read-zero-width-slice.asl
+  ASL Dynamic error: Mismatch type:
+    value 100 does not belong to type integer {0..3}.
+  [1]
+  $ aslref bounds-checks-write-zero-width-slice.asl
+  ASL Dynamic error: Mismatch type:
+    value 100 does not belong to type integer {0..3}.
+  [1]

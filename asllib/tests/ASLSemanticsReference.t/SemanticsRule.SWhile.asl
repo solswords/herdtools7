@@ -1,13 +1,11 @@
-func limit_loop() => integer{4}
+pure func limit_loop() => integer{4}
 begin
-  println("evaluated limit = ", 4);
   return 4;
 end;
 
 func test_condition(i: integer) => boolean
 begin
-  constant limit = 3;
-  println("testing ", i, " <= ", limit);
+  let limit = 3;
   return i <= limit;
 end;
 
@@ -15,7 +13,7 @@ func main () => integer
 begin
   var i: integer = 0;
   while test_condition(i) looplimit limit_loop() do
-    println("i = ", i);
+    println "i = ", i;
     assert i <= 3;
     i = i + 1;
    end;

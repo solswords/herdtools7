@@ -1,11 +1,25 @@
 \chapter{Formal System \label{chap:FormalSystem}}
 
-In this part, we define the mathematical concepts and notations used throughout.
-We start by defining general mathematical concepts
-and then describe how sets of rules formally define functions and relations.
+This chapter defines the mathematical concepts and notations used throughout this
+reference.
 
-\section{Mathematical Definitions and Notations}
+\ChapterOutline
+\begin{itemize}
+  \item \secref{Mathematical Definitions and Notations} defines general mathematical concepts and notations;
+  \item \secref{Inference Rules} defines the concept of \emph{inference rules};
+  \item \secref{Transition Judgments} explains how \emph{transition judgments} can be used to represent
+        relations and functions;
+  \item \secref{Configurations} introduces \emph{configurations} as a way of representing compound data;
+  \item \secref{FlavoursOfEqualityInRules} explains the kinds of equality notations that are used to
+        convey intention in inference rules;
+  \item \secref{ASTNotations} introduces AST-related notations that are used in inference rules;
+  \item \secref{How to Parse Inference Rules Efficiently} explains how to efficiently parse inference rules,
+  \item \secref{ShortCircuitRuleMacros} defines rule macros, which compactly represent multiple rules;
+  \item \secref{ConventionallyUsedJudgments} presents commonly used judgments and notations; and
+  \item \secref{Rule Naming} explains the naming scheme for inference rules used in this reference.
+\end{itemize}
 
+\section{Mathematical Definitions and Notations\label{sec:Mathematical Definitions and Notations}}
 \hypertarget{def-triangleq}{}
 We use $\triangleq$ to define mathematical concepts.
 
@@ -16,7 +30,7 @@ We define the following sets:
 }
 
 \item \hypertarget{def-Npos}{
-    $\Npos$ is the set of natural numbers, excluding $0$.
+    $\Npos$ is the set of positive natural numbers (that is, excluding $0$).
 }
 
 \item
@@ -29,7 +43,7 @@ We define the following sets:
     $\Q$ is the set of rationals.
 }
 
-\hypertarget{def-bool}{}
+\hypertarget{def-Bool}{}
 \hypertarget{def-false}{}
 \hypertarget{def-true}{}
 \item $\Bool$ is the set of ASL Boolean literals, which consists of $\True$ and $\False$.
@@ -59,6 +73,9 @@ For a pair of Boolean values $a,b\in\Bool$, we define $a \land b \triangleq \lan
 and $a \lor b \triangleq \lor\{a, b\}$.
 Finally, $\neg\True\triangleq\False$ and $\neg\False\triangleq\True$.
 
+\hypertarget{def-bit}{}
+\item $\Bit$ stands for $\{0,1\}$. That is, a single bit.
+
 \item
 \hypertarget{def-identifier}{}
     $\Identifiers$ is the set of all ASL identifiers.
@@ -75,7 +92,7 @@ Finally, $\neg\True\triangleq\False$ and $\neg\False\triangleq\True$.
 We utilize the notation $\overname{a}{b}$ to enable us to name the mathematical term $a$ as $b$ so that
 we can refer to it in text. We especially use this to name the input arguments and
 output results of functions and relations. For example, the input argument of $\sign$,
-which is defined next is named $q$.
+defined next, is named $q$.
 
 \hypertarget{def-sign}{}
 \begin{definition}[Sign of a Rational Number]
@@ -100,10 +117,10 @@ which is defined next is named $q$.
 
 \hypertarget{def-pow}{}
 \begin{definition}[Powerset]
-  The \emph{powerset} of a set $A$, denoted as $\pow{A}$, is the set of all subsets of $A$, including the empty set and $A$ itself:
-  \[
-     \pow{A} \triangleq \{ B \;|\; B \subseteq A\} \enspace.
-  \]
+The \emph{powerset} of a set $A$, denoted as $\pow{A}$, is the set of all subsets of $A$, including the empty set and $A$ itself:
+\[
+    \pow{A} \triangleq \{ B \;|\; B \subseteq A\} \enspace.
+\]
 \end{definition}
 
 \hypertarget{def-powfin}{}
@@ -183,22 +200,22 @@ is the list of input-output pairs for $f$, given in any order:
 
 Throughout this document, we will annotate arguments of relations and functions, wherever it is useful,
 by writing a name or an expression above the corresponding argument type.
-This makes convenient to refer to arguments by referring to the corresponding names and helps identify
+This makes it convenient to refer to arguments by referring to the corresponding names, and helps identify
 the expressions corresponding to the arguments.
 For example,
 \[
-    \textsf{choice} : \overname{\Bool}{b} \cartimes \overname{T}{x} \cartimes \overname{T}{y} \rightarrow \overname{T}{z}
+    \choicename : \overname{\Bool}{b} \cartimes \overname{T}{x} \cartimes \overname{T}{y} \rightarrow \overname{T}{z}
 \]
 defines a function type and lets us refer to the first argument as $b$, the second argument as $x$,
 the third argument as $y$, and to the result as $z$.
 
 A \emph{parametric function} is a function whose domain is not a priori fixed but rather
-parameterized by the type of its arguments. An example is the $\textsf{choice}$ function where the type $T$ of
+parameterized by the type of its arguments. An example is the $\choicename$ function where the type $T$ of
 $x$, $y$, and $z$ is unspecified and inferred from the context where the function is used.
 
 \hypertarget{def-choice}{}
 \begin{definition}[Choice]
-The parametric function $\textsf{choice} : \overname{\Bool}{b} \cartimes \overname{T}{x} \cartimes \overname{T}{y} \rightarrow \overname{T}{z}$,
+The parametric function $\choicename : \overname{\Bool}{b} \cartimes \overname{T}{x} \cartimes \overname{T}{y} \rightarrow \overname{T}{z}$,
 is defined as follows:
 \[
   \choice{\vb}{x}{y} \triangleq
@@ -315,24 +332,6 @@ The parametric function $\listrange : T^* \rightarrow \N^*$ returns the ($1$-bas
 \]
 \end{definition}
 
-% \hypertarget{def-filterlist}{}
-% \begin{definition}[Filtering a List]
-% The parametric function
-% \[
-% \filterlist : \overname{T^*}{l} \times \overname{(T \rightarrow \Bool)}{p} \rightarrow T^*
-% \]
-% retains the elements of the list $l$ for which the predicate $p$ returns $\True$:
-% \[
-% \begin{array}{rcl}
-% \filterlist(\emptylist, p) &\triangleq& \emptylist\\
-% \filterlist([h] \concat t, p) &\triangleq& \begin{cases}
-% [h]\concat \filterlist(t) & \text{if }p(h) = \True\\
-%  \filterlist(t) & \text{else}\\
-% \end{cases}\\
-% \end{array}
-% \]
-% \end{definition}
-
 \hypertarget{def-unziplist}{}
 \begin{definition}[Unzipping a List of Pairs]
 The parametric function
@@ -419,36 +418,36 @@ type $T$}, or shortly as an \emph{\optional}.
 \end{definition}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section{Inference Rules}
+\section{Inference Rules\label{sec:Inference Rules}}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \hypertarget{def-inferencerule}{}
-An \emph{\inferencerule} (rule, for short) is an implication between a set of logical assertions,
+An \emph{\inferencerule} (rule, for short) is an implication between a list of judgments,
 called the \emph{premises} of the rule,
-and a \emph{conclusion} assertion.
-The conclusion holds when the \underline{conjunction} of its premises holds.
+and a \emph{conclusion} judgment.
+The conclusion holds when the \underline{conjunction} of the rule premises holds.
 
 We use the following rule notation, where $P_{1..k}$ are the rule premises and $C$ is the conclusion:
 \begin{mathpar}
-  \inferrule{P_1 \and \ldots \and P_k}{C}
+\inferrule{P_1 \and \ldots \and P_k}{C}
 \end{mathpar}
 
 For example, the rule \TypingRuleRef{ELit} has one premise:
 \begin{mathpar}
 \inferrule{
-  \annotateliteral{\vv} \typearrow \vt
+  \annotateliteral(\vv) \typearrow \vt
 }{
-  \annotateexpr{\tenv, \ELiteral(\vv)} \typearrow (\vt, \ELiteral(\vv))
+  \annotateexpr(\tenv, \ELiteral(\vv)) \typearrow (\vt, \ELiteral(\vv))
 }
 \end{mathpar}
 
 and the rule \TypingRuleRef{EBinop} (somewhat simplified here) has three premises:
 \begin{mathpar}
 \inferrule{
-  \annotateexpr{\tenv, \veone} \typearrow (\vtone, \veone') \\\\
-  \annotateexpr{\tenv, \vetwo} \typearrow (\vttwo, \vetwo') \\\\
+  \annotateexpr(\tenv, \veone) \typearrow (\vtone, \veone') \\\\
+  \annotateexpr(\tenv, \vetwo) \typearrow (\vttwo, \vetwo') \\\\
   \applybinoptypes(\tenv, \op, \vtone, \vttwo) \typearrow \vt
 }{
-  \annotateexpr{\tenv, \EBinop(\op, \veone, \vetwo)} \typearrow (\vt, \EBinop(\op, \veone', \vetwo'))
+  \annotateexpr(\tenv, \EBinop(\op, \veone, \vetwo)) \typearrow (\vt, \EBinop(\op, \veone', \vetwo'))
 }
 \end{mathpar}
 
@@ -456,23 +455,23 @@ The free variables appearing in the premises and conclusion are interpreted \und
 That is, the rules apply to any values (of the appropriate types) assigned to their free variables.
 %
 For example, the rule \TypingRuleRef{EBinop} applies to any choice of values for the free variables
-$\tenv$ (a static environment),
+$\tenv$ (a \staticenvironmentterm{}),
 $\veone$, $\vetwo$, $\veone'$, $\vetwo'$ (expressions),
 $\vt$, $\vtone$, and $\vttwo$ (types).
 
 \begin{definition}[Grounding]
-Assertions can be \emph{grounded} by substituting their free variables with values.
-A \emph{ground rule} is a rule with all its assertions (premises and conclusion) grounded.
+Judgments can be \emph{grounded} by substituting their free variables with values.
+A \emph{ground rule} is a rule with all its judgments (premises and conclusion) grounded.
 \end{definition}
 For example,
 the following is a grounding of \TypingRuleRef{EBinop}
 \begin{mathpar}
 \inferrule{
-  \annotateexpr{\emptytenv, \ELiteral(\lint(2))} \typearrow (\TInt, \ELiteral(\lint(2))) \\\\
-  \annotateexpr{\emptytenv, \ELiteral(\lint(3))} \typearrow (\TInt, \ELiteral(\lint(3))) \\\\
+  \annotateexpr(\emptytenv, \ELiteral(\LInt(2))) \typearrow (\TInt, \ELiteral(\LInt(2))) \\\\
+  \annotateexpr(\emptytenv, \ELiteral(\LInt(3))) \typearrow (\TInt, \ELiteral(\LInt(3))) \\\\
   \applybinoptypes(\emptytenv, \MUL, \TInt, \TInt) \typearrow \TInt
 }{
-  \annotateexpr{\emptytenv, \EBinop(\MUL, \ELiteral(\lint(2)), \ELiteral(\lint(3)))} \typearrow \\ (\TInt, \EBinop(\MUL, \ELiteral(\lint(2)), \ELiteral(\lint(3))))
+  \annotateexpr(\emptytenv, \EBinop(\MUL, \ELiteral(\LInt(2)), \ELiteral(\LInt(3)))) \typearrow \\ (\TInt, \EBinop(\MUL, \ELiteral(\LInt(2)), \ELiteral(\LInt(3))))
 }
 \end{mathpar}
 obtained by the following substitutions:
@@ -480,10 +479,10 @@ obtained by the following substitutions:
   \textbf{free variable} & \textbf{value}\\
   \hline
   $\tenv$   & $\emptytenv$\\
-  $\veone$  & $\ELiteral(\lint(2))$\\
-  $\veone'$  & $\ELiteral(\lint(2))$\\
-  $\vetwo$  & $\ELiteral(\lint(3))$\\
-  $\vetwo'$  & $\ELiteral(\lint(3))$\\
+  $\veone$  & $\ELiteral(\LInt(2))$\\
+  $\veone'$  & $\ELiteral(\LInt(2))$\\
+  $\vetwo$  & $\ELiteral(\LInt(3))$\\
+  $\vetwo'$  & $\ELiteral(\LInt(3))$\\
   $\vt$    & $\TInt$\\
   $\vtone$    & $\TInt$\\
   $\vttwo$    & $\TInt$\\
@@ -503,54 +502,56 @@ An example of an axiom in the ASL type system is \TypingRuleRef{SPass}:
 \inferrule{}{\annotatestmt(\tenv, \SPass) \typearrow (\SPass,\tenv)}
 \end{mathpar}
 \hypertarget{SemanticsRule.PAll-example}{}
-An example of an axiom in the ASL semantics is \SemanticsRuleRef{PAll}:
+An example of an axiom in the ASL dynamic semantics is \SemanticsRuleRef{PAll}:
 \begin{mathpar}
 \inferrule{}{
-  \evalpattern{\env, \Ignore, \PatternAll} \evalarrow \Normal(\nvbool(\True), \emptygraph)
+  \evalpattern{\env, \Ignore, \PatternAll} \evalarrow \ResultPattern(\nvbool(\True), \emptygraph)
 }
 \end{mathpar}
 
-To show that a specification is correct, with respect to the set of type rules,
+To show that a specification is correct, with respect to the set of type system rules,
 or to show that a specification evaluates to a certain value, with respect to
-the set of semantic rules, we must apply rules to form a \emph{derivation tree}.
+the set of dynamic semantic rules, we must apply those rules to form a \emph{\derivationtreeterm}.
 
 \hypertarget{def-derivationtree}{}
 \begin{definition}[Derivation Tree]
-  A \emph{derivation tree} is a tree whose vertices correspond to ground assertions.
-  More specifically, the leaves of a derivation tree correspond to ground axioms,
-  and an internal vertex corresponds to a ground conclusion of a rule with its children
-  corresponding to the ground premises of the same rule.
+A \emph{\derivationtreeterm} is a tree whose vertices correspond to ground judgments.
+Each non-leaf vertex $c$ with children $p_{1..k}$ correspond to a ground rule
+$\inferrule{c_{1..k}}{c}$ and each leaf vertex $c$ corresponds to a ground axiom rule
+$c$. There is one root vertex, which intuitively is the goal of the derivation tree.
+Derivation trees can be finite or infinite.
+Infinite derivation trees are used for defining diverging evaluations
+(see \secref{Semantics of Diverging Specifications}).
 \end{definition}
 
-\subsection{Transitions\label{sec:transitions}}
+\section{Transition Judgments\label{sec:Transition Judgments}}
 
 We use rules as a structured way for defining relations (and therefore functions, as a special case).
 
-To define a relation $R \subseteq X \cartimes Y$, we use assertions of the form $\termx \rulearrow \termy$
+To define a relation $R \subseteq X \cartimes Y$, we use judgments of the form $\termx \rulearrow \termy$
 where $\termx$ and $\termy$ are logical terms denoting sets of elements from $X$ and $Y$, respectively.
 %
-We call such assertions \emph{transitions}.
-A set of rules $M$ with transition assertions defines the relation
+We call such judgments \emph{transition judgments}.
+A set of rules $M$ with transition judgments defines the relation
 \[
     R = \{ (x,y) \;|\; x \rulearrow y \text{ can be derived from rules in } M\} \enspace.
 \]
 
 For example, the rule \TypingRuleRef{ELit} defines a relation
 between the infinite set of elements of the form
-$\annotateexpr{\tenv, \ELiteral(\vv)}$ (for the
+$\annotateexpr(\tenv, \ELiteral(\vv))$ (for the
 infinite choice of values for the free variables $\tenv$ and
 $\vv$) to the infinite set of pairs of the form $(\vt,
 \ELiteral(\vv))$, such that the premise holds.
 
 \paragraph{Mutual Exclusion Principle:}
-Our rules follow (with very few deviations, which we point out
-in context) a mutual exclusion principle, where each rule
+Our rules follow a mutual exclusion principle, where each rule
 defines a relation disjoint from the ones defined by the other
-rules.  This makes it easy to determine the rule responsible
+rules. This makes it easy to determine the rule responsible
 for a given transition.
 
 \hypertarget{def-configuration}{}
-\subsection{Configurations}
+\section{Configurations\label{sec:Configurations}}
 
 \hypertarget{def-configdomain}{}
 Our relations range over compound values. That is, values that often nest tuples and lists inside other tuples and lists.
@@ -563,10 +564,10 @@ We refer to configurations at the origin of a transition as \emph{input configur
 configurations at the destination of a transition as \emph{output transitions}.
 
 For example, the conclusion of the rule \TypingRuleRef{ELit} has \\
-$\annotateexpr{\tenv, \ELiteral(\vv)}$ as its input configuration
+$\annotateexpr(\tenv, \ELiteral(\vv))$ as its input configuration
 and $(\vt, \ELiteral(\vv))$ as its output configuration.
 Further, \\
-$\configdomain{\annotateexpr{\tenv, \ELiteral(\vv)}} = \textit{annotate\_expr}$,
+$\configdomain{\annotateexpr(\tenv, \ELiteral(\vv))} = \textit{annotate\_expr}$,
 while the output configuration does not have a configuration domain, since it is an unlabelled pair.
 
 Our rules always make use of labelled input configurations. This makes it easier to ensure
@@ -594,19 +595,19 @@ uses an ignore variable to stand for the value being matched by a \texttt{-} pat
 Since the rule does not need to refer to the value, we do not name it and use an ignore variable
 instead.
 
-\subsection{Flavors of Equality In Rules \label{sec:FlavoursOfEqualityInRules}}
+\section{Flavors of Equality In Rules\label{sec:FlavoursOfEqualityInRules}}
 This section explains the equality notations used in rules, two of which are used in \SemanticsRuleRef{ECond},
 shown here:
 \begin{mathpar}
 \inferrule{
-  \evalexpr{\env, \econd} \evalarrow \Normal(\mcond, \envone) \OrAbnormal\\\\
+  \evalexpr(\env, \econd) \evalarrow \ResultExpr(\mcond, \envone) \OrAbnormal\\\\
   \mcond \eqname (\nvbool(\vb), \vgone)\\
   \vep \eqdef \choice{\vb}{\veone}{\vetwo}\\\\
-  \evalexpr{\envone, \vep} \evalarrow \Normal((\vv, \vgtwo), \newenv)  \OrAbnormal\\\\
+  \evalexpr(\envone, \vep) \evalarrow \ResultExpr((\vv, \vgtwo), \newenv)  \OrAbnormal\\\\
   \vg \eqdef \ordered{\vgone}{\aslctrl}{\vgtwo}
 }{
-  \evalexpr{\env, \overname{\ECond(\econd, \veone, \vetwo)}{\ve}} \evalarrow
-  \Normal((\vv, \vg), \newenv)
+  \evalexpr(\env, \overname{\ECond(\econd, \veone, \vetwo)}{\ve}) \evalarrow
+  \ResultExpr((\vv, \vg), \newenv)
 }
 \end{mathpar}
 
@@ -640,41 +641,46 @@ shown here:
   In \SemanticsRuleRef{ECond}, we know from the definition of $\evalexpr$ that
   $\mcond$ is a pair datatype.
   Therefore, writing $\mcond \eqname (\nvbool(\vb), \vgone)$ allows us to name each component of this pair
-  and then refer to it, while \hyperlink{def-ignore}{ignoring} the static environment component.
+  and then refer to it, while \hyperlink{def-ignore}{ignoring} the \staticenvironmentterm{} component.
   Similarly, if $v$ is a non-empty list, then $v \eqname [h] + t$ deconstructs the list into the
   head of the list $h$ and its tail $t$.
   Given that a variable $v$ represents a list, we write $v \eqname v_{1..k}$ to list its elements and allow
   referring to them by index.
 
-  \hypertarget{def-eqdef}{}
-  \item[Definition / ``Define as'':] the notation $\vx \eqdef \ve$ denotes that $\vx$ is a new name serving as an alias for the expression $\ve$.
-  For example, in the rule \SemanticsRuleRef{ECond}, we use $\vg$ to name the mathematical expression
-  $\ordered{\vgone}{\aslctrl}{\vgtwo}$.
-  Aliases allow us to break down complex expressions, but rules can always be rewritten without them,
-  by inlining their right-hand sides:
+\hypertarget{def-eqdef}{}
+\item[Definition / ``Define as'':] the notation $\vx \eqdef \ve$ denotes that $\vx$ is a new name serving as an alias for the expression $\ve$.
+For example, in the rule \SemanticsRuleRef{ECond}, we use $\vg$ to name the mathematical expression
+$\ordered{\vgone}{\aslctrl}{\vgtwo}$.
+Aliases allow us to break down complex expressions, but rules can always be rewritten without them,
+by inlining their right-hand sides:
 \begin{mathpar}
 \inferrule{
-  \evalexpr{\env, \econd} \evalarrow \Normal(\mcond, \envone) \OrAbnormal\\\\
+  \evalexpr(\env, \econd) \evalarrow \ResultExpr(\mcond, \envone) \OrAbnormal\\\\
   \mcond \eqname (\nvbool(\vb), \vgone)\\
-  \evalexpr{\envone, \choice{\vb}{\veone}{\vetwo}} \evalarrow \Normal((\vv, \vgtwo), \newenv) \OrAbnormal
+  \evalexpr(\envone, \choice{\vb}{\veone}{\vetwo}) \evalarrow \ResultExpr((\vv, \vgtwo), \newenv) \OrAbnormal
 }{
-  \evalexpr{\env, \overname{\ECond(\econd, \veone, \vetwo)}{\ve}} \evalarrow
-  \Normal((\vv, \ordered{\vgone}{\aslctrl}{\vgtwo}), \newenv)
+  {
+  \begin{array}{r}
+  \evalexpr(\env, \overname{\ECond(\econd, \veone, \vetwo)}{\ve}) \evalarrow\\
+  \ResultExpr((\vv, \ordered{\vgone}{\aslctrl}{\vgtwo}), \newenv)
+  \end{array}
+  }
 }
 \end{mathpar}
 \end{description}
 
-\subsection{AST-related Notations}
+\section{AST-related Notations\label{sec:ASTNotations}}
 
 When deconstructing AST record nodes such as $\{f_1:t_1,\ldots,f_k:t_k\}$,
 we sometimes only care about a subset of the fields $\{f_{i_1},\ldots,f_{i_m}\} \subset \{f_{1..k}\}$.
 In such cases, we write $\{f_{i_1}:t_{i_1},\ldots,f_{i_m}:t_{i_m},\ldots\}$,
 where $\ldots$ stands for fields that are irrelevant for the rule.
 
-For example, the \func\ non-terminal is
+For example, the \func{} non-terminal is
 of a record type and has the following fields:
 $\funcname$, $\funcparameters$, $\funcargs$, $\funcbody$, $\funcreturntype$, $\funcsubprogramtype$,
-$\funcrecurselimit$, and $\funcbuiltin$.
+$\funcrecurselimit$, and \\
+$\funcbuiltin$.
 The notation $\{ \funcbody:\vbody,\ \funcargs:\vargdecls, \ldots \}$
 allows us to deconstruct a given \func\ node by matching only the $\funcbody$ and $\funcargs$ fields.
 
@@ -683,28 +689,27 @@ Recall that a subset of AST nodes are either labels or labelled tuples.
 The partial function $\astlabel$ returns the label $\vl\in\astlabels$ of an AST node, when it exists.
 For example, $\astlabel(\TBool) = \TBool$ and $\astlabel(\TNamed(\vx)) = \TNamed$.
 
-\subsection{How to Parse Rules Efficiently}
+\section{How to Parse Inference Rules Efficiently\label{sec:How to Parse Inference Rules Efficiently}}
 Consider the following examples, which is a simplified version of \SemanticsRuleRef{Binop}
 \begin{mathpar}
-  \inferrule{\op \not\in \{\BAND, \BOR, \IMPL\}\\\\
-    \evalexpr{ \env, \veone} \evalarrow \Normal(\vmone, \envone) \\\\
-    \evalexpr{ \envone, \vetwo } \evalarrow \Normal(\vmtwo, \newenv) \\\\
-    \vmone \eqname (\vvone, \vgone) \\
-    \vmtwo \eqname (\vvtwo, \vgtwo) \\
-    \binoprel(\op, \vvone, \vvtwo) \evalarrow \vv \\\\
-    \vg \eqdef \vgone \parallelcomp \vgtwo
-  }
-  {
-    \evalexpr{ \env, \EBinop(\op, \veone, \vetwo) } \evalarrow
-    \Normal((\vv, \vg), \newenv)
-  }
+\inferrule{\op \not\in \{\BAND, \BOR, \IMPL\}\\\\
+  \evalexpr( \env, \veone) \evalarrow \ResultExpr(\vmone, \envone) \\\\
+  \evalexpr( \envone, \vetwo ) \evalarrow \ResultExpr(\vmtwo, \newenv) \\\\
+  \vmone \eqname (\vvone, \vgone) \\
+  \vmtwo \eqname (\vvtwo, \vgtwo) \\
+  \binoprel(\op, \vvone, \vvtwo) \evalarrow \vv \\\\
+  \vg \eqdef \vgone \parallelcomp \vgtwo
+}{
+  \evalexpr( \env, \EBinop(\op, \veone, \vetwo) ) \evalarrow
+  \ResultExpr((\vv, \vg), \newenv)
+}
 \end{mathpar}
 
 To parse a rule, start by examining the conclusion and the variables appearing in the rule.
 In this case, the rule describes a transition from an input configuration \\
-$\evalexpr{ \env, \EBinop(\op, \veone, \vetwo) }$,
-whose configuration domain is \texttt{eval\_expr}, to an output configuration $\Normal((\vv, \vg), \newenv)$
-whose configuration domain is $\Normal$.
+$\evalexpr( \env, \EBinop(\op, \veone, \vetwo) )$,
+whose configuration domain is \texttt{eval\_expr}, to an output configuration $\ResultExpr((\vv, \vg), \newenv)$
+whose configuration domain is $\ResultExpr$.
 %
 A rule uses the free variables appearing in the input configuration of the conclusion
 ($\env$, $\op$, $\veone$, and $\vetwo$ in our example),
@@ -714,23 +719,23 @@ of the conclusion ($\vv$, $\vg$, and $\newenv$, in our example).
 Now, scan the premises in order to see where $\env$, $\op$, $\veone$, and $\vetwo$ are used and how
 premises assign values to $\vv$, $\vg$, and $\newenv$.
 %
-In this case, $\vv$ is assigned as the result of the transition assertion
+In this case, $\vv$ is assigned as the result of the transition judgment
 $\binoprel(\op, \vvone, \vvtwo) \evalarrow \vv$,
 $\vg$ is assigned the expression $\vgone \parallelcomp \vgtwo$,
-and $\newenv$ is assigned as the result of the transition assertion
-$\evalexpr{ \envone, \vetwo } \evalarrow \Normal(\vmtwo, \newenv)$.
+and $\newenv$ is assigned as the result of the transition judgment
+$\evalexpr( \envone, \vetwo ) \evalarrow \ResultExpr(\vmtwo, \newenv)$.
 %
 Notice that to assign values to the variables $\vv$, $\vg$, and $\newenv$,
 intermediate values have to be assigned first.
-For example, $\evalexpr{ \env, \veone} \evalarrow \Normal(\vmone, \envone)$
+For example, $\evalexpr( \env, \veone) \evalarrow \ResultExpr(\vmone, \envone)$
 assigned values to $\envone$, which is then used by the transition \\
-$\evalexpr{ \envone, \vetwo } \evalarrow \Normal(\vmtwo, \newenv)$.
+$\evalexpr( \envone, \vetwo ) \evalarrow \ResultExpr(\vmtwo, \newenv)$.
 Similarly, $\vg$ requires first assigning values to $\vgone$ and $\vgtwo$,
 which are components of the previously assigned variables $\vmone$ and $\vmtwo$.
 
-\subsection{Short-Circuit Rule Macros\label{sec:ShortCircuitRuleMacros}}
-
-\emph{Short-circuit rule macros}, or \emph{rule macros}, for short, allow us to succinctly define sets of rules.
+\hypertarget{def-shortcircuitrulemacro}{}
+\section{Short-circuit Rule Macros\label{sec:ShortCircuitRuleMacros}}
+\emph{\Shortcircuitrulemacros}, or \emph{rule macros}, for short, allow us to succinctly define sets of rules.
 Specifically, they allow us to capture situations where
 transitions have two alternative output configurations.
 If the transition results in the first of the alternative output configurations, the following premises are considered.
@@ -776,7 +781,7 @@ Intuitively, if $C$ transitions to $C'$ then $\sslash E$ can be ignored
 and the rule is interpreted as usual (Option 1).
 However, if $C$ transitions into $E$ (Option 2) then the premises $\XQ$ are ignored,
 thereby short-circuiting the rule, and the input configuration
-in the conclusion also transitions into $E$.
+in the conclusion transitions into $E$.
 
 We allow more than one premise to include short-circuiting alternatives and also
 a single premise to include several alternatives.
@@ -827,115 +832,163 @@ In English prose, we use
 As an example, consider the rule \SemanticsRuleRef{Binop}.
 This time, not simplified:
 \begin{mathpar}
-  \inferrule{\op \not\in \{\BAND, \BOR, \IMPL\}\\\\
-    \evalexpr{ \env, \veone} \evalarrow \Normal(\vmone, \envone) \OrAbnormal \\\\
-    \evalexpr{ \envone, \vetwo } \evalarrow \Normal(\vmtwo, \newenv) \OrAbnormal \\\\
-    \vmone \eqname (\vvone, \vgone) \\
-    \vmtwo \eqname (\vvtwo, \vgtwo) \\
-    \binoprel(\op, \vvone, \vvtwo) \evalarrow \vv \terminateas \DynErrorConfig\\\\
-    \vg \eqdef \vgone \parallelcomp \vgtwo
-  }
-  {
-    \evalexpr{ \env, \EBinop(\op, \veone, \vetwo) } \evalarrow
-    \Normal((\vv, \vg), \newenv)
-  }
+\inferrule{\op \not\in \{\BAND, \BOR, \IMPL\}\\\\
+  \evalexpr( \env, \veone) \evalarrow \ResultExpr(\vmone, \envone) \OrAbnormal \\\\
+  \evalexpr( \envone, \vetwo ) \evalarrow \ResultExpr(\vmtwo, \newenv) \OrAbnormal \\\\
+  \vmone \eqname (\vvone, \vgone) \\
+  \vmtwo \eqname (\vvtwo, \vgtwo) \\
+  \binoprel(\op, \vvone, \vvtwo) \evalarrow \vv \terminateas \DynErrorConfig\\\\
+  \vg \eqdef \vgone \parallelcomp \vgtwo
+}{
+  \evalexpr( \env, \EBinop(\op, \veone, \vetwo) ) \evalarrow
+  \ResultExpr((\vv, \vg), \newenv)
+}
 \end{mathpar}
 
 In this rule, $\ThrowingConfig$ and $\DynErrorConfig$ are just shorthand notations for
 actual configurations, which are properly defined in \chapref{Semantics}.
-Intuitively, the alternative configurations $\ThrowingConfig$ and $\DynErrorConfig$
-represent situations where a transition may result in a raised exception and a dynamic error,
-respectively.
+Intuitively, the alternative configurations $\ThrowingConfig$, $\DynErrorConfig$,
+and $\DivergingConfig$
+represent situations where a transition may result in a raised exception,
+a \dynamicerrorterm, and a diverging evaluation, respectively.
 
 One may first read the rule ignoring these alternative configurations, to see how the
 goal of transitioning into the output configuration appearing in the conclusion ---
-$\Normal((\vv, \vg), \newenv)$ --- is achieved.
-Then, re-reading the rule would indicate where exceptions and dynamic errors may result
-in other output configurations.
+$\ResultExpr((\vv, \vg), \newenv)$ --- is achieved.
+Then, re-reading the rule would indicate where exceptions, \dynamicerrorsterm,
+and diverging evaluation may result in other output configurations.
 %
-For example, if the first transition assertion results in a throwing configuration $\ThrowingConfig$
+For example, if the first transition judgment results in a throwing configuration $\ThrowingConfig$
 then the output configuration of the conclusion is also $\ThrowingConfig$.
 This corresponds to the following rule in the expanded macro:
 
 \begin{mathpar}
-  \inferrule{\op \not\in \{\BAND, \BOR, \IMPL\}\\\\
-    \evalexpr{ \env, \veone} \evalarrow \ThrowingConfig
-  }
-  {
-    \evalexpr{ \env, \EBinop(\op, \veone, \vetwo) } \evalarrow
-    \ThrowingConfig
-  }
+\inferrule{\op \not\in \{\BAND, \BOR, \IMPL\}\\\\
+  \evalexpr( \env, \veone) \evalarrow \ThrowingConfig
+}{
+  \evalexpr( \env, \EBinop(\op, \veone, \vetwo) ) \evalarrow
+  \ThrowingConfig
+}
 \end{mathpar}
 
-Similarly, if the first transition assertion results in a dynamic error, the output configuration of
-the conclusion is that dynamic error, which corresponds to the following rule in the expansion:
+Similarly, if the first transition judgment results in a \DynamicErrorConfigurationTerm, the output configuration of
+the conclusion is \DynamicErrorConfigurationTerm, which corresponds to the following rule in the expansion:
 \begin{mathpar}
-  \inferrule{\op \not\in \{\BAND, \BOR, \IMPL\}\\\\
-    \evalexpr{ \env, \veone} \evalarrow \DynErrorConfig
-  }
-  {
-    \evalexpr{ \env, \EBinop(\op, \veone, \vetwo) } \evalarrow
-    \DynErrorConfig
-  }
+\inferrule{\op \not\in \{\BAND, \BOR, \IMPL\}\\\\
+  \evalexpr( \env, \veone) \evalarrow \DynErrorConfig
+}{
+  \evalexpr( \env, \EBinop(\op, \veone, \vetwo) ) \evalarrow
+  \DynErrorConfig
+}
+\end{mathpar}
+
+Finally, if the first transition judgment results in a diverging configuration, the output configuration of
+the conclusion is also a diverging configuration, which corresponds to the following rule in the expansion:
+\begin{mathpar}
+\inferrule{\op \not\in \{\BAND, \BOR, \IMPL\}\\\\
+  \evalexpr( \env, \veone) \evalarrow \DivergingConfig
+}{
+  \evalexpr( \env, \EBinop(\op, \veone, \vetwo) ) \evalarrow
+  \DivergingConfig
+}
 \end{mathpar}
 
 The following rules correspond to the cases where the first transition results in \\
-$\Normal(\vmone, \envone)$, but the second transition assertion results in either
-$\ThrowingConfig$ or $\DynErrorConfig$, respectively:
+$\ResultExpr(\vmone, \envone)$, but the second transition judgment results in either
+$\ThrowingConfig$, $\DynErrorConfig$, or $\DivergingConfig$, respectively:
 \begin{mathpar}
-  \inferrule{\op \not\in \{\BAND, \BOR, \IMPL\}\\\\
-    \evalexpr{ \env, \veone} \evalarrow \Normal(\vmone, \envone) \\\\
-    \evalexpr{ \envone, \vetwo } \evalarrow \ThrowingConfig
-  }
-  {
-    \evalexpr{ \env, \EBinop(\op, \veone, \vetwo) } \evalarrow
-    \ThrowingConfig
-  }
+\inferrule{\op \not\in \{\BAND, \BOR, \IMPL\}\\\\
+  \evalexpr( \env, \veone) \evalarrow \ResultExpr(\vmone, \envone) \\\\
+  \evalexpr( \envone, \vetwo ) \evalarrow \ThrowingConfig
+}{
+  \evalexpr( \env, \EBinop(\op, \veone, \vetwo) ) \evalarrow
+  \ThrowingConfig
+}
 \end{mathpar}
 
 \begin{mathpar}
-  \inferrule{\op \not\in \{\BAND, \BOR, \IMPL\}\\\\
-    \evalexpr{ \env, \veone} \evalarrow \Normal(\vmone, \envone) \\\\
-    \evalexpr{ \envone, \vetwo } \evalarrow \DynErrorConfig
-  }
-  {
-    \evalexpr{ \env, \EBinop(\op, \veone, \vetwo) } \evalarrow
-    \DynErrorConfig
-  }
+\inferrule{\op \not\in \{\BAND, \BOR, \IMPL\}\\\\
+  \evalexpr( \env, \veone) \evalarrow \ResultExpr(\vmone, \envone) \\\\
+  \evalexpr( \envone, \vetwo ) \evalarrow \DynErrorConfig
+}{
+  \evalexpr( \env, \EBinop(\op, \veone, \vetwo) ) \evalarrow
+  \DynErrorConfig
+}
 \end{mathpar}
 
-Expanding the last transition assertion, gives us the case:
 \begin{mathpar}
-  \inferrule{\op \not\in \{\BAND, \BOR, \IMPL\}\\\\
-    \evalexpr{ \env, \veone} \evalarrow \Normal(\vmone, \envone) \\\\
-    \evalexpr{ \envone, \vetwo } \evalarrow \Normal(\vmtwo, \newenv) \\\\
-    \vmone \eqname (\vvone, \vgone) \\
-    \vmtwo \eqname (\vvtwo, \vgtwo) \\
-    \binoprel(\op, \vvone, \vvtwo) \evalarrow \DynErrorConfig
-  }
-  {
-    \evalexpr{ \env, \EBinop(\op, \veone, \vetwo) } \evalarrow
-    \DynErrorConfig
-  }
+\inferrule{\op \not\in \{\BAND, \BOR, \IMPL\}\\\\
+  \evalexpr( \env, \veone) \evalarrow \ResultExpr(\vmone, \envone) \\\\
+  \evalexpr( \envone, \vetwo ) \evalarrow \DivergingConfig
+}{
+  \evalexpr( \env, \EBinop(\op, \veone, \vetwo) ) \evalarrow
+  \DivergingConfig
+}
+\end{mathpar}
+
+Expanding the last transition judgment, gives us the case:
+\begin{mathpar}
+\inferrule{\op \not\in \{\BAND, \BOR, \IMPL\}\\\\
+  \evalexpr( \env, \veone) \evalarrow \ResultExpr(\vmone, \envone) \\\\
+  \evalexpr( \envone, \vetwo ) \evalarrow \ResultExpr(\vmtwo, \newenv) \\\\
+  \vmone \eqname (\vvone, \vgone) \\
+  \vmtwo \eqname (\vvtwo, \vgtwo) \\
+  \binoprel(\op, \vvone, \vvtwo) \evalarrow \DynErrorConfig
+}{
+  \evalexpr( \env, \EBinop(\op, \veone, \vetwo) ) \evalarrow
+  \DynErrorConfig
+}
 \end{mathpar}
 
 All these cases are succinctly encoded in a single rule with the alternative output configurations.
 
-\subsection{Boolean Transition Assertions}
-\hypertarget{def-booltrans}{}
-We define the following rules to allow us to treat assertions as transition assertions:
-\begin{mathpar}
-  \inferrule[bool\_trans\_true]{}{ \booltrans{\True} \booltransarrow\True }
-  \and
-  \inferrule[bool\_trans\_false]{}{ \booltrans{\False} \booltransarrow\False }
-\end{mathpar}
-This is useful in that it allows us to use assertions in rule macros.
+\section{Conventionally-used Judgments and Notations\label{sec:ConventionallyUsedJudgments}}
+We now present judgments used conventionally in this reference.
 
-\subsection{Assertions Over Optional Data Types}
+\subsection{Checked Transitions\label{sec:Checked Transitions}}
+\hypertarget{def-checktrans}{}
+The function
+\[
+\checktransname(\overname{\Bool}{\vb}, \overname{\Strings}{\vcode}) \aslto \{\True\}
+\cup\ \overname{\TTypeError}{\TypeErrorConfig}\ \cup\ \overname{\TDynError}{\DynErrorConfig}
+\]
+takes a Boolean value $\vb$ and an error code $\vcode$
+and returns $\True$ when $\vb$ is $\True$.
+Otherwise, the result is either a \typingerrorterm{} or a \dynamicerrorterm{},
+based on the error code (see \chapref{Errors}).
+%
+This is used to assert that a condition that holds.
+
+\begin{mathpar}
+\inferrule[check\_trans\_true]{}{ \checktrans{\True}{\vcode} \checktransarrow \True }
+\end{mathpar}
+
+\begin{mathpar}
+\inferrule[check\_trans\_false\_type]{
+  \vcode\text{ is a \typingerrorterm{} code}
+}{ \checktrans{\False}{\vcode} \checktransarrow \TypeErrorVal{\vcode} }
+\end{mathpar}
+
+\begin{mathpar}
+\inferrule[check\_trans\_false\_dynamic]{
+  \vcode\text{ is a \dynamicerrorterm{} code}
+}{ \checktrans{\False}{\vcode} \checktransarrow \DynamicErrorVal{\vcode} }
+\end{mathpar}
+
+\subsection{Boolean Transition Judgments}
+\hypertarget{def-booltrans}{}
+We define the following rules to allow us to treat Boolean values as transition judgments:
+\begin{mathpar}
+\inferrule[bool\_trans\_true]{}{ \booltrans(\True) \booltransarrow\True }
+\and
+\inferrule[bool\_trans\_false]{}{ \booltrans(\False) \booltransarrow\False }
+\end{mathpar}
+
+\subsection{Judgments Over Optional Data Types}
 \hypertarget{def-mapopt}{}
 Optional data types are prevalent in the AST.
-To facilitate transition assertions over optional data types,
-we introduce the parametric function,
+To facilitate transition judgments over optional data types,
+we introduce the following parametric function,
 which accepts a one-argument relation (or function) $f : A \aslrel B$
 and applies it to an optional value $A?$:
 \[
@@ -972,7 +1025,20 @@ and applies it to an optional value $A?$:
 }
 \end{mathpar}
 
-\subsection{Rule Naming}
+\subsection{Conventional Notations}
+\hypertarget{def-wrapline}{}
+\begin{itemize}
+\item
+The notation $\wrappedline$ denotes that a line that is longer than the page width continues on the next line.
+
+\hypertarget{def-commonprefixline}{}
+\item The notation $\commonprefixline$ serves as a visual aid to delimit a common prefix of premises shared by rule cases.
+
+\hypertarget{def-commonsuffixline}{}
+\item The notation $\commonsuffixline$ serves as a visual aid to delimit a common suffix of premises shared by rule cases.
+\end{itemize}
+
+\section{Rule Naming\label{sec:Rule Naming}}
 To name a rule, we place it in a section with its name.
 However, some relations are defined by a group of rules.
 \hypertarget{def-caserules}{}
@@ -985,13 +1051,13 @@ For example, the rule \TypingRuleRef{BaseValue} is defined via multiple
 cases. Two of these cases are the following ones:
 \begin{mathpar}
 \inferrule[t\_bool]{}{
-    \basevalue(\tenv, \overname{\TBool}{\vt}) \typearrow \overname{\ELiteral(\lbool(\False))}{\veinit}
+    \basevalue(\tenv, \overname{\TBool}{\vt}) \typearrow \overname{\ELiteral(\LBool(\False))}{\veinit}
 }
 \end{mathpar}
 
 \begin{mathpar}
 \inferrule[t\_real]{}{
-    \basevalue(\tenv, \overname{\TReal}{\vt}) \typearrow \overname{\ELiteral(\lreal(0))}{\veinit}
+    \basevalue(\tenv, \overname{\TReal}{\vt}) \typearrow \overname{\ELiteral(\LReal(0))}{\veinit}
 }
 \end{mathpar}
 
@@ -1002,19 +1068,3 @@ When explaining rules in English prose, we include the name of the case rules
 in parenthesis to make it easier to relate the prose to the corresponding mathematical
 definitions (see, for example, the Prose paragraph of \TypingRuleRef{BaseValue}
 or that of \TypingRuleRef{ApplyUnopType}).
-
-\subsection{Generic Notations}
-\hypertarget{def-wrapline}{}
-\begin{itemize}
-\item
-The notation $\wrappedline$ denotes that a line that is longer than the page width continues on the next line.
-
-\hypertarget{def-commonprefixline}{}
-\item The notation $\commonprefixline$ serves as a visual aid to delimit a common prefix of premises shared by rule cases.
-
-\hypertarget{def-commonsuffixline}{}
-\item The notation $\commonsuffixline$ serves as a visual aid to delimit a common suffix of premises shared by rule cases.
-
-\hypertarget{tododefine}{} % DO NOT LINT
-\item \tododefine{Missing:} Red hyperlinks indicate items that are yet to be defined.
-\end{itemize}

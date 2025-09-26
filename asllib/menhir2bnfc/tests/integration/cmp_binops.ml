@@ -1,6 +1,6 @@
 open Asllib
 open Feat
-open Enum
+open! Enum
 
 let binops : AST.binop enum =
   finite
@@ -12,23 +12,24 @@ let binops : AST.binop enum =
       `DIV;
       `DIVRM;
       `XOR;
-      `EQ_OP;
+      `EQ;
       `GT;
-      `GEQ;
+      `GE;
       `IMPL;
       `LT;
-      `LEQ;
+      `LE;
       `MOD;
-      `MINUS;
+      `SUB;
       `MUL;
-      `NEQ;
+      `NE;
       `OR;
-      `PLUS;
+      `ADD;
       `POW;
       `RDIV;
       `SHL;
       `SHR;
-      `CONCAT;
+      `BV_CONCAT;
+      `STR_CONCAT;
     ]
 
 let unops : AST.unop enum = finite AST.[ BNOT; NEG; NOT ]
