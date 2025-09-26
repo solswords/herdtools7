@@ -54,9 +54,9 @@
 (deflist taglist :elt-type tag :true-listp t)
 
 
-(defenum set_or_rln (:set :rln))
+(defenum set_or_rln-p (:set :rln))
 
-(defenum op2
+(defenum op2-p
   (:union
    :inter
    :diff
@@ -64,9 +64,9 @@
    :cartesian
    :add
    :tuple)
-  :short "CAT binary operators")
+  :short "CAT binary (and higher) operators")
 
-(defenum op1
+(defenum op1-p
   (:plus
    :star
    :opt
@@ -76,12 +76,12 @@
   :short "CAT unary operators")
 
 (deftagsum konst
-  (:empty ((setrel set_or_rln)))
-  (:universe ((setrel set_or_rln))))
+  (:empty ((setrel set_or_rln-p)))
+  (:universe ((setrel set_or_rln-p))))
 
 
 ;; ??
-(defenum scope
+(defenum scope-p
   (:device :kernel :work_group :sub_group :work_item))
 
 
@@ -110,10 +110,10 @@
     (:e_var         ((loc)
                      (var var)))
     (:e_op1         ((loc)
-                     (op op1)
+                     (op op1-p)
                      (arg exp)))
     (:e_op          ((loc)
-                     (op op2)
+                     (op op2-p)
                      (args explist)))
     (:e_app         ((loc)
                      (fn exp)
@@ -198,14 +198,14 @@
    
 
 
-(defenum do_test (:acyclic :irreflexive :testempty))
+(defenum do_test-p (:acyclic :irreflexive :testempty))
 
 (deftagsum test
-  (:t_yes ((test do_test)))
-  (:t_no  ((test do_test))))
+  (:t_yes ((test do_test-p)))
+  (:t_no  ((test do_test-p))))
 
 
-(defenum test_type (:flagged :undefinedunless :check :assert))
+(defenum test_type-p (:flagged :undefinedunless :check :assert))
 
 (defoption maybe-string string
   ///
@@ -224,7 +224,7 @@
 
 (defoption maybe-app_test app_test)
 
-(defenum is_rec (:isrec :isnotrec))
+(defenum is_rec-p (:isrec :isnotrec))
 
 (deftypes ins
   (deftagsum ins
@@ -241,7 +241,7 @@
                   ;;  Is a None here different than an empty list?
                   (otherwise inslist)))
     (:i_test ((test app_test)
-              (type test_type)))
+              (type test_type-p)))
     (:i_unshow ((loc)
                 (lst string-listp)))
     (:i_show   ((loc)
@@ -255,7 +255,7 @@
                    (name var)
                    (formals pat)
                    (body inslist)
-                   (rec is_rec)))
+                   (rec is_rec-p)))
     (:i_call      ((loc)
                    (proc var)
                    (arg exp)
