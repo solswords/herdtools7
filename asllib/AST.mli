@@ -97,7 +97,9 @@ type binop =
   | `SHL  (** Shift left for ints *)
   | `SHR  (** Shift right for ints *)
   | `BV_CONCAT  (** Bit vector concatenation *)
-  | `STR_CONCAT  (** String concatenation *) ]
+  | `STR_CONCAT  (** String concatenation *)
+  | `BIC  (** Bit clear operation: bitwise and with second argument inverted *)
+  ]
 (** Operations on base value of arity two. *)
 
 (* -------------------------------------------------------------------------
@@ -329,7 +331,7 @@ type lexpr_desc =
 
 and lexpr = lexpr_desc annotated
 
-type local_decl_keyword = LDK_Var | LDK_Constant | LDK_Let
+type local_decl_keyword = LDK_Var | LDK_Let
 
 (** A left-hand side of a declaration statement. In the following example of a
     declaration statement, [(2, 3, 4): (integer, integer, integer {0..32})] is

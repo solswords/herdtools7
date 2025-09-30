@@ -552,7 +552,9 @@ module Make (B : Backend.S) (C : Config) = struct
         | Global v ->
             let* () = B.on_read_identifier x (B.Scope.global ~init:false) v in
             return_normal (v, env)
-        | NotFound -> fatal_from e env @@ Error.UndefinedIdentifier (Dynamic, x))
+        | NotFound ->
+            fatal_from e env
+            @@ Error.UndefinedIdentifier (C.error_handling_time, x))
         |: SemanticsRule.EVar
     (* End *)
     | E_Binop (((`BAND | `BOR | `IMPL) as op), e1, e2)
@@ -595,6 +597,13 @@ module Make (B : Backend.S) (C : Config) = struct
         |> add_pos_from e |> eval_expr env |: SemanticsRule.BinopImpl
     (* End *)
     (* Begin EvalBinop *)
+    | E_Binop (`AND, e1, { desc = E_Unop (NOT, e2) }) ->
+        let op = `BIC in
+        let*^ m1, env1 = eval_expr env e1 in
+        let*^ m2, new_env = eval_expr env1 e2 in
+        let* v1 = m1 and* v2 = m2 in
+        let* v = B.binop op v1 v2 in
+        return_normal (v, new_env) |: SemanticsRule.Binop
     | E_Binop (op, e1, e2) ->
         let*^ m1, env1 = eval_expr env e1 in
         let*^ m2, new_env = eval_expr env1 e2 in
@@ -861,7 +870,8 @@ module Make (B : Backend.S) (C : Config) = struct
             match ver with
             (* Begin EvalLEUndefIdentOne *)
             | V1 ->
-                fatal_from le env @@ Error.UndefinedIdentifier (Dynamic, x)
+                fatal_from le env
+                @@ Error.UndefinedIdentifier (C.error_handling_time, x)
                 |: SemanticsRule.LEUndefIdentV1
             (* End *)
             (* Begin EvalLEUndefIdentZero *)
@@ -1164,6 +1174,19 @@ module Make (B : Backend.S) (C : Config) = struct
         in
         let*| _i, vs = List.fold_left folder (return (0, [])) ms in
         return_return new_env (List.rev vs) |: SemanticsRule.SReturn
+    | S_Return (Some ({ desc = E_Call { name; params; args; _ }; _ } as e)) ->
+        let**| returned, new_env =
+          eval_call (to_pos e) name env ~params ~args
+        in
+        let scope = IEnv.get_scope new_env in
+        let folder acc m =
+          let*| i, vs = acc in
+          let* v = m in
+          let* () = B.on_write_identifier (return_identifier i) scope v in
+          return (i + 1, v :: vs)
+        in
+        let*| _i, vs = List.fold_left folder (return (0, [])) returned in
+        return_return new_env (List.rev vs) |: SemanticsRule.SReturn
     | S_Return (Some e) ->
         let** v, env1 = eval_expr env e in
         let* () =
@@ -1209,7 +1232,7 @@ module Make (B : Backend.S) (C : Config) = struct
         let* limit_opt1 = eval_limit env e_limit_opt in
         let* limit_opt2 = tick_loop_limit s env limit_opt1 in
         let*> env1 = eval_block env body in
-        let env2 = IEnv.tick_push_bis env1 in
+        let env2 = IEnv.tick_push_bis env1 1 in
         eval_loop s false env2 limit_opt2 e body |: SemanticsRule.SRepeat
     (* End *)
     (* Begin EvalSFor *)
@@ -1222,7 +1245,7 @@ module Make (B : Backend.S) (C : Config) = struct
         (* By typing *)
         let undet = B.is_undetermined start_v || B.is_undetermined end_v in
         let*| env1 = declare_local_identifier env index_name start_v in
-        let env2 = if undet then IEnv.tick_push_bis env1 else env1 in
+        let env2 = if undet then IEnv.tick_push_bis env1 1 else env1 in
         let loop_msg =
           if C.empty_branching_effects_optimization then None
           else if undet then Some (Printf.sprintf "for %s" index_name)
@@ -1490,7 +1513,8 @@ module Make (B : Backend.S) (C : Config) = struct
     match IMap.find_opt name genv.static.subprograms with
     (* Begin EvalFUndefIdent *)
     | None ->
-        fatal_from_genv pos genv @@ Error.UndefinedIdentifier (Dynamic, name)
+        fatal_from_genv pos genv
+        @@ Error.UndefinedIdentifier (C.error_handling_time, name)
         |: SemanticsRule.FUndefIdent
     (* End *)
     (* Begin EvalFPrimitive *)
@@ -1522,13 +1546,20 @@ module Make (B : Backend.S) (C : Config) = struct
       when List.compare_lengths args arg_decls <> 0 ->
         fatal_from_genv pos genv
         @@ Error.BadArity
-             (Dynamic, name, List.length arg_decls, List.length args)
+             ( C.error_handling_time,
+               name,
+               List.length arg_decls,
+               List.length args )
         |: SemanticsRule.FBadArity
     | Some ({ parameters = parameter_decls; _ }, _)
       when List.compare_lengths params parameter_decls <> 0 ->
         fatal_from_genv pos genv
         @@ Error.BadParameterArity
-             (Dynamic, V1, name, List.length parameter_decls, List.length params)
+             ( C.error_handling_time,
+               V1,
+               name,
+               List.length parameter_decls,
+               List.length params )
         |: SemanticsRule.FBadArity
     (* End *)
     (* Begin EvalFCall *)
@@ -1585,7 +1616,10 @@ module Make (B : Backend.S) (C : Config) = struct
     if List.compare_lengths les monads != 0 then
       fatal_from pos env
       @@ Error.BadArity
-           (Dynamic, "tuple construction", List.length les, List.length monads)
+           ( C.error_handling_time,
+             "tuple construction",
+             List.length les,
+             List.length monads )
     else multi_assign ver env les monads
 
   (* Begin EvalSpec *)
@@ -1599,7 +1633,9 @@ module Make (B : Backend.S) (C : Config) = struct
     (match res with
     | Normal ([ v ], _genv) -> read_value_from v
     | Normal _ ->
-        Error.(fatal_unknown_pos (MismatchedReturnValue (Dynamic, main_name)))
+        Error.(
+          fatal_unknown_pos
+            (MismatchedReturnValue (C.error_handling_time, main_name)))
     | Throwing ((v, _, _), ty, _genv) ->
         let msg = Format.asprintf "%a %s" PP.pp_ty ty (B.debug_value v) in
         Error.fatal_unknown_pos (Error.UncaughtException msg)

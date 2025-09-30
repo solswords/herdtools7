@@ -115,6 +115,7 @@ let binop_to_string : binop -> string = function
   | `POW -> "^"
   | `BV_CONCAT -> "::"
   | `STR_CONCAT -> "++"
+  | `BIC -> "BIC"
 
 let unop_to_string = function BNOT -> "!" | NEG -> "-" | NOT -> "NOT"
 
@@ -279,12 +280,7 @@ let pp_loop_limit =
 let pp_for_direction = function Up -> "to" | Down -> "downto"
 
 let pp_local_decl_keyword f k =
-  pp_print_string f
-  @@
-  match k with
-  | LDK_Var -> "var"
-  | LDK_Constant -> "constant"
-  | LDK_Let -> "let"
+  pp_print_string f @@ match k with LDK_Var -> "var" | LDK_Let -> "let"
 
 let pp_local_decl_item f = function
   | LDI_Var x -> pp_print_string f x
