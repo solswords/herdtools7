@@ -62,35 +62,12 @@
   ((evts evtlist)))
 
 
+(defprod evtpair
+  ((from evt) (to evt))
+  :layout :list)
 
 
-(fty::defalist relation :key-type evt :val-type evt :true-listp t
-  ///
-  (defthm relation-p-of-pairlis$
-    (implies (and (evtlist-p keys)
-                  (evtlist-p vals)
-                  (<= (len keys) (len vals)))
-             (relation-p (pairlis$ keys vals))))
-
-  (defthm relation-p-of-append
-    (implies (and (relation-p x)
-                  (relation-p y))
-             (relation-p (append x y))))
-
-  (defthm relation-fix-when-not-consp
-    (implies (not (consp x))
-             (equal (relation-fix x) nil))
-    :hints(("Goal" :in-theory (enable relation-fix))))
-
-  (defthm relation-fix-when-consp
-    (implies (consp x)
-             (equal (relation-fix x)
-                    (if (consp (car x))
-                        (cons (cons (evt-fix (caar x))
-                                    (evt-fix (cdar x)))
-                              (relation-fix (cdr x)))
-                      (relation-fix (cdr x)))))
-    :hints(("Goal" :in-theory (enable relation-fix)))))
+(fty::defset relation :elt-type evtpair :elementp-of-nil nil)
 
 (defprod fndef
   ((name var)
@@ -147,7 +124,12 @@
    (env env)
    (comrels varlist-p)))
 
-(deflist resultlist :elt-type result :true-listp t :elementp-of-nil nil)
+(deflist resultlist :elt-type result :true-listp t :elementp-of-nil nil
+  ///
+  (defthm resultlist-p-of-append
+    (implies (and (resultlist-p x)
+                  (resultlist-p y))
+             (resultlist-p (append x y)))))
 
 (define vallist-same-kind-aux ((kind val-kind-p) (x vallist-p))
   (if (atom x)

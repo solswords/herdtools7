@@ -207,11 +207,12 @@
 
 (defenum test_type-p (:flagged :undefinedunless :check :assert))
 
-(defoption maybe-string string
+(defoption maybe-var var
   ///
-  (defthm maybe-string-compound-recognizer
-    (equal (maybe-string-p x)
+  (defthm maybe-var-compound-recognizer
+    (equal (maybe-var-p x)
            (or (stringp x) (not x)))
+    :hints(("Goal" :in-theory (enable maybe-var-p var-p)))
     :rule-classes :compound-recognizer))
 
 (defprod app_test
@@ -219,7 +220,7 @@
    (pos) ;; ??
    (test test)
    (exp exp)
-   (name maybe-string))
+   (name maybe-var))
   :layout :alist)
 
 (defoption maybe-app_test app_test)
@@ -259,7 +260,7 @@
     (:i_call      ((loc)
                    (proc var)
                    (arg exp)
-                   (name maybe-string)))
+                   (name maybe-var)))
     (:i_enum      ((loc)
                    (name var)
                    (elts taglist)))

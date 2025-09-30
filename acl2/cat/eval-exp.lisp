@@ -41,8 +41,8 @@
 
 (acl2::def-b*-binder expval
   :parents (cat-interpreter-functions)
-  :short "Binds a value, returning it immediately if it is an error, otherwise
-  continuing the computation."
+  :short "Binds some number of values preceded by an error, returning @('(mv err nil)')
+if it is an error, otherwise continuing the computation."
   :body
   `(b* (((mv err . ,acl2::args) . ,acl2::forms))
      (if err
@@ -51,8 +51,8 @@
 
 (acl2::def-b*-binder expval2
   :parents (cat-interpreter-functions)
-  :short "Binds a value, returning it immediately if it is an error, otherwise
-  continuing the computation."
+  :short "Binds some number of values preceded by an error, returning @('(mv err nil nil)')
+if it is an error, otherwise continuing the computation."
   :body
   `(b* (((mv err . ,acl2::args) . ,acl2::forms))
      (if err
@@ -109,14 +109,48 @@
   :returns (mv err (val (iff (val-p val) (not err))))
   (b* ((op (op1-fix op)))
     (case op
+      (:inv (val-case arg
+              :v_rel (norm (v_rel (inverse arg.rel)))
+              :otherwise (err "Unsupported"
+                              (msg "unary operator ~x0 on ~x1 type" op (val-kind arg)))))
+      (:toid (val-case arg
+               :v_set (norm (v_rel (id-relation arg.evts)))
+               :otherwise (err "Unsupported"
+                               (msg "unary operator ~x0 on ~x1 type" op (val-kind arg)))))
       (otherwise ;; (:plus :star :opt :comp :inv :toid)
        (err "Unimplemented" (msg "unary operator ~x0" op))))))
 
 
+(local (defthm evtlist-p-of-set-difference
+         (implies (evtlist-p x)
+                  (evtlist-p (set-difference-equal x y)))))
+
+(local (defthm vallist-p-of-set-difference
+         (implies (vallist-p x)
+                  (vallist-p (set-difference-equal x y)))))
+
+(local (defthm vallist-p-of-union
+         (implies (and (vallist-p x)
+                       (vallist-p y))
+                  (vallist-p (union-equal x y)))))
+
+(local (defthm evtlist-p-of-union
+         (implies (and (evtlist-p x)
+                       (evtlist-p y))
+                  (evtlist-p (union-equal x y)))))
+
+(local (defthm vallist-p-of-intersection
+         (implies (and (vallist-p x))
+                  (vallist-p (intersection-equal x y)))))
+
+(local (defthm evtlist-p-of-intersection
+         (implies (and (evtlist-p x))
+                  (evtlist-p (intersection-equal x y)))))
+
 (define eval-op2 ((op op2-p) (args vallist-p))
   :returns (mv err (val (iff (val-p val) (not err))))
   :measure (len args)
-  :guard-debug t
+  :verify-guards nil
   (b* ((op (op2-fix op)))
     (case op
       (:cartesian (cond ((and (eql (len args) 2)
@@ -145,8 +179,78 @@
                 :v_empty (norm (v_empty))
                 :v_rel (norm (v_rel (compose arg1.rel rest.rel)))
                 :otherwise (err "Impossible" "seq op returned non-rel value"))))
+      (:diff (b* (((unless (eql (len args) 2))
+                   (err "Bad operator arguments"
+                        (msg "op: ~x0 args: ~x1" op (vallist-fix args))))
+                  (arg1 (car args))
+                  (arg2 (cadr args)))
+               (fty::multicase
+                 ((val-case arg1)
+                  (val-case arg2))
+                 ((:v_empty -) (norm (val-fix arg1)))
+                 ((:v_rel :v_empty) (norm (val-fix arg1)))
+                 ((:v_set :v_empty) (norm (val-fix arg1)))
+                 ((:v_valset :v_empty) (norm (val-fix arg1)))
+                 ((:v_rel :v_rel) (norm (v_rel (difference arg1.rel arg2.rel))))
+                 ((:v_set :v_set) (norm (v_set (set-difference-equal arg1.evts arg2.evts))))
+                 ((:v_valset :v_valset) (norm (v_valset (set-difference-equal arg1.elts arg2.elts))))
+                 (- (err "Bad operator arguments"
+                         (msg "op: ~x0 args: ~x1" op (vallist-fix args)))))))
+      (:union (b* (((when (atom args))
+                    (err "Bad operator arguments"
+                         (msg "op: ~x0 args: ~x1" op (vallist-fix args))))
+                   (arg1 (car args))
+                   ((when (atom (cdr args)))
+                    (if (val-case arg1 '(:v_empty :v_set :v_valset :v_rel))
+                        (norm (val-fix arg1))
+                      (err "Bad operator arguments"
+                           (msg "op: ~x0 args: ~x1" op (vallist-fix args)))))
+                   ((expval rest) (eval-op2 :union (cdr args))))
+                (fty::multicase
+                  ((val-case arg1)
+                   (val-case rest))
+                 ((:v_empty -) (norm rest))
+                 ((:v_rel :v_empty) (norm (val-fix arg1)))
+                 ((:v_set :v_empty) (norm (val-fix arg1)))
+                 ((:v_valset :v_empty) (norm (val-fix arg1)))
+                 ((:v_rel :v_rel) (norm (v_rel (union arg1.rel rest.rel))))
+                 ((:v_set :v_set) (norm (v_set (union-equal arg1.evts rest.evts))))
+                 ((:v_valset :v_valset) (norm (v_valset (union-equal arg1.elts rest.elts))))
+                 (- (err "Bad operator arguments"
+                         (msg "op: ~x0 args: ~x1" op (vallist-fix args)))))))
+      
+      (:inter (b* (((when (atom args))
+                    (err "Bad operator arguments"
+                         (msg "op: ~x0 args: ~x1" op (vallist-fix args))))
+                   (arg1 (car args))
+                   ((when (atom (cdr args)))
+                    (if (val-case arg1 '(:v_empty :v_set :v_valset :v_rel))
+                        (norm (val-fix arg1))
+                      (err "Bad operator arguments"
+                           (msg "op: ~x0 args: ~x1" op (vallist-fix args)))))
+                   ((expval rest) (eval-op2 :inter (cdr args))))
+                (fty::multicase
+                  ((val-case arg1)
+                   (val-case rest))
+                 ((:v_empty -) (norm (val-fix arg1)))
+                 ((:v_rel :v_empty) (norm rest))
+                 ((:v_set :v_empty) (norm rest))
+                 ((:v_valset :v_empty) (norm rest))
+                 ((:v_rel :v_rel) (norm (v_rel (intersect arg1.rel rest.rel))))
+                 ((:v_set :v_set) (norm (v_set (intersection-equal arg1.evts rest.evts))))
+                 ((:v_valset :v_valset) (norm (v_valset (intersection-equal arg1.elts rest.elts))))
+                 (- (err "Bad operator arguments"
+                         (msg "op: ~x0 args: ~x1" op (vallist-fix args)))))))
+      (:tuple (b* (((when (eql (len args) 1))
+                    (err "Bad operator arguments"
+                         (msg "op: ~x0 args: ~x1" op (vallist-fix args)))))
+                (norm (v_tuple args))))
+                   
       (otherwise ;; (:union :inter :diff :add :tuple)
-       (err "Unimplemented" (msg "operator ~x0" op))))))
+       (err "Unimplemented" (msg "operator ~x0" op)))))
+  ///
+  (verify-guards eval-op2)
+  (local (in-theory (enable vallist-fix))))
     
 
 
@@ -369,10 +473,10 @@
          :e_app (b* (((when (primitive-p x.fn))
                       (b* (((expval arg) (eval-exp x.arg)))
                         (eval-primitive x.fn arg)))
-                     ((expval fn) (eval-exp x.fn))
-                     ((expval arg) (eval-exp x.arg)))
+                     ((expval fn) (eval-exp x.fn)))
                   (val-case fn
-                    :v_fun (b* (((expval argenv) (match-pat fn.formals arg))
+                    :v_fun (b* (((expval arg) (eval-exp x.arg))
+                                ((expval argenv) (match-pat fn.formals arg))
                                 (rec-bindings (fndeflist-closure-bindings fn.recdefs fn.recdefs fn.env))
                                 ((when (zp reclimit))
                                  (err "Hit recursion limit"
