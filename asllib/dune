@@ -31,8 +31,6 @@
  (modules Parser0)
  (flags --unused-tokens --table))
 
-(data_only_dirs acl2)
-
 (rule
  (deps
   (:v1 libdir/stdlib.asl)
