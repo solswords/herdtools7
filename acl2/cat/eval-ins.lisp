@@ -119,10 +119,10 @@
         :i_procedure (b* ((proc (v_proc x.formals x.body result.env))
                           (env (cons (cons x.name proc) result.env)))
                        (norm (list (change-result result :env env))))
-        :i_call      (b* (((expval proc) (b* ((look (hons-assoc-equal x.proc result.env))
+        :i_call      (b* (((expval proc) (b* ((look (env-lookup x.proc result.env))
                                               ((unless look)
                                                (err "Unbound var" x.proc)))
-                                           (norm (cdr look)))))
+                                           (norm look))))
                        (val-case proc
                          :v_proc
                          (b* (((expval arg) (eval-exp x.arg :env result.env))

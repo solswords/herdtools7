@@ -377,7 +377,7 @@
            (compose x (compose y z)))
     :hints(("Goal" :in-theory (enable pick-a-point-subset-strategy
                                       set::double-containment-no-backchain-limit))
-           (SET::PICK-A-POINT-SUBSET-HINT ID CLAUSE
+           (SET::PICK-A-POINT-SUBSET-HINT ID acl2::CLAUSE
                                           WORLD STABLE-UNDER-SIMPLIFICATIONP)
            (and stable-under-simplificationp
                 (acl2::use-termhint

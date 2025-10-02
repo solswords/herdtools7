@@ -133,7 +133,7 @@
                      (elems explist)))
     (:e_match       ((loc)
                      (arg exp)
-                     (clauses clauselist)
+                     (clauses matchclauselist)
                      (otherwise maybe-exp)))
     (:e_matchset    ((loc)
                      (arg exp)
@@ -176,13 +176,13 @@
     (:cond_variant ((c variant_cond)))
     :measure (acl2::two-nats-measure (acl2-count x) 20))
 
-  (defprod clause
+  (defprod matchclause
     ((tag string)
      (exp exp))
     :layout :alist
     :measure (acl2::two-nats-measure (acl2-count x) 20))
 
-  (deflist clauselist :elt-type clause :true-listp t
+  (deflist matchclauselist :elt-type matchclause :true-listp t
     :measure (acl2::two-nats-measure (acl2-count x) 20))
 
   (defprod binding
