@@ -82,7 +82,13 @@
     :t_no (b* (((expval satisfied) (eval-do_test val test.test)))
             (norm (not satisfied)))))
 
-
+(define resultlist-replace-env ((x resultlist-p)
+                                (env env-p))
+  :returns (new-x resultlist-p)
+  (if (Atom x)
+      nil
+    (cons (change-result (car x) :env env)
+          (resultlist-replace-env (cdr x) env))))
 
 (defines eval-ins
   (define eval-ins ((x ins-p)
@@ -119,20 +125,22 @@
         :i_procedure (b* ((proc (v_proc x.formals x.body result.env))
                           (env (cons (cons x.name proc) result.env)))
                        (norm (list (change-result result :env env))))
-        :i_call      (b* (((expval proc) (b* ((look (hons-assoc-equal x.proc result.env))
+        :i_call      (b* (((expval proc) (b* ((look (env-lookup x.proc result.env))
                                               ((unless look)
                                                (err "Unbound var" x.proc)))
-                                           (norm (cdr look)))))
+                                           (norm look))))
                        (val-case proc
                          :v_proc
                          (b* (((expval arg) (eval-exp x.arg :env result.env))
                               ((expval argenv) (match-pat proc.formals arg))
                               ((when (zp reclimit))
                                (err "Hit recursion limit"
-                                    (msg "in procedure call of" x.proc))))
-                           (eval-inslist proc.body
-                                         :result (change-result result :env (append argenv result.env))
-                                         :reclimit (1- reclimit)))
+                                    (msg "in procedure call of" x.proc)))
+                              ((expval rslts)
+                               (eval-inslist proc.body
+                                             :result (change-result result :env (append argenv result.env))
+                                             :reclimit (1- reclimit))))
+                           (norm (resultlist-replace-env rslts result.env)))
                          :otherwise (err "Bad procedure call"
                                          (msg "unexpected procedure value ~x0" proc))))
         :i_withfrom (b* (((expval rels) (eval-exp x.rels :env result.env)))

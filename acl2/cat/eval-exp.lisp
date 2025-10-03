@@ -59,19 +59,22 @@ if it is an error, otherwise continuing the computation."
          (mv err nil nil)
        ,acl2::rest-expr)))
 
-(define eval-var ((v var-p)
-                  (ex execgraph-p)
-                  (env env-p))
+(define env-lookup ((v var-p) (env env-p))
+  :returns (val (iff (val-p val) val))
+  (cdr (hons-assoc-equal (var-fix v) (env-fix env))))
+
+(define special-vars ()
+  :returns (specials varlist-p)
+  '("0" "B" "ext" "F" "id" "IW" "loc" "M" "narrower" "po" "R" "rf" "rmw" "W" "wider")
+  ///
+  (in-theory (disable (special-vars)))) 
+
+(define eval-var-special ((v var-p)
+                          (ex execgraph-p))
+  :guard (member-equal v (special-vars))
+  :prepwork ((local (in-theory (enable (special-vars)))))
   :returns (mv err (val (iff (val-p val) (not err))))
   (b* ((v (var-fix v))
-       ((unless (member-equal v '("0" "B" "ext" "F" "id" "IW" "loc" "M" "narrower" "po" "R" "rf" "rmw" "W" "wider")))
-        (b* ((look (hons-assoc-equal v (env-fix env)))
-             ((unless look)
-              (err "Unbound var" v))
-             (val (cdr look)))
-          (val-case val
-            :v_enum (err "Unimplemented" "Special case for enum vars")
-            :otherwise (norm val))))
        (events (execgraph->evts ex))
        ((when (equal v "0"))
         (norm (v_rel nil))) ;; empty relation
@@ -95,10 +98,25 @@ if it is an error, otherwise continuing the computation."
         (norm (v_set (evtlist-filter-type :evt-w events))))
        ((when (equal v "M"))
         (norm (v_set (append (evtlist-filter-type :evt-w events)
-                       (evtlist-filter-type :evt-r events)))))
+                             (evtlist-filter-type :evt-r events)))))
        ((when (equal v "IW"))
         (norm (v_set (evtlist-filter-init-writes events)))))
     (err "Unimplemented" (msg "special variable ~s0" v))))
+
+
+(define eval-var ((v var-p)
+                  (ex execgraph-p)
+                  (env env-p))
+  :returns (mv err (val (iff (val-p val) (not err))))
+  (b* ((v (var-fix v))
+       ((unless (member-equal v (special-vars)))
+        (b* ((val (env-lookup v env))
+             ((unless val)
+              (err "Unbound var" v)))
+          (val-case val
+            :v_enum (err "Unimplemented" "Special case for enum vars")
+            :otherwise (norm val)))))
+    (eval-var-special v ex)))
 
 
 
@@ -115,6 +133,10 @@ if it is an error, otherwise continuing the computation."
                               (msg "unary operator ~x0 on ~x1 type" op (val-kind arg)))))
       (:toid (val-case arg
                :v_set (norm (v_rel (id-relation arg.evts)))
+               :otherwise (err "Unsupported"
+                               (msg "unary operator ~x0 on ~x1 type" op (val-kind arg)))))
+      (:plus (val-case arg
+               :v_rel (norm (v_rel (transitive-closure arg.rel)))
                :otherwise (err "Unsupported"
                                (msg "unary operator ~x0 on ~x1 type" op (val-kind arg)))))
       (otherwise ;; (:plus :star :opt :comp :inv :toid)
@@ -295,10 +317,10 @@ if it is an error, otherwise continuing the computation."
 (define check-fixpoint-binding ((v var-p) (val val-p) (env env-p))
   :returns (mv err changedp)
   (b* ((v (var-fix v))
-       ((expval prev-val) (b* ((look (hons-assoc-equal v (env-fix env)))
+       ((expval prev-val) (b* ((look (env-lookup v env))
                                ((unless look)
                                 (err "Unbound var" v)))
-                            (norm (cdr look)))))
+                            (norm look))))
     (val-case val
       :v_empty (val-case prev-val
                  :v_empty (norm nil)
@@ -313,24 +335,27 @@ if it is an error, otherwise continuing the computation."
                                     (msg "binding of ~s0 got smaller" v))))
                :otherwise (err "Fixpoint error"
                                (msg "type of ~s0 changed" v)))
-      :v_valset (val-case prev-val
-                  :v_empty (norm (consp val.elts))
-                  :v_valset (cond ((subsetp-equal prev-val.elts val.elts)
-                                   (if (subsetp-equal val.elts prev-val.elts)
-                                       (norm nil)
-                                     (norm t)))
-                                  (t (err "Fixpoint error"
-                                          (msg "binding of ~s0 got smaller" v))))
-                  :otherwise (err "Fixpoint error"
-                                  (msg "type of ~s0 changed" v)))
+      ;; :v_valset (val-case prev-val
+      ;;             :v_empty (norm (consp val.elts))
+      ;;             :v_valset (cond ((subsetp-equal prev-val.elts val.elts)
+      ;;                              (if (subsetp-equal val.elts prev-val.elts)
+      ;;                                  (norm nil)
+      ;;                                (norm t)))
+      ;;                             (t (err "Fixpoint error"
+      ;;                                     (msg "binding of ~s0 got smaller" v))))
+      ;;             :otherwise (err "Fixpoint error"
+      ;;                             (msg "type of ~s0 changed" v)))
       :v_rel (val-case prev-val
-               :v_empty (norm (consp val.rel))
-               :v_rel (cond ((subsetp-equal prev-val.rel val.rel)
-                             (if (subsetp-equal val.rel prev-val.rel)
-                                 (norm nil)
-                               (norm t)))
-                            (t (err "Fixpoint error"
-                                    (msg "binding of ~s0 got smaller" v))))
+               :v_empty (norm (not (emptyp val.rel)))
+               :v_rel (if (subset val.rel prev-val.rel)
+                          (norm nil)
+                        (norm t))
+               ;; (cond ((subset prev-val.rel val.rel)
+               ;;               (if (subset val.rel prev-val.rel)
+               ;;                   (norm nil)
+               ;;                 (norm t)))
+               ;;              (t (err "Fixpoint error"
+               ;;                      (msg "binding of ~s0 got smaller" v))))
                :otherwise (err "Fixpoint error"
                                (msg "type of ~s0 changed" v)))
       :otherwise (err "Fixpoint error"
@@ -350,6 +375,13 @@ if it is an error, otherwise continuing the computation."
     (cons (b* (((fndef x1) (car x)))
             (cons x1.name (v_fun x1.formals x1.body all-recdefs env)))
           (fndeflist-closure-bindings (cdr x) all-recdefs env))))
+
+(define fndeflist->names ((x fndeflist-p))
+  :returns (names varlist-p)
+  (if (atom x)
+      nil
+    (cons (fndef->name (car x))
+          (fndeflist->names (cdr x)))))
                   
 (define function-bindings-p ((x bindinglist-p))
   (if (atom x)
@@ -370,6 +402,30 @@ if it is an error, otherwise continuing the computation."
     (cons (fndef x1.pat.var x1.exp.formals x1.exp.body)
           (function-bindings-to-fndefs (cdr x)))))
 
+(define env-extract ((vars varlist-p) (env env-p))
+  :Returns (new-env env-p)
+  (if (atom vars)
+      nil
+    (let ((val (env-lookup (car vars) env)))
+      (if val
+          (cons (cons (var-fix (car vars)) val)
+                (env-extract (cdr vars) env))
+        (env-extract (cdr vars) env))))
+  ///
+  (defret env-lookup-of-<fn>
+    (equal (env-lookup v new-env)
+           (and (member-equal (var-fix v) (varlist-fix vars))
+                (env-lookup v env)))
+    :hints(("Goal" :expand ((:free (vars) (env-lookup v (env-extract vars env))))
+            :induct (env-extract vars env)
+            :in-theory (disable (:d env-extract)))
+           (and stable-under-simplificationp
+                '(:expand ((Env-extract vars env)))))))
+
+(defthm varlist-p-of-set-difference
+  (implies (varlist-p x)
+           (varlist-p (set-difference-equal x y))))
+
 (define recursive-function-bindings-to-closures-aux ((x bindinglist-p)
                                                      (defs fndeflist-p)
                                                      (env env-p))
@@ -381,7 +437,9 @@ if it is an error, otherwise continuing the computation."
     (cons (b* (((binding x1) (car x))
                ((pvar x1.pat))
                ((e_fun x1.exp)))
-            (cons (var-fix x1.pat.var) (v_fun x1.exp.formals x1.exp.body defs env)))
+            (cons (var-fix x1.pat.var) (v_fun x1.exp.formals x1.exp.body defs
+                                              (env-extract (set-difference-equal x1.exp.free (fndeflist->names defs))
+                                                           env))))
           (recursive-function-bindings-to-closures-aux (cdr x) defs env))))
 
 (define recursive-function-bindings-to-closures ((x bindinglist-p) (env env-p))
@@ -448,11 +506,14 @@ if it is an error, otherwise continuing the computation."
 
 
 
+
+
 (with-output
    ;; makes it so it won't take forever to print the induction scheme
    :evisc (:gag-mode (evisc-tuple 3 4 nil nil))
    :off (event)
    (defines eval-exp
+     :flag-local nil
      (define eval-exp ((x exp-p)
                        &key
                        ((ex execgraph-p) 'ex)
@@ -492,7 +553,7 @@ if it is an error, otherwise continuing the computation."
            (b* ((env (add-empty-bindings-to-env x.bindings env))
                 ((expval env) (eval-fixpoint x.bindings)))
              (eval-exp x.body)))
-         :e_fun (norm (v_fun x.formals x.body nil env))
+         :e_fun (norm (v_fun x.formals x.body nil (env-extract x.free env)))
          :e_explicitset (b* (((expval vals) (eval-explist x.elems)))
                           (norm (v_valset vals)))
          :e_match (err "Unimplemented" "match expression")
@@ -523,8 +584,9 @@ if it is an error, otherwise continuing the computation."
        :measure (acl2::nat-list-measure (list reclimit (bindinglist-count x) 10))
        :returns (mv err (res env-p))
        (b* (((when (atom x)) (norm (env-fix env)))
-            ((expval env) (eval-binding (car x))))
-         (eval-bindings (cdr x))))
+            ((expval env1) (eval-binding (car x)))
+            ((expval env2) (eval-bindings (cdr x))))
+         (norm (append env1 env2))))
 
      (define eval-binding ((x binding-p)
                            &key
@@ -535,10 +597,10 @@ if it is an error, otherwise continuing the computation."
        :measure (acl2::nat-list-measure (list reclimit (binding-count x) 10))
        (b* (((binding x))
             ((when (pat-case x.pat :pvar (not x.pat.var) :otherwise nil))
-             (norm (env-fix env)))
+             (norm nil))
             ((expval val) (eval-exp x.exp))
             ((expval bindings) (match-pat x.pat val)))
-         (norm (append bindings (env-fix env)))))
+         (norm bindings)))
 
 
      (define eval-fixpoint ((x bindinglist-p)
