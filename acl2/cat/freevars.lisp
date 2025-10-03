@@ -27,46 +27,8 @@
 (local (include-book "std/util/termhints" :dir :system))
 (local (include-book "std/basic/arith-equivs" :dir :system))
 (local (include-book "std/lists/sets" :dir :System))
+(local (include-book "varset"))
 (local (std::add-default-post-define-hook :fix))
-(local
- (defsection varset-theory
-   (defthm var-p-of-head
-     (implies (and (varlist-p x)
-                   (not (emptyp x)))
-              (var-p (head x)))
-     :hints(("Goal" :in-theory (enable head sfix))))
-
-   (defthm varlist-p-of-tail
-     (implies (varlist-p x)
-              (varlist-p (tail x)))
-     :hints(("Goal" :in-theory (enable tail sfix))))
-
-   (defthm varlist-p-of-sfix
-     (implies (varlist-p x)
-              (varlist-p (sfix x)))
-     :hints(("Goal" :in-theory (enable sfix))))
-
-   (defthm varlist-p-of-insert
-     (implies (and (var-p x)
-                   (varlist-p y))
-              (varlist-p (insert x y)))
-     :hints(("Goal" :in-theory (enable insert))))
-
-   (defthm varlist-p-of-union
-     (implies (and (varlist-p x)
-                   (varlist-p y))
-              (varlist-p (union x y)))
-     :hints(("Goal" :in-theory (enable union))))
-
-   (defthm varlist-p-of-difference
-     (implies (varlist-p x)
-              (varlist-p (difference x y)))
-     :hints(("Goal" :in-theory (enable difference))))
-
-   (defthm varlist-p-of-mergesort
-     (implies (varlist-p x)
-              (varlist-p (mergesort x)))
-     :hints(("Goal" :in-theory (enable mergesort))))))
 
 
 (define pat0-vars ((x pat0-p))

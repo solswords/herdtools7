@@ -63,19 +63,18 @@ if it is an error, otherwise continuing the computation."
   :returns (val (iff (val-p val) val))
   (cdr (hons-assoc-equal (var-fix v) (env-fix env))))
 
+(define special-vars ()
+  :returns (specials varlist-p)
+  '("0" "B" "ext" "F" "id" "IW" "loc" "M" "narrower" "po" "R" "rf" "rmw" "W" "wider")
+  ///
+  (in-theory (disable (special-vars)))) 
 
-(define eval-var ((v var-p)
-                  (ex execgraph-p)
-                  (env env-p))
+(define eval-var-special ((v var-p)
+                          (ex execgraph-p))
+  :guard (member-equal v (special-vars))
+  :prepwork ((local (in-theory (enable (special-vars)))))
   :returns (mv err (val (iff (val-p val) (not err))))
   (b* ((v (var-fix v))
-       ((unless (member-equal v '("0" "B" "ext" "F" "id" "IW" "loc" "M" "narrower" "po" "R" "rf" "rmw" "W" "wider")))
-        (b* ((val (env-lookup v env))
-             ((unless val)
-              (err "Unbound var" v)))
-          (val-case val
-            :v_enum (err "Unimplemented" "Special case for enum vars")
-            :otherwise (norm val))))
        (events (execgraph->evts ex))
        ((when (equal v "0"))
         (norm (v_rel nil))) ;; empty relation
@@ -99,10 +98,25 @@ if it is an error, otherwise continuing the computation."
         (norm (v_set (evtlist-filter-type :evt-w events))))
        ((when (equal v "M"))
         (norm (v_set (append (evtlist-filter-type :evt-w events)
-                       (evtlist-filter-type :evt-r events)))))
+                             (evtlist-filter-type :evt-r events)))))
        ((when (equal v "IW"))
         (norm (v_set (evtlist-filter-init-writes events)))))
     (err "Unimplemented" (msg "special variable ~s0" v))))
+
+
+(define eval-var ((v var-p)
+                  (ex execgraph-p)
+                  (env env-p))
+  :returns (mv err (val (iff (val-p val) (not err))))
+  (b* ((v (var-fix v))
+       ((unless (member-equal v (special-vars)))
+        (b* ((val (env-lookup v env))
+             ((unless val)
+              (err "Unbound var" v)))
+          (val-case val
+            :v_enum (err "Unimplemented" "Special case for enum vars")
+            :otherwise (norm val)))))
+    (eval-var-special v ex)))
 
 
 
@@ -332,13 +346,16 @@ if it is an error, otherwise continuing the computation."
       ;;             :otherwise (err "Fixpoint error"
       ;;                             (msg "type of ~s0 changed" v)))
       :v_rel (val-case prev-val
-               :v_empty (norm (consp val.rel))
-               :v_rel (cond ((subsetp-equal prev-val.rel val.rel)
-                             (if (subsetp-equal val.rel prev-val.rel)
-                                 (norm nil)
-                               (norm t)))
-                            (t (err "Fixpoint error"
-                                    (msg "binding of ~s0 got smaller" v))))
+               :v_empty (norm (not (emptyp val.rel)))
+               :v_rel (if (subset val.rel prev-val.rel)
+                          (norm nil)
+                        (norm t))
+               ;; (cond ((subset prev-val.rel val.rel)
+               ;;               (if (subset val.rel prev-val.rel)
+               ;;                   (norm nil)
+               ;;                 (norm t)))
+               ;;              (t (err "Fixpoint error"
+               ;;                      (msg "binding of ~s0 got smaller" v))))
                :otherwise (err "Fixpoint error"
                                (msg "type of ~s0 changed" v)))
       :otherwise (err "Fixpoint error"
