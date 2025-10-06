@@ -534,6 +534,43 @@
                       (:free (ex env reclimit) (eval-explist nil)))
              :do-not-induct t)
             (and stable-under-simplificationp
+                 '(:in-theory (enable check-fixpoint-binding)))))
+
+  (defthm eval-fixpoint-empty
+    (b* (((mv err res) (eval-fixpoint
+                        (list (binding loc2 (pvar var)
+                                       (e_op loc3 :union
+                                             (list base
+                                                   (e_op loc4 :seq (list (e_var loc5 var)
+                                                                         (e_var loc6 var)))))))))
+         (baseval (mv-nth 1 (eval-exp base :reclimit (+ 1 (nfix reclimit)))))
+         (initval (env-lookup var env)))
+      (implies (and var
+                    initval
+                    (val-case baseval :v_empty)
+                    (val-case initval :v_empty)
+                    (not err)
+                    (not (in (var-fix var) (exp-free-vars base)))
+                    (not (member-equal (var-fix var) (special-vars))))
+               (equal (env-lookup v res)
+                      (if (equal (var-fix v) (var-fix var))
+                          (v_empty)
+                        (env-lookup v env)))))
+    :hints (("goal"
+             :in-theory (enable eval-op2 eval-var
+                                ;; CHECK-FIXPOINT-BINDING
+                                set::subset-transitive)
+             :expand ((:free (x) (eval-fixpoint x))
+                      (:free (x) (eval-fixpoint1 (list x)))
+                      (:free (x env) (eval-fixpoint1 nil))
+                      (:free (x) (eval-fixpoint-binding x))
+                      (:free (loc x y ex env reclimit) (eval-exp (e_op loc :union (list x y))))
+                      (:free (loc x y ex env reclimit) (eval-exp (e_op loc :seq (list x y))))
+                      (:free (loc v ex env reclimit) (eval-exp (e_var loc v)))
+                      (:free (x y ex env reclimit) (eval-explist (cons x y)))
+                      (:free (ex env reclimit) (eval-explist nil)))
+             :do-not-induct t)
+            (and stable-under-simplificationp
                  '(:in-theory (enable check-fixpoint-binding))))))
 
 (local
@@ -647,5 +684,52 @@
              :cases ((mv-nth 0 (eval-fixpoint x)))))
     :rule-classes :congruence))
 
+
+
+
+
+(defthm eval-fixpoint-is-transitive-closure-env-lookup-equiv
+  (b* (((mv err res) (eval-fixpoint
+                      (list (binding loc2 (pvar var)
+                                     (e_op loc3 :union
+                                           (list base
+                                                 (e_op loc4 :seq (list (e_var loc5 var)
+                                                                       (e_var loc6 var)))))))))
+       (baseval (mv-nth 1 (eval-exp base :reclimit (+ 1 (nfix reclimit)))))
+       (baserel (v_rel->rel baseval))
+       (initval (env-lookup var env))
+       (initrel (if (val-case initval :v_rel)
+                    (v_rel->rel initval)
+                  nil))
+       (closure (transitive-closure baserel)))
+    (implies (and var
+                  initval
+                  (val-case baseval :v_rel)
+                  (subset initrel closure)
+                  (not err)
+                  (not (in (var-fix var) (exp-free-vars base)))
+                  (not (member-equal (var-fix var) (special-vars))))
+             (env-lookup-equiv res
+                               (cons (cons (var-fix var) (v_rel closure)) env))))
+  :hints(("Goal" :in-theory (enable env-lookup-equiv))))
+
+(defthm eval-fixpoint-empty-env-lookup-equiv
+  (b* (((mv err res) (eval-fixpoint
+                      (list (binding loc2 (pvar var)
+                                     (e_op loc3 :union
+                                           (list base
+                                                 (e_op loc4 :seq (list (e_var loc5 var)
+                                                                       (e_var loc6 var)))))))))
+       (baseval (mv-nth 1 (eval-exp base :reclimit (+ 1 (nfix reclimit)))))
+       (initval (env-lookup var env)))
+    (implies (and var
+                  initval
+                  (val-case baseval :v_empty)
+                  (val-case initval :v_empty)
+                  (not err)
+                  (not (in (var-fix var) (exp-free-vars base)))
+                  (not (member-equal (var-fix var) (special-vars))))
+             (env-lookup-equiv res (cons (cons (var-fix var) (v_empty)) env))))
+  :hints(("Goal" :in-theory (enable env-lookup-equiv))))
 
 

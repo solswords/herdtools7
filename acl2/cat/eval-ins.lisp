@@ -91,6 +91,7 @@
           (resultlist-replace-env (cdr x) env))))
 
 (defines eval-ins
+  :flag-local nil
   (define eval-ins ((x ins-p)
                     &key
                     ((ex execgraph-p) 'ex)
@@ -148,7 +149,6 @@
                         :v_valset (norm (withfrom-results x.name rels.elts result))
                         :otherwise (err "Type mismatch" (msg "~x0 expected ~x1 but got ~x2"
                                                              :i_withfrom :v_valset (val-kind rels)))))
-                          
         :otherwise (err "Unimplemented" (msg "~x0 instruction" (ins-kind x))))))
 
   (define eval-inslist ((x inslist-p)
