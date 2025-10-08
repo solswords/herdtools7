@@ -717,52 +717,58 @@
                             in-compose*-id-relation-last-lemma)))))
 
 
-(define haz1-loop-normalize-to-w-first ((haz1loop evtlist-p)
+(defthm consp-cdr-when-relation-path-p
+  (implies (relation-path-p x rel)
+           (consp (cdr x)))
+  :hints(("Goal" :in-theory (enable relation-path-p)))
+  :rule-classes :forward-chaining)
+
+(define haz-loop-normalize-to-w-first ((hazloop evtlist-p)
                                         (r evtlist-p)
                                         (w evtlist-p)
                                         (po&loc relation-p)
                                         (ca&ext relation-p)
                                         (rf&ext relation-p))
   (declare (ignorable w po&loc ca&ext rf&ext))
-  :guard (and (relation-path-p haz1loop (haz1baserel-abstraction r w po&loc ca&ext rf&ext))
-              (not (intersectp-equal r w))
-              (equal (car haz1loop) (car (last haz1loop))))
+  :guard (consp (cdr hazloop))
   :returns (new-loop evtlist-p)
   :verify-guards nil
-  (if (member-equal (evt-fix (car haz1loop)) (evtlist-fix r))
-      (permute-loop-forward haz1loop)
-    (evtlist-fix haz1loop))
+  (if (member-equal (evt-fix (car hazloop)) (evtlist-fix r))
+      (permute-loop-forward hazloop)
+    (evtlist-fix hazloop))
   ///
-  (local (defthm consp-cdr-when-relation-path-p
-           (implies (relation-path-p x rel)
-                    (consp (cdr x)))
-           :hints(("Goal" :in-theory (enable relation-path-p)))
-           :rule-classes :forward-chaining))
-  (verify-guards haz1-loop-normalize-to-w-first)
+  
+  (verify-guards haz-loop-normalize-to-w-first)
   
   (defret <fn>-endpoints
-    (implies (equal (evt-fix (car haz1loop)) (evt-fix (car (last haz1loop))))
+    (implies (equal (evt-fix (car hazloop)) (evt-fix (car (last hazloop))))
              (equal (car (last new-loop))
                     (car new-loop))))
 
 
-  (defret <fn>-preserves-path
+  (defret <fn>-preserves-haz1-path
     (b* ((baserel (haz1baserel-abstraction r w po&loc ca&ext rf&ext)))
-      (implies (and (relation-path-p haz1loop baserel)
-                    (equal (evt-fix (car haz1loop)) (evt-fix (car (last haz1loop)))))
+      (implies (and (relation-path-p hazloop baserel)
+                    (equal (evt-fix (car hazloop)) (evt-fix (car (last hazloop)))))
+               (relation-path-p new-loop baserel))))
+
+  (defret <fn>-preserves-haz2-path
+    (b* ((baserel (haz2baserel-abstraction r w po&loc ca&ext rf&ext)))
+      (implies (and (relation-path-p hazloop baserel)
+                    (equal (evt-fix (car hazloop)) (evt-fix (car (last hazloop)))))
                (relation-path-p new-loop baserel))))
 
   (local
    (defthm intersectp-equal-bind-free
-     (implies (and (bind-free '((key . (evt-fix$inline (car haz1loop)))))
+     (implies (and (bind-free '((key . (evt-fix$inline (car hazloop)))))
                    (member-equal key x)
                    (member-equal key y))
               (intersectp-equal x y))))
 
   (local
    (defthm intersectp-equal-bind-free-2
-     (implies (and (bind-free '((key . (EVT-FIX$INLINE (NTH (BINARY-+ '-1 (LEN (cdr  HAZ1LOOP)))
-                                                            haz1loop)))))
+     (implies (and (bind-free '((key . (EVT-FIX$INLINE (NTH (BINARY-+ '-1 (LEN (cdr  HAZLOOP)))
+                                                            hazloop)))))
                    (member-equal key x)
                    (member-equal key y))
               (intersectp-equal x y))))
@@ -770,6 +776,7 @@
   (local (defthm relation-path-p-implies-len
            (implies (relation-path-p x rel)
                     (<= 2 (len x)))
+           :hints(("Goal" :in-theory (enable relation-path-p)))
            :rule-classes :forward-chaining))
 
   (local (defthm relation-path-p-implies-last-pair
@@ -781,37 +788,160 @@
            :hints(("Goal" :in-theory (enable relation-path-p)))))
                     
   
-  (defret <fn>-write-first
+  (defret <fn>-write-first-haz1
     (b* ((baserel (haz1baserel-abstraction r w po&loc ca&ext rf&ext)))
-      (implies (and (relation-path-p haz1loop baserel)
-                    (equal (evt-fix (car haz1loop)) (evt-fix (car (last haz1loop))))
+      (implies (and (relation-path-p hazloop baserel)
+                    (equal (evt-fix (car hazloop)) (evt-fix (car (last hazloop))))
                     (not (intersectp-equal (evtlist-fix r) (evtlist-fix w))))
                (and (member-equal (evt-fix (car new-loop)) (evtlist-fix w))
                     (not (member-equal (evt-fix (car new-loop)) (evtlist-fix r))))))
     :hints(("Goal" :in-theory (e/d (haz1baserel-abstraction))
-            :expand ((:free (rel) (relation-path-p haz1loop rel)))
+            :expand ((:free (rel) (relation-path-p hazloop rel)))
             :do-not-induct t)
            (and stable-under-simplificationp
                 '(:use ((:instance relation-path-p-implies-last-pair
                          (rel (haz1baserel-abstraction r w po&loc ca&ext rf&ext))
-                         (x ;; (haz1-loop-normalize-to-w-first haz1loop r w po&loc ca&ext rf&ext)
-                          haz1loop)))
+                         (x ;; (haz-loop-normalize-to-w-first hazloop r w po&loc ca&ext rf&ext)
+                          hazloop)))
                   :in-theory (e/d () (relation-path-p-implies-last-pair
-                                      haz1-loop-normalize-to-w-first))))
+                                      haz-loop-normalize-to-w-first))))
            (and stable-under-simplificationp
                 '(:in-theory (e/d (haz1baserel-abstraction)
                                   (relation-path-p-implies-last-pair)))))
     :otf-flg t)
 
-  (defret <fn>-write-first-nofix
+  (defret <fn>-write-first-haz1-nofix
     (b* ((baserel (haz1baserel-abstraction r w po&loc ca&ext rf&ext)))
-      (implies (and (relation-path-p haz1loop baserel)
+      (implies (and (relation-path-p hazloop baserel)
                     (evtlist-p w)
-                    (equal (evt-fix (car haz1loop)) (evt-fix (car (last haz1loop))))
+                    (equal (evt-fix (car hazloop)) (evt-fix (car (last hazloop))))
                     (not (intersectp-equal (evtlist-fix r) (evtlist-fix w))))
                (member-equal (car new-loop) w)))
-    :hints (("goal" :use <fn>-write-first))))
+    :hints (("goal" :use <fn>-write-first-haz1)))
 
+  (defret <fn>-write-first-haz2
+    (b* ((baserel (haz2baserel-abstraction r w po&loc ca&ext rf&ext)))
+      (implies (and (relation-path-p hazloop baserel)
+                    (equal (evt-fix (car hazloop)) (evt-fix (car (last hazloop))))
+                    (not (intersectp-equal (evtlist-fix r) (evtlist-fix w))))
+               (and (member-equal (evt-fix (car new-loop)) (evtlist-fix w))
+                    (not (member-equal (evt-fix (car new-loop)) (evtlist-fix r))))))
+    :hints(("Goal" :in-theory (e/d (haz2baserel-abstraction))
+            :expand ((:free (rel) (relation-path-p hazloop rel)))
+            :do-not-induct t)
+           (and stable-under-simplificationp
+                '(:use ((:instance relation-path-p-implies-last-pair
+                         (rel (haz2baserel-abstraction r w po&loc ca&ext rf&ext))
+                         (x ;; (haz-loop-normalize-to-w-first hazloop r w po&loc ca&ext rf&ext)
+                          hazloop)))
+                  :in-theory (e/d () (relation-path-p-implies-last-pair
+                                      haz-loop-normalize-to-w-first))))
+           (and stable-under-simplificationp
+                '(:in-theory (e/d (haz2baserel-abstraction)
+                                  (relation-path-p-implies-last-pair)))))
+    :otf-flg t)
+
+  (defret <fn>-write-first-haz2-nofix
+    (b* ((baserel (haz2baserel-abstraction r w po&loc ca&ext rf&ext)))
+      (implies (and (relation-path-p hazloop baserel)
+                    (evtlist-p w)
+                    (equal (evt-fix (car hazloop)) (evt-fix (car (last hazloop))))
+                    (not (intersectp-equal (evtlist-fix r) (evtlist-fix w))))
+               (member-equal (car new-loop) w)))
+    :hints (("goal" :use <fn>-write-first-haz2))))
+
+
+;; (defines collect-compose*-path-terms
+;;   (define collect-compose*-path-terms ((x pseudo-termp) acc)
+;;     :measure (acl2-count x)
+;;     :returns (mv is-path new-acc)
+;;     (cond ((atom x) (mv nil acc))
+;;           ((eq (car x) 'quote) (mv nil acc))
+;;           ((consp (car x))
+;;            (mv nil (collect-compose*-path-terms-lst (cdr x) acc)))
+;;           ((eq (car x) 'compose*-path) (mv t acc))
+;;           ((and (eq (car x) 'car)
+;;                 (consp (cdr x)))
+;;            (b* (((mv is-path acc) (collect-compose*-path-terms (cadr x) acc)))
+;;              (mv nil (if is-path (cons x acc) acc))))
+;;           ((and (eq (car x) 'cdr)
+;;                 (consp (cdr x)))
+;;            (collect-compose*-path-terms (cadr x) acc))
+;;           (t (mv nil (collect-compose*-path-terms-lst (cdr x) acc)))))
+
+;;   (define collect-compose*-path-terms-lst ((x pseudo-term-listp) acc)
+;;     :measure (acl2-count x)
+;;     (b* (((when (atom x)) acc)
+;;          ((mv & acc) (collect-compose*-path-terms (car x) acc)))
+;;       (collect-compose*-path-terms-lst (cdr x) acc))))
+
+
+;; (local (include-book "clause-processors/generalize" :dir :system))
+
+(defsection compose-lemmas
+  (defthm in-compose-id
+    (iff (in pair (compose (id-relation r) x))
+         (and (evtpair-p pair)
+              (member-equal (evtpair->from pair) (evtlist-fix r))
+              (in pair (relation-fix x))))
+    :hints(("Goal" :in-theory (enable member-of-compose-rw)
+            :use ((:instance member-of-compose-suff
+                   (x (id-relation r)) (y x)
+                   (mid (evtpair->from pair)))))))
+
+  (defthm in-compose-id-2
+    (iff (in pair (compose x (id-relation r)))
+         (and (evtpair-p pair)
+              (member-equal (evtpair->to pair) (evtlist-fix r))
+              (in pair (relation-fix x))))
+    :hints(("Goal" :in-theory (enable member-of-compose-rw)
+            :use ((:instance member-of-compose-suff
+                   (x x) (y (id-relation r))
+                   (mid (evtpair->to pair)))))))
+
+  (defthm in-compose*-id
+    (iff (in pair (compose* (cons (id-relation r) x)))
+         (and (evtpair-p pair)
+              (member-equal (evtpair->from pair) (evtlist-fix r))
+              (if (atom x)
+                  (equal (evtpair->to pair) (evtpair->from pair))
+                (in pair (compose* x)))))
+    :hints(("Goal" :in-theory (enable compose*))))
+
+  (defthm in-compose*-id-2
+    (iff (in pair (compose* (list x (id-relation r))))
+         (and (evtpair-p pair)
+              (member-equal (evtpair->to pair) (evtlist-fix r))
+              (in pair (relation-fix x))))
+    :hints(("Goal" :in-theory (enable compose*))))
+
+  (defthm compose-midpoint-of-id-relation
+    (implies (and (member-equal (evt-fix src) (evtlist-fix r))
+                  (in (evtpair src dst) (relation-fix y)))
+             (equal (compose-midpoint src dst (id-relation r) y)
+                    (evt-fix src)))
+    :hints (("goal" :use ((:instance compose-midpoint-witnesses
+                           (mid1 (evt-fix src))
+                           (x (id-relation r))))
+             :in-theory (disable compose-midpoint-witnesses))))
+
+  (defthm compose-midpoint-of-id-relation-2
+    (implies (and (member-equal (evt-fix dst) (evtlist-fix r))
+                  (in (evtpair src dst) (relation-fix x)))
+             (equal (compose-midpoint src dst x (id-relation r))
+                    (evt-fix dst)))
+    :hints (("goal" :use ((:instance compose-midpoint-witnesses
+                           (mid1 (evt-fix dst))
+                           (y (id-relation r))))
+             :in-theory (disable compose-midpoint-witnesses)))))
+
+
+
+
+
+(local (defthm member-append
+         (iff (member-equal k (append x y))
+              (or (member-equal k x) (member-equal k y)))))
 
 (define haz2-loop-from-haz1-loop-aux ((haz1loop evtlist-p)
                                       (r evtlist-p)
@@ -894,66 +1024,6 @@
            (and stable-under-simplificationp
                 '(:expand ((:free (rel) (relation-path-p (cdr haz1loop) rel)))))))
 
-  (defthm in-compose-id
-    (iff (in pair (compose (id-relation r) x))
-         (and (evtpair-p pair)
-              (member-equal (evtpair->from pair) (evtlist-fix r))
-              (in pair (relation-fix x))))
-    :hints(("Goal" :in-theory (enable member-of-compose-rw)
-            :use ((:instance member-of-compose-suff
-                   (x (id-relation r)) (y x)
-                   (mid (evtpair->from pair)))))))
-
-  (defthm in-compose-id-2
-    (iff (in pair (compose x (id-relation r)))
-         (and (evtpair-p pair)
-              (member-equal (evtpair->to pair) (evtlist-fix r))
-              (in pair (relation-fix x))))
-    :hints(("Goal" :in-theory (enable member-of-compose-rw)
-            :use ((:instance member-of-compose-suff
-                   (x x) (y (id-relation r))
-                   (mid (evtpair->to pair)))))))
-
-  (defthm in-compose*-id
-    (iff (in pair (compose* (cons (id-relation r) x)))
-         (and (evtpair-p pair)
-              (member-equal (evtpair->from pair) (evtlist-fix r))
-              (if (atom x)
-                  (equal (evtpair->to pair) (evtpair->from pair))
-                (in pair (compose* x)))))
-    :hints(("Goal" :in-theory (enable compose*))))
-
-  (defthm in-compose*-id-2
-    (iff (in pair (compose* (list x (id-relation r))))
-         (and (evtpair-p pair)
-              (member-equal (evtpair->to pair) (evtlist-fix r))
-              (in pair (relation-fix x))))
-    :hints(("Goal" :in-theory (enable compose*))))
-
-  (defthm compose-midpoint-of-id-relation
-    (implies (and (member-equal (evt-fix src) (evtlist-fix r))
-                  (in (evtpair src dst) (relation-fix y)))
-             (equal (compose-midpoint src dst (id-relation r) y)
-                    (evt-fix src)))
-    :hints (("goal" :use ((:instance compose-midpoint-witnesses
-                           (mid1 (evt-fix src))
-                           (x (id-relation r))))
-             :in-theory (disable compose-midpoint-witnesses))))
-
-  (defthm compose-midpoint-of-id-relation-2
-    (implies (and (member-equal (evt-fix dst) (evtlist-fix r))
-                  (in (evtpair src dst) (relation-fix x)))
-             (equal (compose-midpoint src dst x (id-relation r))
-                    (evt-fix dst)))
-    :hints (("goal" :use ((:instance compose-midpoint-witnesses
-                           (mid1 (evt-fix dst))
-                           (y (id-relation r))))
-             :in-theory (disable compose-midpoint-witnesses))))
-
-  (local (defthm member-append
-           (iff (member-equal k (append x y))
-                (or (member-equal k x) (member-equal k y)))))
-
   (local (defthm nth-when-consp
            (implies (and (posp n)
                          (consp x))
@@ -986,7 +1056,16 @@
                 (member-equal '(MEMBER-EQUAL (EVT-FIX$INLINE (CAR (CDR HAZ1LOOP)))
                                              (EVTLIST-FIX$INLINE W))
                               clause)
-                '(:use ((:instance compose-path-p-of-compose*-path
+                '(;; :computed-hint-replacement
+                  ;; ((and stable-under-simplificationp
+                  ;;       (let ((elems (mergesort (collect-compose*-path-terms-lst clause nil))))
+                  ;;         (and elems
+                  ;;              `(:clause-processor
+                  ;;                (acl2::generalize-with-alist-cp
+                  ;;                 clause ',(pairlis$ elems
+                  ;;                                    (make-list (len elems)
+                  ;;                                               :initial-element 'e))))))))
+                  :use ((:instance compose-path-p-of-compose*-path
                          (src (cadr haz1loop)) (dst (caddr haz1loop))
                          (x (list (id-relation r) po&loc (id-relation r) ca&ext (id-relation w))))
                         (:instance compose*-path-endpoints
@@ -1001,7 +1080,6 @@
                                    member-of-compose-suff-rw2)
                                   (compose-path-p-of-compose*-path
                                    compose*-path-endpoints))))))
-
   (local
    (defthm intersectp-equal-bind-free-nofix
      (implies (and (bind-free '((key . (car haz1loop))))
@@ -1027,7 +1105,9 @@
              :in-theory (e/d (haz1baserel-abstraction
                               in-of-compose*-rw)
                              (compose*-path-endpoints))))))
-       
+
+
+
        
 
 
@@ -1064,7 +1144,202 @@
 ;;                    (compose* (list [m] ca&ext [w])))))
 ;;     (union haz-ob obs)))
 
- 
+
+(define haz1-loop-from-haz2-loop-aux ((haz2loop evtlist-p)
+                                      (r evtlist-p)
+                                      (w evtlist-p)
+                                      (po&loc relation-p)
+                                      (ca&ext relation-p)
+                                      (rf&ext relation-p))
+  :guard (and (relation-path-p haz2loop (haz2baserel-abstraction r w po&loc ca&ext rf&ext))
+              ;; (equal (car haz2loop) (car (last haz2loop)))
+              (member-equal (car haz2loop) w)
+              (member-equal (car (last haz2loop)) w)
+              (not (intersectp-equal r w)))
+  :verify-guards nil
+  :ruler-extenders (:lambdas cons)
+  :returns (path evtlist-p)
+  (b* (;; (pair (evtpair (car haz2loop) (cadr haz2loop)))
+       ([r] (id-relation r))
+       ([w] (id-relation w))
+       ;; (haz-ob (compose* (list [r] po&loc [r] ca&ext [w])))
+       ;; (obs1  (compose* (list [w] rf&ext [r])))
+       (a (evt-fix (car haz2loop))) ;; write
+       (b (evt-fix (cadr haz2loop)))
+       (pair1 (evtpair a b))
+       ((when (and (in pair1 (relation-fix ca&ext))
+                   (member-equal b (evtlist-fix w))))
+        ;; The first pair is in the [m] ca&ext [w] relation, which is also in haz1,
+        ;; and we can continue from there since the next element is also a write.
+        (cons a
+              (if (consp (cddr haz2loop))
+                  (haz1-loop-from-haz2-loop-aux (cdr haz2loop)
+                                                r w po&loc ca&ext rf&ext)
+                (list b))))
+       (c (evt-fix (caddr haz2loop)))
+       ((when (and (in pair1 (relation-fix rf&ext))
+                   (member-equal b (evtlist-fix r))))
+        ;; (a b) is in [w] rf&ext [r], therefore (b c) can only be in [m] ca&ext [w].
+        ;; Both relations are also in haz1 and the latter ends in a write so we can then continue from there.
+        (list* a b
+               (if (consp (cdddr haz2loop))
+                   (haz1-loop-from-haz2-loop-aux (cddr haz2loop)
+                                                 r w po&loc ca&ext rf&ext)
+                 (list c))))
+       ;; (a b) is in haz-ob, which ends in [r], therefore (b c) can only be in [m] ca&ext [w].
+       ;; We need to extract the middle element b' between a and b such that (a b') in [w] rf&ext [r], (b' b) in [r] po&loc [r],
+       ;; so then (a b' c) is a path in haz1.
+       (haz-ob-path (compose*-path a b (list [w] rf&ext [r] po&loc [r])))
+       (new-b (nth 2 haz-ob-path)))
+    (list* a new-b
+           (if (consp (cdddr haz2loop))
+               (haz1-loop-from-haz2-loop-aux (cddr haz2loop)
+                                             r w po&loc ca&ext rf&ext)
+             (list c))))
+  ///
+
+  (local
+   (defthm intersectp-equal-bind-free
+     (implies (and (bind-free '((key . (evt-fix$inline (car haz2loop)))))
+                   (member-equal key x)
+                   (member-equal key y))
+              (intersectp-equal x y))))
+
+  (local
+   (defthm intersectp-equal-bind-free2
+     (implies (and (bind-free '((key . (evt-fix$inline (car (cdr haz2loop))))))
+                   (member-equal key x)
+                   (member-equal key y))
+              (intersectp-equal x y))))
+  
+  (defret endpoints-of-<fn>
+    (and (equal (car path) (evt-fix (car haz2loop)))
+         (implies (and (relation-path-p haz2loop (haz2baserel-abstraction r w po&loc ca&ext rf&ext))
+                       (member-equal (evt-fix (car haz2loop)) (evtlist-fix w))
+                       (member-equal (evt-fix (car (last haz2loop))) (evtlist-fix w))
+                       (not (intersectp-equal (evtlist-fix r) (evtlist-fix w))))
+                  (equal (car (last path))
+                         (evt-fix (car (last haz2loop))))))
+    :hints(("Goal" :in-theory (enable haz2baserel-abstraction)
+            :induct <call>
+            :do-not-induct t)
+           (and stable-under-simplificationp
+                '(:expand ((:free (rel) (relation-path-p haz2loop rel)))))
+           (and stable-under-simplificationp
+                '(:expand ((:free (rel) (relation-path-p (cdr haz2loop) rel)))))))
+
+  (local (defthm nth-when-consp
+           (implies (and (posp n)
+                         (consp x))
+                    (equal (nth n x)
+                           (nth (1- n) (cdr x))))))
+  
+  (defret haz1-path-of-<fn>
+    (b* ((haz2 (haz2baserel-abstraction r w po&loc ca&ext rf&ext))
+         (haz1 (haz1baserel-abstraction r w po&loc ca&ext rf&ext)))
+      (implies (and (relation-path-p haz2loop haz2)
+                    (member-equal (evt-fix (car haz2loop)) (evtlist-fix w))
+                    (member-equal (evt-fix (car (last haz2loop))) (evtlist-fix w))
+                    (not (intersectp-equal (evtlist-fix r) (evtlist-fix w))))
+               (relation-path-p path haz1)))
+    :hints(("Goal" :in-theory (e/d (haz1baserel-abstraction
+                                    haz2baserel-abstraction)
+                                   ;; ((:d <fn>))
+                                   )
+            :induct <call>
+             :do-not-induct t
+             )
+           
+            
+           (and stable-under-simplificationp
+                '(:expand ((:free (rel) (relation-path-p haz2loop rel))
+                           (:free (rel x y) (relation-path-p (cons x y) rel)))))
+           (and stable-under-simplificationp
+                '(:expand (;; (:free (src dst x y) (compose*-path src dst (cons x y)))
+                           (:free (x y) (compose* (cons x y)))
+                           (:free (x a b) (compose-path-p x (cons a b))))))
+           (;; acl2::use-termhint
+            ;; (b* (;; (pair (evtpair (car haz2loop) (cadr haz2loop)))
+            ;;      ([r] (id-relation r))
+            ;;      ([w] (id-relation w))
+            ;;      ;; (haz-ob (compose* (list [r] po&loc [r] ca&ext [w])))
+            ;;      ;; (obs1  (compose* (list [w] rf&ext [r])))
+            ;;      (a (evt-fix (car haz2loop))) ;; write
+            ;;      (b (evt-fix (cadr haz2loop)))
+            ;;      (pair1 (evtpair a b))
+            ;;      ((when (and (in pair1 (relation-fix ca&ext))
+            ;;                  (member-equal b (evtlist-fix w))))
+            ;;       ;; The first pair is in the [m] ca&ext [w] relation, which is also in haz1,
+            ;;       ;; and we can continue from there since the next element is also a write.
+            ;;       nil)
+            ;;      (?c (evt-fix (caddr haz2loop)))
+            ;;      ((when (and (in pair1 (relation-fix rf&ext))
+            ;;                  (member-equal b (evtlist-fix r))))
+            ;;       ;; (a b) is in [w] rf&ext [r], therefore (b c) can only be in [m] ca&ext [w].
+            ;;       ;; Both relations are also in haz1 and the latter ends in a write so we can then continue from there.
+            ;;       nil)
+            ;;      ;; (a b) is in haz-ob, which ends in [r], therefore (b c) can only be in [m] ca&ext [w].
+            ;;      ;; We need to extract the middle element b' between a and b such that (a b') in [w] rf&ext [r], (b' b) in [r] po&loc [r],
+            ;;      ;; so then (a b' c) is a path in haz1.
+            ;;      (haz-ob-path (compose*-path a b (list [w] rf&ext [r] po&loc [r])))
+            ;;      (?new-b (nth 2 haz-ob-path)))
+            and stable-under-simplificationp
+              '(;; :computed-hint-replacement
+                ;; ((and stable-under-simplificationp
+                ;;       (let ((elems (mergesort (collect-compose*-path-terms-lst clause nil))))
+                ;;         (and elems
+                ;;              `(:clause-processor
+                ;;                (acl2::generalize-with-alist-cp
+                ;;                 clause ',(pairlis$ elems
+                ;;                                    (make-list (len elems)
+                ;;                                               :initial-element 'e))))))))
+                :use ((:instance compose-path-p-of-compose*-path
+                       (src (car haz2loop)) (dst (cadr haz2loop))
+                       (x (list (id-relation w) rf&ext (id-relation r) po&loc (id-relation r))))
+                      (:instance compose*-path-endpoints
+                       (src (car haz2loop)) (dst (cadr haz2loop))
+                       (x (list (id-relation w) rf&ext (id-relation r) po&loc (id-relation r)))))
+                :in-theory (disable compose-path-p-of-compose*-path
+                                    compose*-path-endpoints)))
+           (and stable-under-simplificationp
+                '(:expand ((:free (rel) (relation-path-p (cdr haz2loop) rel)))
+                  :in-theory (e/d (member-of-compose-rw
+                                   member-of-compose-suff-rw
+                                   member-of-compose-suff-rw2)
+                                  (compose-path-p-of-compose*-path
+                                   compose*-path-endpoints))))))
+  
+  (local
+   (defthm intersectp-equal-bind-free-nofix
+     (implies (and (bind-free '((key . (car haz2loop))))
+                   (member-equal key x)
+                   (member-equal key y))
+              (intersectp-equal x y))))
+
+  (local
+   (defthm intersectp-equal-bind-free2-nofix
+     (implies (and (bind-free '((key . (car (cdr haz2loop)))))
+                   (member-equal key x)
+                   (member-equal key y))
+              (intersectp-equal x y))))
+  
+  (verify-guards haz1-loop-from-haz2-loop-aux
+    :hints (("goal" :do-not-induct t
+             :expand ((:free (rel) (relation-path-p nil rel))
+                      (:free (rel) (relation-path-p haz2loop rel))
+                      (:free (rel) (relation-path-p (cdr haz2loop) rel))
+                      (evtlist-p haz2loop)
+                      (evtlist-p (cdr haz2loop)))
+             :in-theory (e/d (haz2baserel-abstraction)
+                             (compose*-path-endpoints)))
+            (and stable-under-simplificationp
+                 '(:expand ((:free (path x y) (compose-path-p path (cons x y))))
+                   :in-theory (e/d (haz2baserel-abstraction
+                                    in-of-compose*-rw)
+                                   (compose*-path-endpoints)))))))
+
+
+
 (define haz2-loop-from-haz1-loop ((haz1loop evtlist-p)
                                   (r evtlist-p)
                                   (w evtlist-p)
@@ -1076,7 +1351,7 @@
               (not (intersectp-equal r w)))
   :returns (path evtlist-p)
   (haz2-loop-from-haz1-loop-aux
-   (haz1-loop-normalize-to-w-first
+   (haz-loop-normalize-to-w-first
     haz1loop r w po&loc ca&ext rf&ext)
    r w po&loc ca&ext rf&ext)
   ///
@@ -1105,6 +1380,48 @@
                            (has-loop-witness (haz1baserel-abstraction r w po&loc ca&ext rf&ext))
                            r w po&loc ca&ext rf&ext))
                     (x (haz2baserel-abstraction r w po&loc ca&ext rf&ext))))))))
+
+
+(define haz1-loop-from-haz2-loop ((haz2loop evtlist-p)
+                                  (r evtlist-p)
+                                  (w evtlist-p)
+                                  (po&loc relation-p)
+                                  (ca&ext relation-p)
+                                  (rf&ext relation-p))
+  :guard (and (relation-path-p haz2loop (haz2baserel-abstraction r w po&loc ca&ext rf&ext))
+              (equal (car haz2loop) (car (last haz2loop)))
+              (not (intersectp-equal r w)))
+  :returns (path evtlist-p)
+  (haz1-loop-from-haz2-loop-aux
+   (haz-loop-normalize-to-w-first
+    haz2loop r w po&loc ca&ext rf&ext)
+   r w po&loc ca&ext rf&ext)
+  ///
+  (defret haz1-path-p-of-<fn>
+    (implies (and (relation-path-p haz2loop (haz2baserel-abstraction r w po&loc ca&ext rf&ext))
+                  (equal (evt-fix (car haz2loop))
+                         (evt-fix (car (last haz2loop))))
+                  (not (intersectp-equal (evtlist-fix r) (evtlist-fix w))))
+             (relation-path-p path (haz1baserel-abstraction r w po&loc ca&ext rf&ext))))
+
+  (defret endpoints-of-<fn>
+    (implies (and (relation-path-p haz2loop (haz2baserel-abstraction r w po&loc ca&ext rf&ext))
+                  (equal (evt-fix (car haz2loop))
+                         (evt-fix (car (last haz2loop))))
+                  (not (intersectp-equal (evtlist-fix r) (evtlist-fix w))))
+             (equal (car (last path))
+                    (car path))))
+
+  (defthm has-loop-of-haz1baserel-abstraction-when-haz2
+    (implies (and (has-loop (haz2baserel-abstraction r w po&loc ca&ext rf&ext))
+                  (not (intersectp-equal (evtlist-fix r) (evtlist-fix w))))
+             (has-loop (haz1baserel-abstraction r w po&loc ca&ext rf&ext)))
+    :hints (("goal" :expand ((has-loop (haz2baserel-abstraction r w po&loc ca&ext rf&ext)))
+             :use ((:instance has-loop-suff
+                    (path (haz1-loop-from-haz2-loop
+                           (has-loop-witness (haz2baserel-abstraction r w po&loc ca&ext rf&ext))
+                           r w po&loc ca&ext rf&ext))
+                    (x (haz1baserel-abstraction r w po&loc ca&ext rf&ext))))))))
 
 
 
@@ -1214,8 +1531,35 @@
                           (car (haz2fragment-spec co ex)))))
   :hints(("Goal" :in-theory (enable haz1fragment-spec-in-terms-of-abstraction
                                     haz2fragment-spec-in-terms-of-abstraction))))
-       
 
+(defthm haz1fragment-spec-external-when-haz2fragment-spec-external
+  (implies (member-equal "external"
+                         (result->flags
+                          (car (haz2fragment-spec co ex))))
+           (member-equal "external"
+                         (result->flags
+                          (car (haz1fragment-spec co ex)))))
+  :hints(("Goal" :in-theory (enable haz2fragment-spec-in-terms-of-abstraction
+                                    haz1fragment-spec-in-terms-of-abstraction))))
+
+
+
+
+(defthm haz2fragment-external-iff-haz2fragment-external
+  (b* (((mv err1 results1)
+        (eval-inslist (haz1fragment)
+                      :result (make-result :judgement :allowed
+                                           :env (env-update "co" (v_rel co) nil))))
+       ((mv err2 results2)
+        (eval-inslist (haz2fragment)
+                      :result (make-result :judgement :allowed
+                                           :env (env-update "co" (v_rel co) nil)))))
+    (implies (and (not err1)
+                  (not err2))
+             (iff (member-equal "external" (result->flags (car results2)))
+                  (member-equal "external" (result->flags (car results1))))))
+  :hints(("Goal" :in-theory (disable (haz1fragment)
+                                     (haz2fragment)))))
 
 
 ;; haz1: ob =
