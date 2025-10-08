@@ -46,9 +46,9 @@
   (if (atom rels)
       nil
     (cons (change-result result :env
-                         (cons (cons (var-fix var)
-                                     (val-fix (car rels)))
-                               (result->env result)))
+                         (env-update var
+                                     (car rels)
+                                     (result->env result)))
           (withfrom-results var (cdr rels) result))))
 
 
@@ -110,7 +110,7 @@
                     ((expval env)
                      (if (function-bindings-p x.bindings)
                          (b* ((fn-env (recursive-function-bindings-to-closures x.bindings env)))
-                           (norm (append fn-env env)))
+                           (norm (env-combine fn-env env)))
                        (b* ((env (add-empty-bindings-to-env x.bindings env))
                             ((expval env) (eval-fixpoint x.bindings)))
                          (norm env))))
@@ -124,7 +124,7 @@
                       (norm (list (change-result result :flags (cons x.test.name result.flags))))))
                   (norm (list (change-result result :judgement :forbidden))))
         :i_procedure (b* ((proc (v_proc x.formals x.body result.env))
-                          (env (cons (cons x.name proc) result.env)))
+                          (env (env-update x.name proc result.env)))
                        (norm (list (change-result result :env env))))
         :i_call      (b* (((expval proc) (b* ((look (env-lookup x.proc result.env))
                                               ((unless look)
@@ -139,7 +139,7 @@
                                     (msg "in procedure call of" x.proc)))
                               ((expval rslts)
                                (eval-inslist proc.body
-                                             :result (change-result result :env (append argenv result.env))
+                                             :result (change-result result :env (env-combine argenv result.env))
                                              :reclimit (1- reclimit))))
                            (norm (resultlist-replace-env rslts result.env)))
                          :otherwise (err "Bad procedure call"
