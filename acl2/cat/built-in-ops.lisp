@@ -282,7 +282,19 @@
                   (in (evtpair (evtpair->from pair) mid) (relation-fix x))
                   (in (evtpair mid (evtpair->to pair)) (relation-fix y)))
              (in pair compose))
-    :hints(("Goal" :in-theory (enable member-of-compose1)))))
+    :hints(("Goal" :in-theory (enable member-of-compose1))))
+
+  (defretd member-of-compose-suff-rw
+    (implies (and (in (evtpair src mid) (relation-fix x))
+                  (in (evtpair mid dst) (relation-fix y)))
+             (in (evtpair src dst) compose))
+    :hints(("Goal" :in-theory (enable member-of-compose1))))
+
+  (defretd member-of-compose-suff-rw2
+    (implies (and (in (evtpair mid dst) (relation-fix y))
+                  (in (evtpair src mid) (relation-fix x)))
+             (in (evtpair src dst) compose))
+    :hints(("Goal" :in-theory (enable member-of-compose-suff-rw)))))
 
 (local (defthm member-equal-when-relation-p
          (implies (relation-p x)
@@ -305,8 +317,8 @@
     (if (emptyp x)
         nil
       (if (and (equal (evt-fix src) (evtpair->from (head x)))
-               (member-equal (evtpair (evtpair->to (head x)) dst)
-                             (relation-fix y)))
+               (in (evtpair (evtpair->to (head x)) dst)
+                   (relation-fix y)))
           (evt-fix (evtpair->to (head x)))
         (compose-midpoint src dst (tail x) y))))
   ///
@@ -350,6 +362,26 @@
                                       member-of-compose1)
             :cases ((and (evt-p (evtpair->from pair)) (evt-p (evtpair->to pair))))))
     :otf-flg t)
+
+  (fty::deffixequiv compose-midpoint)
+  
+  (defretd member-of-compose-implies-fix
+    :pre-bind ((pair (evtpair src dst)))
+    (implies (and (in pair (compose x y)))
+             (and (in (evtpair src mid) (relation-fix x))
+                  (in (evtpair mid dst) (relation-fix y))))
+    :hints(("Goal" :use ((:instance member-of-compose-necc
+                          (pair (evtpair src dst)))))))
+  
+  (defretd member-of-compose-implies
+    :pre-bind ((pair (evtpair src dst)))
+    (implies (and (in pair (compose x y)))
+             (and (implies (relation-p x)
+                           (in (evtpair src mid) x))
+                  (implies (relation-p y)
+                           (in (evtpair mid dst) y))))
+    :hints(("Goal" :use ((:instance member-of-compose-necc
+                          (pair (evtpair src dst)))))))
                          
   (defretd member-of-compose
     :pre-bind ((src (evtpair->from pair))
@@ -410,6 +442,80 @@
                                 (pair ,(acl2::hq pair2))
                                 (mid ,(acl2::hq step1))))
                          :in-theory (enable member-of-compose-rw))))))))))
+
+
+
+(fty::deflist relationlist :elt-type relation :true-listp t)
+
+(define compose-path-p ((x evtlist-p)
+                                 (rels relationlist-p))
+  :guard (consp rels)
+  (and (consp x)
+       (consp (cdr x))
+       (in (evtpair (car x) (cadr x)) (relation-fix (car rels)))
+       (if (atom (cdr rels))
+           (atom (cddr x))
+         (compose-path-p (cdr x) (cdr rels)))))
+                
+
+(define compose* ((x relationlist-p))
+  :guard (consp x)
+  :returns (compose relation-p)
+  (if (atom (cdr x))
+      (relation-fix (car x))
+    (compose (car x) (compose* (cdr x))))
+  ///
+  (defthm in-compose*-when-compose-path
+    (implies (compose-path-p evts x)
+             (in (evtpair (car evts) (car (last evts)))
+                 (compose* x)))
+    :hints(("Goal" :in-theory (enable compose-path-p
+                                      member-of-compose-suff-rw)
+            :induct t))))
+
+(define compose*-path ((src evt-p) (dst evt-p) (x relationlist-p))
+  :guard (and (consp x)
+              (in (evtpair src dst) (compose* x)))
+  :guard-hints (("goal" :Expand ((compose* x))
+                 :in-theory (enable member-of-compose-implies)))
+  :returns (path evtlist-p)
+  (if (atom (cdr x))
+      (list (evt-fix src) (evt-fix dst))
+    (let ((mid (compose-midpoint src dst (car x) (compose* (cdr x)))))
+      (cons (evt-fix src)
+            (compose*-path mid dst (cdr x)))))
+  ///
+  (defret <fn>-endpoints
+    (and (equal (car path) (evt-fix src))
+         (equal (car (last path)) (evt-fix dst))))
+  
+  (defret compose-path-p-of-<fn>
+    (implies (in (evtpair src dst) (compose* x))
+             (compose-path-p path x))
+    :hints(("Goal" :in-theory (enable compose-path-p
+                                      compose*
+                                      member-of-compose-implies
+                                      member-of-compose-implies-fix))))
+
+  (defretd in-of-compose*-rw
+    :pre-bind ((src (evtpair->from pair))
+               (dst (evtpair->to pair)))
+    (implies (acl2::rewriting-negative-literal
+              `(in ,pair (compose* ,x)))
+             (iff (in pair (compose* x))
+                  (and (evtpair-p pair)
+                       (compose-path-p path x)
+                       (equal (car path) src)
+                       (equal (car (last path)) dst))))
+    :hints (("goal" :use ((:instance in-compose*-when-compose-path
+                           (evts (compose*-path (evtpair->from pair)
+                                                (evtpair->to pair) x)))))))
+  
+  (defret len-of-<fn>
+    (equal (len path) (+ 1 (max (len x) 1)))))
+  
+
+
 
 
 (define domain ((x relation-p))
@@ -831,7 +937,40 @@
         t
       (and (b* (((evtpair x1) (head x)))
              (not (equal x1.from x1.to)))
-           (test-irreflexive (tail x))))))
+           (test-irreflexive (tail x)))))
+  ///
+  (defthm test-irreflexive-necc
+    (implies (in (evtpair evt evt) (relation-fix x))
+             (not (test-irreflexive x)))))
+
+(define test-irreflexive-badguy ((x relation-p))
+  :measure (acl2-count (relation-fix x))
+  :returns (evt (iff (evt-p evt) evt))
+  (b* ((x (relation-fix x)))
+    (if (emptyp x)
+        nil
+      (or (b* (((evtpair x1) (head x)))
+             (and (equal x1.from x1.to)
+                  x1.from))
+          (test-irreflexive-badguy (tail x)))))
+  ///
+  (local (defthm evtpair-when-from-equal-to
+           (b* (((evtpair pair)))
+             (implies (equal pair.from pair.to)
+                      (equal (evtpair pair.from pair.from)
+                             (evtpair-fix pair))))))
+  
+  (defret test-irreflexive-by-badguy
+    (implies (not (in (evtpair evt evt) (relation-fix x)))
+             (test-irreflexive x))
+    :hints(("Goal" :in-theory (enable test-irreflexive))))
+
+  
+  (defret self-pair-exists-when-not-test-irreflexive
+    (implies (not (test-irreflexive x))
+             (in (evtpair evt evt) (relation-fix x)))
+    :hints(("Goal" :in-theory (enable test-irreflexive)))))
+
 
 (define test-acyclic ((x relation-p))
   (test-irreflexive (transitive-closure x)))

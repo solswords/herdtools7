@@ -28,6 +28,7 @@
 (local (include-book "std/basic/arith-equivs" :dir :system))
 (local (include-book "std/lists/sets" :dir :System))
 (local (include-book "varset"))
+(local (include-book "../asl/utils/omaps"))
 (local (std::add-default-post-define-hook :fix))
 
 
@@ -202,6 +203,8 @@
          :rule-classes :linear))
 
 
+
+
 (define env-equiv-on-var-set ((vars varlist-p)
                               (env1 env-p)
                               (env2 env-p))
@@ -233,12 +236,13 @@
                   (subset (mergesort (varlist-fix vars1)) (varlist-fix vars)))
              (equal (env-extract vars1 env1)
                     (env-extract vars1 env2)))
-    :hints (("goal" :induct (varlist-fix vars1)
-             :in-theory (enable (:i varlist-fix)
-                                env-equiv-on-var-set-implies-rw)
-             :expand ((:free (a b) (mergesort (cons a b)))
-                      (varlist-fix vars1)
-                      (:free (env) (env-extract vars1 env)))))))
+    :hints (("goal" 
+             :in-theory (e/d (env-equiv-on-var-set-implies-rw
+                              set::subset-in)
+                             ())
+             :use ((:instance env-diff-key-when-unequal
+                    (x (env-extract vars1 env1))
+                    (y (env-extract vars1 env2))))))))
 
 
 
@@ -331,6 +335,21 @@
          (equal (append (append x y) z)
                 (append x y z))))
 
+
+(defthm env-combine-associative
+  (equal (env-combine (env-combine a b) c)
+         (env-combine a (env-combine b c)))
+  :hints (("goal" :use ((:instance env-diff-key-when-unequal
+                         (x (env-combine (env-combine a b) c))
+                         (y (env-combine a (env-combine b c))))))))
+
+(defthm env-combine-of-update-associative
+  (equal (env-combine (env-update k v b) c)
+         (env-update k v (env-combine b c)))
+  :hints (("goal" :use ((:instance env-diff-key-when-unequal
+                         (x (env-combine (env-update k v b) c))
+                         (y (env-update k v (env-combine b c))))))))
+
 (define eval-bindings-new-env ((x bindinglist-p)
                                &key
                                ((ex execgraph-p) 'ex)
@@ -342,12 +361,12 @@
        ((mv err new-env1) (eval-binding (car x)))
        ((when err) nil)
        (new-env-rest (eval-bindings-new-env (cdr x))))
-    (append new-env1 new-env-rest))
+    (env-combine new-env1 new-env-rest))
   ///
   (defretd <fn>-in-terms-of-eval-bindings-new-env
     (implies (not err)
              (equal res
-                    (append (eval-bindings-new-env x) (env-fix env))))
+                    (env-combine (eval-bindings-new-env x) (env-fix env))))
     :hints(("Goal" :in-theory (enable eval-bindings)))
     :fn eval-bindings))
 
@@ -365,12 +384,12 @@
         nil)
        ((mv err val) (eval-exp x.exp)))
     (and (not err)
-         (list (cons x.pat.var val))))
+         (env-update x.pat.var val nil)))
   ///
   (defretd <fn>-in-terms-of-eval-fixpoint-binding-new-env
     (implies (not err)
              (equal res
-                    (append (eval-fixpoint-binding-new-env x) (env-fix env))))
+                    (env-combine (eval-fixpoint-binding-new-env x) (env-fix env))))
     :hints(("Goal" :in-theory (enable eval-fixpoint-binding)))
     :fn eval-fixpoint-binding))
 
@@ -383,13 +402,13 @@
   :verify-guards nil
   (b* (((when (atom x)) nil)
        (env1 (eval-fixpoint-binding-new-env (car x)))
-       (env2 (eval-fixpoint1-new-env (cdr x) :env (append env1 (env-fix env)))))
-    (append env2 env1))
+       (env2 (eval-fixpoint1-new-env (cdr x) :env (env-combine env1 (env-fix env)))))
+    (env-combine env2 env1))
   ///
   (defretd <fn>-in-terms-of-eval-fixpoint1-new-env
     (implies (not err)
              (equal res
-                    (append (eval-fixpoint1-new-env x) (env-fix env))))
+                    (env-combine (eval-fixpoint1-new-env x) (env-fix env))))
     :hints(("Goal" :in-theory (enable eval-fixpoint1
                                       eval-fixpoint-binding-in-terms-of-eval-fixpoint-binding-new-env)))
     :fn eval-fixpoint1))
@@ -408,13 +427,13 @@
        ((unless changedp) new-env)
        ((when (zp reclimit)) nil)
        (new-env2
-        (eval-fixpoint-new-env x :env (append new-env (env-fix env)) :reclimit (1- reclimit))))
-    (append new-env2 new-env))
+        (eval-fixpoint-new-env x :env (env-combine new-env (env-fix env)) :reclimit (1- reclimit))))
+    (env-combine new-env2 new-env))
   ///
   (defretd <fn>-in-terms-of-eval-fixpoint-new-env
     (implies (not err)
              (equal res
-                    (append (eval-fixpoint-new-env x) (env-fix env))))
+                    (env-combine (eval-fixpoint-new-env x) (env-fix env))))
     :hints(("Goal" :in-theory (enable eval-fixpoint
                                       eval-fixpoint1-in-terms-of-eval-fixpoint1-new-env)
             :induct (eval-fixpoint-new-env x)
@@ -426,14 +445,14 @@
 ;;(defsection eval-exp-of-free-var-equiv-envs
 (local
  (progn
-   (defthm alist-keys-member-env-lookup
-     (implies (and (var-p v)
-                   (env-p env))
-              (iff (member-equal v (acl2::alist-keys env))
-                   (env-lookup v env)))
-     :hints(("Goal" :in-theory (enable env-lookup))))
+   ;; (defthm env-keys-member-env-lookup
+   ;;   (implies (and (var-p v)
+   ;;                 (env-p env))
+   ;;            (iff (member-equal v (env-keys env))
+   ;;                 (env-lookup v env)))
+   ;;   :hints(("Goal" :in-theory (enable env-lookup))))
      
-   (in-theory (disable acl2::alist-keys-member-hons-assoc-equal))
+   ;; (in-theory (disable env-keys-member-hons-assoc-equal))
      
    (defthm difference-of-union
      (equal (difference (union x y) z)
@@ -454,51 +473,54 @@
                                        pat-singleton-vars pat0-vars
                                        env-equiv-on-var-set-implies-rw))))
 
-   (defthm hons-assoc-equal-of-append
-     (equal (hons-assoc-equal k (append x y))
-            (or (hons-assoc-equal k x)
-                (hons-assoc-equal k y))))
+   ;; (defthm hons-assoc-equal-of-append
+   ;;   (equal (hons-assoc-equal k (append x y))
+   ;;          (or (hons-assoc-equal k x)
+   ;;              (hons-assoc-equal k y))))
+
+   
+  
+   ;; (local (defthm cdr-of-omap-assoc-env
+   ;;         (implies (env-p env)
+   ;;                  (iff (cdr (omap::assoc k env))
+   ;;                       (omap::assoc k env)))
+   ;;         :hints(("Goal" :in-theory (enable omap::assoc)))))
      
-   (defthm env-lookup-of-append
-     (equal (env-lookup k (append x y))
-            (or (env-lookup k x)
-                (env-lookup k y)))
-     :hints(("Goal" :in-theory (enable env-lookup))))
-     
-   (defthm env-equiv-on-var-set-of-append-same
+   (defthm env-equiv-on-var-set-of-update*-same
      (implies (env-equiv-on-var-set vars env1 env2)
-              (env-equiv-on-var-set vars (append new env1) (append new env2)))
+              (env-equiv-on-var-set vars (env-combine new env1) (env-combine new env2)))
      :hints(("Goal" :in-theory (enable env-equiv-on-var-set))))
 
    (defthmd env-equiv-on-var-set-of-append-same-diff-lemma
      (implies (and (env-equiv-on-var-set vars2 env1 env2)
                    (subset (difference (varlist-fix vars)
-                                       (mergesort (acl2::alist-keys (env-fix new))))
+                                       (mergesort (env-keys (env-fix new))))
                            (varlist-fix vars2)))
-              (env-equiv-on-var-set vars (append new env1) (append new env2)))
+              (env-equiv-on-var-set vars (env-combine new env1) (env-combine new env2)))
      :hints(("Goal" :in-theory (enable env-equiv-on-var-set
-                                       env-equiv-on-var-set-implies-rw)
-             :induct (env-equiv-on-var-set vars (append new env1) (append new env2))
+                                       env-equiv-on-var-set-implies-rw
+                                       in-env-keys-iff-env-lookup)
+             :induct (env-equiv-on-var-set vars (env-combine new env1) (env-combine new env2))
              :expand ((:free (keys) (difference (varlist-fix vars) keys))))))
 
    (defthm env-equiv-on-var-set-of-append-same-diff
      (implies (env-equiv-on-var-set (difference (varlist-fix vars)
-                                                (mergesort (acl2::alist-keys (env-fix new))))
+                                                (mergesort (env-keys (env-fix new))))
                                     env1 env2)
-              (env-equiv-on-var-set vars (append new env1) (append new env2)))
+              (env-equiv-on-var-set vars (env-combine new env1) (env-combine new env2)))
      :hints (("goal" :use ((:instance env-equiv-on-var-set-of-append-same-diff-lemma
                             (vars2 (difference (varlist-fix vars)
-                                               (mergesort (acl2::alist-keys (env-fix new))))))))))
+                                               (mergesort (env-keys (env-fix new))))))))))
 
-   (defthm alist-keys-of-pair-pat0-tuple
-     (equal (mergesort (acl2::alist-keys (pair-pat0-tuple x elts)))
+   (defthm env-keys-of-pair-pat0-tuple
+     (equal (mergesort (env-keys (pair-pat0-tuple x elts)))
             (pat0-list-vars x))
      :hints(("Goal" :in-theory (enable pair-pat0-tuple pat0-list-vars pat0-vars
                                        mergesort))))
 
-   (defthm alist-keys-of-eval-binding
+   (defthm env-keys-of-eval-binding
      (implies (not (mv-nth 0 (eval-binding x)))
-              (equal (mergesort (acl2::alist-keys (mv-nth 1 (eval-binding x))))
+              (equal (mergesort (env-keys (mv-nth 1 (eval-binding x))))
                      (pat-vars (binding->pat x))))
      :hints(("Goal" :in-theory (enable match-pat
                                        mergesort
@@ -593,9 +615,9 @@
 
    (local (in-theory (disable ACL2::ZP-FORWARD-TO-NAT-EQUIV-0)))
 
-   (defthm alist-keys-of-add-empty-bindings-to-env
-     (equal (mergesort (acl2::alist-keys (add-empty-bindings-to-env x env)))
-            (union (bindinglist-singleton-bound-vars x) (mergesort (acl2::alist-keys (env-fix env)))))
+   (defthm env-keys-of-add-empty-bindings-to-env
+     (equal (mergesort (env-keys (add-empty-bindings-to-env x env)))
+            (union (bindinglist-singleton-bound-vars x) (mergesort (env-keys (env-fix env)))))
      :hints(("Goal" :in-theory (enable add-empty-bindings-to-env
                                        bindinglist-singleton-bound-vars
                                        mergesort pat0-vars pat-singleton-vars))))
@@ -603,7 +625,7 @@
    (defthm add-empty-bindings-to-env-normalize
      (implies (syntaxp (not (equal env ''nil)))
               (equal (add-empty-bindings-to-env x env)
-                     (append (add-empty-bindings-to-env x nil) (env-fix env))))
+                     (env-combine (add-empty-bindings-to-env x nil) (env-fix env))))
      :hints(("Goal" :in-theory (enable add-empty-bindings-to-env))))
 
    (defthm mergesort-of-append
@@ -614,9 +636,9 @@
 
 
      
-   (defthm alist-keys-of-eval-bindings-new-env
+   (defthm env-keys-of-eval-bindings-new-env
      (implies (not (mv-nth 0 (eval-bindings x)))
-              (equal (mergesort (acl2::Alist-keys (eval-bindings-new-env x)))
+              (equal (mergesort (env-keys (eval-bindings-new-env x)))
                      (bindinglist-bound-vars x)))
      :hints(("Goal" :in-theory (enable eval-bindings-new-env
                                        eval-bindings
@@ -625,9 +647,9 @@
              :expand ((Eval-bindings x))
              :induct (eval-bindings-new-env x))))
 
-   (defthm alist-keys-of-recursive-function-bindings-to-closures-aux
+   (defthm env-keys-of-recursive-function-bindings-to-closures-aux
      (implies (function-bindings-p x)
-              (equal (mergesort (acl2::alist-keys (recursive-function-bindings-to-closures-aux
+              (equal (mergesort (env-keys (recursive-function-bindings-to-closures-aux
                                                    x defs env)))
                      (bindinglist-bound-vars x)))
      :hints(("Goal" :in-theory (enable function-bindings-p
@@ -637,9 +659,9 @@
                                        pat-vars
                                        pat0-vars))))
 
-   (defthm alist-keys-of-recursive-function-bindings-to-closures
+   (defthm env-keys-of-recursive-function-bindings-to-closures
      (implies (function-bindings-p x)
-              (equal (mergesort (acl2::alist-keys (recursive-function-bindings-to-closures x env)))
+              (equal (mergesort (env-keys (recursive-function-bindings-to-closures x env)))
                      (bindinglist-bound-vars x)))
      :hints(("Goal" :in-theory (enable recursive-function-bindings-to-closures))))
 
@@ -663,9 +685,10 @@
        (varset-ind (tail (varlist-fix vars)))))
    
    (defthm env-equiv-on-var-set-of-append-same-vars
-     (implies (subset (varlist-fix vars) (mergesort (acl2::alist-keys (env-fix new))))
-              (env-equiv-on-var-set vars (append new env1) (append new env2)))
-     :hints(("Goal" 
+     (implies (subset (varlist-fix vars) (mergesort (env-keys (env-fix new))))
+              (env-equiv-on-var-set vars (env-combine new env1) (env-combine new env2)))
+     :hints(("Goal"
+             :in-theory (enable in-env-keys-iff-env-lookup)
              :induct (varset-ind vars)
              :expand ((:free (keys) (subset (varlist-fix vars) keys))
                       (:free (env1 env2) (env-equiv-on-var-set vars env1 env2))))))
@@ -685,11 +708,11 @@
 
    (defthm keys-of-recursive-function-bindings-to-closures-aux
      (implies (function-bindings-p x)
-              (equal (mergesort (acl2::alist-keys (recursive-function-bindings-to-closures-aux x defs env)))
+              (equal (env-keys (recursive-function-bindings-to-closures-aux x defs env))
                      (bindinglist-singleton-bound-vars x)))
      :hints(("Goal" :in-theory (enable function-bindings-p
                                        recursive-function-bindings-to-closures-aux
-                                       acl2::alist-keys
+                                       ;; env-keys
                                        bindinglist-singleton-bound-vars
                                        pat-singleton-vars pat0-vars pat-vars
                                        bindinglist-bound-vars
@@ -697,7 +720,7 @@
 
    (defthm keys-of-recursive-function-bindings-to-closures
      (implies (function-bindings-p x)
-              (equal (mergesort (acl2::alist-keys (recursive-function-bindings-to-closures x env)))
+              (equal (mergesort (env-keys (recursive-function-bindings-to-closures x env)))
                      (bindinglist-singleton-bound-vars x)))
      :hints(("Goal" :in-theory (enable recursive-function-bindings-to-closures))))
 

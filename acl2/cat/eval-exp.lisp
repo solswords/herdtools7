@@ -59,9 +59,6 @@ if it is an error, otherwise continuing the computation."
          (mv err nil nil)
        ,acl2::rest-expr)))
 
-(define env-lookup ((v var-p) (env env-p))
-  :returns (val (iff (val-p val) val))
-  (cdr (hons-assoc-equal (var-fix v) (env-fix env))))
 
 (define special-vars ()
   :returns (specials varlist-p)
@@ -299,15 +296,15 @@ if it is an error, otherwise continuing the computation."
   (if (atom p)
       nil
     (if (car p)
-        (cons (cons (var-fix (car p)) (val-fix (car v)))
-              (pair-pat0-tuple (cdr p) (cdr v)))
+        (env-update (car p) (car v)
+                    (pair-pat0-tuple (cdr p) (cdr v)))
       (pair-pat0-tuple (cdr p) (cdr v)))))
 
 (define match-pat ((p pat-p) (v val-p))
   :returns (mv err (env env-p))
   (pat-case p
     :pvar (norm (and p.var
-                     (list (cons p.var (val-fix v)))))
+                     (env-update p.var v nil)))
     :ptuple (val-case v
               :v_tuple (if (eql (len v.elts) (len p.tuple))
                            (norm (pair-pat0-tuple p.tuple v.elts))
@@ -372,9 +369,10 @@ if it is an error, otherwise continuing the computation."
   :returns (closure-env env-p)
   (if (atom x)
       nil
-    (cons (b* (((fndef x1) (car x)))
-            (cons x1.name (v_fun x1.formals x1.body all-recdefs env)))
-          (fndeflist-closure-bindings (cdr x) all-recdefs env))))
+    (b* (((fndef x1) (car x)))
+      (env-update
+       x1.name (v_fun x1.formals x1.body all-recdefs env)
+       (fndeflist-closure-bindings (cdr x) all-recdefs env)))))
 
 (define fndeflist->names ((x fndeflist-p))
   :returns (names varlist-p)
@@ -402,25 +400,6 @@ if it is an error, otherwise continuing the computation."
     (cons (fndef x1.pat.var x1.exp.formals x1.exp.body)
           (function-bindings-to-fndefs (cdr x)))))
 
-(define env-extract ((vars varlist-p) (env env-p))
-  :Returns (new-env env-p)
-  (if (atom vars)
-      nil
-    (let ((val (env-lookup (car vars) env)))
-      (if val
-          (cons (cons (var-fix (car vars)) val)
-                (env-extract (cdr vars) env))
-        (env-extract (cdr vars) env))))
-  ///
-  (defret env-lookup-of-<fn>
-    (equal (env-lookup v new-env)
-           (and (member-equal (var-fix v) (varlist-fix vars))
-                (env-lookup v env)))
-    :hints(("Goal" :expand ((:free (vars) (env-lookup v (env-extract vars env))))
-            :induct (env-extract vars env)
-            :in-theory (disable (:d env-extract)))
-           (and stable-under-simplificationp
-                '(:expand ((Env-extract vars env)))))))
 
 (defthm varlist-p-of-set-difference
   (implies (varlist-p x)
@@ -432,15 +411,18 @@ if it is an error, otherwise continuing the computation."
   :guard (function-bindings-p x)
   :guard-hints (("goal" :in-theory (enable function-bindings-p)))
   :returns (rec-env env-p)
+  :verify-guards nil
   (if (atom x)
       nil
-    (cons (b* (((binding x1) (car x))
-               ((pvar x1.pat))
-               ((e_fun x1.exp)))
-            (cons (var-fix x1.pat.var) (v_fun x1.exp.formals x1.exp.body defs
-                                              (env-extract (set-difference-equal x1.exp.free (fndeflist->names defs))
-                                                           env))))
-          (recursive-function-bindings-to-closures-aux (cdr x) defs env))))
+    (b* (((binding x1) (car x))
+         ((pvar x1.pat))
+         ((e_fun x1.exp)))
+      (env-update x1.pat.var (v_fun x1.exp.formals x1.exp.body defs
+                                    (env-extract (set-difference-equal x1.exp.free (fndeflist->names defs))
+                                                 env))
+                  (recursive-function-bindings-to-closures-aux (cdr x) defs env))))
+  ///
+  (verify-guards recursive-function-bindings-to-closures-aux))
 
 (define recursive-function-bindings-to-closures ((x bindinglist-p) (env env-p))
   :guard (function-bindings-p x)
@@ -450,6 +432,7 @@ if it is an error, otherwise continuing the computation."
 
 (define add-empty-bindings-to-env ((x bindinglist-p) (env env-p))
   :returns (new-env env-p)
+  :verify-guards nil
   (if (atom x)
       (env-fix env)
     (b* (((binding x1) (car x))
@@ -457,9 +440,11 @@ if it is an error, otherwise continuing the computation."
          (var (and (pat-case x1.pat :pvar)
                    (pvar->var x1.pat))))
       (if var
-          (cons (cons var (v_empty))
-                (add-empty-bindings-to-env (cdr x) env))
-        (add-empty-bindings-to-env (cdr x) env)))))
+          (env-update var (v_empty)
+                      (add-empty-bindings-to-env (cdr x) env))
+        (add-empty-bindings-to-env (cdr x) env))))
+  ///
+  (verify-guards add-empty-bindings-to-env))
 
 (define eval-binary-condition ((x condition-p) (val1 val-p) (val2 val-p))
   :guard (not (condition-case x :cond_variant))
@@ -542,14 +527,14 @@ if it is an error, otherwise continuing the computation."
                                 ((when (zp reclimit))
                                  (err "Hit recursion limit"
                                       (msg "in call of" x.fn))))
-                             (eval-exp fn.body :env (append argenv rec-bindings fn.env) :reclimit (1- reclimit)))
+                             (eval-exp fn.body :env (env-combine argenv (env-combine rec-bindings fn.env)) :reclimit (1- reclimit)))
                     :otherwise (err "Bad function call" (msg "unexpected function value ~x0" fn))))
          :e_bind (b* (((expval env) (eval-bindings x.bindings)))
                    (eval-exp x.body))
          :e_bindrec
          (if (function-bindings-p x.bindings)
              (b* ((fn-env (recursive-function-bindings-to-closures x.bindings env)))
-               (eval-exp x.body :env (append fn-env env)))
+               (eval-exp x.body :env (env-combine fn-env env)))
            (b* ((env (add-empty-bindings-to-env x.bindings env))
                 ((expval env) (eval-fixpoint x.bindings)))
              (eval-exp x.body)))
@@ -586,7 +571,7 @@ if it is an error, otherwise continuing the computation."
        (b* (((when (atom x)) (norm (env-fix env)))
             ((expval env1) (eval-binding (car x)))
             ((expval env2) (eval-bindings (cdr x))))
-         (norm (append env1 env2))))
+         (norm (env-combine env1 env2))))
 
      (define eval-binding ((x binding-p)
                            &key
@@ -644,7 +629,7 @@ if it is an error, otherwise continuing the computation."
             ((expval2 val) (eval-exp x.exp))
             ((expval2 changedp)
              (check-fixpoint-binding x.pat.var val env))
-            (env (cons (cons x.pat.var val) (env-fix env))))
+            (env (env-update x.pat.var val env)))
          (norm env changedp)))
 
      (define eval-condition ((x condition-p)

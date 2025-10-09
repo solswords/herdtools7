@@ -61,4 +61,29 @@
    (defthm varlist-p-of-mergesort
      (implies (varlist-p x)
               (varlist-p (mergesort x)))
-     :hints(("Goal" :in-theory (enable mergesort)))))
+     :hints(("Goal" :in-theory (enable mergesort))))
+
+   (defthm varlist-p-of-intersect-1
+     (implies (varlist-p x)
+              (varlist-p (intersect x y)))
+     :hints(("Goal" :in-theory (enable intersect))))
+
+   (defthmd var-p-when-in
+     (implies (and (varlist-p x)
+                   (not (var-p v)))
+              (not (in v x)))
+     :hints(("Goal" :in-theory (enable in))))
+   
+   (defthm varlist-p-of-intersect-2
+     (implies (varlist-p y)
+              (varlist-p (intersect x y)))
+     :hints(("Goal" :in-theory (enable intersect)
+             :induct t)
+            (and stable-under-simplificationp
+                 '(:cases ((var-p (head x)))
+                   :in-theory (enable var-p-when-in)))))
+
+   (defthm varlist-p-of-delete
+     (implies (varlist-p x)
+              (varlist-p (delete v x)))
+     :hints(("Goal" :in-theory (enable delete)))))
