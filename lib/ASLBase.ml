@@ -204,8 +204,11 @@ let memoize f =
         let () = Hashtbl.add table k r in
         r
 
+let parser_config =
+  Asllib.Builder.{ v0_use_split_chunks = true }
+
 let do_build_ast_from_file ?ast_type version fname =
-  match Asllib.Builder.from_file_multi_version ?ast_type version fname with
+  match Asllib.Builder.from_file_multi_version ?ast_type ~parser_config version fname with
   | Error e -> raise (Misc.Fatal (Asllib.Error.error_to_string e))
   | Ok ast -> ast
 
@@ -221,15 +224,8 @@ let asl_generic_parser version lexer lexbuf =
 let stmts_from_string s =
   let open Asllib in
   let lexbuf = Lexing.from_string s in
-  let module Parser = Parser.Make(struct
-    let allow_no_end_semicolon = false
-    let allow_expression_elsif = false
-    let allow_storage_discards = false
-  end) in
-  let module Lexer = Lexer.Make(struct
-    let allow_double_underscore = false
-    let allow_unknown = false
-  end) in
+  let module Parser = Parser.Make(struct end) in
+  let module Lexer = Lexer.Make(struct end) in
   try Parser.stmts Lexer.token lexbuf
   with e ->
     Warn.fatal "Internal parsing of \"%s\" failed with %s" s

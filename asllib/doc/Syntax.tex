@@ -20,18 +20,18 @@ That is, given a list of token, returned from $\aslscan$, it is possible to appl
 an LR(1) parser to obtain a parse tree if the list of tokens is in the formal language
 of the grammar and return a parse error otherwise.
 
-The outline of this chapter is as follows:
+\ChapterOutline
 \begin{itemize}
-  \item Definition of inlined derivations (see \secref{InlinedDerivations})
-  \item Definition of parametric productions (see \secref{ParametricProductions})
-  \item ASL Parametric Productions (see \secref{ASLParametricProductions})
-  \item Definition of the ASL grammar (see \secref{ASLGrammar})
-  \item Definition of parse trees (see \secref{ParseTrees})
-  \item Definition of priority and associativity of operators (see \secref{PriorityAndAssociativity})
+  \item \secref{InlinedDerivations} defines \emph{inlined derivations};
+  \item \secref{ParametricProductions} defines \emph{parametric productions};
+  \item \secref{ASLParametricProductions} introduces the parametric productions used for the ASL grammar;
+  \item \secref{ASLGrammar} defines the ASL grammar;
+  \item \secref{ParseTrees} defines parse trees; and
+  \item \secref{PriorityAndAssociativity} defines the priority and associativity of operators.
 \end{itemize}
 
-\section{Inlined Derivations \label{sec:InlinedDerivations}}
-Context-free grammars consist of a list of \emph{derivations} $N \derives S^*$
+\section{Inlined Derivations\label{sec:InlinedDerivations}}
+Context-free grammars consist of a list of \emph{derivations} $N \derives \KleeneStar{S}$
 where $N$ is a non-terminal symbol and $S$ is a list of non-terminal symbols and terminal symbols,
 which correspond to tokens.
 We refer to a list of such symbols as a \emph{sentence}.
@@ -57,7 +57,7 @@ coupled with the derivation
 \begin{flalign*}
 \Nbinop \derives\ & \Tand \;|\; \Tband \;|\; \Tbor \;|\; \Tbeq \;|\; \Tdiv \;|\; \Tdivrm \;|\; \Txor \;|\; \Teqop \;|\; \Tneq &\\
                       |\ & \Tgt \;|\; \Tgeq \;|\; \Timpl \;|\; \Tlt \;|\; \Tleq \;|\; \Tplus \;|\; \Tminus \;|\; \Tmod \;|\; \Tmul &\\
-                      |\ & \Tor \;|\; \Trdiv \;|\; \Tshl \;|\; \Tshr \;|\; \Tpow \;|\; \Tcoloncolon
+                      |\ & \Tor \;|\; \Trdiv \;|\; \Tshl \;|\; \Tshr \;|\; \Tpow \;|\; \Tcoloncolon \;|\; \Tplusplus
 \end{flalign*}
 
 A grammar containing these two derivations results in shift-reduce conflicts.
@@ -68,26 +68,25 @@ and creating a version of the first derivation for each binary operator:
               |\ & \Nexpr \parsesep \Tband \parsesep \Nexpr & \\
               |\ & \Nexpr \parsesep \Tbor \parsesep \Nexpr & \\
               \ldots \\
-              |\ & \Nexpr \parsesep \Tcoloncolon \parsesep \Nexpr &
+              |\ & \Nexpr \parsesep \Tplusplus \parsesep \Nexpr &
 \end{flalign*}
 
 By defining the derivations of $\Nbinop$ as inlined, we achieve the same effect more compactly:
 \begin{flalign*}
 \Nbinop \derivesinline\ & \Tand \;|\; \Tband \;|\; \Tbor \;|\; \Tbeq \;|\; \Tdiv \;|\; \Tdivrm \;|\; \Txor \;|\; \Teqop \;|\; \Tneq &\\
                       |\ & \Tgt \;|\; \Tgeq \;|\; \Timpl \;|\; \Tlt \;|\; \Tleq \;|\; \Tplus \;|\; \Tminus \;|\; \Tmod \;|\; \Tmul &\\
-                      |\ & \Tor \;|\; \Trdiv \;|\; \Tshl \;|\; \Tshr \;|\; \Tpow \;|\; \Tcoloncolon
+                      |\ & \Tor \;|\; \Trdiv \;|\; \Tshl \;|\; \Tshr \;|\; \Tpow \;|\; \Tcoloncolon \;|\; \Tplusplus
 \end{flalign*}
 
 Barring mutually-recursive derivations involving inlined derivations, it is possible to expand
 all inlined derivations to obtain a context-free grammar without any inlined derivations.
 
-\section{Parametric Productions \label{sec:ParametricProductions}}
+\section{Parametric Productions\label{sec:ParametricProductions}}
 A parametric production has the form
 $N(p_{1..m}) \derives R_1 \;|\; \ldots \;|\; R_k$
 where $p_{1..m}$ are place holders for grammar symbols and may appear in any of the alternatives $R_{1..k}$.
 We refer to $N(p_{1..m})$ as a \emph{parametric non-terminal}.
 
-\newcommand\uniquesymb[1]{\textsf{unique}(#1)}
 Given sentences $S_{1..m}$, we can expand $N(p_{1..m}) \derives R_1 \;|\; \ldots \;|\; R_k$
 by creating a unique symbol for $N(p_{1..m})$, denoted as $\uniquesymb{N(S_{1..m})}$, defining the
 derivations
@@ -110,7 +109,6 @@ It is defined via the parametric production for possibly-empty lists:
 \maybeemptylist{x}   \derives\ & \emptysentence \;|\; x \parsesep \maybeemptylist{x} &\\
 \end{flalign*}
 
-\newcommand\Ndecllist[0]{\nonterminal{decl\_list}}
 Expanding $\maybeemptylist{\Ndecl}$ produces the following derivations for a new unique symbol.
 That is, a symbol that does not appear anywhere else in the grammar.
 In this example we will choose $\uniquesymb{\maybeemptylist{\Ndecl}}$ to be the symbol $\Ndecllist$.
@@ -126,7 +124,7 @@ which results in the following derivation replacing the original derivation for 
 
 Expanding all instances of parametric productions results in a grammar without any parametric productions.
 
-\section{ASL Parametric Productions \label{sec:ASLParametricProductions}}
+\section{ASL Parametric Productions\label{sec:ASLParametricProductions}}
 We define the following parametric productions for various types of lists and optional productions.
 
 \paragraph{Optional Symbol}
@@ -211,18 +209,21 @@ For example, instead of $\Tidentifier(\id)$, we simply write $\Tidentifier$.
 
 \hypertarget{def-ndecl}{}
 \begin{flalign*}
-\Ndecl  \derives \ & \Noverride \parsesep \Tfunc \parsesep \Tidentifier \parsesep \Nparamsopt \parsesep \Nfuncargs \parsesep \Nreturntype \parsesep \Nrecurselimit \parsesep &\\
-                   & \wrappedline\ \Nfuncbody\\
-|\ & \Noverride \parsesep \Tfunc \parsesep \Tidentifier \parsesep \Nparamsopt \parsesep \Nfuncargs \parsesep \Nfuncbody &\\
-|\ & \Noverride \parsesep \Taccessor \parsesep \Tidentifier \parsesep \Nparamsopt \parsesep \Nfuncargs \parsesep \Tbiarrow \parsesep \Tidentifier \parsesep \Nasty &\\
+\Ndecl  \derives \ & \Npuritykeyword \parsesep \Noverride \parsesep \Tfunc \parsesep \Tidentifier \parsesep \Nparamsopt \parsesep \Nfuncargs \parsesep \Nreturntype \parsesep &\\
+    &\wrappedline \Nrecurselimit \parsesep \Nfuncbody\\
+|\ & \Nqualifier \parsesep \Noverride \parsesep \Tfunc \parsesep \Tidentifier \parsesep \Nparamsopt \parsesep \Nfuncargs &\\
+    &\wrappedline \Nrecurselimit \parsesep \Nfuncbody &\\
+|\ & \Noverride \parsesep \Taccessor \parsesep \Tidentifier \parsesep \Nparamsopt \parsesep \Nfuncargs \parsesep \Tbeq \parsesep \Tidentifier \parsesep \Nasty &\\
    & \wrappedline\ \Naccessorbody &\\
 |\ & \Ttype \parsesep \Tidentifier \parsesep \Tof \parsesep \Ntydecl \parsesep \Nsubtypeopt \parsesep \Tsemicolon &\\
 |\ & \Ttype \parsesep \Tidentifier \parsesep \Nsubtype \parsesep \Tsemicolon &\\
-|\ & \Nglobaldeclkeyword \parsesep \Tidentifier \parsesep \option{\Tcolon \parsesep \Nty} &\\
+|\ & \Nglobaldeclkeywordnonconfig \parsesep \Tidentifier \parsesep \option{\Tcolon \parsesep \Nty} &\\
    & \wrappedline\ \Teq \parsesep \Nexpr \parsesep \Tsemicolon &\\
 |\ & \Tconfig \parsesep \Tidentifier \parsesep \Tcolon \parsesep \Nty \parsesep \Teq \parsesep \Nexpr \parsesep \Tsemicolon &\\
-|\ & \Tvar \parsesep \Tidentifier \parsesep \option{\Tcolon \parsesep \Nty} \parsesep \Teq \parsesep \Nexpr \parsesep \Tsemicolon &\\
-|\ & \Tvar \parsesep \Tidentifier \parsesep \Tcolon \parsesep \Nty \parsesep \Tsemicolon &\\
+|\ & \Tvar \parsesep \Tidentifier \parsesep \Tcolon \parsesep \Ntyorcollection \parsesep \Tsemicolon &\\
+|\ & \Tvar \parsesep \Clisttwo{\Tidentifier} \parsesep \Nasty \parsesep \Tsemicolon &\\
+|\ & \Nglobaldeclkeyword \parsesep \Tidentifier \parsesep \Tcolon \parsesep \Nty &\\
+   & \wrappedline\ \Teq \parsesep \Nelidedparamcall \parsesep \Tsemicolon &\\
 |\ & \Tpragma \parsesep \Tidentifier \parsesep \ClistZero{\Nexpr} \parsesep \Tsemicolon&
 \end{flalign*}
 
@@ -291,14 +292,9 @@ For example, instead of $\Tidentifier(\id)$, we simply write $\Tidentifier$.
     \Nfuncargs          \derives \ & \PlistZero{\Ntypedidentifier} &
 \end{flalign*}
 
-\hypertarget{def-nmaybeemptystmtlist}{}
-\begin{flalign*}
-\Nmaybeemptystmtlist          \derives \ & \emptysentence \;|\; \Nstmtlist &
-\end{flalign*}
-
 \hypertarget{def-nfuncbody}{}
 \begin{flalign*}
-\Nfuncbody          \derives \ & \Tbegin \parsesep \Nmaybeemptystmtlist \parsesep \Tend \parsesep \Tsemicolon &
+\Nfuncbody          \derives \ & \Tbegin \parsesep \Nstmtlist \parsesep \Tend \parsesep \Tsemicolon &
 \end{flalign*}
 
 \hypertarget{def-nignoredoridentifier}{}
@@ -314,10 +310,25 @@ For example, instead of $\Tidentifier(\id)$, we simply write $\Tidentifier$.
 \hypertarget{def-naccessors}{}
 \begin{flalign*}
    \Naccessors \derives \ &
-      \Tgetter \parsesep \Nmaybeemptystmtlist \parsesep \Tend \parsesep \Tsemicolon \parsesep \\ & \wrappedline
-      \Tsetter \parsesep \Nmaybeemptystmtlist \parsesep \Tend \parsesep \Tsemicolon &\\
-   |\ & \Tsetter \parsesep \Nmaybeemptystmtlist \parsesep \Tend \parsesep \Tsemicolon \parsesep \\ & \wrappedline
-        \Tgetter \parsesep \Nmaybeemptystmtlist \parsesep \Tend \parsesep \Tsemicolon &\\
+      \Nisreadonly \parsesep \Tgetter \parsesep \Nstmtlist \parsesep \Tend \parsesep \Tsemicolon \parsesep \\ & \wrappedline
+      \Tsetter \parsesep \Nstmtlist \parsesep \Tend \parsesep \Tsemicolon &\\
+   |\ & \Tsetter \parsesep \Nstmtlist \parsesep \Tend \parsesep \Tsemicolon \parsesep \\ & \wrappedline
+        \Nisreadonly \parsesep \Tgetter \parsesep \Nstmtlist \parsesep \Tend \parsesep \Tsemicolon &\\
+\end{flalign*}
+
+\hypertarget{def-nqualifier}{}
+\begin{flalign*}
+\Nqualifier \derivesinline\ & \emptysentence \;|\; \Tpure \;|\;\Treadonly \;|\; \Tnoreturn &
+\end{flalign*}
+
+\hypertarget{def-npuritykeyword}{}
+\begin{flalign*}
+\Npuritykeyword \derivesinline\ & \emptysentence \;|\; \Tpure \;|\;\Treadonly &
+\end{flalign*}
+
+\hypertarget{def-nisreadonly}{}
+\begin{flalign*}
+\Nisreadonly \derivesinline\ & \emptysentence \;|\; \Treadonly &
 \end{flalign*}
 
 \hypertarget{def-noverride}{}
@@ -326,15 +337,19 @@ For example, instead of $\Tidentifier(\id)$, we simply write $\Tidentifier$.
 \end{flalign*}
 
 \vspace*{-\baselineskip}
-\paragraph{Parsing note:} $\Tvar$ is not derived by $\Nlocaldeclkeyword$ to avoid an LR(1) conflict.
 \hypertarget{def-nlocaldeclkeyword}{}
 \begin{flalign*}
-\Nlocaldeclkeyword \derives \ & \Tlet \;|\; \Tconstant&
+\Nlocaldeclkeyword \derives \ & \Tlet \;|\; \Tconstant \;|\; \Tvar &
+\end{flalign*}
+
+\hypertarget{def-nglobaldeclkeywordnonconfig}{}
+\begin{flalign*}
+\Nglobaldeclkeywordnonconfig \derives \ & \Tlet \;|\; \Tconstant \;|\; \Tvar &
 \end{flalign*}
 
 \hypertarget{def-nglobaldeclkeyword}{}
 \begin{flalign*}
-\Nglobaldeclkeyword \derives \ & \Tlet \;|\; \Tconstant&
+\Nglobaldeclkeyword \derives \ & \Nglobaldeclkeywordnonconfig \;|\; \Tconfig &
 \end{flalign*}
 
 \hypertarget{def-ndirection}{}
@@ -391,15 +406,13 @@ For example, instead of $\Tidentifier(\id)$, we simply write $\Tidentifier$.
 |\ & \Ncall \parsesep \Nsetteraccess \parsesep \Nslices \parsesep \Teq \parsesep \Nexpr \parsesep \Tsemicolon &\\
 |\ & \Ncall \parsesep \Tdot \parsesep \Tlbracket \parsesep \Clisttwo{{\Tidentifier}} \parsesep \Trbracket \parsesep \Teq \parsesep \Nexpr \parsesep \Tsemicolon &\\
 |\ & \Nlocaldeclkeyword \parsesep \Ndeclitem \parsesep \Nasty \parsesep \Teq \parsesep \Nelidedparamcall \parsesep \Tsemicolon &\\
-|\ & \Tvar \parsesep \Ndeclitem \parsesep \option{\Nasty} \parsesep \option{\Teq \parsesep \Nexpr} \parsesep \Tsemicolon &\\
+|\ & \Tvar \parsesep \Ndeclitem \parsesep \Nasty \parsesep \Tsemicolon &\\
 |\ & \Tvar \parsesep \Clisttwo{\Tidentifier} \parsesep \Nasty \parsesep \Tsemicolon &\\
-|\ & \Tvar \parsesep \Ndeclitem \parsesep \Nasty \parsesep \Teq \parsesep \Nelidedparamcall \parsesep \Tsemicolon &\\
-|\ & \Tprint \parsesep \PlistZero{\Nexpr} \parsesep \Tsemicolon &\\
-|\ & \Tprintln \parsesep \PlistZero{\Nexpr} \parsesep \Tsemicolon &\\
-|\ & \Tunreachable \parsesep \Tlpar \parsesep \Trpar \parsesep \Tsemicolon &\\
+|\ & \Tprint \parsesep \ClistZero{\Nexpr} \parsesep \Tsemicolon &\\
+|\ & \Tprintln \parsesep \ClistZero{\Nexpr} \parsesep \Tsemicolon &\\
+|\ & \Tunreachable \parsesep \Tsemicolon &\\
 |\ & \Trepeat \parsesep \Nstmtlist \parsesep \Tuntil \parsesep \Nexpr \parsesep \Nlooplimit \parsesep \Tsemicolon &\\
 |\ & \Tthrow \parsesep \Nexpr \parsesep \Tsemicolon &\\
-|\ & \Tthrow \parsesep \Tsemicolon &\\
 |\ & \Tpragma \parsesep \Tidentifier \parsesep \ClistZero{\Nexpr} \parsesep \Tsemicolon &
 \end{flalign*}
 
@@ -476,7 +489,7 @@ it must declare a new variable.
 \begin{flalign*}
 \Nconstraintkind \derives \ &
        \Tlbrace \parsesep \ClistOne{\Nintconstraint} \parsesep \Trbrace &\\
-  |\ & \Tlbrace \parsesep \Tminus \parsesep \Trbrace &
+  |\ & \Tlbrace \parsesep \Trbrace &
 \end{flalign*}
 
 \hypertarget{def-nintconstraint}{}
@@ -540,11 +553,6 @@ except they do not derive tuples, which are the last derivation for $\Nexpr$.
                     & \Tlbrace \parsesep \TClistOne{\Ntypedidentifier} \parsesep \Trbrace &
 \end{flalign*}
 
-\hypertarget{def-nfieldsopt}{}
-\begin{flalign*}
-\Nfieldsopt \derives \ & \Nfields \;|\; \emptysentence &
-\end{flalign*}
-
 \hypertarget{def-nslices}{}
 \begin{flalign*}
 \Nslices \derives \ & \Tlbracket \parsesep \ClistOne{\Nslice} \parsesep \Trbracket &
@@ -579,7 +587,8 @@ except they do not derive tuples, which are the last derivation for $\Nexpr$.
             |\ & \Tboolean &\\
             |\ & \Tbit &\\
             |\ & \Tbits \parsesep \Tlpar \parsesep \Nexpr \parsesep \Trpar \parsesep \option{\Nbitfields} &\\
-            |\ & \PlistZero{\Nty} &\\
+            |\ & \Tlpar \parsesep \Nty \parsesep \Trpar &\\
+            |\ & \Plisttwo{\Nty} &\\
             |\ & \Tidentifier &\\
             |\ & \Tarray \parsesep \Tllbracket \parsesep \Nexpr \parsesep \Trrbracket \parsesep \Tof \parsesep \Nty &
 \end{flalign*}
@@ -588,14 +597,18 @@ except they do not derive tuples, which are the last derivation for $\Nexpr$.
 \begin{flalign*}
 \Ntydecl \derives\ & \Nty &\\
             |\ & \Tenumeration \parsesep \Tlbrace \parsesep \TClistOne{\Tidentifier} \parsesep \Trbrace &\\
-            |\ & \Trecord \parsesep \Nfieldsopt &\\
-            |\ & \Tcollection \parsesep \Nfieldsopt &\\
-            |\ & \Texception \parsesep \Nfieldsopt &
+            |\ & \Trecord \parsesep \Nfields &\\
+            |\ & \Texception \parsesep \Nfields &
 \end{flalign*}
 
 \hypertarget{def-nfieldassign}{}
 \begin{flalign*}
 \Nfieldassign \derives \ & \Tidentifier \parsesep \Teq \parsesep \Nexpr &
+\end{flalign*}
+
+\hypertarget{def-ntyorcollection}{}
+\begin{flalign*}
+  \Ntyorcollection \derives \ & \Nty \;|\; \Tcollection \parsesep \Nfields &\\
 \end{flalign*}
 
 \hypertarget{def-nexpr}{}
@@ -640,10 +653,10 @@ except they do not derive tuples, which are the last derivation for $\Nexpr$.
 \begin{flalign*}
 \Nbinop \derivesinline\ & \Tand \;|\; \Tband \;|\; \Tbor \;|\; \Tbeq \;|\; \Tdiv \;|\; \Tdivrm \;|\; \Txor \;|\; \Teqop \;|\; \Tneq &\\
                      |\ & \Tgt \;|\; \Tgeq \;|\; \Timpl \;|\; \Tlt \;|\; \Tleq \;|\; \Tplus \;|\; \Tminus \;|\; \Tmod \;|\; \Tmul &\\
-                     |\ & \Tor \;|\; \Trdiv \;|\; \Tshl \;|\; \Tshr \;|\; \Tpow \;|\; \Tcoloncolon
+                     |\ & \Tor \;|\; \Trdiv \;|\; \Tshl \;|\; \Tshr \;|\; \Tpow \;|\; \Tcoloncolon \;|\; \Tplusplus
 \end{flalign*}
 
-\section{Parse Trees \label{sec:ParseTrees}}
+\section{Parse Trees\label{sec:ParseTrees}}
 We now define \emph{parse trees} for the ASL expanded grammar. Those are later used for build Abstract Syntax Trees.
 
 \begin{definition}[Parse Trees]
@@ -692,7 +705,7 @@ We denote the set of well-formed parse trees for a non-terminal symbol $S$ by $\
 \hypertarget{def-aslparse}{}
 A parser is a function
 \[
-\aslparse : (\Token^* \setminus \{\Terror\}) \aslto \parsenode{\Nspec} \cup \{\ParseErrorConfig\}
+\aslparse : (\KleeneStar{\Token} \setminus \{\Terror\}) \aslto \parsenode{\Nspec} \cup \{\ParseErrorConfig\}
 \]
 \hypertarget{def-parseerror}{}
 where $\ParseErrorConfig$ stands for a \emph{parse error}.
@@ -706,7 +719,7 @@ The \emph{language of a grammar} $G$ is defined as follows:
 \Lang(G) = \{\yield(n) \;|\; n \text{ is a well-formed parse tree for }G\} \enspace.
 \]
 
-\section{Priority and Associativity \label{sec:PriorityAndAssociativity}}
+\section{Priority and Associativity\label{sec:PriorityAndAssociativity}}
 A context-free grammar $G$ is \emph{ambiguous} if there can be more than one parse tree for a given list of tokens
 $\ts \in \Lang(G)$.
 Indeed the expanded ASL grammar is ambiguous, for example, due to its definition of binary operation expressions.
@@ -741,7 +754,7 @@ $\Telse$ & $\nonassoc$\\
 $\Tbor$, $\Tband$, $\Timpl$, $\Tas$ & $\leftassoc$\\
 $\Teqop$, $\Tneq$ & $\leftassoc$\\
 $\Tgt$, $\Tgeq$, $\Tlt$, $\Tleq$ & $\nonassoc$\\
-$\Tplus$, $\Tminus$, $\Tor$, $\Txor$, $\Tand$, $\Tcoloncolon$ & $\leftassoc$\\
+$\Tplus$, $\Tminus$, $\Tor$, $\Txor$, $\Tand$, $\Tcoloncolon$, $\Tplusplus$ & $\leftassoc$\\
 $\Tmul$, $\Tdiv$, $\Tdivrm$, $\Trdiv$, $\Tmod$, $\Tshl$, $\Tshr$ & $\leftassoc$\\
 $\Tpow$ & $\leftassoc$\\
 $\Tunops$ & $\nonassoc$\\

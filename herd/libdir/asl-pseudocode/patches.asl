@@ -73,20 +73,6 @@ end;
 
 // =============================================================================
 
-// IsFault()
-// =========
-// Return TRUE if a fault is associated with an address descriptor
-
-// From https://developer.arm.com/documentation/ddi0602/2023-09/Shared-Pseudocode/shared-functions-aborts?lang=en#impl-shared.IsFault.1
-// No fault is ever constructed with the associated address descriptors.
-
-func IsFault(addrdesc: AddressDescriptor) => boolean
-begin
-  return FALSE;
-end;
-
-// =============================================================================
-
 // AArch64.TranslateAddress()
 // ==========================
 // Main entry point for translating an address
@@ -119,7 +105,7 @@ end;
 func AArch64_TranslateAddress(address:bits(64), accdesc:AccessDescriptor, aligned:boolean, size:integer) => AddressDescriptor
 begin
   var full_addr : FullAddress;
-  return CreateAddressDescriptor(address, full_addr, NormalWBISHMemAttr());
+  return CreateAddressDescriptor(address, full_addr, NormalWBISHMemAttr(), accdesc);
 end;
 
 // =============================================================================
@@ -149,7 +135,7 @@ end;
 // From https://developer.arm.com/documentation/ddi0602/2023-12/Shared-Pseudocode/shared-functions-system?lang=en#ProcState
 // Rewritten from ASLv0 record to ASLv1 collection
 
-type ProcState of collection {
+var PSTATE: collection {
     N: bits (1),        // Negative condition flag
     Z: bits (1),        // Zero condition flag
     C: bits (1),        // Carry condition flag
@@ -285,3 +271,18 @@ begin
   return;
 end;
 
+// Here because it is defined 2 times in the release
+
+// SecurityState
+// =============
+// The Security state of an execution context
+
+type SecurityState of enumeration {
+    SS_NonSecure,
+    SS_Root,
+    SS_Realm,
+    SS_Secure
+};
+
+constant VMID_NONE : bits(16) = Zeros{16};
+constant ASID_NONE : bits(16) = Zeros{16};

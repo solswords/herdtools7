@@ -2,7 +2,7 @@
 
 In this chapter, we define two forms of symbolic reasoning ---
 \emph{symbolic reduction} and \emph{symbolic equivalence testing}.
-Symbolic reduction simplifies expressions into \emph{equivalent} expressions
+Symbolic reduction simplifies expressions into \equivalentexprsterm{}
 that are simpler to reason about.
 In our context, equivalence means that we can substitute one expression for another without
 affecting the semantics of the overall specification.
@@ -16,7 +16,7 @@ there are two possibilities:
   \item the expressions are equivalent, but the reasoning power of our rules
   is not enough to prove it, and so we conservatively answer negatively.
 \end{itemize}
-In proof-theoretic terms, we can say that our equivalence tests are \emph{sound} but \emph{incomplete}.
+In proof-theoretic terms, we say that our equivalence test is \emph{sound} but \emph{incomplete}.
 
 Notice that for a conservative test, it is always correct to return $\False$.
 
@@ -25,21 +25,69 @@ In this chapter, we use the special value $\CannotBeTransformed$
 to represent a failure in transforming an expression into a desired form (the specific
 desired form varies according to the functions utilizing this value).
 
-We first define symbolic expressions and operations over symbolic expressions in \secref{symbolicexpressions}
-and then define the rules for symbolic reduction and equivalence testing in \secref{SymbolicReductionAndEquivalenceTestingRules}.
+\ChapterOutline
+\begin{itemize}
+  \item \secref{Equivalence Definitions} formally defines equivalence for expressions, types, constraints, and bitfields;
+  \item \secref{symbolicexpressions} defines \symbolicexpressionsterm{} and operations over \symbolicexpressionsterm{}; and
+  \item \secref{SymbolicReductionAndEquivalenceTestingRules} defines rules for symbolic reduction and equivalence testing.
+\end{itemize}
+
+\section{Equivalence Definitions\label{sec:Equivalence Definitions}}
+\begin{definition}[Expression Equivalence]
+\hypertarget{def-equivalentexprsterm}{}
+We say that $\veone$ and $\vetwo$ are \emph{\equivalentexprsterm{}} in the \staticenvironmentterm{} $\tenv$
+if for every dynamic environment $\denv$
+and environment $\env = (\tenv, \denv)$, the following condition holds:
+\[
+\{ C \;|\; \evalexpr(\env, \veone) \evalarrow C \} = \{ C \;|\; \evalexpr(\env, \vetwo) \evalarrow C \} \enspace.
+\]
+\end{definition}
+
+\begin{definition}[Type Equivalence]
+\hypertarget{def-equivalenttypesterm}{}
+We say that $\vt$ and $\vs$ are \emph{\equivalenttypesterm{}} in the \staticenvironmentterm{} $\tenv$
+if both types have the same AST label,
+and for every dynamic environment $\denv$
+and environment $\env = (\tenv, \denv)$, the following condition holds:
+\[
+\dynamicdomain(\env, \vt) = \dynamicdomain(\env, \vs) \enspace.
+\]
+\end{definition}
+
+\begin{definition}[Constraint Equivalence]
+\hypertarget{def-equivalentconstraintsterm}{}
+We say that $\vcone$ and $\vctwo$ are \emph{\equivalentconstraintsterm{}} in the \staticenvironmentterm{} $\tenv$
+if for every dynamic environment $\denv$
+and environment $\env = (\tenv, \denv)$, the following condition holds:
+\[
+\dynamicdomain(\env, \vcone) = \dynamicdomain(\env, \vctwo) \enspace.
+\]
+\end{definition}
+
+Bitfield equivalence is defined by \TypingRuleRef{BitFieldEqual} where
+the conservative tests for expression equivalence ($\exprequal$)
+and type equivalence ($\typeequal$) are replaced by their respective
+definitions above.
 
 \section{Symbolic Expressions\label{sec:symbolicexpressions}}
-Our symbolic reduction and equivalence testing rules use \emph{symbolic expressions}, defined below:
+\hypertarget{def-symbolicexpressionterm}{}
+Our symbolic reduction and equivalence testing rules employ \emph{\symbolicexpressionsterm}, defined below:
 \[
   \begin{array}{rcl}
     \polynomial &\triangleq& \unitarymonomial \partialto \Q \setminus \{0\}\\
-    \unitarymonomial   &\triangleq& \Identifiers \partialto \Npos\\
+    \unitarymonomial   &\triangleq& \Identifier \partialto \Npos\\
   \end{array}
 \]
 
-We now explain each component of a symbolic expression and how it can be interpreted as a mathematical formula
+These \symbolicexpressionsterm{} provide a canonical representation for multivariate polynomials
+(that is, polynomials over multiple variables). The motivation for choosing this representation
+is examples similar to the one in \listingref{IR}, which requires representing the
+multivariate polynomials \verb|8*M*N| and \verb|M*N*8| in the same way.
+\ASLListing{Example requiring a canonical polynomial representation}{IR}{\definitiontests/IR.asl}
+
+We now explain each component of a \symbolicexpressionterm{} and how it can be interpreted as a mathematical formula
 via the interpretation function $\alpha$.
-We also define operations over symbolic expressions.
+We also define operations over \symbolicexpressionsterm{}.
 
 \hypertarget{def-unitarymonomial}{}
 \hypertarget{def-monomial}{}
@@ -72,7 +120,7 @@ multiplies two unitary monomials and returns a unitary monomial
 \begin{mathpar}
   \inferrule{
     {
-      \vf \eqdef \lambda \vx\in\identifier.\
+      \vf \eqdef \lambda \vx\in\Identifier.\
       \left\{
       \begin{array}{ll}
         \vfone(\vx) & \text{if } \vx \in \dom(\vfone) \setminus \dom(\vftwo)\\
@@ -140,7 +188,7 @@ adds two polynomials:
 
 The overloaded function
 \[
-  \addpolynomials : \polynomial^* \rightarrow \polynomial
+  \addpolynomials : \KleeneStar{\polynomial} \rightarrow \polynomial
 \]
 adds a list of polynomials:
 \begin{mathpar}
@@ -155,6 +203,11 @@ adds a list of polynomials:
   \addpolynomials(\vp_{1..k}) \typearrow \vp
 }
 \end{mathpar}
+
+For example, if $\alpha(\vpone) = 3\cdot{}x^2\cdot{}y$,
+$\alpha(\vptwo) = 4\cdot{}x^2\cdot{}y$, and
+$\alpha(\vptwo) = x\cdot{}y^2$,
+then $\alpha(\addpolynomials([\vpone, \vptwo, \vpthree])) = 7\cdot{}x^2\cdot{}y + x\cdot{}y^2$.
 
 The function
 \hypertarget{def-mulpolynomials}{}
@@ -178,6 +231,49 @@ multiplies two polynomials.
   \mulpolynomials(\overname{\vfone}{\vpone}, \overname{\vftwo}{\vptwo}) \typearrow \vp
 }
 \end{mathpar}
+
+The function
+\hypertarget{def-polynomialdividebyterm}{}
+\[
+  \polynomialdividebyterm :
+  \overname{\polynomial}{\vpone} \times
+  \overname{\unitarymonomial}{\vm} \times
+  \overname{\Q}{\vf}
+  \rightarrow \overname{\polynomial}{\vp} \cup \CannotBeTransformed
+\]
+returns the result of dividing the polynomial $\vpone$ by the number $\vf$ and unitary monomial $\vm$,
+yielding the polynomial $\vp$. Otherwise, the result is $\CannotBeTransformed$.
+
+\begin{mathpar}
+\inferrule[divides]{
+  \vptwo \eqdef [\vm \mapsto \vf]\\
+  \vpone = \mulpolynomials(\vp, \vptwo)
+}{
+  \polynomialdividebyterm(\vpone, \vm, \vf) \typearrow \vp
+}
+\end{mathpar}
+
+\begin{mathpar}
+\inferrule[does\_not\_divide]{
+  \vptwo \eqdef [\vm \mapsto \vf]\\
+  \forall \vp\in\polynomial.\ \vpone \neq \mulpolynomials(\vp, \vptwo)
+}{
+  \polynomialdividebyterm(\vpone, \vm, \vf) \typearrow \CannotBeTransformed
+}
+\end{mathpar}
+
+For example,
+if $\alpha(\vpone) = 6\cdot{}x^2\cdot{}y + 2\cdot{}x\cdot{}z$
+and $\alpha(\vm) = x$ and $\vf=2$ then
+\[
+\alpha(\polynomialdividebyterm(\vpone, \vm, \vf)) =  3\cdot{}x\cdot{}y + z \enspace.
+\]
+%
+In contrast, if $\alpha(\vpone) = x$
+and $\alpha(\vm) = x^2$ and $\vf=1$ then
+\[
+\alpha(\polynomialdividebyterm(\vpone, \vm, \vf)) =  \CannotBeTransformed \enspace.
+\]
 
 \section{Typing Rules\label{sec:SymbolicReductionAndEquivalenceTestingRules}}
 We employ the following rules:
@@ -203,9 +299,9 @@ We employ the following rules:
 \hypertarget{def-normalize}{}
 The function
 \[
-\normalize(\overname{\staticenvs}{\tenv} \aslsep \overname{\expr}{\ve}) \aslto \overname{\expr}{\newe} \cup \overname{\TTypeError}{\TypeErrorConfig}
+\normalize(\overname{\staticenvs}{\tenv} \aslsep \overname{\expr}{\ve}) \aslto \overname{\expr}{\newe} \cup \overname{\typeerror}{\TypeErrorConfig}
 \]
-\hypertarget{def-symbolicallysimplifies}{symbolically simplifies} an expression $\ve$ in the static environment $\tenv$,
+\hypertarget{def-symbolicallysimplifies}{symbolically simplifies} an expression $\ve$ in the \staticenvironmentterm{} $\tenv$,
 yielding an expression $\newe$.
 \ProseOtherwiseTypeError
 
@@ -222,14 +318,14 @@ and their corresponding normalized expressions.
 \begin{itemize}
   \item \AllApplyCase{normalizable}
   \begin{itemize}
-    \item applying $\toir$ to $\ve$ in $\tenv$ to obtain a symbolic expression yields a symbolic expression $\vpone$\ProseOrTypeError;
+    \item applying $\toir$ to $\ve$ in $\tenv$ to obtain a \symbolicexpressionterm{} yields a \symbolicexpressionterm{} $\vpone$\ProseOrTypeError;
     \item applying $\polynomialtoexpr$ to $\vpone$ to transform it into an expression yields $\newe$.
   \end{itemize}
 
   \item \AllApplyCase{not\_normalizable}
   \begin{itemize}
-    \item applying $\toir$ to $\ve$ in $\tenv$ to obtain a symbolic expression yields $\CannotBeTransformed$,
-          indicating it cannot be transformed to a corresponding symbolic expression;
+    \item applying $\toir$ to $\ve$ in $\tenv$ to obtain a \symbolicexpressionterm{} yields $\CannotBeTransformed$,
+          indicating it cannot be transformed to a corresponding \symbolicexpressionterm{};
     \item define $\newe$ as $\ve$.
   \end{itemize}
 \end{itemize}
@@ -312,9 +408,9 @@ The function
 \[
 \reduceconstraints(
   \overname{\staticenvs}{\tenv} \aslsep
-  \overname{\intconstraint^*}{\cs}
+  \overname{\KleeneStar{\intconstraint}}{\cs}
 ) \aslto
-\overname{\intconstraint^*}{\newcs}
+\overname{\KleeneStar{\intconstraint}}{\newcs}
 \]
 \symbolicallysimplifies\ a list of integer constraints $\cs$, yielding a list of integer constraints $\newcs$
 
@@ -344,10 +440,10 @@ See \ExampleRef{Symbolically Simplifying Constraints}.
 The function
 \[
   \toir(\overname{\staticenvs}{\tenv} \aslsep \overname{\expr}{\ve}) \aslto
-  \overname{\polynomial}{\vp}\ \cup\ \{\CannotBeTransformed\}\ \cup\ \overname{\TTypeError}{\TypeErrorConfig}
+  \overname{\polynomial}{\vp}\ \cup\ \{\CannotBeTransformed\}\ \cup\ \overname{\typeerror}{\TypeErrorConfig}
 \]
-transforms a subset of ASL expressions into symbolic expressions. If an ASL expression cannot be represented
-by a symbolic expression (because, for example, it contains operations that are not available in symbolic expressions),
+transforms a subset of ASL expressions into \symbolicexpressionsterm{}. If an ASL expression cannot be represented
+by a symbolic expression (because, for example, it contains operations that are not available in \symbolicexpressionsterm{}),
 the special value $\CannotBeTransformed$ is returned.
 
 \ExampleDef{Transforming Expressions into Symbolic Expressions}
@@ -362,8 +458,8 @@ Intuitively, $\toir$ conducts a case analysis to determine whether the ASL expre
 \begin{itemize}
   \item \AllApplyCase{literal\_int}
   \begin{itemize}
-    \item $\ve$ is an integer literal expression for $\vi$, that is, $\ELiteral(\lint(\vi))$;
-    \item $\vp$ is the symbolic expression for $\vi$.
+    \item $\ve$ is an integer literal expression for $\vi$, that is, $\ELiteral(\LInt(\vi))$;
+    \item $\vp$ is the \symbolicexpressionterm{} for $\vi$.
   \end{itemize}
 
   \item \AllApplyCase{literal\_other}
@@ -397,8 +493,8 @@ Intuitively, $\toir$ conducts a case analysis to determine whether the ASL expre
     \item determining the type of $\vs$ yields $\vt$\ProseOrTypeError;
     \item the \underlyingtype\ of $\vt$ is $\ttyone$\ProseOrTypeError;
     \item $\ttyone$ is an integer type;
-    \item $\ttyone$ is a well-constrained integer with the exact constraint $\ve$, that is, \\ $\TInt(\wellconstrained([\ConstraintExact(\ve)]))$;
-    \item converting $\ve$ to a symbolic expression yields $\vp$\ProseTerminateAs{\CannotBeTransformed}.
+    \item $\ttyone$ is a well-constrained integer with the exact constraint $\ve$, that is, \\ $\TInt(\WellConstrained([\ConstraintExact(\ve)]))$;
+    \item converting $\ve$ to a \symbolicexpressionterm{} yields $\vp$\ProseTerminateAs{\CannotBeTransformed}.
   \end{itemize}
 
   \item \AllApplyCase{evar\_int}
@@ -409,7 +505,7 @@ Intuitively, $\toir$ conducts a case analysis to determine whether the ASL expre
     \item the \underlyingtype\ of $\vt$ is $\ttyone$\ProseOrTypeError;
     \item $\ttyone$ is an integer type;
     \item $\ttyone$ is not a well-constrained integer with a single exact constraint;
-    \item $\vp$ is the symbolic expression for the variable $\vs$, that is, $\{ \{\vs\mapsto 1\}\mapsto 1 \}$.
+    \item $\vp$ is the \symbolicexpressionterm{} for the variable $\vs$, that is, $\{ \{\vs\mapsto 1\}\mapsto 1 \}$.
   \end{itemize}
 
   \item \AllApplyCase{evar\_non\_int}
@@ -425,17 +521,17 @@ Intuitively, $\toir$ conducts a case analysis to determine whether the ASL expre
 
   \item \AllApplyCase{ebinop\_plus}
   \begin{itemize}
-    \item $\ve$ is a binary addition expression with operands $\veone$ and $\vetwo$, that is, \\ $\EBinop(\PLUS, \veone, \vetwo)$;
-    \item converting $\veone$ to a symbolic expression in $\tenv$ yields $\irone$\ProseOrTypeErrorOrCannotBeTransformed;
-    \item converting $\vetwo$ to a symbolic expression in $\tenv$ yields $\irtwo$\ProseOrTypeErrorOrCannotBeTransformed;
-    \item $\vp$ is the symbolic expression adding up $\irone$ and $\irtwo$.
+    \item $\ve$ is a binary addition expression with operands $\veone$ and $\vetwo$, that is, \\ $\EBinop(\ADD, \veone, \vetwo)$;
+    \item converting $\veone$ to a \symbolicexpressionterm{} in $\tenv$ yields $\irone$\ProseOrTypeErrorOrCannotBeTransformed;
+    \item converting $\vetwo$ to a \symbolicexpressionterm{} in $\tenv$ yields $\irtwo$\ProseOrTypeErrorOrCannotBeTransformed;
+    \item $\vp$ is the \symbolicexpressionterm{} adding up $\irone$ and $\irtwo$.
   \end{itemize}
 
   \item \AllApplyCase{ebinop\_minus}
   \begin{itemize}
-    \item $\ve$ is a binary subtraction expression with operands $\veone$ and $\vetwo$, that is, \\ $\EBinop(\MINUS, \veone, \vetwo)$;
-    \item $\vep$ is the addition expression with operands $\veone$ and the negation of $\vetwo$, that is, \\ $\EBinop(\PLUS, \veone, \EUnop(\MINUS, \vetwo))$;
-    \item converting $\vep$ into a symbolic expression in $\tenv$ yields $\vp$\ProseOrTypeErrorOrCannotBeTransformed.
+    \item $\ve$ is a binary subtraction expression with operands $\veone$ and $\vetwo$, that is, \\ $\EBinop(\SUB, \veone, \vetwo)$;
+    \item $\vep$ is the addition expression with operands $\veone$ and the negation of $\vetwo$, that is, \\ $\EBinop(\ADD, \veone, \EUnop(\SUB, \vetwo))$;
+    \item converting $\vep$ into a \symbolicexpressionterm{} in $\tenv$ yields $\vp$\ProseOrTypeErrorOrCannotBeTransformed.
   \end{itemize}
 
   \item \AllApplyCase{ebinop\_mul\_div\_left}
@@ -460,16 +556,16 @@ Intuitively, $\toir$ conducts a case analysis to determine whether the ASL expre
   \begin{itemize}
     \item $\ve$ is a binary multiplication expression with operands $\veone$ and $\vetwo$, that is, \\ $\EBinop(\MUL, \veone, \vetwo)$;
     \item neither $\veone$ nor $\vetwo$ are binary vision expressions;
-    \item converting $\veone$ to a symbolic expression in $\tenv$ yields $\irone$\ProseOrTypeErrorOrCannotBeTransformed;
-    \item converting $\vetwo$ to a symbolic expression in $\tenv$ yields $\irtwo$\ProseOrTypeErrorOrCannotBeTransformed;
-    \item $\vp$ is the symbolic expression multiplying $\irone$ and $\irtwo$.
+    \item converting $\veone$ to a \symbolicexpressionterm{} in $\tenv$ yields $\irone$\ProseOrTypeErrorOrCannotBeTransformed;
+    \item converting $\vetwo$ to a \symbolicexpressionterm{} in $\tenv$ yields $\irtwo$\ProseOrTypeErrorOrCannotBeTransformed;
+    \item $\vp$ is the \symbolicexpressionterm{} multiplying $\irone$ and $\irtwo$.
   \end{itemize}
 
   \item \AllApplyCase{ebinop\_div\_int\_denominator}
   \begin{itemize}
     \item $\ve$ is a binary division expression with operands $\veone$ and $\vetwo$, that is, \\ $\EBinop(\DIV, \veone, \vetwo)$;
     \item $\vetwo$ is an integer literal expression for $\vitwo$;
-    \item converting $\veone$ to a symbolic expression in $\tenv$ yields $\irone$\ProseOrTypeErrorOrCannotBeTransformed;
+    \item converting $\veone$ to a \symbolicexpressionterm{} in $\tenv$ yields $\irone$\ProseOrTypeErrorOrCannotBeTransformed;
     \item $\vftwo$ is $\frac{1}{\vitwo}$ (testing against $\vitwo = 0$ is done dynamically);
     \item $\vp$ is the polynomial $\irone$ with each monomial multiplied by $\vftwo$.
   \end{itemize}
@@ -477,8 +573,8 @@ Intuitively, $\toir$ conducts a case analysis to determine whether the ASL expre
   \item \AllApplyCase{ebinop\_div\_monomial\_denominator}
   \begin{itemize}
     \item $\ve$ is a binary division expression with operands $\veone$ and $\vetwo$, that is, \\ $\EBinop(\DIV, \veone, \vetwo)$;
-    \item converting $\veone$ to a symbolic expression in $\tenv$ yields $\irone$\ProseOrTypeErrorOrCannotBeTransformed;
-    \item converting $\vetwo$ to a symbolic expression in $\tenv$ yields $\irtwo$\ProseOrTypeErrorOrCannotBeTransformed;
+    \item converting $\veone$ to a \symbolicexpressionterm{} in $\tenv$ yields $\irone$\ProseOrTypeErrorOrCannotBeTransformed;
+    \item converting $\vetwo$ to a \symbolicexpressionterm{} in $\tenv$ yields $\irtwo$\ProseOrTypeErrorOrCannotBeTransformed;
     \item $\irtwo$ consists of a single binding between the monomial $\vmono$ and the factor $\vfactor$;
     \item applying $\polynomialdividebyterm$ to $\irone$, $\vfactor$, and $\vmono$ yields $\vp$\ProseTerminateAs{\CannotBeTransformed}.
   \end{itemize}
@@ -486,8 +582,8 @@ Intuitively, $\toir$ conducts a case analysis to determine whether the ASL expre
   \item \AllApplyCase{ebinop\_div\_non\_monomial\_denominator}
   \begin{itemize}
     \item $\ve$ is a binary division expression with operands $\veone$ and $\vetwo$, that is, \\ $\EBinop(\DIV, \veone, \vetwo)$;
-    \item converting $\veone$ to a symbolic expression in $\tenv$ yields $\irone$\ProseOrTypeErrorOrCannotBeTransformed;
-    \item converting $\vetwo$ to a symbolic expression in $\tenv$ yields $\irtwo$\ProseOrTypeErrorOrCannotBeTransformed;
+    \item converting $\veone$ to a \symbolicexpressionterm{} in $\tenv$ yields $\irone$\ProseOrTypeErrorOrCannotBeTransformed;
+    \item converting $\vetwo$ to a \symbolicexpressionterm{} in $\tenv$ yields $\irtwo$\ProseOrTypeErrorOrCannotBeTransformed;
     \item $\irtwo$ does not consist of a single binding;
     \item the result is $\CannotBeTransformed$.
   \end{itemize}
@@ -511,7 +607,7 @@ Intuitively, $\toir$ conducts a case analysis to determine whether the ASL expre
   \begin{itemize}
     \item $\ve$ is a binary shift-left expression with operands $\veone$ and $\vetwo$, that is, \\ $\EBinop(\SHL, \veone, \vetwo)$;
     \item $\vetwo$ is an integer literal expression for $\vitwo$;
-    \item converting $\veone$ to a symbolic expression in $\tenv$ yields $\irone$\ProseOrTypeErrorOrCannotBeTransformed;
+    \item converting $\veone$ to a \symbolicexpressionterm{} in $\tenv$ yields $\irone$\ProseOrTypeErrorOrCannotBeTransformed;
     \item $\vitwo$ is non-negative;
     \item $\vftwo$ is $2^{\vitwo}$;
     \item $\vp$ is the polynomial $\irone$ with each monomial multiplied by $\vftwo$.
@@ -519,7 +615,7 @@ Intuitively, $\toir$ conducts a case analysis to determine whether the ASL expre
 
   \item \AllApplyCase{ebinop\_other\_non\_literals}
   \begin{itemize}
-    \item $\ve$ is a binary expression with an operator $\op$ that is other than $\PLUS$, $\MINUS$, $\MUL$, or $\SHL$,
+    \item $\ve$ is a \binopexpressionterm{} with an operator $\op$ that is other than $\ADD$, $\SUB$, $\MUL$, or $\SHL$,
           applied to the operand expressions $\veone$ and $\vetwo$;
     \item at least one of $\veone$ and $\vetwo$ is not a literal expression;
     \item $\vp$ is $\CannotBeTransformed$.
@@ -527,7 +623,7 @@ Intuitively, $\toir$ conducts a case analysis to determine whether the ASL expre
 
   \item \AllApplyCase{ebinop\_other\_literals\_non\_int\_result}
   \begin{itemize}
-    \item $\ve$ is a binary expression with an operator $\op$ that is other than $\PLUS$, $\MINUS$, $\MUL$, $\DIV$, or $\SHL$,
+    \item $\ve$ is a \binopexpressionterm{} with an operator $\op$ that is other than $\ADD$, $\SUB$, $\MUL$, $\DIV$, or $\SHL$,
           applied to the operand expressions $\veone$ and $\vetwo$;
     \item $\veone$ is the literal expression for literal $\vlone$;
     \item $\vetwo$ is the literal expression for literal $\vltwo$;
@@ -537,12 +633,12 @@ Intuitively, $\toir$ conducts a case analysis to determine whether the ASL expre
 
   \item \AllApplyCase{ebinop\_other\_literals\_int\_result}
   \begin{itemize}
-    \item $\ve$ is a binary expression with an operator $\op$ that is other than $\PLUS$, $\MINUS$, $\MUL$, or $\SHL$,
+    \item $\ve$ is a \binopexpressionterm{} with an operator $\op$ that is other than $\ADD$, $\SUB$, $\MUL$, or $\SHL$,
           applied to the operand expressions $\veone$ and $\vetwo$;
     \item $\veone$ is the literal expression for literal $\vlone$;
     \item $\vetwo$ is the literal expression for literal $\vltwo$;
     \item statically applying $\op$ to $\vlone$ and $\vltwo$ yields the integer literal for $k$;
-    \item $\vp$ is the symbolic expression for the integer $k$, that is, $\{ \emptyfunc\mapsto k \}$.
+    \item $\vp$ is the \symbolicexpressionterm{} for the integer $k$, that is, $\{ \emptyfunc\mapsto k \}$.
   \end{itemize}
 
   \item \AllApplyCase{eunop\_neg}
@@ -576,13 +672,13 @@ Intuitively, $\toir$ conducts a case analysis to determine whether the ASL expre
 \begin{mathpar}
 \inferrule[literal\_int]{}
 {
-  \toir(\tenv, \overname{\ELiteral(\lint(\vi))}{\ve}) \typearrow \overname{\{ \emptyfunc\mapsto \vi \}}{\vp}
+  \toir(\tenv, \overname{\ELiteral(\LInt(\vi))}{\ve}) \typearrow \overname{\{ \emptyfunc\mapsto \vi \}}{\vp}
 }
 \end{mathpar}
 
 \begin{mathpar}
 \inferrule[literal\_other]{
-  \astlabel(\vv) \neq \lint
+  \astlabel(\vv) \neq \LInt
 }{
   \toir(\tenv, \overname{\ELiteral(\vv)}{\ve}) \typearrow \CannotBeTransformed
 }
@@ -591,7 +687,7 @@ Intuitively, $\toir$ conducts a case analysis to determine whether the ASL expre
 \begin{mathpar}
 \inferrule[evar\_constant]{
   \lookupconstant(\tenv, \vs) \typearrow \ELiteral(\vv)\\
-  \vp \eqdef \choice{\vv = \lint(\vi)}{\{ \emptyfunc\mapsto \vi \}}{\CannotBeTransformed}
+  \vp \eqdef \choice{\vv = \LInt(\vi)}{\{ \emptyfunc\mapsto \vi \}}{\CannotBeTransformed}
 }{
   \toir(\tenv, \overname{\EVar(\vs)}{\ve}) \typearrow \vp
 }
@@ -614,7 +710,7 @@ Intuitively, $\toir$ conducts a case analysis to determine whether the ASL expre
   \typeof(\vs) \typearrow \vt \OrTypeError\\\\
   \makeanonymous(\vt) \typearrow \ttyone \OrTypeError\\\\
   \astlabel(\ttyone) = \TInt\\
-  \ttyone = \TInt(\wellconstrained([\ConstraintExact(\ve)]))\\
+  \ttyone = \TInt(\WellConstrained([\ConstraintExact(\ve)]))\\
   \toir(\ve) \typearrow \vp \terminateas \CannotBeTransformed
 }{
   \toir(\tenv, \overname{\EVar(\vs)}{\ve}) \typearrow \vp
@@ -628,7 +724,7 @@ Intuitively, $\toir$ conducts a case analysis to determine whether the ASL expre
   \typeof(\vs) \typearrow \vt\\
   \makeanonymous(\vt) \typearrow \ttyone\\
   \astlabel(\ttyone) = \TInt\\
-  \ttyone \neq \TInt(\wellconstrained([\ConstraintExact(\Ignore)]))
+  \ttyone \neq \TInt(\WellConstrained([\ConstraintExact(\Ignore)]))
 }{
   \toir(\tenv, \overname{\EVar(\vs)}{\ve}) \typearrow \overname{\{ \{\vs\mapsto 1\}\mapsto 1 \}}{\vp}
 }
@@ -652,16 +748,16 @@ Intuitively, $\toir$ conducts a case analysis to determine whether the ASL expre
   \toir(\tenv, \vetwo) \typearrow \irtwo \OrTypeError, \CannotBeTransformed\\\\
   \vp \eqdef \addpolynomials(\irone, \irtwo)
 }{
-  \toir(\tenv, \overname{\EBinop(\PLUS, \veone, \vetwo)}{\ve}) \typearrow \vp
+  \toir(\tenv, \overname{\EBinop(\ADD, \veone, \vetwo)}{\ve}) \typearrow \vp
 }
 \end{mathpar}
 
 \begin{mathpar}
 \inferrule[ebinop\_minus]{
-  \vep \eqdef \EBinop(\PLUS, \veone, \EUnop(\MINUS, \vetwo))\\
+  \vep \eqdef \EBinop(\ADD, \veone, \EUnop(\SUB, \vetwo))\\
   \toir(\tenv, \vep) \typearrow \vp \OrTypeError, \CannotBeTransformed\\\\
 }{
-  \toir(\tenv, \overname{\EBinop(\MINUS, \veone, \vetwo)}{\ve}) \typearrow \vp
+  \toir(\tenv, \overname{\EBinop(\SUB, \veone, \vetwo)}{\ve}) \typearrow \vp
 }
 \end{mathpar}
 
@@ -701,7 +797,7 @@ Intuitively, $\toir$ conducts a case analysis to determine whether the ASL expre
   \irone \eqname [i=1..k: \vm_\vi \mapsto \vc_\vi]\\
   \vp \eqdef [i=1..k: \vm_\vi \mapsto \vc_\vi \times \vftwo]\\
 }{
-  \toir(\tenv, \overname{\EBinop(\DIV, \veone, \overname{\ELiteral(\lint(\vitwo))}{\vetwo})}{\ve}) \typearrow \vp
+  \toir(\tenv, \overname{\EBinop(\DIV, \veone, \overname{\ELiteral(\LInt(\vitwo))}{\vetwo})}{\ve}) \typearrow \vp
 }
 \end{mathpar}
 
@@ -715,6 +811,7 @@ Intuitively, $\toir$ conducts a case analysis to determine whether the ASL expre
   \toir(\tenv, \overname{\EBinop(\DIV, \veone, \vetwo)}{\ve}) \typearrow \vp
 }
 \end{mathpar}
+
 \begin{mathpar}
 \inferrule[ebinop\_div\_non\_monomial\_denominator]{
   \toir(\tenv, \veone) \typearrow \irone \OrTypeError, \CannotBeTransformed\\\\
@@ -727,7 +824,7 @@ Intuitively, $\toir$ conducts a case analysis to determine whether the ASL expre
 
 \begin{mathpar}
 \inferrule[ebinop\_shl\_non\_lint\_exponent]{
-    \vetwo \neq \ELiteral(\lint(\Ignore))
+    \vetwo \neq \ELiteral(\LInt(\Ignore))
 }{
   \toir(\tenv, \overname{\EBinop(\SHL, \Ignore, \vetwo)}{\ve}) \typearrow \CannotBeTransformed
 }
@@ -737,7 +834,7 @@ Intuitively, $\toir$ conducts a case analysis to determine whether the ASL expre
 \inferrule[ebinop\_shl\_neg\_shift]{
   \vitwo < 0
 }{
-  \toir(\tenv, \overname{\EBinop(\SHL, \veone, \ELiteral(\lint(\vitwo)))}{\ve}) \typearrow \CannotBeTransformed
+  \toir(\tenv, \overname{\EBinop(\SHL, \veone, \ELiteral(\LInt(\vitwo)))}{\ve}) \typearrow \CannotBeTransformed
 }
 \and
   \inferrule[ebinop\_shl\_okay]{
@@ -747,29 +844,29 @@ Intuitively, $\toir$ conducts a case analysis to determine whether the ASL expre
     \irone \eqname [i=1..k: \vm_\vi \mapsto \vc_\vi]\\
     \vp \eqdef [i=1..k: \vm_\vi \mapsto \vc_\vi \times \vftwo]\\
 }{
-  \toir(\tenv, \overname{\EBinop(\SHL, \veone, \ELiteral(\lint(\vitwo)))}{\ve}) \typearrow \vp
+  \toir(\tenv, \overname{\EBinop(\SHL, \veone, \ELiteral(\LInt(\vitwo)))}{\ve}) \typearrow \vp
 }
 \end{mathpar}
 
 \begin{mathpar}
 \inferrule[ebinop\_other\_non\_literals]{
-  \op \not\in \{\PLUS, \MINUS, \MUL, \DIV, \SHL\}\\
+  \op \not\in \{\ADD, \SUB, \MUL, \DIV, \SHL\}\\
   (\veone \neq \ELiteral(\Ignore) \lor \vetwo \neq \ELiteral(\Ignore))
 }{
   \toir(\tenv, \overname{\EBinop(\op, \veone, \vetwo)}{\ve}) \typearrow \CannotBeTransformed
 }
 \and
 \inferrule[ebinop\_other\_literals\_non\_int\_result]{
-  \op \not\in \{\PLUS, \MINUS, \MUL, \SHL\}\\
+  \op \not\in \{\ADD, \SUB, \MUL, \SHL\}\\
   \binopliterals(\op, \vlone, \vltwo) \typearrow \vl\\
-  \vl \neq \lint(\Ignore)
+  \vl \neq \LInt(\Ignore)
 }{
   \toir(\tenv, \overname{\EBinop(\op, \ELiteral(\vlone), \ELiteral(\vltwo))}{\ve}) \typearrow \CannotBeTransformed
 }
 \and
 \inferrule[ebinop\_other\_literals\_int\_result]{
-  \op \not\in \{\PLUS, \MINUS, \MUL, \SHL\}\\
-  \binopliterals(\op, \vlone, \vltwo) \typearrow \lint(k)\\
+  \op \not\in \{\ADD, \SUB, \MUL, \SHL\}\\
+  \binopliterals(\op, \vlone, \vltwo) \typearrow \LInt(k)\\
   \vp \eqdef \{ \emptyfunc\mapsto k \}
 }{
   \toir(\tenv, \overname{\EBinop(\op, \ELiteral(\vlone), \ELiteral(\vltwo))}{\ve}) \typearrow \vp
@@ -778,7 +875,7 @@ Intuitively, $\toir$ conducts a case analysis to determine whether the ASL expre
 
 \begin{mathpar}
 \inferrule[eunop\_neg]{
-  \toir(\tenv, \EBinop(\MUL, \ELiteral(\lint(-1)),\veone )) \typearrow \vp \OrTypeError, \CannotBeTransformed\\\\
+  \toir(\tenv, \EBinop(\MUL, \ELiteral(\LInt(-1)),\veone )) \typearrow \vp \OrTypeError, \CannotBeTransformed\\\\
 }{
   \toir(\tenv, \overname{\EUnop(\NEG, \veone)}{\ve}) \typearrow \vp
 }
@@ -814,9 +911,10 @@ Intuitively, $\toir$ conducts a case analysis to determine whether the ASL expre
 The function
 \[
   \exprequal(\overname{\staticenvs}{\tenv} \aslsep \overname{\expr}{\veone} \aslsep \overname{\expr}{\vetwo}) \aslto
-  \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
+  \overname{\Bool}{\vb} \cup \overname{\typeerror}{\TypeErrorConfig}
 \]
-conservatively checks whether the expression $\veone$ is equivalent to the expression $\vetwo$ in environment $\tenv$.
+conservatively checks whether $\veone$ and $\vetwo$ are \equivalentexprsterm{} in
+the \staticenvironmentterm{} $\tenv$.
 The result is given in $\vb$ or a \typingerrorterm{}, if one is detected.
 
 \ExampleDef{Expression Equivalence}
@@ -861,11 +959,11 @@ comprising the array lengths are equivalent, as details in comments.
 The helper function
 \[
   \exprequalnorm(\overname{\staticenvs}{\tenv} \aslsep \overname{\expr}{\veone} \aslsep \overname{\expr}{\vetwo})
-  \aslto \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
+  \aslto \overname{\Bool}{\vb} \cup \overname{\typeerror}{\TypeErrorConfig}
 \]
-conservatively tests whether the expression $\veone$ is equivalent to the expression $\vetwo$ in environment $\tenv$
-by attempting to transform both expressions to their symbolic expression form
-and, if successful, comparing the resulting normal forms for equality.
+conservatively tests whether the $\veone$ and $\vetwo$ are \equivalentexprsterm{} in the \staticenvironmentterm{} $\tenv$
+by attempting to transform both expressions to their \symbolicexpressionterm{} form
+and, if successful, comparing the resulting \symbolicexpressionsterm{} for equality.
 The result is given in $\vb$ or a \typingerrorterm{}, if one is detected.
 
 See \ExampleRef{Expression Equivalence}.
@@ -875,21 +973,21 @@ See \ExampleRef{Expression Equivalence}.
 \begin{itemize}
   \item \AllApplyCase{all\_supported}
   \begin{itemize}
-    \item transforming $\veone$ into a symbolic expression in $\tenv$ yields $\irone$\ProseOrTypeError;
-    \item transforming $\vetwo$ into a symbolic expression in $\tenv$ yields $\irtwo$\ProseOrTypeError;
+    \item transforming $\veone$ into a \symbolicexpressionterm{} in $\tenv$ yields $\irone$\ProseOrTypeError;
+    \item transforming $\vetwo$ into a \symbolicexpressionterm{} in $\tenv$ yields $\irtwo$\ProseOrTypeError;
     \item $\vb$ is the result of equating $\irone$ and $\irtwo$.
   \end{itemize}
 
   \item \AllApplyCase{unsupported1}
   \begin{itemize}
-    \item transforming $\veone$ into a symbolic expression in $\tenv$ yields $\CannotBeTransformed$;
+    \item transforming $\veone$ into a \symbolicexpressionterm{} in $\tenv$ yields $\CannotBeTransformed$;
     \item $\vb$ is $\False$;
   \end{itemize}
 
   \item \AllApplyCase{unsupported2}
   \begin{itemize}
-    \item transforming $\veone$ into a symbolic expression in $\tenv$ yields $\irone$;
-    \item transforming $\vetwo$ into a symbolic expression in $\tenv$ yields $\CannotBeTransformed$;
+    \item transforming $\veone$ into a \symbolicexpressionterm{} in $\tenv$ yields $\irone$;
+    \item transforming $\vetwo$ into a \symbolicexpressionterm{} in $\tenv$ yields $\CannotBeTransformed$;
     \item $\vb$ is $\False$;
   \end{itemize}
 \end{itemize}
@@ -922,7 +1020,7 @@ See \ExampleRef{Expression Equivalence}.
 The helper function
 \[
   \exprequalcase(\overname{\staticenvs}{\tenv} \aslsep \overname{\expr}{\veone} \aslsep \overname{\expr}{\vetwo})
-  \aslto \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
+  \aslto \overname{\Bool}{\vb} \cup \overname{\typeerror}{\TypeErrorConfig}
 \]
 specializes the equivalence test for expressions $\veone$ and $\vetwo$ in $\tenv$
 for the different types of expressions.
@@ -959,8 +1057,8 @@ See \ExampleRef{Expression Equivalence}.
     \item checking whether $\nameone$ is equal to $\nametwo$ either yields $\True$ or $\False$, which short-circuits the entire rule;
     \item checking whether the lists of arguments $\vargsone$ and $\vargstwo$ have the same length yields
           $\True$ or $\False$, which short-circuits the entire rule;
-    \item for each index $i$ in the list of indices for $\vargsone$, testing whether $\vargsone[i]$ is equivalent to $\vargstwo[i]$
-          in $\tenv$ yields $\vb_i$\ProseOrTypeError;
+    \item for each index $i$ in the list of indices for $\vargsone$, testing whether $\vargsone[i]$ and $\vargstwo[i]$
+          are \equivalentexprsterm{} in $\tenv$ yields $\vb_i$\ProseOrTypeError;
     \item $\vb$ is $\True$ if and only if $\vb_i$ is $\True$ for each index $i$ in the list of indices for $\vargsone$.
   \end{itemize}
 
@@ -970,9 +1068,9 @@ See \ExampleRef{Expression Equivalence}.
           that is, $\ECond(\veoneone, \veonetwo, \veonethree)$;
     \item $\vetwo$ is a conditional expression with expressions $\vetwoone$, $\vetwotwo$, and $\vetwothree$,
           that is, $\ECond(\vetwoone, \vetwotwo, \vetwothree)$;
-    \item testing whether $\veoneone$ is equivalent to $\vetwoone$ yields $\vbone$\ProseOrTypeError;
-    \item testing whether $\veonetwo$ is equivalent to $\vetwotwo$ yields $\vbtwo$\ProseOrTypeError;
-    \item testing whether $\veonethree$ is equivalent to $\vetwothree$ yields $\vbthree$\ProseOrTypeError;
+    \item testing whether $\veoneone$ and $\vetwoone$ are \equivalentexprsterm{} in $\tenv$ yields $\vbone$\ProseOrTypeError;
+    \item testing whether $\veonetwo$ and $\vetwotwo$ are \equivalentexprsterm{} in $\tenv$ yields $\vbtwo$\ProseOrTypeError;
+    \item testing whether $\veonethree$ and $\vetwothree$ are \equivalentexprsterm{} in $\tenv$ yields $\vbthree$\ProseOrTypeError;
     \item $\vb$ is $\True$ if and only if all of $\vbone$, $\vbtwo$, and $\vbthree$ are $\True$.
   \end{itemize}
 
@@ -1135,7 +1233,7 @@ See \ExampleRef{Expression Equivalence}.
 \inferrule[e\_call]{
   \veone = \ECall(\nameone, \vargsone, \Ignore)\\
   \vetwo = \ECall(\nametwo, \vargstwo, \Ignore)\\\\
-  \booltrans{\nameone = \nametwo} \booltransarrow \True \terminateas \False\\\\
+  \booltrans(\nameone = \nametwo) \booltransarrow \True \terminateas \False\\\\
   \equallength(\vargsone, \vargstwo) \typearrow \True \terminateas \False\\\\
   i \in \listrange(\vargsone): \exprequal(\tenv, \vargsone[i], \vargstwo[i]) \typearrow \vb_i \OrTypeError\\\\
   \vb \eqdef \bigwedge_{i \in \listrange(\vargsone)} \vb_i
@@ -1312,11 +1410,12 @@ See \ExampleRef{Expression Equivalence}.
 \hypertarget{def-typeequal}{}
 The function
 \[
-  \typeequal(\overname{\ty}{\vtone} \aslsep \overname{\ty}{\vttwo}) \aslto
-   \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
+  \typeequal(\overname{\staticenvs}{\tenv} \aslsep \overname{\ty}{\vtone} \aslsep \overname{\ty}{\vttwo}) \aslto
+   \overname{\Bool}{\vb} \cup \overname{\typeerror}{\TypeErrorConfig}
 \]
-conservatively tests whether the type $\vtone$ is equivalent to the type $\vttwo$ in environment $\tenv$
-and yields the result in $\vb$.  \ProseOtherwiseTypeError
+conservatively tests whether $\vtone$ and $\vttwo$ are \equivalenttypesterm{} in
+the \staticenvironmentterm{} $\tenv$
+and yields the result in $\vb$. \ProseOtherwiseTypeError
 
 \ExampleDef{Equivalent Types}
 The specification in \listingref{TypeEqual} is well-typed.
@@ -1348,15 +1447,15 @@ of \verb|Foo|.
 
   \item \AllApplyCase{tint\_parameterized}
   \begin{itemize}
-    \item $\vtone$ is the \parameterizedintegertype\  with identifier $\vione$, that is, \\ $\TInt(\parameterized(\vione))$;
-    \item $\vttwo$ is the \parameterizedintegertype\ with identifier $\vitwo$, that is, \\ $\TInt(\parameterized(\vitwo))$;
+    \item $\vtone$ is the \parameterizedintegertype\  with identifier $\vione$, that is, \\ $\TInt(\Parameterized(\vione))$;
+    \item $\vttwo$ is the \parameterizedintegertype\ with identifier $\vitwo$, that is, \\ $\TInt(\Parameterized(\vitwo))$;
     \item $\vb$ is $\True$ if and only if $\vione$ is equal to $\vitwo$.
   \end{itemize}
 
   \item \AllApplyCase{tint\_wellconstrained}
   \begin{itemize}
-    \item $\vtone$ is the well-constrained integer type with list of constraints $\vcone$, that is, \\ $\TInt(\wellconstrained(\vcone))$;
-    \item $\vttwo$ is the well-constrained integer type with list of constraints $\vctwo$, that is, \\ $\TInt(\wellconstrained(\vctwo))$;
+    \item $\vtone$ is the well-constrained integer type with list of constraints $\vcone$, that is, \\ $\TInt(\WellConstrained(\vcone))$;
+    \item $\vttwo$ is the well-constrained integer type with list of constraints $\vctwo$, that is, \\ $\TInt(\WellConstrained(\vctwo))$;
     \item testing whether $\vcone$ and $\vctwo$ are equivalent in $\tenv$ yields $\vb$\ProseOrTypeError.
   \end{itemize}
 
@@ -1445,13 +1544,13 @@ of \verb|Foo|.
 \inferrule[tint\_parameterized]{
   \vb \eqdef \vione = \vitwo
 }{
-  \typeequal(\tenv, \TInt(\parameterized(\vione)), \TInt(\parameterized(\vitwo))) \typearrow \vb
+  \typeequal(\tenv, \TInt(\Parameterized(\vione)), \TInt(\Parameterized(\vitwo))) \typearrow \vb
 }
 \and
 \inferrule[tint\_wellconstrained]{
   \constraintsequal(\tenv, \vcone, \vctwo) \typearrow \vb \OrTypeError
 }{
-  \typeequal(\tenv, \TInt(\wellconstrained(\vcone)), \TInt(\wellconstrained(\vctwo))) \typearrow \vb
+  \typeequal(\tenv, \TInt(\WellConstrained(\vcone)), \TInt(\WellConstrained(\vctwo))) \typearrow \vb
 }
 \end{mathpar}
 
@@ -1494,7 +1593,7 @@ of \verb|Foo|.
 \begin{mathpar}
 \inferrule[tstructured]{
   L \in \{\TRecord, \TException\}\\
-  \booltrans{\fieldnames(\vfieldsone) = \fieldnames(\vfieldstwo)} \booltransarrow \True \terminateas \False\\\\
+  \booltrans(\fieldnames(\vfieldsone) = \fieldnames(\vfieldstwo)) \booltransarrow \True \terminateas \False\\\\
   {
     \begin{array}{l}
   \vf \in \fieldnames(\vfieldsone): \\ \typeequal(\tenv, \fieldtype(\vfieldsone, \vf), \fieldtype(\vfieldstwo, \vf)) \typearrow \vb_\vf \OrTypeError
@@ -1521,7 +1620,7 @@ of \verb|Foo|.
 The function
 \[
   \bitwidthequal(\overname{\staticenvs}{\tenv} \aslsep \overname{\expr}{\vwone} \aslsep \overname{\expr}{\vwtwo})
-  \aslto \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
+  \aslto \overname{\Bool}{\vb} \cup \overname{\typeerror}{\TypeErrorConfig}
 \]
 conservatively tests whether the bitwidth expression $\vwone$ is equivalent to the bitwidth expression $\vwtwo$
 in environment $\tenv$ and yields the result in $\vb$.  \ProseOtherwiseTypeError
@@ -1547,8 +1646,8 @@ Testing whether the expressions $\vwone$ and $\vwtwo$ are equivalent in $\tenv$ 
 \hypertarget{def-bitfieldsequal}{}
 The function
 \[
-  \bitfieldsequal(\overname{\staticenvs}{\tenv} \aslsep \overname{\bitfield^*}{\bfone} \aslsep \overname{\bitfield^*}{\bftwo})
-  \aslto \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
+  \bitfieldsequal(\overname{\staticenvs}{\tenv} \aslsep \overname{\KleeneStar{\bitfield}}{\bfone} \aslsep \overname{\KleeneStar{\bitfield}}{\bftwo})
+  \aslto \overname{\Bool}{\vb} \cup \overname{\typeerror}{\TypeErrorConfig}
 \]
 conservatively tests whether the list of bitfields $\bfone$ is equivalent to the list of bitfields $\bftwo$
 in environment $\tenv$ and yields the result in $\vb$.  \ProseOtherwiseTypeError
@@ -1605,7 +1704,7 @@ of \verb|Foo| are not equivalent.
 The function
 \[
   \bitfieldequal(\overname{\staticenvs}{\tenv} \aslsep \overname{\bitfield}{\bfone} \aslsep \overname{\bitfield}{\bftwo})
-  \aslto \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
+  \aslto \overname{\Bool}{\vb} \cup \overname{\typeerror}{\TypeErrorConfig}
 \]
 conservatively tests whether the bitfield $\bfone$ is equivalent to the bitfield $\bftwo$ in environment $\tenv$
 and yields the result in $\vb$.  \ProseOtherwiseTypeError
@@ -1677,7 +1776,7 @@ or different nested bitfields.
 \inferrule[bitfield\_simple]{
   \bfone = \BitFieldSimple(\nameone, \slicesone)\\
   \bftwo = \BitFieldSimple(\nametwo, \slicestwo)\\
-  \booltrans{\nameone = \nametwo} \booltransarrow \vbone\\
+  \booltrans(\nameone = \nametwo) \booltransarrow \vbone\\
   \slicesequal(\tenv, \slicesone, \slicestwo) \typearrow \vbtwo \OrTypeError\\\\
   \vb \eqdef \vbone \land \vbtwo
 }{
@@ -1687,7 +1786,7 @@ or different nested bitfields.
 \inferrule[bitfield\_nested]{
   \bfone = \BitFieldNested(\nameone, \slicesone, \bfoneone)\\
   \bftwo = \BitFieldNested(\nametwo, \slicestwo, \bftwoone)\\
-  \booltrans{\nameone = \nametwo} \booltransarrow \True \terminateas \False\\\\
+  \booltrans(\nameone = \nametwo) \booltransarrow \True \terminateas \False\\\\
   \slicesequal(\tenv, \slicesone, \slicestwo) \typearrow \vbone \terminateas \TypeErrorConfig,\\\\
   \bitfieldsequal(\tenv, \bfoneone, \bftwoone) \typearrow \vbtwo
 }{
@@ -1697,7 +1796,7 @@ or different nested bitfields.
 \inferrule[bitfield\_typed]{
   \bfone = \BitFieldType(\nameone, \slicesone, \vtone)\\
   \bftwo = \BitFieldType(\nametwo, \slicestwo, \vttwo)\\
-  \booltrans{\nameone = \nametwo} \booltransarrow \True \terminateas \False \\\\
+  \booltrans(\nameone = \nametwo) \booltransarrow \True \terminateas \False \\\\
   \slicesequal(\tenv, \slicesone, \slicestwo) \typearrow \vbone \OrTypeError\\\\
   \typeequal(\tenv, \vtone, \vttwo) \typearrow \vbtwo \OrTypeError\\\\
   \vb \eqdef \vbone \land \vbtwo
@@ -1710,8 +1809,8 @@ or different nested bitfields.
 \hypertarget{def-constraintsequal}{}
 The function
 \[
-  \constraintsequal(\overname{\staticenvs}{\tenv} \aslsep \overname{\intconstraint^*}{\csone} \aslsep \overname{\intconstraint^*}{\cstwo})
-  \aslto \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
+  \constraintsequal(\overname{\staticenvs}{\tenv} \aslsep \overname{\KleeneStar{\intconstraint}}{\csone} \aslsep \overname{\KleeneStar{\intconstraint}}{\cstwo})
+  \aslto \overname{\Bool}{\vb} \cup \overname{\typeerror}{\TypeErrorConfig}
 \]
 conservatively tests whether the constraint list $\csone$ is equivalent to the constraint list $\cstwo$ in environment $\tenv$
 and yields the result in $\vb$.  \ProseOtherwiseTypeError
@@ -1726,7 +1825,7 @@ the expression is well-typed.
 The expression \verb|x as integer{w + w + w, w..2 * w + z}| on the other hand
 has the constraints in a different order, which means that the two lists of constraints
 are not considered equivalent. This is still considered well-typed (see \TypingRuleRef{CheckATC}),
-and the typing assertion will be checked dynamically (see \SemanticsRuleRef{ATC}).
+and the type assertion will be checked dynamically (see \SemanticsRuleRef{ATC}).
 \ASLListing{Equivalent lists of constraints}{ConstraintsEqual}{\typingtests/TypingRule.ConstraintsEqual.asl}
 
 \ProseParagraph
@@ -1734,7 +1833,7 @@ and the typing assertion will be checked dynamically (see \SemanticsRuleRef{ATC}
 \begin{itemize}
   \item checking whether the number of constraints in $\csone$ is the same as the number of constraints in $\cstwo$
         yields $\True$\ProseTerminateAs{\False};
-  \item testing whether the constraint $\csone[i]$ is equivalent to the constraint $\cstwo[i]$ in $\tenv$
+  \item testing whether $\csone[i]$ and $\cstwo[i]$ are \equivalentconstraintsterm{} in $\tenv$
         yields $\vb_i$ for each index in the index in the indices for $\csone$ ($i\in\listrange(\csone)$)\ProseOrTypeError;
   \item $\vb$ is $\True$ if and only if all $\vb_i$ are $\True$ for each index in the indices for $\csone$.
 \end{itemize}
@@ -1755,7 +1854,7 @@ and the typing assertion will be checked dynamically (see \SemanticsRuleRef{ATC}
 The function
 \[
   \constraintequal(\overname{\staticenvs}{\tenv} \aslsep \overname{\intconstraint}{\vcone} \aslsep \overname{\intconstraint}{\vstwo})
-  \aslto \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
+  \aslto \overname{\Bool}{\vb} \cup \overname{\typeerror}{\TypeErrorConfig}
 \]
 conservatively tests whether the constraint $\vcone$ is equivalent to the constraint $\vctwo$ in environment $\tenv$
 and yields the result in $\vb$.  \ProseOtherwiseTypeError
@@ -1823,8 +1922,8 @@ corresponding constraint on the left-hand-side of that assignment.
 \hypertarget{def-slicesequal}{}
 The function
 \[
-  \slicesequal(\overname{\staticenvs}{\tenv} \aslsep \overname{\slice^*}{\slicesone} \aslsep \overname{\slice^*}{\slicestwo})
-  \aslto \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
+  \slicesequal(\overname{\staticenvs}{\tenv} \aslsep \overname{\KleeneStar{\slice}}{\slicesone} \aslsep \overname{\KleeneStar{\slice}}{\slicestwo})
+  \aslto \overname{\Bool}{\vb} \cup \overname{\typeerror}{\TypeErrorConfig}
 \]
 conservatively tests whether the list of slices $\slicesone$ is equivalent to the list of slices $\slicestwo$
 in environment $\tenv$ and yields the result in $\vb$.  \ProseOtherwiseTypeError
@@ -1873,17 +1972,17 @@ in environment $\tenv$ and yields the result in $\vb$.  \ProseOtherwiseTypeError
 The function
 \[
   \sliceequal(\overname{\staticenvs}{\tenv} \aslsep \overname{\slice}{\sliceone} \aslsep \overname{\slice}{\slicetwo})
-  \aslto \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
+  \aslto \overname{\Bool}{\vb} \cup \overname{\typeerror}{\TypeErrorConfig}
 \]
 conservatively tests whether the slice $\sliceone$ is equivalent to the slice $\slicetwo$
 in environment $\tenv$ and yields the result in $\vb$. \ProseOtherwiseTypeError
 
 This function operates both on \typedast{} nodes, where both slices are only
 of the form $\SliceLength(\ \cdot\ ,\ \cdot\ )$, as well as \untypedast{} nodes where all slice forms
-are possible. The latter is used during checking overriding subprograms (\secref{Overriding}).
+are possible. The latter is used during checking overriding subprograms (\secref{Overriding Subprograms}).
 This function operates both on \typedast{} nodes, where both slices are only
 of the form $\SliceLength(\ \cdot\ ,\ \cdot\ )$, as well as \untypedast{} nodes where all slice forms
-are possible. The latter is used during checking overriding subprograms (\secref{Overriding}).
+are possible. The latter is used during checking overriding subprograms (\secref{Overriding Subprograms}).
 
 \ExampleDef{Equivalent Slices}
 The specification in \listingref{SliceEqual} shows examples of equivalent slices.
@@ -1955,7 +2054,7 @@ of \verb|Foo| and the overridden version of \verb|Foo| are equivalent.
 The function
 \[
   \arraylengthequal(\overname{\arrayindex}{\vlone} \aslsep \overname{\arrayindex}{\vltwo})
-  \aslto \overname{\Bool}{\vb} \cup \overname{\TTypeError}{\TypeErrorConfig}
+  \aslto \overname{\Bool}{\vb} \cup \overname{\typeerror}{\TypeErrorConfig}
 \]
 tests whether the array lengths $\vlone$ and $\vltwo$ are equivalent and yields the result
 in $\vb$. \ProseOtherwiseTypeError
@@ -1981,7 +2080,7 @@ even though they both contain three elements each.
   \begin{itemize}
     \item $\vlone$ is an integer type length expression with subexpression $\veoneone$, that is, \\ $\ArrayLengthExpr(\veoneone)$;
     \item $\vltwo$ is an integer type length expression with subexpression $\vetwoone$, that is, \\ $\ArrayLengthExpr(\vetwoone)$;
-    \item testing whether $\veoneone$ and $\vetwoone$ are equivalent in $\tenv$ yields $\vb$\ProseOrTypeError.
+    \item testing whether $\veoneone$ and $\vetwoone$ are \equivalentexprsterm{} in $\tenv$ yields $\vb$\ProseOrTypeError.
   \end{itemize}
 
   \item \AllApplyCase{enum\_enum}
@@ -2058,7 +2157,7 @@ See \ExampleRef{Transforming Expressions into Symbolic Expressions}.
 \begin{mathpar}
 \inferrule[empty]{}
 {
-  \polynomialtoexpr(\overname{\emptyfunc}{\vp}) \typearrow \overname{\ELiteral(\lint(0))}{\ve}
+  \polynomialtoexpr(\overname{\emptyfunc}{\vp}) \typearrow \overname{\ELiteral(\LInt(0))}{\ve}
 }
 \and
 \inferrule[non\_empty]{
@@ -2066,7 +2165,7 @@ See \ExampleRef{Transforming Expressions into Symbolic Expressions}.
   \monomialstoexpr(\monoms) \typearrow (\veone, \vsone)\\
   {
   \ve \eqdef \begin{cases}
-    \ELiteral(\lint(0))   & \text{if }\vsone = 0\\
+    \ELiteral(\LInt(0))   & \text{if }\vsone = 0\\
     \veone                & \text{if }\vsone = 1\\
     \EUnop(\NEG, \veone)  & \text{if }\vsone = -1
   \end{cases}
@@ -2155,7 +2254,7 @@ via the lexicographic ordering.
 \hypertarget{def-monomialstoexpr}{}
 The function
 \[
-\monomialstoexpr(\overname{(\overname{\unitarymonomial}{\vm}\times\overname{\Q}{q})^*}{\monoms}) \aslto
+\monomialstoexpr(\overname{\KleeneStar{(\overname{\unitarymonomial}{\vm}\times\overname{\Q}{q})}}{\monoms}) \aslto
 (\overname{\expr}{\ve},\overname{\{-1,0,1\}}{\vs})
 \]
 transforms a list consisting of pairs of unitary monomials and rational factors $\monoms$ (so, general monomials),
@@ -2191,7 +2290,7 @@ yields the expression \verb|5 * x * y * y - 5 * x * y|.
 \begin{mathpar}
 \inferrule[empty]{}
 {
-  \monomialstoexpr(\overname{\emptylist}{\monoms}) \typearrow (\overname{\ELiteral(\lint(0))}{\ve}, \overname{0}{\vs})
+  \monomialstoexpr(\overname{\emptylist}{\monoms}) \typearrow (\overname{\ELiteral(\LInt(0))}{\ve}, \overname{0}{\vs})
 }
 \and
 \inferrule[non\_empty]{
@@ -2217,7 +2316,7 @@ which represents the absolute value of $\ve$ multiplied by $q$, and the sign of 
 \ExampleDef{Transforming Expressions and Rationals}
 The following are examples of inputs and outputs of $\monomialtoexpr$:
 \[
-\monomialtoexpr(\EVar(\vx), 0) \typearrow (\ELiteral(\lint(0)), 0)
+\monomialtoexpr(\EVar(\vx), 0) \typearrow (\ELiteral(\LInt(0)), 0)
 \]
 
 \[
@@ -2275,13 +2374,13 @@ The following are examples of inputs and outputs of $\monomialtoexpr$:
 \inferrule[q\_zero]{
   q = 0\\
 }{
-  \monomialtoexpr(\ve, q) \typearrow (\overname{\ELiteral(\lint(0))}{\newe}, \overname{0}{\vs})
+  \monomialtoexpr(\ve, q) \typearrow (\overname{\ELiteral(\LInt(0))}{\newe}, \overname{0}{\vs})
 }
 \and
 \inferrule[q\_natural]{
   q > 0\\
   q \in \N\\
-  \symmulexpr(\ELiteral(\lint(q)), \ve) \typearrow \newe
+  \symmulexpr(\ELiteral(\LInt(q)), \ve) \typearrow \newe
 }{
   \monomialtoexpr(\ve, q) \typearrow (\newe, \overname{1}{\vs})
 }
@@ -2290,8 +2389,8 @@ The following are examples of inputs and outputs of $\monomialtoexpr$:
   q > 0\\
   q \not\in \N\\\\
   q \eqname \frac{d}{n} \;\;\;\;\text{ is the reduced fraction for }q\\\\
-  \symmulexpr(\ELiteral(\lint(d)), \ve) \typearrow \vetwo\\
-  \newe \eqdef \EBinop(\DIV, \vetwo, \ELiteral(\lint(n)))
+  \symmulexpr(\ELiteral(\LInt(d)), \ve) \typearrow \vetwo\\
+  \newe \eqdef \EBinop(\DIV, \vetwo, \ELiteral(\LInt(n)))
 }{
   \monomialtoexpr(\ve, q) \typearrow (\newe, \overname{1}{\vs})
 }
@@ -2363,8 +2462,8 @@ The following are some examples of inputs and outputs for symbolic addition:
   \begin{itemize}
     \item both $\vsone$ and $\vstwo$ are not $0$;
     \item $\vsone$ is equal to $\vstwo$;
-    \item $\ve$ is the binary expression with operator $\PLUS$ and operands $\veone$ and $\vetwo$,
-          that is, $\EBinop(\PLUS, \veone, \vetwo)$;
+    \item $\ve$ is the binary expression with operator $\ADD$ and operands $\veone$ and $\vetwo$,
+          that is, $\EBinop(\ADD, \veone, \vetwo)$;
     \item $\vs$ is $\vsone$;
   \end{itemize}
 
@@ -2372,8 +2471,8 @@ The following are some examples of inputs and outputs for symbolic addition:
   \begin{itemize}
     \item both $\vsone$ and $\vstwo$ are not $0$;
     \item $\vsone$ is different from $\vstwo$;
-    \item $\ve$ is the binary expression with operator $\MINUS$ and operands $\veone$ and $\vetwo$,
-          that is, $\EBinop(\MINUS, \veone, \vetwo)$;
+    \item $\ve$ is the binary expression with operator $\SUB$ and operands $\veone$ and $\vetwo$,
+          that is, $\EBinop(\SUB, \veone, \vetwo)$;
     \item $\vs$ is $\vsone$;
   \end{itemize}
 \end{itemize}
@@ -2391,14 +2490,14 @@ The following are some examples of inputs and outputs for symbolic addition:
   \vsone \neq 0 \land \vstwo \neq 0\\
   \vsone = \vstwo
 }{
-  \symaddexpr(\veone, \vetwo) \typearrow (\overname{\EBinop(\PLUS, \veone, \vetwo)}{\ve}, \overname{\vsone}{\vs})
+  \symaddexpr(\veone, \vetwo) \typearrow (\overname{\EBinop(\ADD, \veone, \vetwo)}{\ve}, \overname{\vsone}{\vs})
 }
 \and
 \inferrule[different\_signs]{
   \vsone \neq 0 \land \vstwo \neq 0\\
   \vsone \neq \vstwo
 }{
-  \symaddexpr(\veone, \vetwo) \typearrow (\overname{\EBinop(\MINUS, \veone, \vetwo)}{\ve}, \overname{\vsone}{\vs})
+  \symaddexpr(\veone, \vetwo) \typearrow (\overname{\EBinop(\SUB, \veone, \vetwo)}{\ve}, \overname{\vsone}{\vs})
 }
 \end{mathpar}
 
@@ -2406,7 +2505,7 @@ The following are some examples of inputs and outputs for symbolic addition:
 \hypertarget{def-unitarymonomialstoexpr}{}
 The function
 \[
-\unitarymonomialstoexpr(\overname{(\identifier\times\N)^*}{\monoms}) \aslto \overname{\expr}{\ve}
+\unitarymonomialstoexpr(\overname{\KleeneStar{(\Identifier\times\N)}}{\monoms}) \aslto \overname{\expr}{\ve}
 \]
 transforms a list of single-variable unitary monomials $\monoms$ into an expression $\ve$.
 Intuitively, $\monoms$ represented a multiplication of the single-variable unitary monomials.
@@ -2464,7 +2563,7 @@ and the corresponding expressions, in comments.
 \begin{mathpar}
 \inferrule[empty]{}
 {
-  \unitarymonomialstoexpr(\overname{\emptylist}{\monoms}) \typearrow \overname{\ELiteral(\lint(1))}{\ve}
+  \unitarymonomialstoexpr(\overname{\emptylist}{\monoms}) \typearrow \overname{\ELiteral(\LInt(1))}{\ve}
 }
 \end{mathpar}
 
@@ -2548,8 +2647,8 @@ yielding the result in $\ve$:
 \FormallyParagraph
 \begin{mathpar}
 \inferrule[one\_operand]{
-  (\veone = \ELiteral(\lint(1)) \lor \vetwo = \ELiteral(\lint(1)))\\
-  \ve \eqdef \choice{\veone = \ELiteral(\lint(1))}{\vetwo}{\veone}
+  (\veone = \ELiteral(\LInt(1)) \lor \vetwo = \ELiteral(\LInt(1)))\\
+  \ve \eqdef \choice{\veone = \ELiteral(\LInt(1))}{\vetwo}{\veone}
 }{
   \symmulexpr(\veone, \vetwo) \typearrow \ve
 }
@@ -2557,7 +2656,7 @@ yielding the result in $\ve$:
 
 \begin{mathpar}
 \inferrule[no\_one\_operand]{
-  (\veone \neq \ELiteral(\lint(1)) \land \vetwo \neq \ELiteral(\lint(1)))
+  (\veone \neq \ELiteral(\LInt(1)) \land \vetwo \neq \ELiteral(\LInt(1)))
 }{
   \symmulexpr(\veone, \vetwo) \typearrow \overname{\EBinop(\MUL, \veone, \vetwo)}{\ve}
 }
@@ -2567,8 +2666,8 @@ yielding the result in $\ve$:
 \hypertarget{def-typeof}{}
 The function
 \[
-  \typeof(\overname{\staticenvs}{\tenv} \aslsep \overname{\identifier}{\vs})
-  \;\aslto\; \overname{\ty}{\tty}\ \cup\ \overname{\TTypeError}{\TypeErrorConfig}
+  \typeof(\overname{\staticenvs}{\tenv} \aslsep \overname{\Identifier}{\vs})
+  \;\aslto\; \overname{\ty}{\tty}\ \cup\ \overname{\typeerror}{\TypeErrorConfig}
 \]
 looks up the environment $\tenv$ for a type $\tty$ associated with an identifier
 $\vs$. The result is \typingerrorterm{} if $\vs$ is not associated with any type.
@@ -2578,10 +2677,10 @@ In \listingref{expressions-evar}, the type bound to the global storage element
 \verb|global_non_constant| after annotating the global storage element declarations
 is \verb|integer{19}|,
 %
-the type bound to the local storage element \verb|var_x| in the static environment
+the type bound to the local storage element \verb|var_x| in the \staticenvironmentterm{}
 after annotating the local declaration \verb|var var_x = LOCAL_CONSTANT;| is \verb|integer{7}|.
 %
-Invoking $\typeof$ for the static environment just before annotating the local
+Invoking $\typeof$ for the \staticenvironmentterm{} just before annotating the local
 declaration \verb|var x = t;| in \listingref{expressions-evar-undefined} yields a \typingerrorterm.
 
 \ProseParagraph
@@ -2636,7 +2735,7 @@ declaration \verb|var x = t;| in \listingref{expressions-evar-undefined} yields 
 The helper function
 \[
 \normalizeopt(\overname{\staticenvs}{\tenv} \aslsep \overname{\expr}{\ve}) \aslto
-\overname{\langle\expr\rangle}{\neweopt} \cup \overname{\TTypeError}{\TypeErrorConfig}
+\overname{\langle\expr\rangle}{\neweopt} \cup \overname{\typeerror}{\TypeErrorConfig}
 \]
 is similar to $\normalize$, except that it returns $\None$ when $\ve$ is not an
 expression that can be symbolically simplified.
@@ -2649,7 +2748,7 @@ See \ExampleRef{Normalize}.
 \begin{itemize}
   \item \AllApplyCase{normalizable}
   \begin{itemize}
-    \item applying $\toir$ to $\ve$ in $\tenv$ to obtain a symbolic expression yields a symbolic expression $\vpone$
+    \item applying $\toir$ to $\ve$ in $\tenv$ to obtain a \symbolicexpressionterm{} yields a \symbolicexpressionterm{} $\vpone$
     (that is, not $\CannotBeTransformed$)\ProseOrTypeError;
     \item applying $\normalize$ to $\ve$ in $\tenv$ yields $\newe$;
     \item \Proseeqdef{$\neweopt$}{$\langle\newe\rangle$}.
@@ -2657,7 +2756,7 @@ See \ExampleRef{Normalize}.
 
   \item \AllApplyCase{not\_normalizable}
   \begin{itemize}
-    \item applying $\toir$ to $\ve$ in $\tenv$ to obtain a symbolic expression yields $\CannotBeTransformed$;
+    \item applying $\toir$ to $\ve$ in $\tenv$ to obtain a \symbolicexpressionterm{} yields $\CannotBeTransformed$;
     \item \Proseeqdef{$\neweopt$}{$\None$}.
   \end{itemize}
 \end{itemize}

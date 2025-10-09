@@ -7,18 +7,18 @@ type MyException of exception {
     msg: string,
 };
 
-type MyCollection of collection {
+
+var rec: MyRecord;
+var exc: MyException;
+
+var coll: collection {
     high_bits: bits(32),
     low_bits: bits(32),
 };
 
-var rec: MyRecord;
-var exc: MyException;
-var coll: MyCollection;
-
 accessor Rec() <=> values: bits (64)
 begin
-    getter
+  readonly getter
         return rec.high_bits :: rec.low_bits;
     end;
 
@@ -30,8 +30,8 @@ end;
 
 func main() => integer
 begin
-    println(Rec());
+    println Rec();
     Rec() = Ones{64};
-    println(Rec());
+    println Rec();
     return 0;
 end;

@@ -14,14 +14,14 @@ begin
   X = 2;
 
   if foo (2) && foo (3) then
-    println("Impossible");
+    println "Impossible";
   end;
 
   if foo (2) || foo (3) then
-    println("Should print.");
+    println "Should print.";
   end;
 
-  if foo (2) --> foo (3) then
+  if foo (2) ==> foo (3) then
     println ("Should print.");
   end;
 

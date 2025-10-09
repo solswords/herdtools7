@@ -139,14 +139,14 @@ module NativeBackend (C : Config) = struct
     match vec with
     | NV_Vector li ->
         let n = List.length li in
-        if i >= n then bad_index i n else List.nth li i |> return
+        if i < 0 || i >= n then bad_index i n else List.nth li i |> return
     | v -> non_tuple_exception v
 
   let set_index i v vec =
     match vec with
     | NV_Vector li ->
         let n = List.length li in
-        if i >= n then bad_index i n
+        if i < 0 || i >= n then bad_index i n
         else list_update i (Fun.const v) li |> v_tuple
     | v -> non_tuple_exception v
 
@@ -193,9 +193,16 @@ module NativeBackend (C : Config) = struct
       positions
     |> slices_to_positions Fun.id
 
+  let max_pos_of_slices slices =
+    let max_pos (start, len) =
+      let start = as_int start and len = as_int len in
+      if len == 0 then start else start + len - 1
+    in
+    List.fold_left (fun acc slice -> int_max acc (max_pos slice)) 0 slices
+
   let read_from_bitvector ~loc slices v =
+    let max_pos = max_pos_of_slices slices in
     let positions = slices_to_positions slices in
-    let max_pos = List.fold_left int_max 0 positions in
     let () =
       List.iter
         (fun x -> if x < 0 then mismatch_type v [ default_t_bits ])
@@ -203,7 +210,9 @@ module NativeBackend (C : Config) = struct
     in
     let bv =
       match v with
-      | NV_Literal (L_BitVector bv) when Bitvector.length bv > max_pos -> bv
+      | NV_Literal (L_BitVector bv) ->
+          if max_pos < Bitvector.length bv then bv
+          else bad_index max_pos (Bitvector.length bv)
       | NV_Literal (L_Int i) -> Bitvector.of_z (max_pos + 1) i
       | _ ->
           let ( ~! ) = add_pos_from loc in
@@ -217,6 +226,24 @@ module NativeBackend (C : Config) = struct
     let dst = as_bitvector dst
     and src = as_bitvector src
     and positions = slices_to_positions slices in
+    let () =
+      List.iter
+        (fun x ->
+          if x < 0 then
+            mismatch_type (bitvector_to_value dst) [ default_t_bits ])
+        positions
+    in
+    let () =
+      if List.length positions != Bitvector.length src then
+        mismatch_type
+          (v_of_int (List.length positions))
+          [ integer_exact' (expr_of_int (Bitvector.length src)) ]
+    in
+    let max_pos = max_pos_of_slices slices in
+    let () =
+      if not (max_pos < Bitvector.length dst) then
+        bad_index max_pos (Bitvector.length dst)
+    in
     Bitvector.write_slice dst src positions |> bitvector_to_value
 
   let concat_bitvectors bvs =
@@ -226,6 +253,8 @@ module NativeBackend (C : Config) = struct
   let bitvector_length bv =
     let bv = as_bitvector bv in
     Bitvector.length bv |> v_of_int
+
+  let fail exn _a = raise exn
 
   module Primitives = struct
     let return_one v = return [ return v ]
@@ -261,24 +290,31 @@ module NativeBackend (C : Config) = struct
       | [ v ] -> mismatch_type v [ integer' ]
       | li ->
           Error.fatal_unknown_pos
-          @@ Error.BadArity (Dynamic, "DecStr", 1, List.length li)
+          @@ Error.BadArity (Dynamic, "HexStr", 1, List.length li)
 
     let ascii_integer = integer_range' !$0 !$127
 
-    let ascii_str =
-      let open! Z in
-      function
-      | [ NV_Literal (L_Int i) ] when geq zero i && leq ~$127 i ->
-          L_String (char_of_int (Z.to_int i) |> String.make 1)
-          |> nv_literal |> return_one
+    let ascii_str = function
+      | [ NV_Literal (L_Int i) ] ->
+          if Z.(zero <= i && i <= of_int 127) then
+            L_String (char_of_int (Z.to_int i) |> String.make 1)
+            |> nv_literal |> return_one
+          else
+            Error.fatal_unknown_pos
+            @@ Error.BadPrimitiveArgument
+                 ( "AsciiStr",
+                   "greater than or equal to 0 and less than or equal to 127" )
       | [ v ] -> mismatch_type v [ ascii_integer ]
       | li ->
           Error.fatal_unknown_pos
-          @@ Error.BadArity (Dynamic, "DecStr", 1, List.length li)
+          @@ Error.BadArity (Dynamic, "AsciiStr", 1, List.length li)
 
     let floor_log2 = function
-      | [ NV_Literal (L_Int i) ] when Z.gt i Z.zero ->
-          [ L_Int (Z.log2 i |> Z.of_int) |> nv_literal ]
+      | [ NV_Literal (L_Int i) ] ->
+          if Z.gt i Z.zero then [ L_Int (Z.log2 i |> Z.of_int) |> nv_literal ]
+          else
+            Error.fatal_unknown_pos
+            @@ Error.BadPrimitiveArgument ("FloorLog2", "greater than 0")
       | [ v ] -> mismatch_type v [ integer' ]
       | li ->
           Error.fatal_unknown_pos
@@ -311,7 +347,7 @@ module NativeBackend (C : Config) = struct
       let e_var x = E_Var x |> add_dummy_annotation in
       let eoi i = expr_of_int i in
       let binop = ASTUtils.binop in
-      let minus_one e = binop `MINUS e (eoi 1) in
+      let minus_one e = binop `SUB e (eoi 1) in
       let pow_2 = binop `POW (eoi 2) in
       let neg e = E_Unop (NEG, e) |> add_pos_from e in
       (* [t_bits "N"] is the bitvector type of length [N]. *)
@@ -334,6 +370,7 @@ module NativeBackend (C : Config) = struct
             return_type;
             subprogram_type;
             recurse_limit;
+            qualifier = Some Pure;
             override = None;
             builtin = true;
           },
@@ -352,7 +389,7 @@ module NativeBackend (C : Config) = struct
          let minus_two_pow_n_minus_one = neg two_pow_n_minus_one
          and two_pow_n_minus_one_minus_one = minus_one two_pow_n_minus_one in
          let if_0_then_0_else else_expr =
-           cond_expr (binop `EQ_OP var_N zero_expr) zero_expr else_expr
+           cond_expr (binop `EQ var_N zero_expr) zero_expr else_expr
          in
          let returns =
            integer_range
@@ -448,7 +485,7 @@ module DeterministicBackend = struct
     | T_Int UnConstrained -> NV_Literal (L_Int Z.zero)
     | T_Int (WellConstrained (constraints, _)) ->
         deterministic_unknown_of_constraints ~eval_expr_sef ty constraints
-    | T_Int (Parameterized (_, x)) -> eval_expr_sef (E_Var x |> add_pos_from ty)
+    | T_Int (Parameterized x) -> eval_expr_sef (E_Var x |> add_pos_from ty)
     | T_Bits (e, _) -> (
         match eval_expr_sef e with
         | NV_Literal (L_Int n) ->
@@ -467,29 +504,43 @@ module DeterministicBackend = struct
     deterministic_unknown_of_type ~eval_expr_sef ty
 end
 
-module DeterministicInterpreter (C : Interpreter.Config) =
-  Interpreter.Make (DeterministicBackend) (C)
+module NativeConfig (I : Instrumentation.SEMINSTR) = struct
+  let unroll = 0
+  let recursive_unroll _ = None
+  let error_handling_time = Error.Dynamic
+  let empty_branching_effects_optimization = true
+  let log_nondet_choice = false
+  let display_call_stack_on_error = false
+  let track_symbolic_path = false
+
+  module Instr = I
+end
+
+module DeterministicInterpreter (I : Instrumentation.SEMINSTR) =
+  Interpreter.Make (DeterministicBackend) (NativeConfig (I))
+
+module DeterministicInterpreterNoInstr =
+  DeterministicInterpreter (Instrumentation.SemanticsNoInstr)
+
+module DeterministicInterpreterSingleSetInstr =
+  DeterministicInterpreter (Instrumentation.SemanticsSingleSetInstr)
 
 let exit_value = function
   | NV_Literal (L_Int i) -> i |> Z.to_int
   | v -> mismatch_type v [ integer' ]
 
-let instrumentation_buffer = function
+let interpret ?instrumentation static_env main_name ast =
+  match instrumentation with
   | Some true ->
-      (module Instrumentation.SemanticsSingleSetBuffer
-      : Instrumentation.SEMBUFFER)
+      let module B = Instrumentation.SemanticsSingleSetBuffer in
+      B.reset ();
+      let res =
+        DeterministicInterpreterSingleSetInstr.run_typed static_env main_name
+          ast
+      in
+      (exit_value res, B.get ())
   | Some false | None ->
-      (module Instrumentation.SemanticsNoBuffer : Instrumentation.SEMBUFFER)
-
-let interpret ?instrumentation static_env ast =
-  let module B = (val instrumentation_buffer instrumentation) in
-  let module CI : Interpreter.Config = struct
-    let unroll = 0
-    let error_handling_time = Error.Dynamic
-
-    module Instr = Instrumentation.SemMake (B)
-  end in
-  let module I = DeterministicInterpreter (CI) in
-  B.reset ();
-  let res = I.run_typed static_env ast in
-  (exit_value res, B.get ())
+      let res =
+        DeterministicInterpreterNoInstr.run_typed static_env main_name ast
+      in
+      (exit_value res, [])

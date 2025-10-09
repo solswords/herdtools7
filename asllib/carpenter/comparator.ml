@@ -29,14 +29,9 @@ let get_ref_result ast =
 let get_ref_result_instr =
   let open Asllib in
   let open Native in
+  let module Instr = Instrumentation.SemanticsSingleSetInstr in
   let module B = Instrumentation.SemanticsSingleSetBuffer in
-  let module C : Interpreter.Config = struct
-    let unroll = 0
-    let error_handling_time = Error.Dynamic
-
-    module Instr = Instrumentation.SemMake (B)
-  end in
-  let module I = DeterministicInterpreter (C) in
+  let module I = DeterministicInterpreter (Instr) in
   fun ast ->
     B.reset ();
     let res =
@@ -45,7 +40,8 @@ let get_ref_result_instr =
           Builder.with_primitives Native.DeterministicBackend.primitives ast
         in
         let ast, static_env = Typing.TypeCheckDefault.type_check_ast ast in
-        match I.run_typed static_env ast with
+        let main_name = Typing.TypeCheckDefault.find_main static_env in
+        match I.run_typed static_env main_name ast with
         | NV_Literal (L_Int z) when Z.equal z Z.zero -> Ok ()
         | NV_Literal (L_Int z) -> Error ("Bad return code: " ^ Z.to_string z)
         | _ -> Error "Bad return code (not integer)."

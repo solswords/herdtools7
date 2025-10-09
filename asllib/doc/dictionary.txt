@@ -36,6 +36,7 @@ act
 action
 actively
 actual
+actually
 adapt
 add
 added
@@ -46,6 +47,8 @@ additions
 address
 addressed
 adds
+adheres
+adjusted
 admits
 advance
 advised
@@ -61,6 +64,7 @@ aim
 aims
 alias
 aliases
+aliasing
 align
 all
 allow
@@ -130,6 +134,7 @@ arising
 arithmetic
 arm
 around
+arrange
 array
 arrays
 artificial
@@ -139,6 +144,7 @@ ascii
 asl
 aslref
 aspects
+assert
 asserted
 asserting
 assertion
@@ -180,12 +186,14 @@ avoid
 avoidance
 avoiding
 avoids
+aware
 away
 axiom
 axiomatically
 back
 background
 backslash
+bare
 barring
 base
 based
@@ -207,6 +215,7 @@ behaviour
 being
 belongs
 below
+beta
 better
 between
 biased
@@ -246,6 +255,7 @@ branches
 brands
 break
 brevity
+brings
 bug
 build
 builder
@@ -258,6 +268,7 @@ but
 by
 byte
 calculate
+calculated
 calculation
 call
 called
@@ -282,14 +293,17 @@ cases
 catch
 catcher
 catchers
+catches
 catching
 categories
+category
 caught
 cause
 caused
 causes
 cell
 certain
+chance
 changed
 changes
 changing
@@ -314,12 +328,15 @@ clash
 clashes
 clashing
 classed
+classes
+classification
 classified
 classifies
 classify
 classifying
 clause
 clauses
+clearly
 closed
 closer
 closest
@@ -327,6 +344,7 @@ closing
 closure
 code
 codes
+coincidentally
 collection
 collections
 collectively
@@ -336,6 +354,7 @@ combinations
 combine
 combined
 combines
+combining
 come
 comes
 commas
@@ -386,6 +405,7 @@ concept
 concepts
 conceptually
 concerned
+concerning
 conclude
 concludes
 concluding
@@ -430,6 +450,7 @@ consists
 console
 constant
 constants
+constitutes
 constrained
 constraining
 constrains
@@ -448,6 +469,7 @@ containing
 contains
 content
 context
+contiguous
 continuation
 continue
 continues
@@ -457,15 +479,19 @@ contributes
 control
 convenient
 convention
+conventional
+conventionally
 conversion
 conversions
 convert
 converted
 converting
 converts
+convey
 conveying
 conveys
 copied
+copying
 copyright
 corporate
 correct
@@ -489,6 +515,8 @@ current
 currently
 custom
 customers
+cycle
+cyclic
 data
 datatype
 dealing
@@ -543,6 +571,7 @@ derived
 describe
 described
 describes
+describing
 description
 descriptions
 descriptors
@@ -563,6 +592,7 @@ determined
 determines
 determining
 deterministic
+dev
 development
 diagnostic
 dictates
@@ -573,9 +603,11 @@ different
 differentiating
 differently
 differing
+digit
 digits
 directive
 directly
+disambiguate
 discard
 discarded
 discarding
@@ -584,6 +616,7 @@ disclaimer
 disclosure
 discriminant
 discussed
+discusses
 discussion
 disjoint
 disjunction
@@ -593,6 +626,8 @@ distinct
 distinction
 distinguish
 distinguishing
+diverges
+diverging
 divide
 divided
 dividing
@@ -621,6 +656,7 @@ dynamically
 each
 early
 easier
+easily
 easy
 echo
 edge
@@ -656,6 +692,7 @@ enclosing
 encoded
 encoding
 encountered
+encounters
 end
 endian
 ending
@@ -676,9 +713,11 @@ entry
 enumerate
 enumerated
 enumeration
+enumerations
 environment
 environments
 equal
+equalities
 equality
 equals
 equate
@@ -697,12 +736,14 @@ essentially
 establish
 establishing
 estoppel
+evaluability
 evaluable
 evaluate
 evaluated
 evaluates
 evaluating
 evaluation
+evaluations
 even
 event
 every
@@ -725,6 +766,7 @@ excluding
 exclusion
 executable
 executables
+executed
 executes
 executing
 execution
@@ -775,6 +817,7 @@ extremes
 facilitate
 fact
 factor
+factoring
 factors
 fail
 failed
@@ -826,6 +869,7 @@ followed
 following
 follows
 for
+forbid
 forbidden
 forbids
 form
@@ -866,11 +910,13 @@ generating
 generic
 gets
 getter
+getters
 getting
 github
 give
 given
 gives
+giving
 global
 go
 goal
@@ -887,11 +933,13 @@ ground
 grounded
 grounding
 group
+grouping
 groups
 guarantee
 guaranteed
 guarantees
 guards
+guideline
 guidelines
 had
 hand
@@ -937,7 +985,9 @@ ignored
 ignores
 ignoring
 illegal
+illegally
 illustrated
+illustrates
 image
 immediately
 immutability
@@ -966,6 +1016,7 @@ include
 included
 includes
 including
+inclusive
 incomplete
 incorrect
 incorrectly
@@ -992,6 +1043,7 @@ individual
 induce
 induced
 induction
+inductive
 inequality
 inevitably
 infer
@@ -1000,6 +1052,7 @@ inferred
 inferring
 infers
 infinite
+infinitely
 infinity
 informal
 information
@@ -1050,6 +1103,7 @@ interfere
 intermediate
 internal
 internally
+interpret
 interpretation
 interpreted
 interpreter
@@ -1059,6 +1113,7 @@ interval
 intervals
 into
 introduce
+introduced
 introduces
 introducing
 intuition
@@ -1068,9 +1123,12 @@ invalid
 invariant
 inverse
 invocation
+invocations
 invoke
+invoked
 invokes
 invoking
+involve
 involved
 involves
 involving
@@ -1082,13 +1140,17 @@ it
 item
 items
 iterates
+iteration
 iterations
 its
 itself
 join
+judgment
+judgments
 just
 justified
 keep
+key
 keys
 keyword
 keywords
@@ -1111,6 +1173,7 @@ latter
 laws
 lead
 leads
+leaf
 least
 leaves
 leaving
@@ -1159,7 +1222,9 @@ look
 looked
 looking
 looks
+lookup
 loop
+looping
 loops
 loss
 lost
@@ -1194,6 +1259,7 @@ matches
 matching
 material
 mathematical
+matters
 maximal
 maximum
 may
@@ -1203,6 +1269,7 @@ means
 meant
 mechanism
 mechanisms
+meet
 meets
 member
 members
@@ -1211,11 +1278,14 @@ memory
 menhir
 mentioned
 merged
+merges
 meta
 might
 minimal
 minimum
 minus
+mirroring
+mirrors
 mismatch
 missing
 model
@@ -1230,6 +1300,7 @@ monomial
 monomials
 more
 most
+motivation
 move
 multiple
 multiplication
@@ -1237,6 +1308,7 @@ multiplied
 multiplies
 multiply
 multiplying
+multivariate
 munch
 must
 mutable
@@ -1251,6 +1323,7 @@ naming
 native
 natural
 nearest
+necessarily
 necessary
 necessitates
 need
@@ -1296,7 +1369,9 @@ numbered
 numbers
 numeral
 numerator
+numeric
 numerous
+obeys
 object
 observable
 observe
@@ -1346,6 +1421,7 @@ order
 ordered
 ordering
 orders
+organized
 origin
 original
 other
@@ -1364,6 +1440,7 @@ over
 overall
 overapproximated
 overapproximates
+overapproximating
 overapproximation
 overcome
 overlap
@@ -1393,6 +1470,7 @@ parentheses
 parenthesis
 parenthesized
 parenthesizing
+parlance
 parse
 parsed
 parser
@@ -1429,6 +1507,7 @@ pertain
 pertaining
 phase
 place
+placement
 places
 placing
 platform
@@ -1455,6 +1534,7 @@ practice
 pragma
 pragmas
 precedence
+preceding
 precise
 precisely
 precision
@@ -1473,6 +1553,7 @@ presence
 present
 presentation
 presented
+presents
 prevalent
 prevents
 previous
@@ -1488,8 +1569,10 @@ prior
 priori
 priorities
 priority
+problem
 procedure
 procedures
+proceeds
 process
 processed
 processes
@@ -1505,6 +1588,7 @@ productions
 program
 programming
 prohibited
+promoted
 propagate
 propagated
 propagates
@@ -1526,9 +1610,13 @@ prs
 pull
 punctuation
 pure
+purities
 purity
 purpose
 purposes
+qualified
+qualifier
+qualifiers
 quality
 query
 quite
@@ -1558,6 +1646,7 @@ reason
 reasoning
 recall
 recognise
+recognize
 recognized
 recommend
 recommended
@@ -1583,8 +1672,10 @@ refers
 refine
 refined
 refinement
+refinements
 refines
 refining
+reflect
 reflected
 reflects
 regardless
@@ -1619,6 +1710,7 @@ removed
 removes
 removing
 rename
+renamed
 renames
 renaming
 repeat
@@ -1646,6 +1738,8 @@ required
 requirement
 requirements
 requires
+requiring
+resemble
 reserved
 resolve
 resolved
@@ -1659,6 +1753,7 @@ rest
 restore
 restoring
 restrict
+restricted
 restriction
 restrictions
 result
@@ -1702,6 +1797,7 @@ runtime
 runtimes
 s
 safe
+safely
 said
 same
 satisfaction
@@ -1715,6 +1811,7 @@ scan
 scanned
 scanning
 scans
+scheme
 schemes
 scope
 scoping
@@ -1756,6 +1853,7 @@ several
 shall
 share
 shared
+shares
 shift
 shortens
 shortest
@@ -1788,7 +1886,9 @@ simplifies
 simplify
 simplifying
 simply
+simulating
 simultaneous
+simultaneously
 since
 single
 singleton
@@ -1796,6 +1896,7 @@ singular
 site
 situations
 size
+sizes
 slice
 slices
 slicing
@@ -1807,6 +1908,7 @@ so
 solely
 some
 sometimes
+sort
 sorted
 sorting
 sorts
@@ -1882,6 +1984,7 @@ substituting
 substring
 substrings
 subsume
+subsumed
 subsumes
 subsumption
 subtracting
@@ -2031,6 +2134,8 @@ tree
 trees
 trial
 tries
+trigger
+triggered
 triple
 triples
 trivial
@@ -2050,6 +2155,7 @@ typechecking
 typechecks
 typed
 types
+typical
 typically
 typing
 typo
@@ -2067,6 +2173,7 @@ undefined
 under
 underapproximated
 underapproximates
+underapproximating
 underapproximation
 underlying
 underscore
@@ -2092,8 +2199,12 @@ unordered
 unpredictable
 unprintable
 unreachable
+unrecognized
+unrelated
 unreleased
+unsigned
 unspecified
+unsupported
 until
 untyped
 unusual
@@ -2151,12 +2262,15 @@ view
 viewed
 viewing
 views
+violate
 violation
 virtual
 vision
 visual
+visually
 walk
 want
+warn
 warning
 warnings
 warns
@@ -2164,6 +2278,7 @@ was
 way
 ways
 we
+weakened
 welcome
 well
 were

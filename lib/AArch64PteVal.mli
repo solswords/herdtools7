@@ -24,7 +24,8 @@ module Attrs : sig
   val pp : t -> string
   val as_list : t -> string list
   val of_list : string list -> t
-  val mem : string -> t -> bool
+  val is_tagged : t -> bool
+  val as_kvm_symbols : t -> string list
 end
 
 type t = {
@@ -37,10 +38,15 @@ type t = {
   attrs : Attrs.t;
   }
 
+(* Identity translations *)
+val fromExtra : t -> t
+val toExtra : t -> t
+
+(* Basic *)
 val compare : t -> t -> int
 val eq : t -> t -> bool
 
-(* Accessors, setters *)
+(* Accessors, Setters *)
 val is_af : t -> bool
 
 val same_oa : t -> t -> bool
@@ -54,6 +60,9 @@ val of_pte : string -> t (* Default value for pte page table entry *)
 
 (* Flags have default values *)
 val is_default : t -> bool
+
+(* Attributes have the defaults values *)
+val is_default_attrs : t -> bool
 
 (* Finish parsing *)
 val tr : ParsedPteVal.t -> t
@@ -72,3 +81,12 @@ val norm : string StringMap.t -> string StringMap.t
 val dump_pack : (string -> string) -> t -> string
 val as_physical : t -> string option
 val as_flags : t -> string option
+val attrs_as_kvm_symbols : t -> string list
+
+(***************************************)
+(* PTE operation as bitwise operations *)
+(***************************************)
+
+val orop : t -> int64 -> t option
+val andnot2 : t -> int64 -> t option
+val andop : t -> int64 -> int64 option

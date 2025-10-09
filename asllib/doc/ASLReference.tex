@@ -1,5 +1,5 @@
 \documentclass{book}
-\newcommand\VERSION[0]{ASLRefALP3.1}
+\newcommand\VERSION[0]{ASLRefBET2}
 
 \raggedbottom
 \input{ASLmacros}
@@ -18,6 +18,9 @@
 \newcommand{\syntaxtests}{../tests/ASLSyntaxReference.t/}
 \newcommand{\typingtests}{../tests/ASLTypingReference.t/}
 \newcommand{\semanticstests}{../tests/ASLSemanticsReference.t/}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\input{rendering_macros.tex}
+\input{generated_macros.tex}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Increase indentation of sections in the table of contents
@@ -39,6 +42,12 @@
 \include{disclaimer.tex}
 
 \chapter{Changelog}
+\input{ASLRefBET2ChangeLog.tex}
+\clearpage
+\input{ASLRefBET1ChangeLog.tex}
+\clearpage
+\input{ASLRefBET0ChangeLog.tex}
+\clearpage
 \input{ASLRefALP3.1ChangeLog.tex}
 \clearpage
 \input{ASLRefALP3ChangeLog.tex}
@@ -54,13 +63,12 @@
 \input{AbstractSyntax.tex}
 \input{TypeChecking.tex}
 \input{Semantics.tex}
-% explain the order - going over the AST - graphic depiction of navigation map
 \input{Literals.tex}
 \input{PrimitiveOperations.tex}
 \input{Types.tex}
+\input{Slicing.tex}
 \input{Bitfields.tex}
 \input{Expressions.tex}
-\input{Slicing.tex}
 \input{PatternMatching.tex}
 \input{AssignableExpressions.tex}
 \input{LocalStorageDeclarations.tex}
@@ -68,10 +76,10 @@
 \input{BlockStatements.tex}
 \input{CatchingExceptions.tex}
 \input{SubprogramCalls.tex}
-\input{GlobalDeclarations.tex}
 \input{GlobalStorageDeclarations.tex}
 \input{TypeDeclarations.tex}
 \input{SubprogramDeclarations.tex}
+\input{GlobalPragmas.tex}
 \input{Specifications.tex}
 \input{TopLevel.tex}
 \input{SideEffects.tex}
@@ -86,8 +94,5 @@
 
 \bibliographystyle{plain}
 \bibliography{ASL}
-
-\appendix
-\input{ASLRefProgress.tex}
 
 \end{document}

@@ -23,6 +23,8 @@ type 'op1 unop =
   | Valid (* get Valid bit from PTE entry *)
   | EL0 (* get EL0 bit from PTE entry *)
   | OA (* get OA from PTE entry *)
+  | SetOA (* store OA into PAR_EL1 *)
+  | SetF (* set F to 1 in PAR_EL1 *)
   | Tagged (* get Tag attribute from PTE entry *)
   | CheckCanonical (* Check is a virtual address is canonical *)
   | MakeCanonical (* Make a virtual address canonical *)
@@ -35,13 +37,14 @@ type 'op binop =
 module
    Make
      (S:Scalar.S)
-     (Extra:ArchOp.S with type scalar = S.t) : ArchOp.S
+     (Extra:ArchOp.WithTr with type scalar = S.t) : ArchOp.S
    with type extra_op1 = Extra.op1
     and type 'a constr_op1 = 'a unop
     and type extra_op = Extra.op
     and type 'a constr_op = 'a binop
     and type scalar = S.t
     and type pteval = AArch64PteVal.t
+    and type addrreg = AArch64AddrReg.t
     and type instr = AArch64Base.instruction
   = struct
 
@@ -69,6 +72,8 @@ module
       | Valid -> "Valid"
       | EL0 -> "EL0"
       | OA -> "OA"
+      | SetOA -> "SetOA"
+      | SetF -> "SetF"
       | Tagged -> "Tagged"
       | CheckCanonical -> "CheckCanonical"
       | MakeCanonical -> "MakeCanonical"
@@ -76,14 +81,15 @@ module
 
     type scalar = S.t
     type pteval = AArch64PteVal.t
+    type addrreg = AArch64AddrReg.t
     type instr = AArch64Base.instruction
-    type cst = (scalar,pteval,instr) Constant.t
+    type cst = (scalar,pteval,addrreg,instr) Constant.t
 
     let pp_cst hexa v =
       let module InstrPP = AArch64Base.MakePP(struct
         let is_morello = true
       end) in
-      Constant.pp (S.pp hexa) (AArch64PteVal.pp hexa)
+      Constant.pp (S.pp hexa) (AArch64PteVal.pp hexa) (AArch64AddrReg.pp hexa)
       (InstrPP.dump_instruction) v
 
     open AArch64PteVal
@@ -109,8 +115,8 @@ module
     (* Check that the PAC field of a virtual address is canonical *)
     let checkCanonical =
       let open Constant in function
-      | Symbolic (Virtual {pac}) ->
-          Some (boolToCst (PAC.is_canonical pac))
+      | Symbolic (Virtual a) ->
+          Some (boolToCst (PAC.is_canonical a.pac))
       | _ ->
           None
 
@@ -132,7 +138,7 @@ module
 
     let getel0 = op_get_pteval (fun p -> p.el0 <> 0)
 
-    let gettagged = op_get_pteval (fun p -> Attrs.mem "TaggedNormal" p.attrs)
+    let gettagged = op_get_pteval (fun p -> Attrs.is_tagged p.attrs)
 
     let getoa v =
       let open Constant in
@@ -140,9 +146,23 @@ module
       | PteVal {oa;_} -> Some (Symbolic (oa2symbol oa))
       | _ -> None
 
+    let setoa v =
+      let open Constant in
+      match v with
+      | Symbolic (Physical (s,0)) -> Some (AddrReg { AArch64AddrReg.oa = OutputAddress.PHY s; AArch64AddrReg.f = 0 })
+      | _ -> None
+
+    let setf v =
+      let open Constant in
+      match v with
+      | Symbolic (Physical _) -> Some (AddrReg { AArch64AddrReg.oa = OutputAddress.PHY ""; AArch64AddrReg.f = 1 })
+      | _ -> None
+
     let exit _ = raise Exit
-    let toExtra cst = Constant.map Misc.identity exit exit cst
-    and fromExtra cst = Constant.map Misc.identity exit exit cst
+
+    let trToExtra cst = Constant.map Misc.identity Extra.toExtraPteVal Extra.toExtraAddrReg exit cst
+    and trFromExtra cst =
+      Constant.map Misc.identity Extra.fromExtraPteVal Extra.fromExtraAddrReg exit cst
 
     (* Add a PAC field to a virtual address, this function can only add a PAC
        field if the input pointer is canonical, otherwise it raise an error, it is
@@ -150,9 +170,9 @@ module
     let addOnePAC key pointer modifier =
       let open Constant in
       match pointer with
-      | Symbolic (Virtual {pac}) when not (PAC.is_canonical pac) ->
+      | Symbolic (Virtual a) when not (PAC.is_canonical a.pac) ->
           None
-      | Symbolic (Virtual ({pac; offset} as v)) ->
+      | Symbolic (Virtual ({pac; offset; _} as v)) ->
         let modifier = pp_cst true modifier in
         let pac = PAC.add key modifier offset pac in
         Some (Symbolic (Virtual {v with pac}))
@@ -166,7 +186,7 @@ module
     let addPAC key pointer modifier =
       let open Constant in
       match pointer with
-      | Symbolic (Virtual ({pac; offset} as v)) ->
+      | Symbolic (Virtual ({pac; offset; _} as v)) ->
         let modifier = pp_cst true modifier in
         let pac = PAC.add key modifier offset pac in
         Some (Symbolic (Virtual {v with pac}))
@@ -176,11 +196,11 @@ module
       | AddPAC (true, key) -> addOnePAC key
       | AddPAC (false, key) -> addPAC key
       | Extra op -> fun c1 c2 ->
-          try
-            match Extra.do_op op (toExtra c1) (toExtra c2) with
-            | None -> None
-            | Some cst -> Some (fromExtra cst)
-          with Exit -> None
+        try
+          match Extra.do_op op (trToExtra c1) (trToExtra c2) with
+          | None -> None
+          | Some cst -> Some (trFromExtra cst)
+        with Exit -> None
 
 
     let do_op1 = function
@@ -192,15 +212,17 @@ module
       | Valid -> getvalid
       | EL0 -> getel0
       | OA -> getoa
+      | SetOA -> setoa
+      | SetF -> setf
       | Tagged -> gettagged
       | CheckCanonical -> checkCanonical
       | MakeCanonical -> makeCanonical
       | Extra1 op1 ->
          fun cst ->
            try
-             match Extra.do_op1 op1 (toExtra cst) with
+             match Extra.do_op1 op1 (trToExtra cst) with
              | None -> None
-             | Some cst -> Some (fromExtra cst)
+             | Some cst -> Some (trFromExtra cst)
            with Exit -> None
 
 
@@ -209,60 +231,11 @@ module
       if S.equal (S.of_int 12) c then Some (Symbolic (System (TLB,s)))
       else None
 
-    let mask_valid = S.one
-    let mask_el0 = S.shift_left S.one 6
-    let mask_db = S.shift_left S.one 7
-    let mask_af = S.shift_left S.one 10
-    let mask_dbm = S.shift_left S.one 51
-    let mask_all_neg =
-      S.lognot
-        (S.logor mask_el0
-           (S.logor
-              (S.logor mask_valid  mask_db)
-              (S.logor  mask_af  mask_dbm)))
-
-    let is_zero v = S.equal S.zero v
-    let is_set v m = not (is_zero (S.logand v m))
-
-    let orop p m =
-      if is_set m mask_all_neg then None
-      else
-        let p = if is_set m mask_valid then { p with valid=1; } else p in
-        let p = if is_set m mask_el0 then { p with el0=1; } else p in
-        let p = if is_set m mask_db then { p with db=0; } else p in
-        let p = if is_set m mask_af then { p with af=1; } else p in
-        let p = if is_set m mask_dbm then { p with dbm=1; } else p in
-        Some p
-
-    and andnot2 p m =
-      if is_set m mask_all_neg then None
-      else
-        let p = if is_set m mask_valid then { p with valid=0; } else p in
-        let p = if is_set m mask_el0 then { p with el0=0; } else p in
-        let p = if is_set m mask_db then { p with db=1; } else p in
-        let p = if is_set m mask_af then { p with af=0; } else p in
-        let p = if is_set m mask_dbm then { p with dbm=0; } else p in
-        Some p
-
-    and andop p m =
-      let r = S.zero in
-      let r =
-        if is_set m mask_valid && p.valid=1
-        then S.logor r mask_valid else r  in
-      let r =
-        if is_set m mask_el0 && p.el0=1
-        then S.logor r mask_el0 else r  in
-      let r =
-        if is_set m mask_db && p.db=0;
-        then S.logor r mask_db else r  in
-      let r =
-        if is_set m mask_af &&  p.af=1;
-        then S.logor r mask_af else r  in
-      let r =
-        if is_set m mask_dbm && p.dbm=1
-        then S.logor r mask_dbm else r  in
-      Some r
-
+    let orop p m = AArch64PteVal.orop p @@ S.to_int64 m
+    and andnot2 p m = AArch64PteVal.andnot2 p @@ S.to_int64 m
+    and andop p m  =
+      AArch64PteVal.andop p @@ S.to_int64 m
+      |> Misc.app_opt S.of_int64
 
     let mask c sz =
       let open MachSize in

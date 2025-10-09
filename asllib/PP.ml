@@ -52,12 +52,12 @@ let nonstandard_constraint_compare c1 c2 =
 let pp_comma f () = fprintf f ",@ "
 let pp_comma_list pp_elt f = pp_print_list ~pp_sep:pp_comma pp_elt f
 
-let pp_pos f { pos_start; pos_end; _ } =
+let pp_pos f ({ pos_start; pos_end; _ } as x) =
   let open Lexing in
   let pp_char_num f { pos_cnum; pos_bol; _ } =
     pp_print_int f (pos_cnum - pos_bol)
   in
-  if pos_start = dummy_pos || pos_end = dummy_pos then ()
+  if ASTUtils.is_dummy_annotated x then ()
   else (
     pp_open_hovbox f 2;
     fprintf f "File %s,@ " pos_start.pos_fname;
@@ -92,28 +92,30 @@ let pp_pos_str_no_char { pos_start; pos_end } =
 let binop_to_string : binop -> string = function
   | `AND -> "AND"
   | `BAND -> "&&"
-  | `BEQ -> "<->"
+  | `BEQ -> "<=>"
   | `BOR -> "||"
   | `DIV -> "DIV"
   | `DIVRM -> "DIVRM"
   | `XOR -> "XOR"
-  | `EQ_OP -> "=="
+  | `EQ -> "=="
   | `GT -> ">"
-  | `GEQ -> ">="
-  | `IMPL -> "-->"
+  | `GE -> ">="
+  | `IMPL -> "==>"
   | `LT -> "<"
-  | `LEQ -> "<="
+  | `LE -> "<="
   | `MOD -> "MOD"
-  | `MINUS -> "-"
+  | `SUB -> "-"
   | `MUL -> "*"
-  | `NEQ -> "!="
+  | `NE -> "!="
   | `OR -> "OR"
-  | `PLUS -> "+"
+  | `ADD -> "+"
   | `RDIV -> "/"
   | `SHL -> "<<"
   | `SHR -> ">>"
   | `POW -> "^"
-  | `CONCAT -> "::"
+  | `BV_CONCAT -> "::"
+  | `STR_CONCAT -> "++"
+  | `BIC -> "BIC"
 
 let unop_to_string = function BNOT -> "!" | NEG -> "-" | NOT -> "NOT"
 
@@ -196,7 +198,7 @@ and pp_ty f t =
   | T_Int (WellConstrained (cs, _)) ->
       fprintf f "@[integer {%a}@]" pp_int_constraints cs
   | T_Int PendingConstrained -> pp_print_string f "integer{-}"
-  | T_Int (Parameterized (_uid, var)) -> fprintf f "@[integer {%s}@]" var
+  | T_Int (Parameterized var) -> fprintf f "@[integer {%s}@]" var
   | T_Real -> pp_print_string f "real"
   | T_String -> pp_print_string f "string"
   | T_Bool -> pp_print_string f "boolean"
@@ -278,12 +280,7 @@ let pp_loop_limit =
 let pp_for_direction = function Up -> "to" | Down -> "downto"
 
 let pp_local_decl_keyword f k =
-  pp_print_string f
-  @@
-  match k with
-  | LDK_Var -> "var"
-  | LDK_Constant -> "constant"
-  | LDK_Let -> "let"
+  pp_print_string f @@ match k with LDK_Var -> "var" | LDK_Let -> "let"
 
 let pp_local_decl_item f = function
   | LDI_Var x -> pp_print_string f x
@@ -308,7 +305,8 @@ let rec pp_stmt f s =
       fprintf f
         "@[<hv>@[<h>if %a@ then@]@;\
          <1 2>@[<hv>%a@]@ else@;\
-         <1 2>@[<hv>%a@]@ end;@]" pp_expr e pp_stmt s1 pp_stmt s2
+         <1 2>@[<hv>%a@]@ end;@]"
+        pp_expr e pp_stmt s1 pp_stmt s2
   | S_Assert e -> fprintf f "@[<2>assert@ %a;@]" pp_expr e
   | S_While (e, limit, s) ->
       fprintf f "@[<hv>@[<h>while %a%a@ do@]@;<1 2>@[<hv>%a@]@ end;@]" pp_expr e
@@ -331,9 +329,7 @@ let rec pp_stmt f s =
   | S_Decl (ldk, ldi, Some ty, Some e) ->
       fprintf f "@[<2>%a %a:@ %a =@ %a;@]" pp_local_decl_keyword ldk
         pp_local_decl_item ldi pp_ty ty pp_expr e
-  | S_Throw (Some (e, _ty_annotation)) ->
-      fprintf f "@[<2>throw@ %a;@]" pp_expr e
-  | S_Throw None -> fprintf f "throw;"
+  | S_Throw (e, _ty_annotation) -> fprintf f "@[<2>throw@ %a;@]" pp_expr e
   | S_Try (s, catchers, Some s') ->
       fprintf f
         "@[<hv>@[try@ %a@]@ @[<v 2>catch@ %a@ @[<2>otherwise =>@ %a@]@]@ end@]"
@@ -345,12 +341,12 @@ let rec pp_stmt f s =
         (pp_print_list ~pp_sep:pp_print_space pp_catcher)
         catchers
   | S_Print { args; newline = false; debug = false } ->
-      fprintf f "@[<2>print(%a);@]" (pp_comma_list pp_expr) args
+      fprintf f "@[<2>print %a;@]" (pp_comma_list pp_expr) args
   | S_Print { args; newline = true; debug = false } ->
-      fprintf f "@[<2>println(%a);@]" (pp_comma_list pp_expr) args
+      fprintf f "@[<2>println %a;@]" (pp_comma_list pp_expr) args
   | S_Print { args; debug = true } ->
       fprintf f "@[<2>DEBUG@ %a;@]" (pp_comma_list pp_expr) args
-  | S_Unreachable -> fprintf f "Unreachable();"
+  | S_Unreachable -> fprintf f "unreachable;"
   | S_Pragma (name, args) ->
       fprintf f "@[<2>pragma@ %a %a;@]" pp_print_string name
         (pp_comma_list pp_expr) args
@@ -370,6 +366,11 @@ let pp_gdk f gdk =
   | GDK_Let -> "let"
   | GDK_Constant -> "constant"
 
+let func_qualifier_to_string = function
+  | Pure -> "pure"
+  | Readonly -> "readonly"
+  | Noreturn -> "noreturn"
+
 let pp_decl f =
   let pp_global_storage f = function
     | { name; keyword; ty = None; initial_value = Some e } ->
@@ -388,6 +389,7 @@ let pp_decl f =
         parameters;
         subprogram_type;
         body = _;
+        qualifier;
         override;
       } =
     let pp_args = pp_comma_list pp_typed_identifier in
@@ -404,6 +406,11 @@ let pp_decl f =
           in
           fprintf f "@ {%a}" (pp_comma_list pp_one) parameters
     in
+    let qualifier_keyword =
+      match qualifier with
+      | None -> ""
+      | Some attr -> func_qualifier_to_string attr ^ " "
+    in
     let override_keyword =
       match override with
       | None -> ""
@@ -412,14 +419,16 @@ let pp_decl f =
     in
     match subprogram_type with
     | ST_Function | ST_Procedure ->
-        fprintf f "@[<hv 4>%sfunc @[%s%a@] (@,%a)%a@]" override_keyword name
-          pp_parameters parameters pp_args args pp_return_type_opt return_type
-    | ST_Getter ->
-        fprintf f "@[<hv 4>%sgetter %s%a [@,%a]%a@]" override_keyword name
-          pp_parameters parameters pp_args args pp_return_type_opt return_type
-    | ST_EmptyGetter ->
-        fprintf f "@[<hv 4>%sgetter %s%a@]" override_keyword name
+        fprintf f "@[<hv 4>%s%sfunc @[%s%a@] (@,%a)%a@]" qualifier_keyword
+          override_keyword name pp_parameters parameters pp_args args
           pp_return_type_opt return_type
+    | ST_Getter ->
+        fprintf f "@[<hv 4>%s%sgetter %s%a [@,%a]%a@]" qualifier_keyword
+          override_keyword name pp_parameters parameters pp_args args
+          pp_return_type_opt return_type
+    | ST_EmptyGetter ->
+        fprintf f "@[<hv 4>%s%sgetter %s%a@]" qualifier_keyword override_keyword
+          name pp_return_type_opt return_type
     | ST_Setter ->
         let new_v, args =
           match args with [] -> assert false | h :: t -> (h, t)
@@ -428,7 +437,7 @@ let pp_decl f =
           pp_parameters parameters pp_args args pp_typed_identifier new_v
     | ST_EmptySetter ->
         let new_v = match args with [ h ] -> h | _ -> assert false in
-        fprintf f "@[<hv 4>%ssetter %s@ = %a]" override_keyword name
+        fprintf f "@[<hv 4>%ssetter %s@ = %a@]" override_keyword name
           pp_typed_identifier new_v
   in
   let pp_body f = function

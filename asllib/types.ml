@@ -32,7 +32,7 @@ module TypingRule = Instrumentation.TypingRule
 let ( |: ) = Instrumentation.TypingNoInstr.use_with
 
 let undefined_identifier pos x =
-  Error.fatal_from pos (Error.UndefinedIdentifier x)
+  Error.fatal_from pos (Error.UndefinedIdentifier (Static, x))
 
 let thing_equal astutil_equal env = astutil_equal (StaticModel.equal_in_env env)
 let expr_equal = thing_equal expr_equal
@@ -153,19 +153,11 @@ let rec is_non_primitive ty =
 let is_primitive ty = (not (is_non_primitive ty)) |: TypingRule.PrimitiveType
 (* End *)
 
-let parameterized_constraints =
-  let next_uid = ref 0 in
-  fun var ->
-    let uid = !next_uid in
-    incr next_uid;
-    Parameterized (uid, var)
-
-let parameterized_ty ~loc var =
-  T_Int (parameterized_constraints var) |> add_pos_from loc
+let parameterized_ty ~loc var = T_Int (Parameterized var) |> add_pos_from loc
 
 let to_well_constrained ty =
   match ty.desc with
-  | T_Int (Parameterized (_uid, var)) -> var_ var |> integer_exact
+  | T_Int (Parameterized var) -> var_ var |> integer_exact
   | _ -> ty
 
 let get_well_constrained_structure env ty =
@@ -232,12 +224,13 @@ module Domain = struct
 
   (* Begin SymdomOfType *)
 
-  (** [symdom_of_type env ty] constructs the symbolic domain of [ty] in [env]. *)
+  (** [symdom_of_type env ty] constructs the symbolic domain of [ty] in [env].
+  *)
   let symdom_of_type env ty : t =
     let ty = make_anonymous env ty in
     match ty.desc with
     | T_Int UnConstrained -> Top
-    | T_Int (Parameterized (_uid, var)) ->
+    | T_Int (Parameterized var) ->
         Subdomains [ ConstrainedDom (Constraint_Exact (var_ var)) ]
     | T_Int (WellConstrained (constraints, _)) ->
         Subdomains (List.map (symdom_of_constraint env) constraints)
@@ -260,7 +253,8 @@ module Domain = struct
     exception CannotUnderApproximate
     (** Raised if under approximation is not possible. *)
 
-    (** Return bottom for Under approximation, top for over approximation. *)
+    (** Return bottom for Under approximation, or raise CannotOverApproximate
+        for over approximation. *)
     let bottom_top approx =
       if approx = Over then raise CannotOverApproximate else IntSet.empty
 
@@ -280,19 +274,22 @@ module Domain = struct
       let warn_from ~loc:_ _ = ()
     end)
 
-    module UnderOp = StaticOperations.Make (struct
+    module UnderSOp = StaticOperations.Make (struct
       let fail _ = raise CannotUnderApproximate
       let warn_from ~loc:_ _ = ()
     end)
 
-    let constraint_binop = function
+    (* Begin ApproxConstraintBinop *)
+    let approx_constraint_binop = function
       | Over -> OverSOp.annotate_constraint_binop
       | Under -> (
           fun ~loc env op s1 s2 ->
-            try UnderOp.annotate_constraint_binop ~loc env op s1 s2
+            try UnderSOp.annotate_constraint_binop ~loc env op s1 s2
             with CannotUnderApproximate -> ([], Precision_Lost []))
+    (* End *)
 
-    (** [intset_to_constraints s] converts each interval in [s] into a constraint for that interval. *)
+    (** [intset_to_constraints s] converts each interval in [s] into a
+        constraint for that interval. *)
     let intset_to_constraints s =
       let open IntSet.Interval in
       List.map
@@ -318,7 +315,7 @@ module Domain = struct
       | E_Binop ((#StaticOperations.int3_binop as op), e1, e2) -> (
           let s1 = approx_expr approx env e1 |> intset_to_constraints in
           let s2 = approx_expr approx env e2 |> intset_to_constraints in
-          let s', plf = constraint_binop approx ~loc:e env op s1 s2 in
+          let s', plf = approx_constraint_binop approx ~loc:e env op s1 s2 in
           match (plf, approx) with
           | Precision_Full, _ | Precision_Lost _, Under ->
               approx_constraints approx env s'
@@ -343,7 +340,10 @@ module Domain = struct
     (* Begin ApproxConstraints *)
     and approx_constraints approx env cs =
       let join =
-        let empty = IntSet.empty (* will not be used *) in
+        let empty =
+          IntSet.empty
+          (* will not be used *)
+        in
         match approx with
         | Under -> list_iterated_op ~empty IntSet.inter
         | Over -> list_iterated_op ~empty IntSet.union
@@ -406,7 +406,8 @@ module Domain = struct
   (* Begin SymdomNormalize *)
 
   (** [symdom_normalize symdoms] returns a symbolic domain with at most one
-     [Finite] component, which is the union of the [Finite] components in [symdoms]. *)
+      [Finite] component, which is the union of the [Finite] components in
+      [symdoms]. *)
   let symdom_normalize symdoms =
     let finite_domains, others =
       List.partition (function Finite _ -> true | _ -> false) symdoms
@@ -425,11 +426,10 @@ module Domain = struct
 
   (* Begin SymdomsSubsetUnions *)
 
-  (** [symdom_subset_unions env symdoms1 symdoms2] conservatively tests
-  whether the set of integers represented by the union of symbolic domains
-  in [symdoms1] is a subset of the set of integers represented by
-  the union of symbolic domains in [symdoms2], in the context of [env].
-  *)
+  (** [symdom_subset_unions env symdoms1 symdoms2] conservatively tests whether
+      the set of integers represented by the union of symbolic domains in
+      [symdoms1] is a subset of the set of integers represented by the union of
+      symbolic domains in [symdoms2], in the context of [env]. *)
   let symdom_subset_unions env sd1 sd2 =
     let () =
       if false then

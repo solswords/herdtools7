@@ -44,14 +44,13 @@ module Top
 
     module Dec = struct let hexa = false end
     module P = GenParser.Make(GenParser.DefaultConfig)(LISA)(LISALexParse)
-    module A = ArchExtra_tools.Make(Dec)(LISA)(PteVal.No)
+    module A = ArchExtra_tools.Make(Dec)(LISA)(PteVal.No)(AddrReg.No)
     module Alloc = SymbReg.Make(A)
 
     module D = Dumper.Make(A)
 
     module RegAlloc = struct
 
-      type t = A.RegSet.t A.ProcMap.t
       let all_regs = A.RegSet.of_list  A.allowed_for_symb
       module Collect = CollectRegs.Make(A)
 

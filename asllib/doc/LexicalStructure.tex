@@ -1,11 +1,26 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \chapter{Lexical Structure\label{chap:LexicalStructure}}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-This chapter defines the various elements of an ASL specification text in a high-level way
+This chapter defines the various elements of an ASL specification text in a high-level way,
 and then formalizes the lexical analysis as a function that takes a text and returns
-a list of \emph{tokens} or a lexical error.
+either a list of \emph{tokens} or a lexical error.
 
-\section{ASL Specification Text}
+\ChapterOutline
+\begin{itemize}
+  \item \secref{ASL Specification Text} defines what constitutes the text of an ASL specification,
+  \item \secref{Lexical Regular Expressions} defines the regular expressions used to define the lexical structure,
+  \item \secref{Whitespace} defines whitespace,
+  \item \secref{Comments} defines comments,
+  \item \secref{Integer Literals} defines integer literals,
+  \item \secref{Rational Number Literals} defines rational number literals,
+  \item \secref{Boolean Literals} defines Boolean literals,
+  \item \secref{Bitmasks} defines bitmasks,
+  \item \secref{String Literals} defines string literals,
+  \item \secref{LexicalIdentifiers} defines identifiers, and
+  \item \secref{LexicalAnalysis} defines the analysis used to transform text into tokens.
+\end{itemize}
+
+\section{ASL Specification Text\label{sec:ASL Specification Text}}
 An ASL specification is a string, that is a list of ASCII characters, consisting of a \emph{content text}
 followed by an \emph{end-of-file}.
 The content text is a list of
@@ -21,7 +36,7 @@ The content text does not contain an end-of-file character.
 % NO_EXAMPLE
 In particular, it is an error to use a tab character in ASL specification text (decimal encoding 9).
 
-\section{Lexical Regular Expressions}
+\section{Lexical Regular Expressions\label{sec:Lexical Regular Expressions}}
 
 \hypertarget{def-regex}{}
 \taref{LexicalRegularExpressions} defines the regular expressions $\RegExp$ used to define
@@ -40,8 +55,8 @@ $\square$                             & The space character (decimal 32) \hypert
 \ascii{$a$-$b$}                       & The ASCII range between decimals $a$ and $b$\\
 (\texttt{$A$})                        & $A$\\
 $A$ $B$                               & $A$ followed by $B$\\
-\texttt{$A$ | $B$}                    & A or B\\
-\texttt{$A$ - $B$}                    & $A$ but not $B$\\
+\texttt{$A$ | $B$}                    & A or B \hypertarget{def-regexminus}{}\\
+\texttt{$A\ \regexminus{}\, B$}       & $A$ but not $B$\\
 $A*$                                  & Zero or more repetitions of A\\
 $A+$                                  & One or more repetitions of A\\
 \verb|"a_string"|                     & The string \verb|a_string| verbatim\\
@@ -71,7 +86,7 @@ $\REchar$       &$\triangleq$& \ascii{10} \texttt{|} \ascii{13} \texttt{|} \asci
 The notation $\Lang(e)$ stands for \emph{formal language} of a regular expression $e$.
 That is, the set of strings that match that regular expression.
 
-\section{Whitespace}
+\section{Whitespace\label{sec:Whitespace}}
 \RequirementDef{Whitespace}
 Comments and whitespace characters are collectively referred to as whitespace lexemes
 and are discarded. Technically, line comments and multi-line comments are treated
@@ -93,7 +108,7 @@ $\REwhitespace$ & $\triangleq$ & (\ascii{10} $|$ \ascii{13} $|$ \ascii{32})+\\
 \end{tabular}
 \end{center}
 
-\section{Comments}
+\section{Comments\label{sec:Comments}}
 ASL supports comments in the style of C++:
 \begin{itemize}
 \item Single-line comments: the text from \text{//} until the end of the line
@@ -109,13 +124,13 @@ Line comments are formally defined via the following regular expressions:
 \hypertarget{def-relinecomment}{}
 \begin{center}
 \begin{tabular}{rcl}
-$\RElinecomment$  &$\triangleq$& \texttt{"//"} (\REchar\ \texttt{-} \ascii{10})* \texttt{|} \texttt{"/*"} \REchar* \texttt{"*/"}\\
+$\RElinecomment$  &$\triangleq$& \texttt{"//"} (\REchar\ \regexminus{} \ascii{10})* \texttt{|} \texttt{"/*"} \REchar* \texttt{"*/"}\\
 \end{tabular}
 \end{center}
 
 Multi-line comments are defined via $\actionstartcomment$ and in \secref{scanningmultilinecomments}.
 
-\section{Integer Literals}
+\section{Integer Literals\label{sec:Integer Literals}}
 Integers are written either in decimal using one or more of the characters \texttt{0-9} and underscore, or in hexadecimal
 using \texttt{0x} at the start followed by the characters \texttt{0-9, a-f, A-F} and underscore. An integer literal cannot start with
 an underscore.
@@ -124,33 +139,49 @@ This is formalized by the following lexical regular expression:
 \hypertarget{def-redigit}{}
 \hypertarget{def-reintlit}{}
 \hypertarget{def-rehexlit}{}
+\hypertarget{def-forbiddenhexfirst}{}
+\hypertarget{def-forbiddenhexremaining}{}
+\hypertarget{def-rehexletter}{}
 \begin{center}
 \begin{tabular}{rcl}
 $\REdigit$  &$\triangleq$& \anycharacter{\texttt{0123456789}}\\
+$\REhexletter$ &$\triangleq$& \anycharacter{\texttt{abcdefABCDEF}}\\
 $\REintlit$ &$\triangleq$& \texttt{\REdigit\ (\Underscore\ | \REdigit)*}\\
-$\REhexlit$ &$\triangleq$& \texttt{"0x"} (\REdigit\ \texttt{|} \anycharacter{\texttt{abcdefABCDEF}}) (\Underscore\ \texttt{|} \REdigit\ \texttt{|} \anycharacter{\texttt{abcdefABCDEF}})*
+$\REhexlit$ &$\triangleq$& \texttt{"0x"} (\REdigit\ \texttt{|} \REhexletter) \\
+            &            & $\wrappedline$ (\Underscore\ \texttt{|} \REdigit\ \texttt{|} \REhexletter)* \\
+$\REforbiddenhexfirst$ &$\triangleq$& \texttt{"0x"} ((\REchar\ \regexminus{} \REdigit) \regexminus{} \REhexletter) \\
+$\REforbiddenhexremaining$ &$\triangleq$& \texttt{"0x"} (\REdigit\ \texttt{|} \REhexletter)  \\
+                           &            & $\wrappedline$ (\Underscore\ \texttt{|} \REdigit\ \texttt{|} \REhexletter)*  \\
+                           &            & $\wrappedline$ (\REletter{} \regexminus{} \REhexletter) \\
 \end{tabular}
 \end{center}
 
-\section{Real Number Literals}
-Real numbers are written in decimal and consist of one or more decimal digits, a decimal point and one
+\section{Rational Number Literals\label{sec:Rational Number Literals}}
+Rational numbers are written in decimal and consist of one or more decimal digits, a decimal point and one
 or more decimal digits. Underscores can be added between digits to aid readability
 
 Underscores in numbers are not significant, and their only purpose is to separate groups of digits to make constants
 such as \texttt{0xefff\_fffe}, \texttt{1\_000\_000} or \texttt{3.141\_592\_654} easier to read,
 
+The patterns $\REforbiddenrealfirst$ and $\REforbiddenrealremaining$ are
+forbidden and trigger a lexical error.
+
 \hypertarget{def-reallit}{}
+\hypertarget{def-forbiddenrealfirst}{}
+\hypertarget{def-forbiddenrealremaining}{}
 This is formalized by the following lexical regular expression:
 \begin{center}
 \begin{tabular}{rcl}
-$\REreallit$ &$\triangleq$& \texttt{\REdigit\ (\Underscore\ | \REdigit)* "." \REdigit\ (\Underscore\ | \REdigit)*}
+$\REreallit$ &$\triangleq$& \texttt{\REdigit\ (\Underscore\ | \REdigit)* "." \REdigit\ (\Underscore\ | \REdigit)*} \\
+$\REforbiddenrealfirst$ &$\triangleq$& \texttt{\REdigit\ (\Underscore\ | \REdigit)* "." (\REchar\ \regexminus{} \anycharacter{0123456789.})} \\
+$\REforbiddenrealremaining$ &$\triangleq$& \texttt{\REdigit\ (\Underscore\ | \REdigit)* "." \REdigit\ (\Underscore\ | \REdigit)* \REletter{}} \\
 \end{tabular}
 \end{center}
 
-\section{Boolean Literals}
+\section{Boolean Literals\label{sec:Boolean Literals}}
 Boolean literals are written using \texttt{TRUE} or \texttt{FALSE}.
 
-\section{Bitvector Literals}
+\section{Bitvector Literals\label{Bitvector Literals}}
 Constant bitvectors are written using 1, 0 and spaces surrounded by single-quotes.
 
 We first define a regular expression for a bit character:
@@ -172,7 +203,7 @@ $\REbitvectorlit$ &$\triangleq$& \anycharacter{\texttt{'}} \REbit* \anycharacter
 The spaces in a bitvector are not significant and are only used to improve readability.
 For example, \texttt{'1111 1111 1111 1111'} is the same as \texttt{'1111111111111111'}.
 
-\section{Bitmasks}
+\section{Bitmasks\label{sec:Bitmasks}}
 Constant bitmasks are written using \texttt{1}, \texttt{0}, \texttt{x}, and \texttt{0}s/\texttt{1}s enclosed in parentheses.
 Any \texttt{x}s or characters enclosed in parentheses represent don't care characters.
 
@@ -192,12 +223,17 @@ Similarly, the specific characters enclosed within parentheses are not significa
 For example, the bitmask \verb|'0xx1'| is equivalent to \verb|'0(00)1'|, \verb|'0(01)1'|, \verb|'0(10)1'|, and \verb|'0(11)1'|.
 Similarly, \verb|'0xx(1)'| is equivalent to \verb|'0xxx'|.
 
-\section{String Literals}
+\RequirementDef{BitmasksMSB}
+The most significant bit (\ProseMSB) of a bitmask is its leftmost value and
+the least significant bit (\ProseLSB) is its rightmost value.
+% INLINED_EXAMPLE
+For example, in \verb|'10'| the \ProseMSB{} is \verb|1| and the \ProseLSB{} is \verb|0|.
 
+\section{String Literals\label{sec:String Literals}}
 String literals consist of printable characters surrounded by double quotes.
 They are used to create string values, which are strings of zero or more characters,
 where a character is a printable ASCII character,
-tab (ASCII code \texttt{10}),
+tab (ASCII code \texttt{9}),
 newline (ASCII code \texttt{10}),
 the backslash character (ASCII code \texttt{92}),
 and double-quote character (ASCII code \texttt{34}).
@@ -227,11 +263,11 @@ The escape sequences allowed in string literals appear in \taref{EscapeSequences
 \begin{center}
 \begin{tabular}{rcl}
 $\REstrchar$ &$\triangleq$& \ascii{32-126}\\
-$\REstringlit$ &$\triangleq$& \anycharacter{\texttt{"}} ( ($\REstrchar$ \texttt{-} \anycharacter{\texttt{"}\ \backslash\ }) $|$ (\anycharacter{\backslash\ } \anycharacter{\texttt{" n t }\backslash\ })  )* \anycharacter{\texttt{"}}
+$\REstringlit$ &$\triangleq$& \anycharacter{\texttt{"}} ( ($\REstrchar$ \regexminus{} \anycharacter{\texttt{"}\ \backslash\ }) $|$ (\anycharacter{\backslash\ } \anycharacter{\texttt{" n t }\backslash\ })  )* \anycharacter{\texttt{"}}
 \end{tabular}
 \end{center}
 
-\section{Identifiers} \label{sec:LexicalIdentifiers}
+\section{Identifiers\label{sec:LexicalIdentifiers}}
 Identifiers start with a letter or underscore and continue with zero or more letters, underscores or digits.
 Identifiers are case sensitive.
 \hypertarget{def-reletter}{}
@@ -289,11 +325,11 @@ For example, \listingref{IdentifierSingleUnderscore}
 can be useful for declaring a constant specific to the platform \verb|my_platform|.
 \ASLListing{An identifier starting with a single underscore}{IdentifierSingleUnderscore}{\syntaxtests/ConventionRule.IdentifierSingleUnderscore.asl}
 
-\section{Lexical Analysis} \label{sec:LexicalAnalysis}
+\section{Lexical Analysis\label{sec:LexicalAnalysis}}
 Lexical analysis, which is also referred to as \emph{scanning}, is defined via the function
 \hypertarget{def-aslscan}{}
 \[
-\aslscan : \LexSpec \times \REasciichar^* \aslto (\Token^* \cup \{\LexicalErrorConfig\})
+\aslscan : \LexSpec \times \KleeneStar{\REasciichar} \aslto (\KleeneStar{\Token} \cup \{\LexicalErrorConfig\})
 \]
 \hypertarget{def-lexicalerrorresult}{}
 which takes a \emph{lexical specification} (explained soon), an ASL specification string
@@ -317,8 +353,8 @@ The set of tokens used for the lexical analysis of ASL strings is defined below.
         & & \{\ \Tstringlit(s) \;|\; s\in \Lang(\REstringlit) \} & \cup\\
         & & \{\ \Tstringchar(c) \;|\; c \in \Lang(\REchar) \} & \cup\\
         & & \{\ \Tstringend \} & \cup\\
-        & & \{\ \Tbitvectorlit(b) \;|\; b\in\{0,1\}^*\ \} & \cup\\
-        & & \{\ \Tmasklit(m) \;|\; m\in\{0,1,x\}^*\ \} & \cup\\
+        & & \{\ \Tbitvectorlit(b) \;|\; b\in\KleeneStar{\Bit}\ \} & \cup\\
+        & & \{\ \Tmasklit(m) \;|\; m\in\KleeneStar{\{0,1,x\}}\ \} & \cup\\
         & & \{\ \Tboollit(\True), \Tboollit(\False)\ \} & \cup \\
         & & \{\ \Tidentifier(\id) \;|\; \id\in \Lang(\REidentifier)\ \} & \cup \\
         & & \{\ \Tlexeme(s) \;|\; s\in\Strings\ \} & \cup \\
@@ -329,7 +365,7 @@ The set of tokens used for the lexical analysis of ASL strings is defined below.
 \hypertarget{def-tintlit}{}
 \begin{itemize}
   \item Tokens of the form $\Tintlit(n)$ represent integer literals; \hypertarget{def-treallit}{}
-  \item Tokens of the form $\Treallit(q)$ represent real literals; \hypertarget{def-tstringlit}{}
+  \item Tokens of the form $\Treallit(q)$ represent rational number literals; \hypertarget{def-tstringlit}{}
   \item Tokens of the form $\Tstringlit(s)$ represent string literals;
   \hypertarget{def-tstringchar}{}
   \item Tokens of the form $\Tstringchar(c)$ represent a single character in a string literal;
@@ -354,7 +390,7 @@ The set of tokens used for the lexical analysis of ASL strings is defined below.
 \begin{definition}[Lexical Specification]
 A \emph{lexical specification} consists of a list of pairs $[(r_1,a_1),\ldots,(r_k,a_k)] \in \LexSpec$
 where each pair $(r_i,a_i)$ consists of a lexical regular expression $r_i$
-and a \emph{lexeme action} $a_i : \Strings\times\Strings \aslto \Token^*$.
+and a \emph{lexeme action} $a_i : \Strings\times\Strings \aslto \KleeneStar{\Token}$.
 \end{definition}
 
 \hypertarget{def-rematch}{}
@@ -485,13 +521,15 @@ $s$, which is given via a floating point representation.
 \item The function $\strtolit(s)$ returns $\Tstringlit(s')$ where $s'$ is the string value represented by $s$.
 \hypertarget{def-bitstolit}{}
 \item The function $\bitstolit(s)$ returns $\Tbitvectorlit(b)$ where $b$ is the sequence of bits
-given by $s$.
+      given by $s$.
 \hypertarget{def-masktolit}{}
 \item The function $\masktolit(s)$ returns $\Tmasklit(m)$ where $m$ is the bitmask given by $s$.
 \hypertarget{def-falsetolit}{}
-\item The function $\falsetolit(s)$ returns $\Tboollit(\False)$ ($s$ is ensured to be \texttt{FALSE}).
+\item The function $\falsetolit(s)$ returns $\Tboollit(\False)$ ($s$ is guaranteed to be \\
+      \texttt{FALSE}).
 \hypertarget{def-truetolit}{}
-\item The function $\truetolit(s)$ returns $\Tboollit(\True)$ ($s$ is ensured to be \texttt{TRUE}).
+\item The function $\truetolit(s)$ returns $\Tboollit(\True)$ ($s$ is guaranteed to be \\
+      \texttt{TRUE}).
 \hypertarget{def-tokenid}{}
 \item The function $\tokenid(s)$ returns $\Tlexeme(s)$.
 \hypertarget{def-lexicalerror}{}
@@ -550,8 +588,8 @@ $\REreallit$                          & $\actiontoken(\realtolit)$ \\
 $\REstringlit$                        & $\actiontoken(\strtolit)$ \\
 $\REbitvectorlit$                     & $\actiontoken(\bitstolit)$ \\
 $\REbitmasklit$                       & $\actiontoken(\masktolit)$ \\
-\texttt{"!"}, \texttt{","}, \texttt{"<"}, \shiftrightlexeme, \texttt{"\&\&"}, \texttt{"-->"}, \shiftleftlexeme{}                         & $\actiontoken(\tokenid)$  \\
-\texttt{"]"}, \texttt{"]]"}, \texttt{")"}, \texttt{".."}, \texttt{"="}, \texttt{"\{"}, \texttt{"!="}, \texttt{"-"}, \texttt{"<->"}                        & $\actiontoken(\tokenid)$  \\
+\texttt{"!"}, \texttt{","}, \texttt{"<"}, \shiftrightlexeme, \texttt{"\&\&"}, \texttt{"==>"}, \shiftleftlexeme{}                         & $\actiontoken(\tokenid)$  \\
+\texttt{"]"}, \texttt{"]]"}, \texttt{")"}, \texttt{".."}, \texttt{"="}, \texttt{"\{"}, \texttt{"!="}, \texttt{"-"}, \texttt{"<=>"}                        & $\actiontoken(\tokenid)$  \\
 \texttt{"["}, \texttt{"[["}, \texttt{"("}, \texttt{"."}, \texttt{"<="}, \texttt{"\textasciicircum"}, \texttt{"*"}, \texttt{"/"}                          & $\actiontoken(\tokenid)$  \\
 \texttt{"=="}, \texttt{"||"}, \texttt{"+"}, \texttt{":"}, \texttt{"=>"}, \texttt{"<=>"}                         & $\actiontoken(\tokenid)$  \\
 \texttt{"\}"}, \texttt{"++"}, \texttt{">"}, \texttt{"+:"}, \texttt{"*:"}, \texttt{";"}, \texttt{">="}                         & $\actiontoken(\tokenid)$  \\
@@ -576,33 +614,49 @@ $\REbitmasklit$                       & $\actiontoken(\masktolit)$ \\
 \texttt{"if"}, \texttt{"impdef"}, \texttt{"implementation"}, \texttt{"IN"}, \texttt{"integer"}       & $\actiontoken(\tokenid)$ \\
 \texttt{"let"}, \texttt{"looplimit"}           & $\actiontoken(\tokenid)$ \\
 \texttt{"MOD"}           & $\actiontoken(\tokenid)$ \\
-\texttt{"NOT"}           & $\actiontoken(\tokenid)$ \\
+\texttt{"noreturn"}, \texttt{"NOT"}           & $\actiontoken(\tokenid)$ \\
 \texttt{"of"},      \texttt{"OR"},      \texttt{"otherwise"}                  & $\actiontoken(\tokenid)$ \\
-\texttt{"pass"},    \texttt{"pragma"},  \texttt{"print"}                      & $\actiontoken(\tokenid)$ \\
-\texttt{"real"},    \texttt{"record"},  \texttt{"recurselimit"}, \texttt{"repeat"}, \texttt{"return"}  & $\actiontoken(\tokenid)$ \\
+\texttt{"pass"},    \texttt{"pragma"},  \texttt{"print"}, \texttt{"pure"}                      & $\actiontoken(\tokenid)$ \\
+\texttt{"readonly"}, \texttt{"real"},    \texttt{"record"}  & $\actiontoken(\tokenid)$ \\
+\texttt{"recurselimit"}, \texttt{"repeat"}, \texttt{"return"}  & $\actiontoken(\tokenid)$ \\
 \texttt{"setter"},  \texttt{"string"},  \texttt{"subtypes"}                   & $\actiontoken(\tokenid)$ \\
 \texttt{"then"},    \texttt{"throw"},   \texttt{"to"}, \texttt{"try"}         & $\actiontoken(\tokenid)$ \\
 \texttt{"TRUE"}          & $\actiontoken(\truetolit)$ \\
 \texttt{"type"}          & $\actiontoken(\tokenid)$ \\
-\texttt{"ARBITRARY"}, \texttt{"Unreachable"}, \texttt{"until"}         & $\actiontoken(\tokenid)$ \\
+\texttt{"ARBITRARY"}, \texttt{"unreachable"}, \texttt{"until"}         & $\actiontoken(\tokenid)$ \\
 \texttt{"var"}           & $\actiontoken(\tokenid)$ \\
 \texttt{"when"}, \texttt{"where"}, \texttt{"while"}, \texttt{"with"}          & $\actiontoken(\tokenid)$ \\
 \hline
 \end{tabular}
 \end{center}
 
-The following list represents keywords that are reserved for future use.
+The following list represents forbidden lexemes in ASL:
 \begin{center}
-\begin{tabular}{ll}
-\textbf{Lexical Regular Expressions} & \textbf{Lexeme Action}\\
-\hline
-\texttt{"pure"}, \texttt{"readonly"} & $\lexicalerror$ \\
-\hline
-\end{tabular}
+  \begin{tabular}{ll}
+    \textbf{Lexical Regular Expression} & \textbf{Lexeme Action}\\
+    \hline
+    $\REforbiddenhexfirst$ & $\lexicalerror$ \\
+    $\REforbiddenhexremaining$ & $\lexicalerror$ \\
+    $\REforbiddenrealfirst$ & $\lexicalerror$ \\
+    $\REforbiddenrealremaining$ & $\lexicalerror$ \\
+    \hline
+  \end{tabular}
 \end{center}
 
+\ExampleDef{Illegal Numeric Lexemes}
 \begin{center}
 \begin{tabular}{ll}
+\textbf{illegal lexeme} & \textbf{reason}\\
+\hline
+\verb|5.a| & fails $\REforbiddenrealfirst$\\
+\verb|5.2a| & fails $\REforbiddenrealremaining$\\
+\verb|0xs| & fails $\REforbiddenhexfirst$\\
+\verb|0xa1s| & fails $\REforbiddenhexremaining$\\
+\end{tabular}
+\end{center}
+\begin{center}
+\begin{tabular}{ll}
+
 \textbf{Lexical Regular Expression} & \textbf{Lexeme Action}\\
 \hline
 $\REidentifier$   & $\actiontoken(\toidentifier)$ \\
@@ -616,7 +670,7 @@ $\eof$            & $\eoftoken$ \\
 To scan string literals, we define the following specialized scanning function.
 The function
 \[
-\scanstring : \overname{\REasciichar^*}{\buff} \times \overname{\REasciichar^*}{s} \aslto (\Token^* \cup \{\LexicalErrorConfig\})
+\scanstring : \overname{\KleeneStar{\REasciichar}}{\buff} \times \overname{\KleeneStar{\REasciichar}}{s} \aslto (\KleeneStar{\Token} \cup \{\LexicalErrorConfig\})
 \]
 scans string with the $\specstring$ specification while building the final string literal in $\buff$.
 It is defined via the following rules:

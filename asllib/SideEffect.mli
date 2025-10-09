@@ -11,7 +11,8 @@ end
 
 type read = { name : identifier; time_frame : TimeFrame.t; immutable : bool }
 
-(** Data type describing a potential side effect associated with an ASL piece of code. *)
+(** Data type describing a potential side effect associated with an ASL piece of
+    code. *)
 type t =
   | ReadsLocal of read
       (** Reads the local storage element indicated by its argument. *)
@@ -29,6 +30,7 @@ type t =
   | PerformsAssertions  (** Performs an assertion. *)
   | NonDeterministic
       (** Uses a non-deterministic construct such as [ARBITRARY: ty]. *)
+  | Prints  (** Prints via [print] or [println]. *)
 
 type side_effect = t
 
@@ -54,11 +56,15 @@ module SES : sig
   val calls_recursive : identifier -> t
   val performs_assertions : t
   val non_deterministic : t
+  val prints : t
 
   (* Properties *)
   val max_time_frame : t -> TimeFrame.t
   val is_pure : t -> bool
+  val is_readonly : t -> bool
   val is_symbolically_evaluable : t -> bool
+  val fine_grained_is_pure : t -> bool
+  val fine_grained_is_symbolically_evaluable : t -> bool
   val equal : t -> t -> bool
   val is_deterministic : t -> bool
 
@@ -72,8 +78,10 @@ module SES : sig
   val add_side_effect : side_effect -> t -> t
   val add_assertion : t -> t
   val add_non_determinism : t -> t
+  val add_print : t -> t
   val remove_pure : t -> t
   val remove_locals : t -> t
+  val set_purity_for_subprogram : AST.func_qualifier option -> t -> t
   val remove_thrown_exceptions : t -> t
   val remove_calls_recursives : t -> t
   val remove_assertions : t -> t

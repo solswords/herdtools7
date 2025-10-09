@@ -21,8 +21,8 @@
 (******************************************************************************)
 
 (** The Typing module is yet a single-entry-point module. It only exports the
-    function [annotate_ast] which fills type-annotations holes in the AST.
-    It should provide enough information to disambiguate any type-dependent
+    function [annotate_ast] which fills type-annotations holes in the AST. It
+    should provide enough information to disambiguate any type-dependent
     behaviour. *)
 
 (** Possible strictness of type-checking. *)
@@ -39,9 +39,9 @@ module type ANNOTATE_CONFIG = sig
   val output_format : Error.output_format
   val print_typed : bool
   val use_field_getter_extension : bool
+  val fine_grained_side_effects : bool
   val use_conflicting_side_effects_extension : bool
   val override_mode : override_mode
-  val control_flow_analysis : bool
 end
 
 module type S = sig
@@ -49,6 +49,10 @@ module type S = sig
 
   val type_check_ast_in_env :
     StaticEnv.global -> AST.t -> AST.t * StaticEnv.global
+
+  val find_main : StaticEnv.global -> AST.identifier
+  (** Returns the identifier of the function with the signature fun main() =>
+      integer, if one exists, and otherwise produces a dynamic error. *)
 end
 
 module Annotate : functor (C : ANNOTATE_CONFIG) -> S

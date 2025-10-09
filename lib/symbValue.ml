@@ -30,6 +30,7 @@ module
     (ArchOp:ArchOp.S with
        type scalar = Cst.Scalar.t
        and type pteval = Cst.PteVal.t
+       and type addrreg = Cst.AddrReg.t
        and type instr = Cst.Instr.t) = struct
 
   module Cst = Cst
@@ -61,10 +62,18 @@ module
   type v =
     | Var of csym
     | Val of cst
+
 (* A symbolic constant, computations much reduced on them... *)
   let fresh_var () = Var (gensym ())
 
   let from_var v = Var v
+
+(* Basic utilities *)
+  let as_constant = function
+    | Var _ -> None
+    | Val c -> Some c
+
+  let as_scalar v = Option.bind (as_constant v) Constant.as_scalar
 
   let do_pp pp_val = function
   | Var s -> pp_csym s
@@ -77,14 +86,6 @@ module
 
   let pp_v =  do_pp Cst.pp_v
   let pp_v_old =  do_pp Cst.pp_v_old
-
-(* Basic utilities *)
-
-  let as_constant = function
-    | Var _ -> None
-    | Val c -> Some c
-
-  let as_scalar v = Option.bind (as_constant v) Constant.as_scalar
 
   let printable = function
     | Val (c) ->
@@ -114,6 +115,7 @@ module
   and nameToV s = Val (Cst.nameToV s)
   and instructionToV i = Val (Constant.Instruction i)
   and cstToV cst = Val cst
+  and scalarToV sc = Val (Constant.Concrete sc)
 
   let maybevToV c = Val (Cst.tr c)
 
@@ -160,7 +162,7 @@ module
     | Val (Concrete v) -> Val (Concrete (Cst.Scalar.bit_at k v))
     | Val
         (ConcreteVector _|ConcreteRecord _|Symbolic _|Label _|
-         Tag _|PteVal _|Instruction _|Frozen _ as x)
+         Tag _|PteVal _|AddrReg _|Instruction _|Frozen _ as x)
       ->
         Warn.user_error "Illegal operation on %s" (Cst.pp_v x)
     | Var _ -> raise Undetermined
@@ -171,7 +173,7 @@ module
   match v1 with
     | Val (Concrete i1) ->
         Val (Concrete (op i1))
-    | Val (ConcreteVector _|ConcreteRecord _|Symbolic _|Label _|Tag _|PteVal _|Frozen _ as x) ->
+    | Val (ConcreteVector _|ConcreteRecord _|Symbolic _|Label _|Tag _|PteVal _|AddrReg _|Frozen _ as x) ->
         Warn.user_error "Illegal operation %s on %s"
           (pp_unop op_op) (Cst.pp_v x)
     | Val (Instruction _ as x) ->
@@ -283,7 +285,7 @@ module
 (* specific binops, with some specific cases for symbolic constants *)
 
   let add v1 v2 =
-(* Particular cases are important for symbolic constants *)
+    (* Particular cases are important for symbolic constants *)
     if protect_is is_zero v1 then v2
     else if protect_is is_zero v2 then v1
     else match v1,v2 with
@@ -295,6 +297,10 @@ module
     | (Val (Symbolic (Physical (s,i2))),Val (Concrete i1)) ->
         let i1 = Cst.Scalar.to_int i1 in
         Val (Symbolic (Physical (s,i1+i2)))
+    | (Val (Symbolic _) as v,Val cst)
+        when Cst.is_zero cst -> v
+    | (Val cst,(Val (Symbolic _) as v))
+        when Cst.is_zero cst -> v
     | _,_ -> (* General case *)
         binop Op.Add Cst.Scalar.add v1 v2
 
@@ -304,6 +310,7 @@ module
     | (Val (Symbolic _),Val (Symbolic _))
     | (Val (Label _),Val (Label _))
     | (Val (PteVal _),Val (PteVal _))
+    | (Val (AddrReg _),Val (AddrReg _))
     | (Val (Instruction _),Val (Instruction _)) ->
         Val (Concrete (Cst.Scalar.of_int (compare  v1 v2)))
     (* 0 is sometime used as invalid PTE, no orpat because warning 57
@@ -332,7 +339,7 @@ module
   | Val (Symbolic (Physical (s,i))) -> Val (Symbolic (Physical (s,i+k)))
   | Val (ConcreteVector _|ConcreteRecord _
        | Symbolic ((TagAddr _|System _))|Label _
-       |Tag _|PteVal _|Instruction _|Frozen _ as c) ->
+       |Tag _|PteVal _|AddrReg _|Instruction _|Frozen _ as c) ->
       Warn.user_error "Illegal addition on constants %s +%d" (Cst.pp_v c) k
   | Var _ -> raise Undetermined
 
@@ -359,14 +366,24 @@ module
   and xor v1 v2 =
     if equal v1 v2 && Cst.Scalar.unique_zero then zero else
     match v1,v2 with
-    | (Val (Symbolic id1),Val (Symbolic id2))
-      when Constant.symbol_eq id1 id2
-        -> zero
+      (* Scalar constants `Concrete _` an their compositions
+       * as vectors or records, cannot be checked below
+       * when several zero's exist, because the value of c1 ^ c2
+       * depends on scalar type. In that case one should perform
+       * the exclusive or operation. See PR #970.
+       *)
+    | (Val (Symbolic _ as c1),Val (Symbolic _ as c2))
+    | (Val (PteVal _ as c1),Val (PteVal _ as c2))
+    | (Val (Instruction _ as c1),Val (Instruction _ as c2))
+    | (Val (Label _ as c1),Val (Label _ as c2))
+    | (Val (Tag _ as c1),Val (Tag _ as c2))
+      when Cst.eq c1 c2
+      -> zero
     | _ -> binop Op.Xor Cst.Scalar.logxor v1 v2
 
   and maskop op sz v = match v,sz with
   | Val (Tag _),_ -> v (* tags are small enough for any mask be idempotent *)
-  | Val (PteVal _|Instruction _|Symbolic _|Label _ as c),_ ->
+  | Val (PteVal _|AddrReg _|Instruction _|Symbolic _|Label _ as c),_ ->
      begin
        match ArchOp.mask c sz with
        | Some c -> Val c
@@ -495,7 +512,7 @@ module
   |  Val (Symbolic (Physical _|TagAddr _|System _)
           |Concrete _|Label _
           |Tag _|ConcreteRecord _|ConcreteVector _
-          |PteVal _|Instruction _
+          |PteVal _|AddrReg _|Instruction _
           |Frozen _)
      -> Warn.user_error "Illegal tagged operation %s on %s" op_op (pp_v v)
   | Var _ -> raise Undetermined
@@ -515,7 +532,7 @@ module
     | Val
         (Concrete _|ConcreteRecord _|ConcreteVector _
          |Symbolic ((TagAddr _|System _))
-         |Label _|Tag _|PteVal _
+         |Label _|Tag _|PteVal _|AddrReg _
          |Instruction _|Frozen _)
       ->
        Warn.user_error "Illegal tagloc on %s" (pp_v v)
@@ -528,7 +545,7 @@ module
     | Val
         (Concrete _|ConcreteRecord _|ConcreteVector _
         |Label _|Tag _
-        |PteVal _|Instruction _
+        |PteVal _|AddrReg _|Instruction _
         |Frozen _)
       ->
        Warn.fatal "Illegal check_ctag" (* NB: not an user error *)
@@ -549,7 +566,7 @@ module
   |  Val
        (Concrete _|ConcreteRecord _|ConcreteVector _
        |Label _|Tag _
-       |Symbolic _|PteVal _
+       |Symbolic _|PteVal _|AddrReg _
        |Instruction _|Frozen _)
      ->
       Warn.user_error "Illegal %s on %s" op_op (pp_v v)
@@ -561,23 +578,28 @@ module
   | Val
       (Concrete _|ConcreteRecord _|ConcreteVector _
       |Label _|Tag _
-      |Symbolic _|PteVal _
+      |Symbolic _|PteVal _|AddrReg _
       |Instruction _|Frozen _)
     ->
      Warn.user_error "Illegal pteloc on %s" (pp_v v)
   | Var _ -> raise Undetermined
 
+  let illegal_offset v =
+    Warn.user_error "Illegal offset on %s" @@ pp_v v
+
   let offset v = match v with
-  | Val
-    (Symbolic
-       (Virtual {offset=o;_}|Physical (_,o)|TagAddr (_,_,o))) -> intToV o
-  | Val (Symbolic (System ((PTE|PTE2|TLB),_))) -> zero
+    | Val (Symbolic x) ->
+      begin
+        match Constant.get_index x with
+        | Some o -> intToV o
+        | None ->  illegal_offset v
+      end
   | Val
       (Concrete _|ConcreteRecord _|ConcreteVector _
       |Label _|Tag _
-      |PteVal _|Instruction _
+      |PteVal _|AddrReg _|Instruction _
       |Frozen _) ->
-      Warn.user_error "Illegal offset on %s" (pp_v v)
+      illegal_offset v
   | Var _ -> raise Undetermined
 
   let op_tlbloc {name=a;_} = Symbolic (System (TLB,a))
@@ -896,7 +918,7 @@ module
              begin
                match ArchOp.do_op1 op c with
                | None ->
-                   Warn.user_error "Illegal operation %s on %s"
+                   Warn.user_error "Illegal arch operation %s on %s"
                      (ArchOp.pp_op1 true op) (pp_v v)
                | Some c -> Val c
              end)
@@ -972,7 +994,7 @@ module
   | Val
       (ConcreteVector _|ConcreteRecord _|Symbolic _
       |Label _|Tag _
-      |PteVal _|Instruction _
+      |PteVal _|AddrReg _|Instruction _
       | Frozen _ as s) ->
       Warn.user_error "illegal if on symbolic constant %s" (Cst.pp_v s)
   | Var _ -> raise Undetermined
@@ -1023,6 +1045,12 @@ module
     | Val c -> Val (f c)
 
   let map_scalar f = map_const (Constant.map_scalar f)
+
+
+(* Lift constant location classification *)
+  let access_of_value = function
+  | Var _ -> assert false
+  | Val cst -> Cst.access_of_constant cst
 
 
 end

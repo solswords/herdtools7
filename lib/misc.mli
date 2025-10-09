@@ -59,6 +59,7 @@ val ing2 : 'a -> 'b -> unit
 (* raise Not_found *)
 val not_found : unit -> 'a
 
+val some : 'a -> 'a option
 val is_none : 'a option -> bool
 val is_some : 'a option -> bool
 val as_some : 'a option -> 'a
@@ -322,6 +323,7 @@ val tr_atag : string -> string option
 val is_atag : string -> bool
 
 val add_pte : string -> string
+val add_parel1: string -> string
 val tr_pte : string ->  string option
 val is_pte : string -> bool
 val pp_pte : string -> string

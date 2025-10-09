@@ -58,6 +58,11 @@ begin
   let y : bits(4) = Bar{,3}('111');
 end;
 
+// We can elide parameters for global declarations
+let elided_global1: bits(64) = Zeros{};
+var elided_global2: bits(64) = Zeros{};
+constant elided_global3: bits(64) = Zeros{};
+config elided_global4: bits(64) = Zeros{};
 
 // We can parametrise accessors
 var _R : array [[31]] of bits(64);
@@ -65,7 +70,7 @@ var _R : array [[31]] of bits(64);
 
 accessor X{N}(regno: integer) <=> value: bits(N)
 begin
-  getter
+  readonly getter
     assert N == 64;
     assert 0 <= regno && regno <= 31;
     return _R[[regno]][0+:N];

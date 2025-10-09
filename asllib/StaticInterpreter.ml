@@ -29,8 +29,13 @@ let ( |: ) = Instrumentation.TypingNoInstr.use_with
 module InterpConf = struct
   module Instr = Instrumentation.SemanticsNoInstr
 
-  let unroll = 0
+  let unroll = 1 lsl 12
+  let recursive_unroll _ = Some (1 lsl 12)
   let error_handling_time = Error.Static
+  let empty_branching_effects_optimization = true
+  let log_nondet_choice = false (* Not relevant here *)
+  let display_call_stack_on_error = false
+  let track_symbolic_path = false
 end
 
 module SB = Native.StaticBackend
@@ -38,11 +43,8 @@ module SI = Interpreter.Make (Native.StaticBackend) (InterpConf)
 
 let eval_from ~loc env e =
   try SI.eval_expr env e
-  with
-  | Error.(ASLException { pos_start; pos_end; desc; _ })
-  when pos_start == dummy_pos && pos_end == dummy_pos
-  ->
-    Error.fatal_from loc desc
+  with Error.(ASLException exn) when is_dummy_annotated exn ->
+    Error.fatal_from loc exn.desc
 
 (* Begin StaticEval *)
 let static_eval (senv : SEnv.env) (e : expr) : literal =
@@ -50,18 +52,16 @@ let static_eval (senv : SEnv.env) (e : expr) : literal =
     let open SI.IEnv in
     let global =
       global_from_static senv.global
-        ~storage:(Storage.map SB.v_of_literal senv.SEnv.global.constant_values)
+        ~storage:(IMap.map SB.v_of_literal senv.SEnv.global.constant_values)
     and local =
-      local_empty_scoped
-        (SB.Scope.global ~init:true)
-        ~storage:(Storage.map SB.v_of_literal senv.SEnv.local.constant_values)
+      local_empty_scoped (SB.Scope.global ~init:true) ~storage:IMap.empty
     in
     { global; local }
   in
   match eval_from ~loc:e env e with
   | SI.Normal (Native.NV_Literal l, _env) ->
       l |: Instrumentation.TypingRule.StaticEval
-  | SI.Normal _ | SI.Throwing _ ->
+  | SI.Normal _ | SI.Throwing _ | SI.Cutoff ->
       Error.fatal_from e (UnsupportedExpr (Static, e))
 (* End *)
 

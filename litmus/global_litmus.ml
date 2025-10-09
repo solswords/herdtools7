@@ -46,10 +46,18 @@ let as_addr = function
 let tr_symbol =
   let open Constant in
   function
-    | Virtual {name=s; tag=None; cap=0L; offset=0;} -> Addr s
+    | Virtual {name=s; tag=None; cap=0L; offset=0; _} -> Addr s
     | Physical (s,0) -> Phy s
     | System (PTE,s) -> Pte s
     | c ->  Warn.fatal "litmus cannot handle symbol '%s'" (pp_symbol c)
+
+let get_base_symbol =
+ let open Constant in
+  function
+    | Virtual {name=s; tag=None; cap=0L; _ } -> Addr s
+    | Physical (s,_) -> Phy s
+    | System (PTE,s) -> Pte s
+    | c ->  Warn.fatal "litmus cannot get base of symbol '%s'" (pp_symbol c)
 
 type u = t
 

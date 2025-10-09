@@ -8,6 +8,7 @@ on:
       - 'asllib/Parser.mly'
       - 'asllib/Lexer.mll'
       - 'asllib/Tokens.mly'
+      - 'asllib/**.asl'
   # push:
   workflow_dispatch:
   schedule:
@@ -34,17 +35,11 @@ jobs:
       - name: Checkout tree
         uses: actions/checkout@v4
 
-      - name: Set-up OCaml .5.2
+      - name: Set-up OCaml
         uses: ocaml/setup-ocaml@v3
         with:
-          ocaml-compiler: 5.2
+          ocaml-compiler: dune,zarith,menhir,conf-which,feat,qcheck,re,logs,cmdliner
           dune-cache: true
-
-      - name: Install herdtools's dependencies
-        run: opam install . --deps-only --with-test
-
-      - name: Install carpenter dependencies
-        run: opam install feat qcheck re logs cmdliner
 
       - name: Update apt database
         run: sudo apt-get update --quiet --yes
@@ -52,9 +47,13 @@ jobs:
       - name: Install BNFC
         run: sudo apt-get install --quiet --yes bnfc
 
+      - name: Install herdtools and carpenter dependencies
+        run: opam install dune zarith menhir feat qcheck re logs cmdliner
+
       - run: opam exec -- make build DUNE_PROFILE=dev
 
       - run: opam exec -- make test DUNE_PROFILE=dev
 
       - run: opam exec -- make test-bnfc DUNE_PROFILE=dev
 
+      - run: opam install .

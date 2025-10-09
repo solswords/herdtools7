@@ -20,14 +20,5 @@
 (* herdtools7 github repository.                                              *)
 (******************************************************************************)
 
+module type CONFIG = sig end
 (** The CONFIG module signature for the ASL1 Parser *)
-module type CONFIG = sig
-  val allow_no_end_semicolon : bool
-  (** Allow no semicolon after [end]. *)
-
-  val allow_expression_elsif : bool
-  (** Allow [elsif] at the expression level. *)
-
-  val allow_storage_discards : bool
-  (** Allow storage declarations to discard their right-hand sides. *)
-end

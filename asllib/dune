@@ -1,3 +1,14 @@
+(env
+ (release
+  (flags
+   (:standard -w +a-3-4-9-29-33-41-45-60-67-70)))
+ (dev
+  (flags
+   (:standard -warn-error +A -w +a-3-4-9-29-33-41-45-60-67-70))))
+
+(dirs
+ (:standard \ menhir2bnfc))
+
 (rule
  (copy ../Version.ml Version.ml))
 
@@ -14,13 +25,31 @@
 (menhir
  (modules Tokens Parser)
  (merge_into Parser)
- (flags --cmly --external-tokens Tokens))
+ (flags --cmly --external-tokens Tokens --exn-carries-state))
 
 (menhir
  (modules Parser0)
  (flags --unused-tokens --table))
 
-(data_only_dirs acl2)
+(rule
+ (target parser_errors.ml)
+ (deps
+  (:tokens Tokens.mly)
+  (:parser Parser.mly)
+  (:msg parser_errors.messages))
+ (action
+  (with-stdout-to
+   %{target}
+   (run
+    menhir
+    --external-tokens
+    Tokens
+    %{tokens}
+    %{parser}
+    --base
+    %{parser}
+    --compile-errors
+    %{msg}))))
 
 (rule
  (deps

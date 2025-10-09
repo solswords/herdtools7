@@ -7,21 +7,20 @@ let exact e = Constraint_Exact e
 let range a b = Constraint_Range (a, b)
 
 type int3_binop =
-  [ `PLUS | `MINUS | `DIV | `DIVRM | `SHR | `SHL | `POW | `MOD | `MUL ]
+  [ `ADD | `SUB | `DIV | `DIVRM | `SHR | `SHL | `POW | `MOD | `MUL ]
 
-type extremities_binops = [ `PLUS | `MINUS | `DIV | `DIVRM | `SHR | `SHL | `MUL ]
+type extremities_binops = [ `ADD | `SUB | `DIV | `DIVRM | `SHR | `SHL | `MUL ]
 
 (* Begin ConstraintMod *)
 let constraint_mod = function
   | Constraint_Exact e | Constraint_Range (_, e) ->
-      range zero_expr (binop `MINUS e one_expr) |: TypingRule.ConstraintMod
+      range zero_expr (binop `SUB e one_expr) |: TypingRule.ConstraintMod
 (* End *)
 
 (* Begin PossibleExtremitiesLeft *)
 
-(** [possible_extremities_left op a b] is given a range [a..b] the set of
-    needed extremities of intervals for the left-hand-side of an operation
-    [op]. *)
+(** [possible_extremities_left op a b] is given a range [a..b] the set of needed
+    extremities of intervals for the left-hand-side of an operation [op]. *)
 let possible_extremities_left (op : extremities_binops) a b =
   match op with
   (* MUL is not left-increasing: if c is negative, then the following is not
@@ -33,7 +32,7 @@ let possible_extremities_left (op : extremities_binops) a b =
   (* All the following operations are left-increasing:
      for any operation op among those, if x < y, and c a valid value for the
      right-hand side of op, x op c < y op c *)
-  | `DIV | `DIVRM | `SHR | `SHL | `PLUS | `MINUS -> [ (a, b) ]
+  | `DIV | `DIVRM | `SHR | `SHL | `ADD | `SUB -> [ (a, b) ]
 (* End *)
 
 (* Begin PossibleExtremitiesRIght *)
@@ -43,10 +42,10 @@ let possible_extremities_left (op : extremities_binops) a b =
     [op]. *)
 let possible_extremities_right (op : extremities_binops) c d =
   match op with
-  (* PLUS is right-increasing. *)
-  | `PLUS -> [ (c, d) ] |: TypingRule.PossibleExtremitiesRight
-  (* MINUS simply reverse the intervals. *)
-  | `MINUS -> [ (d, c) ]
+  (* ADD is right-increasing. *)
+  | `ADD -> [ (c, d) ] |: TypingRule.PossibleExtremitiesRight
+  (* SUB simply reverse the intervals. *)
+  | `SUB -> [ (d, c) ]
   (* We need:
       - the normal interval if the left-hand-side value is positive
       - the reversed interval if the right-hand-side value is negative
@@ -65,8 +64,8 @@ let possible_extremities_right (op : extremities_binops) c d =
 (** [apply_binop_extremities op c1 c2] applies [op] to the slices [c1] and [c2].
 
     It produces a list of all possible slices, by using the functions
-    [possible_extremities_left/right], and taking the cartesian product of
-    their results. *)
+    [possible_extremities_left/right], and taking the cartesian product of their
+    results. *)
 let apply_binop_extremities (op : extremities_binops) c1 c2 =
   let op' = (op :> binop) in
   match (c1, c2) with
@@ -267,13 +266,13 @@ module Make (C : CONFIG) = struct
 
   (* Begin BinopFilterRight *)
 
-  (** Filters out values from the right-hand-side operand of [op] that will definitely
-  result in a dynamic error. *)
+  (** Filters out values from the right-hand-side operand of [op] that will
+      definitely result in a dynamic error. *)
   let binop_filter_rhs ~loc env (op : int3_binop) =
     match op with
     | `SHL | `SHR | `POW -> filter_sign ~loc env op @@ fun x -> x >= 0
     | `MOD | `DIV | `DIVRM -> filter_sign ~loc env op @@ fun x -> x > 0
-    | `MINUS | `MUL | `PLUS -> Fun.id
+    | `SUB | `MUL | `ADD -> Fun.id
   (* End *)
 
   (* Begin RefineConstraintForDIV *)
@@ -344,7 +343,7 @@ module Make (C : CONFIG) = struct
   (** [binop_is_exploding op] returns [true] if [constraint_binop op] loses
       precision on intervals. *)
   let binop_is_exploding : int3_binop -> bool = function
-    | `PLUS | `MINUS -> false
+    | `ADD | `SUB -> false
     | `MUL | `SHL | `POW | `DIV | `DIVRM | `MOD | `SHR -> true
 
   let log_max_constraint_size = 17

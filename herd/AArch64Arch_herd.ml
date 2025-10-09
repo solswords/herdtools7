@@ -16,8 +16,8 @@
 
 module Types = struct
   type annot = AArch64Annot.t
-  type nexp =  AF|DB|AFDB|IFetch|Other
-  type explicit = Exp | NExp of nexp
+  type nexp =  AArch64Explicit.nexp
+  type explicit = AArch64Explicit.explicit
   type lannot = annot
 end
 
@@ -36,24 +36,17 @@ module Make (C:Arch_herd.Config)(V:Value.AArch64) =
     let pp_barrier_short = pp_barrier
     let reject_mixed = true
 
+    include AArch64Explicit
     include Types
 
     let empty_annot = AArch64Annot.N
-    let exp_annot = Exp
-    let nexp_annot = NExp Other
-    let nexp_ifetch = NExp IFetch
+    let exp_annot = AArch64Explicit.Exp
+    let nexp_annot = AArch64Explicit.NExp AArch64Explicit.Other
+    let nexp_ifetch = AArch64Explicit.NExp AArch64Explicit.IFetch
 
     let is_atomic = AArch64Annot.is_atomic
 
-    let is_explicit_annot = function
-      | Exp -> true
-      | NExp _ -> false
-
-    and is_not_explicit_annot = function
-      | NExp _ -> true
-      | Exp -> false
-
-    and is_ifetch_annot = function
+    let is_ifetch_annot = function
       | NExp IFetch -> true
       | NExp (AF|DB|AFDB|Other)|Exp -> false
 
@@ -107,7 +100,7 @@ module Make (C:Arch_herd.Config)(V:Value.AArch64) =
     | I_STOPBH _| I_STP _| I_STP_SIMD _| I_STR _ | I_STLUR_SIMD _
     | I_STR_SIMD _| I_STRBH _| I_STUR_SIMD _| I_STXP _| I_STXR _
     | I_STXRBH _| I_STZG _| I_STZ2G _
-    | I_SWP _| I_SWPBH _| I_SXTW _| I_TLBI _| I_UBFM _
+    | I_SWP _| I_SWPBH _| I_SXTW _| I_TLBI _ | I_AT _ | I_UBFM _
     | I_UDF _| I_UNSEAL _ | I_ADDSUBEXT _ | I_ABS _ | I_REV _ | I_EXTR _
     | I_MOPL _ | I_MOP _
     | I_WHILELT _ | I_WHILELE _ | I_WHILELO _ | I_WHILELS _
@@ -130,7 +123,7 @@ module Make (C:Arch_herd.Config)(V:Value.AArch64) =
       | V.Val Instruction i -> is_cmodx_restricted_instruction i
       | V.Val
            (Symbolic _|Concrete _|ConcreteVector _|ConcreteRecord _|
-            Label _|Tag _|PteVal _|Frozen _)
+            Label _|Tag _|PteVal _|AddrReg _|Frozen _)
       | V.Var _ -> false
 
     let ifetch_value_sets = [("Restricted-CMODX",is_cmodx_restricted_value)]
@@ -195,13 +188,12 @@ module Make (C:Arch_herd.Config)(V:Value.AArch64) =
 
     let pp_annot = AArch64Annot.pp
 
-    let pp_explicit = function
-      | Exp -> if is_kvm && C.verbose > 2 then "Exp" else ""
-      | NExp Other-> "NExp"
-      | NExp IFetch-> "IFetch"
-      | NExp AF-> "NExpAF"
-      | NExp DB-> "NExpDB"
-      | NExp AFDB-> "NExpAFDB"
+    let pp_explicit e =
+      match e with
+      | AArch64Explicit.Exp
+           when  not is_kvm || C.verbose <= 2
+        -> ""
+      | _ -> AArch64Explicit.pp e
 
     let promote_int64 x =
       let sc =
@@ -312,6 +304,7 @@ module Make (C:Arch_herd.Config)(V:Value.AArch64) =
       | I_STCT _|I_UNSEAL _
       | I_SC _
       | I_TLBI (_,_)
+      | I_AT (_,_)
       | I_MOV_V _ | I_MOV_VE _ | I_MOV_S _ | I_MOV_TG _ | I_MOV_FG _
       | I_MOVI_S _ | I_MOVI_V _ | I_ADDV _ | I_DUP _ |  I_FMOV_TG _
       | I_OP3_SIMD _ | I_ADD_SIMD _ | I_ADD_SIMD_S _
@@ -355,7 +348,7 @@ module Make (C:Arch_herd.Config)(V:Value.AArch64) =
       | I_STRBH _ | I_STLRBH _
       | I_STOP _ | I_STOPBH _
       | I_FENCE _
-      | I_IC _|I_DC _|I_TLBI _
+      | I_IC _|I_DC _|I_TLBI _ | I_AT _
       | I_NOP|I_TBZ _|I_TBNZ _
       | I_BL _ | I_BLR _ | I_RET _ | I_ERET | I_SVC _ | I_UDF _
       | I_ST1SP _ | I_ST2SP _ | I_ST3SP _ | I_ST4SP _
@@ -377,9 +370,8 @@ module Make (C:Arch_herd.Config)(V:Value.AArch64) =
       | I_LDRBH (_,r,_,_)
       | I_LDRS (_,r,_,_)
       | I_LDUR (_,r,_,_)
-      | I_LDAR (_,_,r,_) |I_LDARBH (_,_,r,_)
+      | I_LDAR (_,(AA|AQ),r,_) |I_LDARBH (_,(AA|AQ),r,_)
       | I_SWP (_,_,_,r,_) | I_SWPBH (_,_,_,r,_)
-      | I_STXR (_,_,r,_,_) | I_STXP (_,_,r,_,_, _) | I_STXRBH (_,_,r,_,_)
       | I_CAS (_,_,r,_,_) | I_CASBH (_,_,r,_,_)
       | I_LDOP (_,_,_,_,r,_) | I_LDOPBH (_,_,_,_,r,_)
       | I_MOV (_,r,_) | I_MOVZ (_,r,_,_) | I_MOVN (_,r,_,_) | I_MOVK (_,r,_,_)
@@ -408,13 +400,17 @@ module Make (C:Arch_herd.Config)(V:Value.AArch64) =
       | I_LD1SPT (_,r,_,_,_,_,_) | I_MOVA_TV (r,_,_,_,_) | I_MOVA_VT (r,_,_,_,_)
       | I_ADDA (_,r,_,_,_)
         -> [r]
+      | I_LDAR (_,(XX|AX),r,_) |I_LDARBH (_,(XX|AX),r,_)
+        -> [r;ResAddr;]
+      | I_STXR (_,_,r,_,_) | I_STXP (_,_,r,_,_, _) | I_STXRBH (_,_,r,_,_)
+        -> [r;ResAddr;]
       | I_MSR (SYS_NZCV,_)
         ->
           nzcv_regs
       | I_MSR (sr,_)
         -> [(SysReg sr)]
       | I_LDXP (_,_,r1,r2,_)
-        -> [r1;r2;]
+        -> [r1;r2;ResAddr;]
       | I_LD1SP (_,rs,_,_,_)
       | I_LD2SP (_,rs,_,_,_)
       | I_LD3SP (_,rs,_,_,_)
@@ -482,7 +478,7 @@ module Make (C:Arch_herd.Config)(V:Value.AArch64) =
       | I_LDOPBH _|I_STOP _|I_STOPBH _
       | I_MOV _|I_MOVZ _|I_MOVN _|I_MOVK _|I_SXTW _
       | I_OP3 _|I_ADR _|I_RBIT _|I_ABS _|I_REV _|I_EXTR _|I_FENCE _
-      | I_CSEL _|I_IC _|I_DC _|I_TLBI _|I_MRS _|I_MSR _
+      | I_CSEL _|I_IC _|I_DC _|I_TLBI _ | I_AT _ |I_MRS _|I_MSR _
       | I_STG _|I_STZG _|I_STZ2G _|I_LDG _|I_UDF _
       | I_ADDSUBEXT _|I_MOPL _ | I_MOP _
       | I_WHILELT _ | I_WHILELE _ | I_WHILELO _ | I_WHILELS _
@@ -506,6 +502,9 @@ module Make (C:Arch_herd.Config)(V:Value.AArch64) =
 
     include ArchExtra_herd.Make(C)
         (struct
+
+          let arch = arch
+
           module V = V
           let endian = endian
 

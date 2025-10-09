@@ -30,7 +30,7 @@ let ( |: ) = Instrumentation.TypingNoInstr.use_with
 
 type global = {
   declared_types : (ty * TimeFrame.t) IMap.t;
-  constant_values : literal Storage.t;
+  constant_values : literal IMap.t;
   storage_types : (ty * global_decl_keyword) IMap.t;
   subtypes : identifier IMap.t;
   subprograms : (AST.func * SES.t) IMap.t;
@@ -39,7 +39,6 @@ type global = {
 }
 
 type local = {
-  constant_values : literal Storage.t;
   storage_types : (ty * local_decl_keyword) IMap.t;
   expr_equiv : expr IMap.t;
   return_type : ty option;
@@ -67,12 +66,10 @@ module PPEnv = struct
       (PP.pp_print_seq ~pp_sep pp_print_string)
       (ISet.to_seq s)
 
-  let pp_local f { constant_values; storage_types; return_type; expr_equiv } =
+  let pp_local f { storage_types; return_type; expr_equiv } =
     fprintf f
-      "@[<v 2>Local with:@ - @[constants:@ %a@]@ - @[storage:@ %a@]@ - \
-       @[return type:@ %a@]@ - @[expr equiv:@ %a@]@]"
-      (Storage.pp_print PP.pp_literal)
-      constant_values
+      "@[<v 2>Local with:@ - @[storage:@ %a@]@ - @[return type:@ %a@]@ - \
+       @[expr equiv:@ %a@]@]"
       (pp_map (fun f (t, _) -> PP.pp_ty f t))
       storage_types
       (pp_print_option ~none:(fun f () -> fprintf f "none") PP.pp_ty)
@@ -97,7 +94,7 @@ module PPEnv = struct
       "@[<v 2>Global with:@ - @[constants:@ %a@]@ - @[storage:@ %a@]@ - \
        @[types:@ %a@]@ - @[subtypes:@ %a@]@ - @[subprograms:@ %a@]@ - \
        @[overloaded_subprograms:@ %a@]@ - @[expr equiv:@ %a@]@]"
-      (Storage.pp_print PP.pp_literal)
+      (IMap.pp_print PP.pp_literal)
       constant_values
       (pp_map (fun f (t, _) -> PP.pp_ty f t))
       storage_types
@@ -119,7 +116,7 @@ let pp_local = PPEnv.pp_local
 let empty_global =
   {
     declared_types = IMap.empty;
-    constant_values = Storage.empty;
+    constant_values = IMap.empty;
     storage_types = IMap.empty;
     subtypes = IMap.empty;
     subprograms = IMap.empty;
@@ -129,12 +126,7 @@ let empty_global =
 
 (** An empty local static env. *)
 let empty_local =
-  {
-    constant_values = Storage.empty;
-    storage_types = IMap.empty;
-    return_type = None;
-    expr_equiv = IMap.empty;
-  }
+  { storage_types = IMap.empty; return_type = None; expr_equiv = IMap.empty }
 
 let empty_local_return_type return_type = { empty_local with return_type }
 
@@ -148,16 +140,11 @@ let with_empty_local global =
 
 (** [lookup x env] is the value of x as defined in environment.
 
-(* Begin LookupConstant *)
-      @raise Not_found if it is not defined inside. *)
+    (* Begin LookupConstant *)
+    @raise Not_found if it is not defined inside. *)
 let lookup_constant env x =
-  try Storage.find x env.local.constant_values
-  with Not_found ->
-    Storage.find x env.global.constant_values |: TypingRule.LookupConstant
+  IMap.find x env.global.constant_values |: TypingRule.LookupConstant
 (* End *)
-
-let lookup_constant_opt env x =
-  try Some (lookup_constant env x) with Not_found -> None
 
 (* Begin TypeOf *)
 
@@ -178,15 +165,17 @@ let lookup_immutable_expr env x =
 let lookup_immutable_expr_opt env x =
   try Some (lookup_immutable_expr env x) with Not_found -> None
 
-let mem_constants env x =
-  Storage.mem x env.global.constant_values
-  || Storage.mem x env.local.constant_values
+let mem_constants env x = IMap.mem x env.global.constant_values
 
 let add_subprogram name func_def ses env =
   let () =
     if false then
-      Format.eprintf "@[Adding func %s with side effects:@ @[%a]@]@." name
-        SideEffect.SES.pp_print ses
+      Format.eprintf
+        "@[Adding func %s with side effects:@ @[%a]@ and@ qualifier@ %s@]@."
+        name SideEffect.SES.pp_print ses
+        (match func_def.qualifier with
+        | Some q -> PP.func_qualifier_to_string q
+        | None -> "none")
   in
   {
     env with
@@ -224,21 +213,9 @@ let add_type x ty time_frame env =
       };
   }
 
-(* Begin AddLocalConstant *)
-let add_local_constant name v env =
-  {
-    env with
-    local =
-      {
-        env.local with
-        constant_values = Storage.add name v env.local.constant_values;
-      };
-  }
-(* End *)
-
 (* Begin AddGlobalConstant *)
 let add_global_constant name v (genv : global) =
-  { genv with constant_values = Storage.add name v genv.constant_values }
+  { genv with constant_values = IMap.add name v genv.constant_values }
 (* End *)
 
 let add_local x ty ldk env =
