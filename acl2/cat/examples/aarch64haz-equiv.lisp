@@ -25,6 +25,10 @@
 (include-book "../exp-equiv")
 (include-book "std/util/defconsts" :dir :system)
 
+; (depends-on "aarch64haz-1-fragment.cat.lsp")
+; (depends-on "aarch64haz-2-fragment.cat.lsp")
+; (depends-on "aarch64haz-1.cat.lsp")
+; (depends-on "aarch64haz-2.cat.lsp")
 (acl2::defconsts (& *haz1fragment* state)
   (read-ast-file "aarch64haz-1-fragment.cat.lsp"))
 
