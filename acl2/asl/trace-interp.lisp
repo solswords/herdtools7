@@ -32,7 +32,7 @@
 (local (in-theory (disable integer-listp))) ;; doubles the time for some deftypes if not disabled
 
 (local (include-book "centaur/vl/util/default-hints" :dir :system))
-
+(local (std::add-default-post-define-hook :fix))
 
 
 ;; Define a new version of the interpreter that additionally collects

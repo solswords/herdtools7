@@ -126,6 +126,7 @@
 
 (defines expr_of_lexpr
   :ruler-extenders (expr)
+  :flag-local nil
   (define expr_of_lexpr ((x lexpr-p))
     :returns (res expr-p)
     :measure (lexpr-count x)
