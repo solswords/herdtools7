@@ -197,7 +197,7 @@ and pp_ty f t =
   | T_Int UnConstrained -> pp_print_string f "integer"
   | T_Int (WellConstrained (cs, _)) ->
       fprintf f "@[integer {%a}@]" pp_int_constraints cs
-  | T_Int PendingConstrained -> pp_print_string f "integer{-}"
+  | T_Int PendingConstrained -> pp_print_string f "integer{}"
   | T_Int (Parameterized var) -> fprintf f "@[integer {%s}@]" var
   | T_Real -> pp_print_string f "real"
   | T_String -> pp_print_string f "string"
@@ -426,19 +426,12 @@ let pp_decl f =
         fprintf f "@[<hv 4>%s%sgetter %s%a [@,%a]%a@]" qualifier_keyword
           override_keyword name pp_parameters parameters pp_args args
           pp_return_type_opt return_type
-    | ST_EmptyGetter ->
-        fprintf f "@[<hv 4>%s%sgetter %s%a@]" qualifier_keyword override_keyword
-          name pp_return_type_opt return_type
     | ST_Setter ->
         let new_v, args =
           match args with [] -> assert false | h :: t -> (h, t)
         in
         fprintf f "@[<hv 4>%ssetter %s%a [@,%a]@ = %a@]" override_keyword name
           pp_parameters parameters pp_args args pp_typed_identifier new_v
-    | ST_EmptySetter ->
-        let new_v = match args with [ h ] -> h | _ -> assert false in
-        fprintf f "@[<hv 4>%ssetter %s@ = %a@]" override_keyword name
-          pp_typed_identifier new_v
   in
   let pp_body f = function
     | SB_ASL s -> pp_stmt f s

@@ -3,15 +3,11 @@ open AST
 open AST.AttributeKey
 
 let check_definition_name name =
-let () = assert (String.length name > 0) in
-let id_regexp = Str.regexp "^[A-Za-z_']+$" in
-if not (Str.string_match id_regexp name 0) then
-    let msg =
-    Format.sprintf
-        "illegal element-defining identifier: %s"
-        name
-    in
-    raise (SpecError msg)
+   let () = assert (String.length name > 0) in
+   let id_regexp = Str.regexp "^[A-Za-z_']+$" in
+   if not (Str.string_match id_regexp name 0) then
+     let msg = Format.sprintf "illegal element-defining identifier: %s" name in
+     raise (SpecError msg)
 %}
 
 %type <AST.t> spec
@@ -152,7 +148,7 @@ let type_attributes ==
 let type_attribute :=
     | PROSE_DESCRIPTION; EQ; template=STRING; { (Prose_Description, StringAttribute template) }
     | template=STRING; { (Prose_Description, StringAttribute template) }
-    | MATH_MACRO; EQ; macro=LATEX_MACRO; { (Math_Macro, StringAttribute macro) }
+    | MATH_MACRO; EQ; macro=LATEX_MACRO; { (Math_Macro, MathMacroAttribute macro) }
     | MATH_LAYOUT; EQ; ~=math_layout; { (Math_Layout, MathLayoutAttribute math_layout) }
 
 let relation_attributes ==
@@ -162,7 +158,7 @@ let relation_attribute :=
     | PROSE_DESCRIPTION; EQ; template=STRING; { (Prose_Description, StringAttribute template) }
     | template=STRING; { (Prose_Description, StringAttribute template) }
     | PROSE_APPLICATION; EQ; template=STRING; { (Prose_Application, StringAttribute template) }
-    | MATH_MACRO; EQ; macro=LATEX_MACRO; { (Math_Macro, StringAttribute macro) }
+    | MATH_MACRO; EQ; macro=LATEX_MACRO; { (Math_Macro, MathMacroAttribute macro) }
     | MATH_LAYOUT; EQ; ~=math_layout; { (Math_Layout, MathLayoutAttribute math_layout) }
 
 let type_variants_with_attributes :=
@@ -183,22 +179,25 @@ let type_term_with_attributes := ~=type_term; ~=type_attributes;
 
 let type_term :=
     | name=IDENTIFIER; { check_definition_name name; Label name }
-    | POWERSET; LPAR; member_type=type_term; RPAR; { Powerset {term=member_type; finite=false} }
-    | POWERSET_FINITE; LPAR; member_type=type_term; RPAR; { Powerset {term=member_type; finite=true} }
-    | OPTION; LPAR; member_type=type_term; RPAR; { Option member_type }
+    | op=operator; LPAR; ~=opt_named_type_term; RPAR; { make_operator op opt_named_type_term }
     | LPAR; components=tclist1(opt_named_type_term); RPAR; { LabelledTuple {label_opt = None; components} }
     | label=IDENTIFIER; LPAR; components=tclist1(opt_named_type_term); RPAR;
     {   check_definition_name label;
         LabelledTuple {label_opt = Some label; components} }
-    | LIST0; LPAR; member_type=type_term; RPAR; { List { maybe_empty=true; member_type} }
-    | LIST1; LPAR; member_type=type_term; RPAR; { List { maybe_empty=false; member_type}}
     | LBRACKET; fields=tclist1(named_type_term); RBRACKET; { make_record fields }
     | label=IDENTIFIER; LBRACKET; fields=tclist1(named_type_term); RBRACKET;
     {   check_definition_name label;
         make_labelled_record label fields }
     | CONSTANTS_SET; LPAR; constants=tclist1(IDENTIFIER); RPAR; { ConstantsSet constants }
-    | FUN; from_type=type_term; ARROW; to_type=type_term; { Function {from_type; to_type; total = true}}
-    | PARTIAL; from_type=type_term; ARROW; to_type=type_term; { Function {from_type; to_type; total = false}}
+    | FUN; from_type=opt_named_type_term; ARROW; to_type=opt_named_type_term; { Function {from_type; to_type; total = true}}
+    | PARTIAL; from_type=opt_named_type_term; ARROW; to_type=opt_named_type_term; { Function {from_type; to_type; total = false}}
+
+let operator :=
+    | POWERSET; { Powerset }
+    | POWERSET_FINITE; { Powerset_Finite }
+    | LIST0; { List0 }
+    | LIST1; { List1 }
+    | OPTION; { Option }
 
 let named_type_term ==
     name=IDENTIFIER; COLON; ~=type_term; { (name, type_term) }

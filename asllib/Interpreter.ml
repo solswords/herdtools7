@@ -77,6 +77,7 @@ module type Config = sig
   val log_nondet_choice : bool
   val display_call_stack_on_error : bool
   val track_symbolic_path : bool
+  val bit_clear_optimisation : bool
 end
 
 module Make (B : Backend.S) (C : Config) = struct
@@ -596,14 +597,16 @@ module Make (B : Backend.S) (C : Config) = struct
         E_Cond (e1, e2, true_at ~loc:e)
         |> add_pos_from e |> eval_expr env |: SemanticsRule.BinopImpl
     (* End *)
-    (* Begin EvalBinop *)
-    | E_Binop (`AND, e1, { desc = E_Unop (NOT, e2) }) ->
+    | E_Binop (`AND, e1, { desc = E_Unop (NOT, e2) })
+      when C.bit_clear_optimisation ->
+        (* Internal usage of BIC operator *)
         let op = `BIC in
         let*^ m1, env1 = eval_expr env e1 in
         let*^ m2, new_env = eval_expr env1 e2 in
         let* v1 = m1 and* v2 = m2 in
         let* v = B.binop op v1 v2 in
-        return_normal (v, new_env) |: SemanticsRule.Binop
+        return_normal (v, new_env)
+    (* Begin EvalBinop *)
     | E_Binop (op, e1, e2) ->
         let*^ m1, env1 = eval_expr env e1 in
         let*^ m2, new_env = eval_expr env1 e2 in
@@ -1173,19 +1176,6 @@ module Make (B : Backend.S) (C : Config) = struct
           return (i + 1, v :: vs)
         in
         let*| _i, vs = List.fold_left folder (return (0, [])) ms in
-        return_return new_env (List.rev vs) |: SemanticsRule.SReturn
-    | S_Return (Some ({ desc = E_Call { name; params; args; _ }; _ } as e)) ->
-        let**| returned, new_env =
-          eval_call (to_pos e) name env ~params ~args
-        in
-        let scope = IEnv.get_scope new_env in
-        let folder acc m =
-          let*| i, vs = acc in
-          let* v = m in
-          let* () = B.on_write_identifier (return_identifier i) scope v in
-          return (i + 1, v :: vs)
-        in
-        let*| _i, vs = List.fold_left folder (return (0, [])) returned in
         return_return new_env (List.rev vs) |: SemanticsRule.SReturn
     | S_Return (Some e) ->
         let** v, env1 = eval_expr env e in

@@ -3,6 +3,37 @@
 
 open AST
 module StringMap = Map.Make (String)
+module StringSet = Set.Make (String)
+
+(** [vars_of_type_term term] returns the list of term-naming variables that
+    occur at any depth inside [term]. *)
+let rec vars_of_type_term term =
+  let listed_vars =
+    match term with
+    | Label _ -> []
+    | Operator { term } -> opt_named_term_to_var_list term
+    | LabelledTuple { components } -> vars_of_opt_named_type_terms components
+    | LabelledRecord { fields } ->
+        Utils.list_concat_map
+          (fun (field_name, t) -> field_name :: vars_of_type_term t)
+          fields
+    | ConstantsSet _ -> []
+    | Function { from_type; to_type } ->
+        opt_named_term_to_var_list from_type
+        @ opt_named_term_to_var_list to_type
+  in
+  List.sort_uniq String.compare listed_vars
+
+(** [opt_named_term_to_var_list (var, t)] returns the list of term-naming
+    variables that occur at any depth inside [t], plus [var] if it is [Some x].
+*)
+and opt_named_term_to_var_list (var, t) =
+  Option.to_list var @ vars_of_type_term t
+
+(** [vars_of_opt_named_type_terms named_terms] returns the list of term-naming
+    variables that occur at any depth inside [opt_named_terms]. *)
+and vars_of_opt_named_type_terms opt_named_terms =
+  List.map opt_named_term_to_var_list opt_named_terms |> List.concat
 
 (** Returns the label of a type variant, if it consists of a label. *)
 let variant_to_label_opt { TypeVariant.term } =
@@ -33,6 +64,25 @@ let math_macro_opt_for_node = function
   | Node_TypeVariant def -> TypeVariant.math_macro def
   | Node_Constant def -> Constant.math_macro def
 
+let prose_description_for_node = function
+  | Node_Type def -> Type.prose_description def
+  | Node_Relation def -> Relation.prose_description def
+  | Node_TypeVariant def -> TypeVariant.prose_description def
+  | Node_Constant def -> Constant.prose_description def
+
+(** [vars_of_node node] returns the list of term-naming variables that occur at
+    any depth inside the definition node [node]. *)
+let vars_of_node = function
+  | Node_Type { Type.variants; _ } ->
+      Utils.list_concat_map
+        (fun { TypeVariant.term } -> vars_of_type_term term)
+        variants
+  | Node_TypeVariant { TypeVariant.term } -> vars_of_type_term term
+  | Node_Constant _ -> []
+  | Node_Relation { Relation.input; output; _ } ->
+      vars_of_opt_named_type_terms input
+      @ Utils.list_concat_map vars_of_type_term output
+
 (** Utility functions for handling layouts. *)
 module Layout = struct
   (** For a relation like [ r(a,b,c) -> A|B|C ] generates a term
@@ -51,8 +101,7 @@ module Layout = struct
   let rec horizontal_for_type_term term =
     match term with
     | Label _ -> Unspecified
-    | Powerset { term = t } | Option t | List { member_type = t; _ } ->
-        horizontal_for_type_term t
+    | Operator { term = _, t } -> horizontal_for_type_term t
     | LabelledTuple { components } ->
         if List.length components > 1 then
           Horizontal
@@ -65,17 +114,16 @@ module Layout = struct
         else Unspecified
     | ConstantsSet names ->
         Horizontal ((List.init (List.length names)) (fun _ -> Unspecified))
-    | Function { from_type; to_type; _ } ->
+    | Function { from_type = _, from_term; to_type = _, to_term; _ } ->
         Horizontal
           [
-            horizontal_for_type_term from_type; horizontal_for_type_term to_type;
+            horizontal_for_type_term from_term; horizontal_for_type_term to_term;
           ]
 
   let rec default_for_type_term term =
     match term with
     | Label _ -> Unspecified
-    | Powerset { term = t } | Option t | List { member_type = t; _ } ->
-        default_for_type_term t
+    | Operator { term = _, t } -> default_for_type_term t
     | LabelledTuple { components } ->
         if List.length components > 1 then
           Horizontal
@@ -87,14 +135,14 @@ module Layout = struct
         else Unspecified
     | ConstantsSet names ->
         Horizontal ((List.init (List.length names)) (fun _ -> Unspecified))
-    | Function { from_type; to_type; _ } ->
+    | Function { from_type = _, from_term; to_type = _, to_term; _ } ->
         Horizontal
-          [ default_for_type_term from_type; default_for_type_term to_type ]
+          [ default_for_type_term from_term; default_for_type_term to_term ]
 
-  let horizontal_for_list layout terms =
+  let horizontal_if_unspecified layout terms =
     match layout with
     | Horizontal _ | Vertical _ -> layout
-    | _ -> Horizontal (List.init (List.length terms) (fun _ -> Unspecified))
+    | _ -> Horizontal (List.map (fun _ -> Unspecified) terms)
 
   let rec contains_vertical = function
     | Unspecified -> false
@@ -123,8 +171,6 @@ let definition_node_attributes = function
   | Node_Relation { Relation.att }
   | Node_Constant { Constant.att } ->
       att
-
-type string_map = String.t StringMap.t
 
 let elem_name = function
   | Elem_Type { Type.name }
@@ -175,7 +221,7 @@ let make_id_to_definition_node definition_nodes =
     StringMap.empty definition_nodes
 
 type t = {
-  ast : AST.t;  (** The original AST as parsed. *)
+  ast : AST.t;  (** The original AST as parsed *)
   id_to_defining_node : definition_node StringMap.t;
       (** Associates identifiers with the AST nodes where they are defined. *)
   defined_ids : string list;
@@ -183,6 +229,15 @@ type t = {
 }
 
 let ast spec = spec.ast
+
+(** [defining_node_for_id self id] returns the defining node for the element
+    with identifier [id] that is given in the specification. If no such element
+    exists, a [SpecError] is raised. *)
+let defining_node_for_id self id =
+  try StringMap.find id self.id_to_defining_node
+  with Not_found ->
+    let msg = Format.sprintf "Encountered undefined element: %s" id in
+    raise (SpecError msg)
 
 module Check = struct
   let list_find_duplicate strs =
@@ -231,8 +286,7 @@ module Check = struct
     match (term, layout) with
     | Label _, Unspecified -> ()
     | Label _, _ -> raise (SpecError msg)
-    | Powerset { term }, _ | Option term, _ -> check_layout term layout
-    | List { member_type }, _ -> check_layout member_type layout
+    | Operator { term = _, t }, _ -> check_layout t layout
     | LabelledTuple { components }, Horizontal cells
     | LabelledTuple { components }, Vertical cells ->
         if List.length components <> List.length cells then
@@ -249,10 +303,11 @@ module Check = struct
     | ConstantsSet names, Horizontal cells ->
         if List.length names <> List.length cells then raise (SpecError msg)
         else List.iter2 (fun _ cell -> check_layout (Label "") cell) names cells
-    | Function { from_type; to_type }, Horizontal cells ->
+    | ( Function { from_type = _, from_term; to_type = _, to_term; _ },
+        Horizontal cells ) ->
         if List.length cells <> 2 then raise (SpecError msg)
-        else check_layout from_type (List.nth cells 0);
-        check_layout to_type (List.nth cells 1)
+        else check_layout from_term (List.nth cells 0);
+        check_layout to_term (List.nth cells 1)
     | _ -> ()
 
   let check_math_layout definition_nodes =
@@ -273,8 +328,7 @@ module Check = struct
   (** Returns all the identifiers referencing nodes that define identifiers. *)
   let rec referenced_ids = function
     | Label id -> [ id ]
-    | Powerset { term } -> referenced_ids term
-    | Option term -> referenced_ids term
+    | Operator { term = _, t } -> referenced_ids t
     | LabelledTuple { label_opt; components } -> (
         let component_ids =
           List.map snd components |> Utils.list_concat_map referenced_ids
@@ -288,10 +342,9 @@ module Check = struct
         | Some label ->
             label
             :: (List.map snd fields |> Utils.list_concat_map referenced_ids))
-    | List { member_type } -> referenced_ids member_type
     | ConstantsSet constant_names -> constant_names
-    | Function { from_type; to_type } ->
-        referenced_ids from_type @ referenced_ids to_type
+    | Function { from_type = _, from_term; to_type = _, to_term } ->
+        referenced_ids from_term @ referenced_ids to_term
 
   (** [check_no_undefined_ids elements id_to_defining_node] checks that all
       identifiers referenced in [elements] are keys in [id_to_defining_node]. *)
@@ -325,35 +378,75 @@ module Check = struct
     in
     List.iter (check_no_undefined_ids_in_elem id_to_defining_node) elements
 
-  (** Checks that [type_term] references only top-level types. That is, not
-      constants or type variants. This check assumes that all identifiers in
-      [type_term] are mapped to their defining nodes in [id_to_defining_node].
+  (** A module for checking that each prose template string ([prose_description]
+      and [prose_application] attributes) to ensure it does not contain a
+      [{var}] where [var] does not name any type term. If it does, LaTeX will
+      fail on [{var}], which would require debugging the generated code. This
+      check catches such cases and generates an easy to understand explanation.
   *)
-  let check_only_top_level_types id_to_defining_node type_term =
-    let identifiers_in_type_term = referenced_ids type_term in
-    List.iter
-      (fun id ->
-        match StringMap.find id id_to_defining_node with
-        | Node_Type _ -> ()
-        | _ ->
-            let msg =
-              Format.asprintf
-                "Identifier '%s' in '%a' does not refer to a top-level type" id
-                PP.pp_type_term type_term
-            in
-            raise (SpecError msg))
-      identifiers_in_type_term
+  module CheckProseTemplates : sig
+    val check : definition_node list -> unit
+    (** [check definition_nodes] checks all prose templates in
+        [definition_nodes] *)
+  end = struct
+    (** [check_prose_template_for_vars template vars] checks that [template]
+        does not contain a [{var}] where [var] is not in [vars]. Otherwise,
+        raises a [SpecError] detailing the unmatched variables. *)
+    let check_prose_template_for_vars template vars =
+      let open Text in
+      (* Populate with [{var}] for each [var]. *)
+      let template_vars =
+        List.fold_left
+          (fun acc_map var_str ->
+            let template_var = spec_var_to_template_var var_str in
+            StringSet.add template_var acc_map)
+          StringSet.empty vars
+      in
+      let template_var_regexp = Str.regexp "{[a-zA-Z0-9_']+}" in
+      (* Remove things like [\texttt{a}], which do not (should not) reference variables. *)
+      let reduce_template =
+        Str.global_replace
+          (Str.regexp
+             {|\\\([a-zA-Z]+\){[a-zA-Z0-9_']+}\|\(\\hyperlink{[a-zA-Z_\-]*}{[a-zA-Z_\-]*}\)|})
+          "" template
+      in
+      let blocks = Str.full_split template_var_regexp reduce_template in
+      let unmatched_vars =
+        List.fold_left
+          (fun acc block ->
+            match block with
+            | Str.Text _ -> acc
+            | Str.Delim var -> (
+                match StringSet.find_opt var template_vars with
+                | Some _ -> acc
+                | None -> var :: acc))
+          [] blocks
+      in
+      if Utils.list_is_empty unmatched_vars then ()
+      else
+        let msg =
+          Format.sprintf
+            "The prose template '%s' contains the following unmatched \
+             variables: %s"
+            template
+            (String.concat ", " unmatched_vars)
+        in
+        raise (SpecError msg)
 
-  let check_only_top_level_types_in_relations id_to_defining_node elements =
-    List.iter
-      (function
-        | Elem_Relation { Relation.input } ->
-            List.iter
-              (fun (_, type_term) ->
-                check_only_top_level_types id_to_defining_node type_term)
-              input
-        | _ -> ())
-      elements
+    let check_prose_template_for_definition_node defining_node =
+      let prose_description = prose_description_for_node defining_node in
+      let vars = vars_of_node defining_node in
+      let () = check_prose_template_for_vars prose_description vars in
+      match defining_node with
+      | Node_Type _ | Node_TypeVariant _ | Node_Constant _ -> ()
+      | Node_Relation def ->
+          let prose_application = Relation.prose_application def in
+          let () = check_prose_template_for_vars prose_application vars in
+          ()
+
+    let check defining_nodes =
+      List.iter check_prose_template_for_definition_node defining_nodes
+  end
 
   (** TODO:
       - Check that instantiated type terms for labelled type terms and labelled
@@ -367,19 +460,8 @@ let from_ast ast =
   let () = Check.check_no_undefined_ids ast id_to_defining_node in
   let () = Check.check_mandatory_attributes definition_nodes in
   let () = Check.check_math_layout definition_nodes in
-  let () =
-    Check.check_only_top_level_types_in_relations id_to_defining_node ast
-  in
+  let () = Check.CheckProseTemplates.check definition_nodes in
   let defined_ids = List.rev defined_ids in
   { ast; id_to_defining_node; defined_ids }
-
-(** [defining_node_for_id self id] returns the defining node for the element
-    with identifier [id] that is given in the specification. If no such element
-    exists, a [SpecError] is raised. *)
-let defining_node_for_id self id =
-  try StringMap.find id self.id_to_defining_node
-  with Not_found ->
-    let msg = Format.sprintf "Encountered undefined element: %s" id in
-    raise (SpecError msg)
 
 let defined_ids self = self.defined_ids

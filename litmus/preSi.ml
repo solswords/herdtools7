@@ -449,7 +449,7 @@ module Make
                  let ((p, lbl), loc, ftype) = f in
                  let lbl_cond = match lbl with
                    | None -> ""
-                   | Some s -> sprintf " && instr_symb == %s" (SkelUtil.instr_symb_id (sprintf "P%d_%s" p s))
+                   | Some s -> sprintf " && instr_symb == %s" (SkelUtil.instr_symb_id (OutUtils.fmt_lbl_var p s))
                  and loc_cond = match loc with
                    | None -> ""
                    | Some s -> sprintf " && data_symb == %s" (SkelUtil.data_symb_id (A.V.pp_v_old s))
@@ -976,7 +976,7 @@ module Make
             let ((p, lbl), loc, ft) = f in
             let lbl = match lbl with
               | None -> "UNKNOWN"
-              | Some s -> sprintf "P%d_%s" p s
+              | Some s -> OutUtils.fmt_lbl_var p s
             and loc = match loc with
               | None -> "UNKNOWN"
               | Some s -> A.V.pp_v_old s
@@ -1510,24 +1510,27 @@ module Make
         let user =  ProcsUser.is procs_user proc in
         let args0 =
           let open Template in
-          if user then
-            let default_handler = A.default_sync_handler user in
-            { trashed=["tr0"];
-              inputs=
-                (fun k ->
-                   if A.Out.has_asmhandler out then k
-                   else
-                     ([],("default_handler","&"^default_handler))::k)
-                @@
-                [[CType.word,"cpu"],("sp_usr","user_stack[cpu]")];
-              constants=[];
-              clobbers=A.user_handler_clobbers;
-              externs=
-                if A.Out.has_asmhandler out then []
-                else [(CType.quad,default_handler)];
-            }
-          else no_extra_args in
-        Lang.dump_fun ~user
+          if Cfg.is_kvm then begin
+            if user then
+              let default_handler = A.default_sync_handler user in
+              { trashed=["tr0"];
+                inputs=
+                  (fun k ->
+                     if A.Out.has_asmhandler out then k
+                     else
+                       ([],("default_handler","&"^default_handler))::k)
+                  @@
+                  [[CType.word,"cpu"],("sp_usr","user_stack[cpu]")];
+                constants=[];
+                clobbers=A.user_handler_clobbers;
+                externs=
+                  if A.Out.has_asmhandler out then []
+                  else [(CType.quad,default_handler)];
+              }
+            else
+              { no_extra_args with trashed = ["tr0";]; }
+          end else no_extra_args in
+        Lang.dump_fun
           O.out args0 global_env envVolatile proc out
 
 (* Untouched variables, per thread + responsability *)

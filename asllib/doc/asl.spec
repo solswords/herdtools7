@@ -10,10 +10,20 @@
 // Generic Types
 ////////////////////////////////////////////////////////////////////////////////
 
+typedef empty_set
+{
+    "the empty set",
+    math_macro = \emptyset,
+};
+
+constant True { "true", math_macro = \True };
+constant False { "false", math_macro = \False };
+
 typedef Bool
 {  "Boolean",
     math_macro = \Bool,
-};
+} = constants_set(True, False)
+;
 
 typedef Bit
 { "bit" };
@@ -21,6 +31,11 @@ typedef Bit
 typedef N
 {  "natural number",
     math_macro = \N,
+};
+
+typedef N_pos
+{  "positive natural number",
+    math_macro = \Npos,
 };
 
 typedef Z
@@ -47,6 +62,35 @@ typedef ASTLabels
 { "AST label",
    math_macro = \ASTLabels,
 };
+
+constant bot { "bottom", math_macro = \bot };
+
+typedef TAbsField { "\absolutebitfields", math_macro = \TAbsField } =
+    (name: list0(Identifier), slice: list0(N))
+    { "absolute field named {name} with slice {slice}" }
+;
+
+typedef def_use_name { "subprogram identifier kind" } =
+    | Subprogram(id: Identifier)
+    { "subprogram identifier {id}" }
+    | Other(id: Identifier)
+    { "non-subprogram identifier {id}" }
+;
+
+////////////////////////////////////////////////////////////////////////////////
+// Types for Symbolic Equivalence Testing
+constant negative_sign { "negative sign", math_macro = \negativesign };
+constant positive_sign { "positive sign", math_macro = \positivesign };
+constant equal_sign { "equal sign", math_macro = \equalsign };
+typedef Sign { "sign" } =
+    constants_set(negative_sign, positive_sign, equal_sign)
+;
+typedef Q_nonzero { "non-zero rational", math_macro = \Qnonzero };
+typedef unitary_monomial { "unitary monomial" } = partial Identifier -> N_pos;
+typedef polynomial { "polynomial" } = partial unitary_monomial -> Q_nonzero;
+typedef monomial { "monomial" } = (exponents: unitary_monomial, factor:Q);
+render symbolic_expressions = polynomial(-), unitary_monomial(-),  monomial(-);
+constant CannotBeTransformed { "cannot be transformed", math_macro = \CannotBeTransformed };
 
 ////////////////////////////////////////////////////////////////////////////////
 // Untyped AST
@@ -140,11 +184,11 @@ ast expr { "expression" } =
     | E_Var(name: Identifier)
     { "variable expression for {name}" }
     | E_ATC(source: expr, type: ty)
-    { "asserting type conversion for the source expression {e} and type {type}" }
+    { "asserting type conversion for the source expression {source} and type {type}" }
     | E_Binop(operator: binop, left: expr, right: expr)
     { "binary expression for the operator {operator}, left expression {left} and right expression {right}" }
     | E_Unop(operator: unop, subexpression: expr)
-    { "unary expression for the unary operator {operator} and subexpression {e}" }
+    { "unary expression for the unary operator {operator} and subexpression {subexpression}" }
     | E_Call(call_descriptor: call)
     { "call expression for the call descriptor {call_descriptor}" }
     | E_Slice(base: expr, slices: list0(slice))
@@ -175,9 +219,9 @@ ast expr { "expression" } =
     | E_GetItem(base: expr, index: N)
     { "an access to tuple expression {base} of the component at index {index}" }
     | E_Array[length: expr, value: expr]
-    { "array construction {base} of the component at index {index}" }
+    { "array construction for an array of length given by {length} with all cells initialized with {value}" }
     | E_EnumArray[labels: list1(Identifier), value: expr]
-    { "array construction {base} of the component at index {index}" }
+    { "array construction for an array associating each label in {labels} with the value given by {value}" }
     | E_GetEnumArray(base: expr, key: expr)
     { "access to enumeration-indexed array {base} with key expression {key}" }
     | E_GetCollectionFields(collection_name: Identifier, field_names: list0(Identifier))
@@ -309,17 +353,17 @@ ast ty { "type" } =
     | T_Tuple(component_types: list0(ty))
     { "tuple type with components types {component_types}" }
     | T_Array(index: array_index, element_type: ty)
-    { "integer type with {array_index} and element_type {element_type}" }
+    { "integer type with {index} and element_type {element_type}" }
     | T_Named(type_name: Identifier)
     { "named type with name {type_name}" }
     | T_Enum(labels: list1(Identifier))
     { "enumeration type with labels {labels}" }
     | T_Record(fields: list0(field))
-    { "record type with fields {record_fields}" }
+    { "record type with fields {fields}" }
     | T_Exception(fields: list0(field))
-    { "exception type with fields {record_fields}" }
+    { "exception type with fields {fields}" }
     | T_Collection(fields: list0(field))
-    { "collection type with fields {record_fields}" }
+    { "collection type with fields {fields}" }
 ;
 
 ast constraint_kind { "constraint kind" } =
@@ -367,7 +411,7 @@ ast int_constraint { "integer constraint" } =
     | Constraint_Exact(subexpression: expr)
     { "exact constraint for the subexpression {subexpression}" }
     | Constraint_Range(start_expression: expr, end_expression: expr)
-    { "range constraint from the start expression {start_subexpression} to the end expression {end_subexpression}" }
+    { "range constraint from the start expression {start_expression} to the end expression {end_expression}" }
 ;
 
 ast bitfield { "bitfield" } =
@@ -551,7 +595,7 @@ ast stmt { "statement" } =
   | S_Throw(exception: expr)
   { "throw statement with exception expression {exception}" }
   | S_Try(statement: stmt, catchers: list0(catcher), otherwise: option(stmt))
-  { "try statement with statement {stmt},
+  { "try statement with statement {statement},
     list of catchers {catchers},
     and otherwise optional statement {otherwise}" }
   | S_Print(arguments: list0(expr), newline: Bool)
@@ -1010,12 +1054,12 @@ typedef Nodes
 
 typedef XGraphs
 {
-    "\executiongraph{}",
+    "\executiongraphterm{}",
     math_macro = \XGraphs,
 } =
     (vertices: powerset(Nodes), edges: powerset((source: Nodes, label: Labels, target: Nodes)), output_nodes: powerset(Nodes))
     {
-        "\executiongraph{} with vertices {vertices}, labeled edges {edges}, and output nodes {output_nodes}",
+        "\executiongraphterm{} with vertices {vertices}, labeled edges {edges}, and output nodes {output_nodes}",
     }
 ;
 
@@ -1038,6 +1082,30 @@ ast symdom_or_top { "symbolic integer set" } =
 ;
 
 render symbolic_domains = symdom(-), symdom_or_top(-);
+
+constant Over { "overapproximation" };
+constant Under { "underapproximation" };
+typedef approximation_direction { "approximation direction" } =
+    constants_set(Over, Under)
+;
+
+constant CannotOverapproximate { "cannot overapproximate" };
+
+constant CannotUnderapproximate { "cannot underapproximate" };
+
+typedef ty_or_opt { "type or optional type" } =
+    | (t:ty)
+    { "the type {t}" }
+    | option(ty)
+    { "optional type" }
+;
+
+typedef expr_or_opt { "expression or optional expression" } =
+    | (e:expr)
+    { "the expression {e}" }
+    | option(expr)
+    { "optional expression" }
+;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Dynamic Semantics Configurations
@@ -1111,11 +1179,37 @@ typedef TDiverging
     { "diverging execution result" }
 ;
 
+typedef value_read_from { "value-reading effect" } =
+    (v: native_value, id: Identifier)
+    { "{v} is read with {id}" }
+;
+
+typedef abstract_configuration
+{
+    "\hyperlink{type-abstractconfiguration}{abstract configuration}",
+    math_macro = \AbsConfig
+} =
+    | Abs_Continuing
+    { "abstract continuing configuration" }
+    | Abs_Returning
+    { "abstract returning configuration" }
+    | Abs_Abnormal
+    { "abstract abnormal configuration" }
+;
+
+////////////////////////////////////////////////////////////////////////////////
+// Literals Relations
+////////////////////////////////////////////////////////////////////////////////
+
 relation annotate_literal(tenv: static_envs, l: literal) -> (t: ty)
 {
     "annotates a literal {l} in the \staticenvironmentterm{} {tenv}, resulting in a type {t}.",
     prose_application = "annotating {l} in {tenv} yields {t}",
 };
+
+////////////////////////////////////////////////////////////////////////////////
+// Expression Relations
+////////////////////////////////////////////////////////////////////////////////
 
 relation annotate_expr(tenv: static_envs, e: expr) -> (t: ty, new_e: expr, ses: powerset(TSideEffect)) | type_error
 {
@@ -1126,5 +1220,4 @@ relation annotate_expr(tenv: static_envs, e: expr) -> (t: ty, new_e: expr, ses: 
                         and {ses} is the \sideeffectsetterm{} inferred for {e}. \ProseOtherwiseTypeError",
     prose_application = "annotating {e} in {tenv} yields
         {t}, the annotated expression {new_e} and {ses}\ProseOrTypeError",
-    math_layout = ((_,_),(_,_)),
 };
