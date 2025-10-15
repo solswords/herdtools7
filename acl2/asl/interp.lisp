@@ -2543,12 +2543,6 @@ ASLRef we don't return the environment.</p>"
                               :wellconstrained (evtailcall (check_int_constraints env v.val ty.constraint.constraints)) ;;INT_WELLCONSTRAINED
                               :otherwise ;;pendingconstraines and parametrized are not mentioned in ASLRef????
                               (evo_error "is_val_of_type failed - cases of int constrained not covered in ASLRef" (cons v ty) (list pos))))
-           ((:v_label :t_enum) (b* (((unless (consp ty.elts))
-                                     (evo_error "For the case of enum, ty.elts must be non-empty list" (cons v ty) (list pos)))
-                                    )
-                                 (if (member-equal v.val ty.elts)
-                                     (evo_normal t)
-                                   (evo_error "is_val_of_type failed - unexpected value of enum" (cons v ty) (list pos)))))
            ((-      :t_int) (constraint_kind-case ty.constraint
                               :unconstrained (evo_normal t) ;;INT_UNCONSTRAINED
                               :otherwise (evo_error "is_val_of_type failed T_INT with other than v_int" (cons v ty) (list pos))))
