@@ -482,12 +482,14 @@ interior tracespec @('new-ts') from some matching call or statement tracespec."
 
 (acl2::def-b*-binder evs-*t
   :body
-    `(b* (((evoo-*t cflow) ,(car acl2::forms)))
+  `(b* (((evoo-*t cflow) ,(car acl2::forms)))
      (control_flow_state-case cflow
-              :returning (evo_normal-*t cflow)
-              :continuing (b* ,(and (not (eq (car acl2::args) '&))
-                                    `((,(car acl2::args) cflow.env)))
-                            ,acl2::rest-expr))))
+       :returning (evo_normal-*t
+                   (mbe :logic (returning cflow.vals cflow.env)
+                        :exec cflow))
+       :continuing (b* ,(and (not (eq (car acl2::args) '&))
+                             `((,(car acl2::args) cflow.env)))
+                     ,acl2::rest-expr))))
 
 (acl2::def-b*-binder evob-*t
   :body

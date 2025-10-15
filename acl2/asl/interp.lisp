@@ -1188,10 +1188,11 @@ evaluates the rest of the bindings/body."
   :body
   `(b* (((mv (evo cflow) orac) ,(car acl2::forms)))
      (control_flow_state-case cflow
-              :returning (evo_normal cflow)
-              :continuing (b* ,(and (not (eq (car acl2::args) '&))
-                                    `((,(car acl2::args) cflow.env)))
-                            ,acl2::rest-expr))))
+       :returning (evo_normal (mbe :logic (returning cflow.vals cflow.env)
+                                   :exec cflow))
+       :continuing (b* ,(and (not (eq (car acl2::args) '&))
+                             `((,(car acl2::args) cflow.env)))
+                     ,acl2::rest-expr))))
 
 (defxdoc evs
   :short "@(csee B*) binder: see @(see patbind-evs)")
@@ -2549,13 +2550,18 @@ ASLRef we don't return the environment.</p>"
                                      (val-case n.val
                                        :v_int (evo_normal (equal n.val.val v.len)) ;;BITS
                                        :otherwise (evo_error "is_val_of_type failed - unexpected value of e in (T_BITS e,-)" (cons v ty) (list pos)))))
+           ((-        :t_bits) (evo_error "is_val_of_type failed T_BITS with other than v_bitvector" (cons v ty) (list pos)))
            ((:v_array :t_tuple) (b* (((unless (and (consp v.arr)
                                                    (consp ty.types)))
                                       (evo_error "For the case of tuple, both v-arr and ty.types must be non-empty lists" (cons v ty) (list pos)))
                                      ((unless (eql (len v.arr) (len ty.types)))
                                       (evo_error "is_val_of_type: value tuple of different length than type tuple" (cons v ty) (list pos))))
                                   (evtailcall (is_val_of_type_tuple env v.arr ty.types))))
-           (- (evo_error "is_val_of_type: bad val type combo" (cons v ty) (list pos))))
+           ((-       :t_tuple) (evo_error "is_val_of_type failed T_TUPLE with other than v_array" (cons v ty) (list pos)))
+           ;; Note: ASL reference says if the AST label of the type is not T_Int, T_Bits, or T_Tuple
+           ;; then is_val_of_type should return true, since all others are determined statically
+           ;; at type checking time.
+           (- (evo_normal t)))
          ))
 
      ///
