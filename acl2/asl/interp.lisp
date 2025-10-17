@@ -1112,6 +1112,31 @@ error has been reached. Arguably unnecessary given FGL's backtrace capability."
 (defmacro evo_error (&rest args)
   `(pass-error (ev_error . ,args) orac))
 
+;; Similar to the RETURNING case in the B* binder for EVS, below.  In the EVO
+;; and EVOB b* binders, we check whether a result is ev_normal, and if so we
+;; continue with some computation whereas otherwise we return immediately. In
+;; symbolic simulation, sometimes this result is a splitter object,
+;; i.e. something that in some cases is an ev_normal and in others is an
+;; ev_error or ev_throwing. When we come back from the ev_normal branch and
+;; merge all the results together, it helps to be merging an object from the
+;; nonnormal branch that is explicitly not an ev_normal. So we apply
+;; eval_result-nonnormal-fix to ensure that it's syntactically either an error
+;; or throwing.
+(define eval_result-nonnormal-fix ((x eval_result-p))
+  :inline t
+  :guard (not (eval_result-case x :ev_normal))
+  (mbe :logic (if (eval_result-case x :ev_error)
+                  (b* (((ev_error x)))
+                    (ev_error x.desc x.data x.backtrace))
+                (b* (((ev_throwing x)))
+                  (ev_throwing x.throwdata x.env x.backtrace)))
+       :exec x)
+  ///
+  (defthm eval_result-nonnormal-fix-when-not-ev_normal
+    (implies (not (eval_result-case x :ev_normal))
+             (Equal (eval_result-nonnormal-fix x)
+                    (eval_Result-fix x)))))
+                     
 (acl2::def-b*-binder evo
   :parents (asl-interpreter-functions)
   :short "Binds an eval_result object. If it is an ev_error or ev_throwing,
@@ -1124,7 +1149,7 @@ error has been reached. Arguably unnecessary given FGL's backtrace capability."
        :ev_normal (b* ,(and (not (eq (car acl2::args) '&))
                            `((,(car acl2::args) evresult.res)))
                     ,acl2::rest-expr)
-       :otherwise (mv evresult orac))))
+       :otherwise (mv (eval_result-nonnormal-fix evresult) orac))))
 
 (defxdoc evo
   :short "@(csee B*) binder: see @(see patbind-evo)")
@@ -1170,7 +1195,9 @@ passed down from a context where a code position wasn't available.</p>"
                            `((,(car acl2::args) evresult.res)))
                     ,acl2::rest-expr)
 
-       :otherwise (pass-error (init-backtrace evresult pos) orac))))
+       :otherwise (pass-error (init-backtrace
+                               (eval_result-nonnormal-fix evresult)
+                               pos) orac))))
 
 (defxdoc evob
   :short "@(csee B*) binder: see @(see patbind-evob)")
@@ -1188,6 +1215,12 @@ evaluates the rest of the bindings/body."
   :body
   `(b* (((mv (evo cflow) orac) ,(car acl2::forms)))
      (control_flow_state-case cflow
+       ;; Note: Building a new copy of the RETURNING object here helps in
+       ;; symbolic simulation for cases where it's originally represented by a
+       ;; splitter object (i.e., something representing a RETURNING in some
+       ;; cases and a CONTINUING in others). When we finally come back from the
+       ;; continuing case, it helps to need to merge only a RETURNING from this
+       ;; branch rather than a splitter with an obsolete continuing branch.
        :returning (evo_normal (mbe :logic (returning cflow.vals cflow.env)
                                    :exec cflow))
        :continuing (b* ,(and (not (eq (car acl2::args) '&))

@@ -470,7 +470,7 @@ interior tracespec @('new-ts') from some matching call or statement tracespec."
        :ev_normal (b* ,(and (not (eq (car acl2::args) '&))
                            `((,(car acl2::args) evresult.res)))
                     ,acl2::rest-expr)
-       :otherwise (mv evresult orac trace))))
+       :otherwise (mv (eval_result-nonnormal-fix evresult) orac trace))))
 
 (acl2::def-b*-binder evoo-*t
   :body
@@ -499,7 +499,10 @@ interior tracespec @('new-ts') from some matching call or statement tracespec."
                            `((,(car acl2::args) evresult.res)))
                     ,acl2::rest-expr)
        
-       :otherwise (pass-error-*t (init-backtrace evresult pos) orac))))
+       :otherwise (pass-error-*t
+                   (init-backtrace
+                    (eval_result-nonnormal-fix evresult)
+                    pos) orac))))
 
 (defmacro evbody-*t (body)
   `(let ((trace nil))
