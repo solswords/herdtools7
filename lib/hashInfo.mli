@@ -4,7 +4,7 @@
 (* Jade Alglave, University College London, UK.                             *)
 (* Luc Maranget, INRIA Paris-Rocquencourt, France.                          *)
 (*                                                                          *)
-(* Copyright 2019-present Institut National de Recherche en Informatique et *)
+(* Copyright 2025-present Institut National de Recherche en Informatique et *)
 (* en Automatique and the authors. All rights reserved.                     *)
 (*                                                                          *)
 (* This software is governed by the CeCILL-B license under French law and   *)
@@ -14,11 +14,27 @@
 (* "http://www.cecill.info". We also give a copy in LICENSE.txt.            *)
 (****************************************************************************)
 
-type arch_edge
+(** Describes behaviour of tools as regards test hashes *)
 
-let pp_arch_edge _ = assert false
-let dir_tgt _ = assert false
-let dir_src _ = assert false
-let loc_sd _ = assert false
-let get_ie _ = assert false
-let fold_edge _ r = r
+(*
+ * Test hashes come from two sources:
+ *  + Computation from test
+ *  + Meta-data Hash=...
+ *
+ * Possible behaviours are as follows:
+ *  + Standard, always include hash in test structure,
+ *    meta data have precedence over computation.
+ *    Default mode of all tools except `mprog`.
+ *    Commanded by option `-set-hash true` of `mprog`.
+ *  + NoOp, include hash in test structure when
+ *    from meta data, otherwise do not include hash.
+ *    That is, do not change anything.
+ *    Default mode for `mprog`.
+ *  + Rehash, always recompute and include hash.
+ *    Option of `-rehash true` of `mshowhashes`.
+ *)
+
+type t =
+  | Std
+  | NoOp
+  | Rehash

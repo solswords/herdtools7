@@ -32,6 +32,7 @@ module Top
          val mode : OutMode.t
          val transpose : bool
          val alloc : bool
+         val set_hash : bool
        end) =
   struct
 
@@ -228,22 +229,35 @@ module Top
 
     end
 
+    module TPT =
+      ToolParse.Top
+        (struct
+          include ToolParse.DefaultConfig
+
+          let verbose = O.verbose
+
+          let hash =
+            let open HashInfo in
+            if O.set_hash then Std else NoOp
+        end)
+        (T)
+
     open OutMode
 
     let zyva =
       if O.transpose then
-        let module Z =  ToolParse.Top(T)(Transpose) in
+        let module Z = TPT(Transpose) in
         Z.from_file
       else match O.mode with
       | Txt ->
           if O.alloc then
-            let module Z =  ToolParse.Top(T)(TextAlloc) in
+            let module Z =  TPT(TextAlloc) in
             Z.from_file
           else
-            let module Z =  ToolParse.Top(T)(Text) in
+            let module Z =  TPT(Text) in
             Z.from_file
       | LaTeX|HeVeA|HeVeANew ->
-          let module Z =  ToolParse.Top(T)(Latex) in
+          let module Z =  TPT(Latex) in
           Z.from_file
 
   end
@@ -258,23 +272,29 @@ let outputdir = ref None
 let mode = ref OutMode.LaTeX
 let transpose = ref false
 let alloc = ref false
+let set_hash = ref false
+
+(* Util for creating boolean arguments. *)
+let arg_set_bool arg_ref = Arg.Bool (fun b -> arg_ref := b)
+
 let opts =
   [
    "-v",Arg.Unit (fun () -> incr verbose), " be verbose";
-   "-texmacros", Arg.Bool (fun b -> texmacros := b),
+   "-texmacros", arg_set_bool texmacros,
    (sprintf "<bool> use latex macros in output, default %b" !texmacros);
-   "-hexa", Arg.Bool (fun b -> hexa := b),
+   "-hexa", arg_set_bool hexa,
    (sprintf "<bool> hexadecimal output, default %b" !hexa);
-   "-compat", Arg.Bool (fun b -> compat := b),
+   "-compat", arg_set_bool compat,
    (sprintf "<bool> backward compatible output (used for hashes), default %b" !hexa);
    begin let module P = ParseTag.Make(OutMode) in
    P.parse "-mode" mode "output mode" end ;
-   "-transpose", Arg.Bool (fun b -> transpose := b),
+   "-transpose", arg_set_bool transpose,
    (sprintf "<bool> show code proc by proc, default %b" !transpose);
-   "-alloc", Arg.Bool (fun b -> alloc := b),
+   "-alloc", arg_set_bool alloc,
    (sprintf "<bool> alloc symbolic registers (text mode only), default %b" !alloc);
-   "-o", Arg.String (fun s -> outputdir := Some s),
-   "<name>  all output in directory <name>";
+   ("-o", Arg.String (fun s -> outputdir := Some s),
+   "<name>  all output in directory <name>");
+   ("-set-hash", arg_set_bool set_hash, (sprintf "<bool> add hashes to litmus tests, default %b" !set_hash));
  ]
 
 let prog =
@@ -300,6 +320,7 @@ module X =
       let mode = !mode
       let transpose = !transpose
       let alloc = !alloc
+      let set_hash = !set_hash
     end)
 
 let () =

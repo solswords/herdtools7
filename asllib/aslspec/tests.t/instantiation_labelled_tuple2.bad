@@ -1,0 +1,10 @@
+typedef O;
+
+typedef A =
+    | L(O, O)
+;
+
+typedef B =
+    // L should only be instantiated with two types, not three.
+    | (L(O, A, B))
+;

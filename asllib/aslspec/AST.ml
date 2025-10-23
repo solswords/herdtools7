@@ -4,6 +4,14 @@
 
 exception SpecError of string
 
+(** Extends an error message and re-raises an exception. This is a temporary
+    hack until the AST supports source locations. *)
+let stack_spec_error msg extra_msg =
+  let full_msg = Printf.sprintf "%s\n%s" msg extra_msg in
+  raise (SpecError full_msg)
+
+(** The kind of a type, either generic or AST-specific. *)
+
 type type_kind = TypeKind_Generic | TypeKind_AST
 
 (** A unary operator that transforms one type into another. *)
@@ -187,7 +195,7 @@ end = struct
   let prose_description self =
     match Attributes.find_opt AttributeKey.Prose_Description self.att with
     | Some (StringAttribute s) -> s
-    | _ -> assert false
+    | _ -> ""
 
   let math_macro self =
     match find_opt AttributeKey.Math_Macro self.att with
@@ -253,7 +261,7 @@ end = struct
   let prose_description self =
     match Attributes.find_opt AttributeKey.Prose_Description self.att with
     | Some (StringAttribute s) -> s
-    | _ -> assert false
+    | _ -> ""
 
   let math_macro self =
     match find_opt AttributeKey.Math_Macro self.att with
@@ -268,8 +276,18 @@ end
 
 (** A datatype for a relation definition. *)
 module Relation : sig
+  type relation_property =
+    | RelationProperty_Relation
+    | RelationProperty_Function
+
+  type relation_category =
+    | RelationCategory_Typing
+    | RelationCategory_Semantics
+
   type t = {
     name : string;
+    property : relation_property;
+    category : relation_category option;
     input : opt_named_type_term list;
     output : type_term list;
     att : Attributes.t;
@@ -277,6 +295,8 @@ module Relation : sig
 
   val make :
     string ->
+    relation_property ->
+    relation_category option ->
     opt_named_type_term list ->
     type_term list ->
     (AttributeKey.t * attribute) list ->
@@ -290,15 +310,32 @@ module Relation : sig
   val math_layout : t -> layout option
   (** The layout used when rendered as a stand-alone relation definition. *)
 end = struct
+  type relation_property =
+    | RelationProperty_Relation
+    | RelationProperty_Function
+
+  type relation_category =
+    | RelationCategory_Typing
+    | RelationCategory_Semantics
+
   type t = {
     name : string;
+    property : relation_property;
+    category : relation_category option;
     input : opt_named_type_term list;
     output : type_term list;
     att : Attributes.t;
   }
 
-  let make name input output attributes =
-    { name; input; output; att = Attributes.of_list attributes }
+  let make name property category input output attributes =
+    {
+      name;
+      property;
+      category;
+      input;
+      output;
+      att = Attributes.of_list attributes;
+    }
 
   let attributes_to_list self = Attributes.bindings self.att
 
@@ -307,7 +344,7 @@ end = struct
   let prose_description self =
     match Attributes.find_opt AttributeKey.Prose_Description self.att with
     | Some (StringAttribute s) -> s
-    | _ -> assert false
+    | _ -> ""
 
   let math_macro self =
     match find_opt AttributeKey.Math_Macro self.att with
@@ -317,7 +354,7 @@ end = struct
   let prose_application self =
     match find_opt AttributeKey.Prose_Application self.att with
     | Some (StringAttribute s) -> s
-    | _ -> assert false
+    | _ -> ""
 
   let math_layout self =
     match find_opt AttributeKey.Math_Layout self.att with

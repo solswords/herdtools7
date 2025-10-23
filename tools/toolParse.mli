@@ -18,7 +18,12 @@
 (* Apply a function (zyva) to one test *)
 (***************************************)
 
+module type Config = GenParser.Config
+
+module DefaultConfig : Config
+
 module Top :
+  functor (Cfg:Config) ->
     functor (T:sig type t end) -> (* Return type, must be abstracted *)
       functor (B: functor(A:ArchBase.S) -> functor (Pte:PteVal.S) -> functor (AddrReg:AddrReg.S) ->
         (sig val zyva : Name.t -> A.pseudo MiscParser.t -> T.t end)) ->

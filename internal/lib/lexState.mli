@@ -4,8 +4,8 @@
 (* Jade Alglave, University College London, UK.                             *)
 (* Luc Maranget, INRIA Paris-Rocquencourt, France.                          *)
 (*                                                                          *)
-(* Copyright 2019-present Institut National de Recherche en Informatique et *)
-(* en Automatique and the authors. All rights reserved.                     *)
+(* Copyright 2025-present Institut National de Recherche en Informatique et *)
+(* en Automatique, ARM Ltd and the authors. All rights reserved.            *)
 (*                                                                          *)
 (* This software is governed by the CeCILL-B license under French law and   *)
 (* abiding by the rules of distribution of free software. You can use,      *)
@@ -14,4 +14,10 @@
 (* "http://www.cecill.info". We also give a copy in LICENSE.txt.            *)
 (****************************************************************************)
 
-include Fence.Edge
+(** Sufficient scanning of outcome (a.k.a. final state) lines in logs *)
+
+(** [as_state line] splist a line from **herd7** output into
+    elements, an element being an equality (`loc=v`) or a fault
+    index (`~fault(...);` or `fault(...);`.
+    Returns the empty list when the line is not an outcome *)
+val as_state : string -> string list
