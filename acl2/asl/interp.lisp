@@ -1099,18 +1099,6 @@ error results) satisfies the given bitvector mask. That is, every 1-bit in the
   `(mv (ev_normal ,arg) orac))
 
 
-;; This is just a convenient function to hang rewrite rules on for FGL.
-(define pass-error (val orac)
-  :short "This function is just the @('mv') of its two arguments, but it is only called
-when the resulting value is an error. It is a convenience for FGL rewriting so
-that the @('orac') can be found for counterexample generation when we detect an
-error has been reached. Arguably unnecessary given FGL's backtrace capability."
-  :inline t
-  :enabled t
-  (mv val orac))
-
-(defmacro evo_error (&rest args)
-  `(pass-error (ev_error . ,args) orac))
 
 ;; Similar to the RETURNING case in the B* binder for EVS, below.  In the EVO
 ;; and EVOB b* binders, we check whether a result is ev_normal, and if so we
@@ -1136,6 +1124,45 @@ error has been reached. Arguably unnecessary given FGL's backtrace capability."
     (implies (not (eval_result-case x :ev_normal))
              (Equal (eval_result-nonnormal-fix x)
                     (eval_Result-fix x)))))
+
+(define ev_error-fix ((x eval_result-p))
+  :inline t
+  :guard (eval_result-case x :ev_error)
+  (mbe :logic (b* (((ev_error x)))
+                (ev_error x.desc x.data x.backtrace))
+       :exec x)
+  ///
+  (defthm ev_error-fix-when-ev_error
+    (implies (eval_result-case x :ev_error)
+             (Equal (ev_error-fix x)
+                    (eval_Result-fix x)))))
+
+(define ev_throwing-fix ((x eval_result-p))
+  :inline t
+  :guard (eval_result-case x :ev_throwing)
+  (mbe :logic (b* (((ev_throwing x)))
+                (ev_throwing x.throwdata x.env x.backtrace))
+       :exec x)
+  ///
+  (defthm ev_throwing-fix-when-ev_throwing
+    (implies (eval_result-case x :ev_throwing)
+             (Equal (ev_throwing-fix x)
+                    (eval_Result-fix x)))))
+
+
+;; This is just a convenient function to hang rewrite rules on for FGL.
+(define pass-error ((val eval_result-p) orac)
+  :guard (eval_result-case val :ev_error)
+  :short "This function is just the @('mv') of its two arguments, but it is only called
+when the resulting value is an error. It is a convenience for FGL rewriting so
+that the @('orac') can be found for counterexample generation when we detect an
+error has been reached. Arguably unnecessary given FGL's backtrace capability."
+  :inline t
+  :enabled t
+  (mv (ev_error-fix val) orac))
+
+(defmacro evo_error (&rest args)
+  `(pass-error (ev_error . ,args) orac))
                      
 (acl2::def-b*-binder evo
   :parents (asl-interpreter-functions)
@@ -1192,12 +1219,11 @@ passed down from a context where a code position wasn't available.</p>"
   `(b* ((evresult ,(car acl2::forms)))
      (eval_result-case evresult
        :ev_normal (b* ,(and (not (eq (car acl2::args) '&))
-                           `((,(car acl2::args) evresult.res)))
+                            `((,(car acl2::args) evresult.res)))
                     ,acl2::rest-expr)
 
-       :otherwise (pass-error (init-backtrace
-                               (eval_result-nonnormal-fix evresult)
-                               pos) orac))))
+       :ev_throwing (mv (init-backtrace (ev_throwing-fix evresult) pos) orac)
+       :otherwise (pass-error (init-backtrace (ev_error-fix evresult) pos) orac))))
 
 (defxdoc evob
   :short "@(csee B*) binder: see @(see patbind-evob)")
@@ -2671,5 +2697,5 @@ ASLRef we don't return the environment.</p>"
          :fn resolve-ty)
        :skip-others t)
 
-     (verify-guards eval_expr-fn :guard-debug t
+     (verify-guards eval_expr-fn
        :hints (("goal" :do-not-induct t))))))
