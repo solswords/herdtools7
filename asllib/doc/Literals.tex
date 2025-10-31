@@ -48,12 +48,15 @@ and their corresponding types in comments:
 \RenderType[remove_hypertargets]{literal}
 
 \subsection{ASTRule.Value \label{sec:ASTRule.Value}}
+\MarkedIgnoredRelationDefinition{
 \hypertarget{build-value}{}
 The function
 \[
   \buildvalue(\overname{\parsenode{\Nvalue}}{\vparsednode}) \;\aslto\; \overname{\literal}{\vastnode}
 \]
 transforms a parse node $\vparsednode$ for $\Nvalue$ into an AST node $\vastnode$ for $\literal$.
+} % END_OF_IGNORED_RELATION
+
 
 \begin{mathpar}
 \inferrule[integer]{}{
@@ -107,8 +110,7 @@ annotates
 a literal $\texttt{l}$ in the \staticenvironmentterm{} $\texttt{tenv}$,
 resulting in a type
 $\texttt{t}$.
-}
-
+} % END_OF_BACKUP_RELATION
 See \ExampleRef{Literals}.
 
 \ProseParagraph
@@ -155,29 +157,33 @@ See \ExampleRef{Literals}.
 
 \FormallyParagraph
 \begin{mathpar}
-  \begin{array}{r}
-\inferrule[int]{}{\annotateliteral(\Ignore, \LInt(n)) \typearrow\\
-\TInt(\WellConstrained([\ConstraintExact(\ELInt{n})]))}
-  \end{array}
+\inferrule[int]{}{
+{
+\begin{array}{r}
+  \annotateliteral(\overname{\Ignore}{\tenv}, \overname{\LInt(n)}{\vl}) \typearrow\\
+  \TInt(\WellConstrained([\ConstraintExact(\ELInt{n})]))
+\end{array}
+}
+}
 \end{mathpar}
 
 \begin{mathpar}
-\inferrule[bool]{}{\annotateliteral(\Ignore, \LBool(\Ignore))\typearrow \TBool}
+\inferrule[bool]{}{\annotateliteral(\overname{\Ignore}{\tenv}, \overname{\LBool(\Ignore)}{\vl})\typearrow \TBool}
 \end{mathpar}
 
 \begin{mathpar}
-\inferrule[real]{}{\annotateliteral(\Ignore, \LReal(\Ignore))}\typearrow \TReal
+\inferrule[real]{}{\annotateliteral(\overname{\Ignore}{\tenv}, \overname{\LReal(\Ignore)}{\vl})}\typearrow \TReal
 \end{mathpar}
 
 \begin{mathpar}
-\inferrule[string]{}{\annotateliteral(\Ignore, \LString(\Ignore))\typearrow \TString}
+\inferrule[string]{}{\annotateliteral(\overname{\Ignore}{\tenv}, \overname{\LString(\Ignore)}{\vl})\typearrow \TString}
 \end{mathpar}
 
 \begin{mathpar}
 \inferrule[bits]{
   n \eqdef \listlen{\bits}
 }{
-  \annotateliteral(\Ignore, \LBitvector(\bits))\typearrow \TBits(\ELInt{n}, \emptylist)
+  \annotateliteral(\overname{\Ignore}{\tenv}, \overname{\LBitvector(\bits)}{\vl})\typearrow \TBits(\ELInt{n}, \emptylist)
 }
 \end{mathpar}
 
@@ -185,7 +191,7 @@ See \ExampleRef{Literals}.
 \inferrule[label]{
   G^\tenv.\declaredtypes(\vlabel) = (\vt, \Ignore)
 }{
-  \annotateliteral(\tenv, \LLabel(\vlabel))\typearrow \vt
+  \annotateliteral(\tenv, \overname{\LLabel(\vlabel)}{\vl}) \typearrow \vt
 }
 \end{mathpar}
 \CodeSubsection{\LitBegin}{\LitEnd}{../Typing.ml}
