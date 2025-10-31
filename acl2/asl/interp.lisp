@@ -88,42 +88,6 @@
 
 
 
-(defprod expr_result
-  :short "Type of the result from evaluating an ASL expression"
-  ((val val)
-   (env env)))
-
-(def-eval_result expr_eval_result-p expr_result-p)
-
-(defprod exprlist_result
-  :short "Type of the result from evaluating a list of ASL expressions"
-  ((val vallist)
-   (env env)))
-
-(def-eval_result exprlist_eval_result-p exprlist_result-p)
-
-(deftagsum control_flow_state
-  :short "Type of result from evaluating a statement"
-  (:returning ((vals vallist)
-               (env global-env))
-   :short "Indicates that a return has been encountered")
-  (:continuing ((env env))
-   :short "Indicates that no return has been encountered and execution of the current
-function continues"))
-
-(def-eval_result stmt_eval_result-p control_flow_state-p)
-
-(defprod func_result ((vals vallist ;; val_read_from-list
-                            )
-                      (env global-env))
-  :short "Type of result from evaluating a function call: a list of return values and an
-updated global environment")
-
-(def-eval_result func_eval_result-p func_result-p)
-
-
-
-
 ;; sequential bind
 (defmacro let*s (&rest args) (cons 'let* args))
 ;; data bind
@@ -930,10 +894,10 @@ function shouldn't be called.</p>"
       (("RoundDown" nil (:v_real)) (ev_normal (list (v_int (floor a0.val 1)))))
       (("RoundTowardsZero" nil (:v_real)) (ev_normal (list (v_int (truncate a0.val 1)))))
 
-      ;; (("AsciiStr" nil (:v_int))   (if (and (<= 0 a0.val)
-      ;;                                       (<= a0.val 127))
-      ;;                                  (ev_normal (list (v_string (coerce (list (code-char a0.val)) 'string))))
-      ;;                                (ev_error "AsciiStr argument out of bounds" a0)))
+      (("AsciiStr" nil (:v_int))   (if (and (<= 0 a0.val)
+                                            (<= a0.val 127))
+                                       (ev_normal (list (v_string (coerce (list (code-char a0.val)) 'string))))
+                                     (ev_error "AsciiStr argument out of bounds" (val-fix a0) nil)))
       (("DecStr"   nil (:v_int))   (ev_normal (list (v_string (coerce (explode-atom a0.val 10) 'string)))))
       ;; (("HexStr"   nil (:v_int))   (ev_normal (list (v_string (coerce (explode-atom a0.val 16) 'string)))))
       (("FloorLog2" nil (:v_int))  (if (< 0 a0.val)
@@ -2473,9 +2437,9 @@ beginning (except for the cases of returns and exceptions/errors)."
                               (stmt-count* body)
                               (+ 1 (for_loop-measure v_start v_end dir)))
        :returns (mv (res stmt_eval_result-p) new-orac)
-       (b* (((evo limit1) (tick_loop_limit limit))
-            ((when (for_loop-test v_start v_end dir))
+       (b* (((when (for_loop-test v_start v_end dir))
              (evo_normal (continuing env)))
+            ((evo limit1) (tick_loop_limit limit))
             ((evs env1) (eval_block env body))
             ((mv v_step env2) (eval_for_step env1 index_name v_start dir)))
          (evtailcall (eval_for env2 index_name limit1 v_step dir v_end body))))
