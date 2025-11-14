@@ -26,9 +26,11 @@
 (include-book "std/portcullis" :dir :system)
 (include-book "centaur/fty/portcullis" :dir :system)
 (include-book "centaur/bitops/portcullis" :dir :system)
+(include-book "../portcullis")
+(include-book "centaur/meta/portcullis" :dir :system)
 
 
-(defpkg "CAT"
+(defpkg "TAC"
   (set-difference-eq
    (union-eq
     '(pattern-match)
@@ -42,6 +44,20 @@
        fty::defoption
        fty::deflist
        b*
+       pseudo-var pseudo-var-p pseudo-var-fix pseudo-var-equiv
+       pseudo-fn pseudo-fn-p pseudo-fn-fix pseudo-fn-equiv
+       pseudo-lambda pseudo-lambda-p pseudo-lambda-fix pseudo-lambda-equiv
+       pseudo-fnsym pseudo-fnsym-p pseudo-fnsym-fix pseudo-fnsym-equiv
+       pseudo-term pseudo-term-kind pseudo-term-case
+       pseudo-term-fix pseudo-term-equiv pseudo-term-count
+       pseudo-term-list pseudo-term-list-fix pseudo-term-list-equiv pseudo-term-list-count
+       pseudo-term-null
+       pseudo-term-quote pseudo-term-quote->val
+       pseudo-term-var pseudo-term-var->name
+       pseudo-term-fncall pseudo-term-fncall->fn
+       pseudo-term-lambda pseudo-term-lambda->formals pseudo-term-lambda->body pseudo-term-lambda->fn
+       pseudo-term-call pseudo-term-call->fn pseudo-term-call->args
+       pseudo-term-const
        ))
    '(std::deflist tag exp condition)))
 

@@ -21,31 +21,6 @@
 ;;****************************************************************************;;
 
 (in-package "ACL2")
-
-
-(include-book "std/portcullis" :dir :system)
-(include-book "centaur/fty/portcullis" :dir :system)
-(include-book "centaur/bitops/portcullis" :dir :system)
-
-
-(defpkg "CAT"
-  (set-difference-eq
-   (union-eq
-    '(pattern-match)
-    *standard-acl2-imports*
-    std::*std-exports*
-    set::*sets-exports*
-    bitops::*bitops-exports*
-    '(fty::deftagsum
-       fty::defprod
-       fty::deftypes
-       fty::defoption
-       fty::deflist
-       b*
-       ))
-   '(std::deflist tag exp condition)))
-
-
-        
-        
-   
+(include-book "portcullis")
+(ld "~/acl2-customization.lsp" :ld-missing-input-ok t)
+(in-package "TAC")

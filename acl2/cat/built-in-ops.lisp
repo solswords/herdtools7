@@ -820,6 +820,10 @@
            (and stable-under-simplificationp
                 '(:in-theory (enable member-of-compose-rw)))))
 
+  (defret len-of-<fn>
+    (<= 2 (len new-path))
+    :rule-classes :linear)
+
   (local (in-theory (enable evtlist-fix))))
        
 
@@ -860,7 +864,11 @@
     :hints(("Goal" :in-theory (enable transitive-closure))))
   
   (verify-guards transitive-path
-    :hints (("goal" :expand ((transitive-closure x))))))
+    :hints (("goal" :expand ((transitive-closure x)))))
+
+  (defret len-of-<fn>
+    (<= 2 (len path))
+    :rule-classes :linear))
   
 
 
@@ -925,7 +933,64 @@
                    :use ((:instance in-transitive-closure-when-path
                           (path (exists-path-witness
                                  (evtpair->from pair)
-                                 (evtpair->to pair) x)))))))))))
+                                 (evtpair->to pair) x))))))))))
+
+  (fty::deffixequiv exists-path :args ((src evt-p))
+    :hints(("Goal" :in-theory (disable exists-path
+                                       exists-path-suff)
+            :cases ((exists-path src dst x)))
+           (and stable-under-simplificationp
+                (let* ((lit (assoc 'exists-path clause))
+                       (src (cadr lit))
+                       (other (if (eq src 'src) '(evt-fix$inline src) 'src)))
+                  `(:expand ((exists-path ,other dst x)
+                             (:free (a b) (relation-path-p (cons a b) x))
+                             (:free (src) (relation-path-p (exists-path-witness src dst x) x)))
+                    :use ((:instance exists-path-suff
+                           (src ,src)
+                           (path (cons ,src (cdr (exists-path-witness ,other dst x)))))))))))
+
+  (local (defun replace-last (last x)
+           (if (atom (cdr x))
+               (list last)
+             (cons (car x) (replace-last last (cdr x))))))
+
+  (local (defthm relation-path-p-of-replace-last
+           (implies (and (relation-path-p path x)
+                         (evt-equiv (car (last path)) last))
+                    (relation-path-p (replace-last last path) x))
+           :hints(("Goal" :in-theory (enable relation-path-p replace-last)))))
+
+  (local (defthm last-of-replace-last
+           (equal (car (last (replace-last last x)))
+                  last)))
+
+  (local (defthm car-of-replace-last
+           (implies (consp (cdr x))
+                    (equal (car (replace-last last x))
+                           (car x)))))
+  
+  (local (in-theory (disable replace-last)))
+  
+  (fty::deffixequiv exists-path :args ((dst evt-p))
+    :hints(("Goal" :in-theory (disable exists-path
+                                       exists-path-suff)
+            :cases ((exists-path src dst x)))
+           (and stable-under-simplificationp
+                (let* ((lit (assoc 'exists-path clause))
+                       (dst (caddr lit))
+                       (other (if (eq dst 'dst) '(evt-fix$inline dst) 'dst)))
+                  `(:expand ((exists-path src ,other x)
+                             (:free (dst) (relation-path-p (exists-path-witness src dst x) x)))
+                    :use ((:instance exists-path-suff
+                           (dst ,dst)
+                           (path (replace-last ,dst (exists-path-witness src ,other x))))))))))
+  
+  (defthm transitive-path-when-exists-path
+    (implies (exists-path src dst x)
+             (let ((path (transitive-path src dst x)))
+               (relation-path-p path x)))
+    :hints(("Goal" :in-theory (enable transitive-closure-correct)))))
 
 
 
