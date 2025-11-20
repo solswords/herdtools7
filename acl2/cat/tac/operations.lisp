@@ -1257,6 +1257,15 @@
     (implies (event-rel-p r)
              (event-rel-p star))))
 
+(define relplus ((r relation-p))
+  :returns (plus relation-p)
+  :enabled t
+  (transitive-closure r)
+  ///
+  (defret event-rel-p-of-<fn>
+    (implies (event-rel-p r)
+             (event-rel-p plus))))
+
 (define relinverse ((r relation-p))
   :returns (inv relation-p)
   :enabled t
@@ -1281,28 +1290,406 @@
   :enabled t
   nil)
 
+(define pred-true ()
+  :enabled t
+  t)
+
 (define pred-nonempty ((s setp))
   :enabled t
   (not (emptyp s)))
+
+(define not-pred-nonempty ((s setp))
+  :enabled t
+  (emptyp s))
 
 (define pred-equal (e1 e2)
   :enabled t
   (equal e1 e2))
 
+(define not-pred-equal (e1 e2)
+  :enabled t
+  (not (equal e1 e2)))
+
 (define pred-in-set (e (s setp))
   :enabled t
   (in e s))
+
+(define not-pred-in-set (e (s setp))
+  :enabled t
+  (not (in e s)))
 
 (define pred-in-rel (e1 e2 (r relation-p))
   :enabled t
   (in (edge e1 e2) (relation-fix r)))
 
+(define not-pred-in-rel (e1 e2 (r relation-p))
+  :enabled t
+  (not (in (edge e1 e2) (relation-fix r))))
+
+
+(define base-set-p (x)
+  (declare (ignore x))
+  :enabled t
+  t)
+
+(define base-rel-p (x)
+  (declare (ignore x))
+  :enabled t
+  t)
+
+(define not-singleton-set-p (x)
+  (declare (ignore x))
+  :enabled t
+  t)
+
+(define mentioned-event-p (e)
+  (declare (ignore e))
+  :enabled t
+  t)
+
 (acl2::def-ruleset! tac-functions
   '(emptyset singleton setunion setintersect setimage setpreimage relidentity
-             relunion relintersect relcompose relstar relinverse relprod
-             pred-false pred-nonempty pred-equal pred-in-set pred-in-rel))
+             relunion relintersect relcompose relstar relplus relinverse relprod
+             pred-false pred-true pred-nonempty pred-equal pred-in-set pred-in-rel
+             not-pred-nonempty not-pred-equal not-pred-in-set not-pred-in-rel
+             base-set-p base-rel-p not-singleton-set-p mentioned-event-p))
 
-(defevaluator tac-ev tac-ev-lst
+
+
+(define relation-path*-p ((path true-listp)
+                          (x relation-p))
+  ;; Like relation-path-p, but also accepts a length-1 path regardless of the relation.
+  (if (atom (cdr path))
+      (consp path)
+    (and (in (edge (car path) (cadr path))
+             (relation-fix x))
+         (relation-path*-p (cdr path) x)))
+  ///
+  (defthm relation-path*-p-of-compose
+    (implies (and (relation-path*-p a x)
+                  (relation-path*-p b x)
+                  (equal (car b)
+                         (car (last a))))
+             (relation-path*-p (append a (cdr b)) x)))
+
+  (defthmd relation-path*-p-when-subset
+    (implies (and (subset (relation-fix x)
+                          (relation-fix y))
+                  (relation-path*-p path x))
+             (relation-path*-p path y))
+    :hints(("Goal" :in-theory (enable relation-path*-p
+                                      set::subset-in))))
+
+  (defthmd relation-path-p-when-relation-path*-p
+    (implies (<= 2 (len path))
+             (iff (relation-path*-p path x)
+                  (relation-path-p path x)))
+    :hints(("Goal" :in-theory (enable relation-path-p))))
+  
+  (defthm relation-path*-p-implies-in-relstar
+    (implies (and (relation-path*-p path x)
+                  (event-p (car (last path))))
+             (in (edge (car path) (car (last path)))
+                 (relstar x)))
+    :hints(("Goal" :in-theory (e/d (relstar reflexive-transitive-closure
+                                            transitive-closure-correct
+                                            event-p)
+                                   (relation-path*-p))
+            :use relation-path-p-when-relation-path*-p
+            :do-not-induct t)
+           (and stable-under-simplificationp
+                '(:expand ((len path))
+                  :in-theory (disable (event-p)))))
+    :otf-flg t))
+
+
+
+
+(define relstar-path (src dst (x relation-p))
+  :returns (path true-listp)
+  :guard (in (edge src dst) (relstar x))
+  :guard-hints (("goal" :in-theory (enable reflexive-transitive-closure)))
+  (if (equal src dst)
+      (list src)
+    (transitive-path src dst x))
+  ///
+  (defthmd in-relstar-implies-relstar-path
+    (implies (in (edge src dst) (relstar x))
+             (let ((path (relstar-path src dst x)))
+               (and (relation-path*-p path x)
+                    (equal (car path) src)
+                    (equal (car (last path)) dst))))
+    :hints(("Goal" :in-theory (e/d (reflexive-transitive-closure
+                                    relation-path-p-when-relation-path*-p)
+                                   ())
+            :expand ((:free (src) (relation-path*-p (list src) x))))
+           (and stable-under-simplificationp
+                '(:in-theory (enable transitive-closure-correct))))
+    :otf-flg t))
+
+(defsection relstar-correctness
+  (defun-sk exists-path* (src dst x)
+    (exists path
+            (and (relation-path*-p path x)
+                 (equal src (car path))
+                 (equal dst (car (last path))))))
+
+  (in-theory (Disable exists-path*))
+
+  (defthmd relstar-correct
+    (implies (event-p (edge->dst pair))
+             (iff (in pair (relstar x))
+                  (and (edge-p pair)
+                       (exists-path* (edge->src pair)
+                                     (edge->dst pair)
+                                     x))))
+    :hints ((acl2::use-termhint
+             (b* (((edge pair)))
+               (if (in pair (relstar x))
+                   `(:use ((:instance exists-path*-suff
+                            (path ,(acl2::hq (relstar-path pair.src pair.dst x)))
+                            (src ,(acl2::hq pair.src)) (dst ,(acl2::hq pair.dst))))
+                     :in-theory (e/d (in-relstar-implies-relstar-path)
+                                     (exists-path*-suff)))
+                 `(:in-theory (e/d (exists-path*)
+                                   (relation-path*-p-implies-in-relstar))
+                   :use ((:instance relation-path*-p-implies-in-relstar
+                          (path (exists-path*-witness
+                                 (edge->src pair)
+                                 (edge->dst pair) x))))))))))
+
+  
+  (defthm relstar-path-when-exists-path*
+    (implies (and (exists-path* src dst x)
+                  (event-p dst))
+             (let ((path (relstar-path src dst x)))
+               (relation-path*-p path x)))
+    :hints(("Goal" :in-theory (e/d (relstar-correct
+                                    in-relstar-implies-relstar-path)
+                                   (relstar))))))
+                      
+         
+  
+
+
+(defsection exists-bounded-path*
+  (defun-sk exists-bounded-path* (src dst len x)
+    (exists path
+            (and (relation-path*-p path x)
+                 (equal src (car path))
+                 (equal dst (car (last path)))
+                 (<= (len path) (nfix len)))))
+
+  (in-theory (disable exists-bounded-path*))
+
+  (defthmd exists-path-when-exists-bounded-path*
+    (implies (exists-bounded-path* src dst len x)
+             (exists-path* src dst x))
+    :hints(("Goal" :in-theory (enable exists-bounded-path*))))
+
+  (defthmd exists-bounded-path-when-exists-path
+    (implies (and (exists-path* src dst x)
+                  (<= (len (exists-path*-witness src dst x)) (nfix len)))
+             (exists-bounded-path* src dst len x))
+    :hints(("Goal" :in-theory (enable exists-path*)))))
+
+
+(define relstar-bounded ((n natp) (x relation-p))
+  :returns (star relation-p)
+  :verify-guards nil
+  (if (zp n)
+      (relidentity (universe))
+    (relunion (relidentity (universe))
+              (relcompose x (relstar-bounded (1- n) x))))
+  ///
+  (verify-guards relstar-bounded)
+
+  (local (defun bound-path-ind (n path)
+           (if (atom (cdr path))
+               n
+             (bound-path-ind (1- n) (cdr path)))))
+  
+  (defret in-relstar-bounded-when-relation-path-p
+    (implies (and (relation-path*-p path x)
+                  (<= (len path) (+ 1 (nfix n)))
+                  (event-p (car (last path))))
+             (in (edge (car path) (car (last path))) star))
+    :hints(("Goal" :in-theory (enable len (:i relation-path*-p)
+                                      in-of-compose-suff-rw
+                                      in-of-compose-suff-rw2
+                                      event-p)
+            :induct (bound-path-ind n path)
+            :expand (<call>
+                     (relation-path*-p path x)))))
+
+  
+  
+  (defthm in-relstar-bounded-when-exists-bounded-path*
+    (implies (and (exists-bounded-path* (edge->src pair)
+                                        (edge->dst pair) (+ 1 (nfix n)) x)
+                  (edge-p pair)
+                  (event-p (edge->dst pair)))
+             (in pair (relstar-bounded n x)))
+    :hints (("goal" :in-theory (e/d (exists-bounded-path*)
+                                    (in-relstar-bounded-when-relation-path-p))
+             :use ((:instance in-relstar-bounded-when-relation-path-p
+                    (path (exists-bounded-path*-witness (edge->src pair)
+                                        (edge->dst pair) (+ 1 (nfix n)) x))))
+             :do-not-induct t)))
+
+  (defret event-rel-p-of-<fn>
+    (implies (event-rel-p x)
+             (event-rel-p star))))
+
+
+
+(define relstar-bounded-path ((src )
+                              (dst )
+                              (n natp) (x relation-p))
+  :returns (path true-listp)
+  :guard (in (edge src dst) (relstar-bounded n x))
+  :measure (nfix n)
+  :guard-hints (("goal" :expand ((relstar-bounded n x))
+                 :in-theory (enable in-of-compose-necc)))
+  (if (zp n)
+      (list dst)
+    (if (equal src dst)
+        (list dst)
+      (let ((closure (relstar-bounded (1- n) x)))
+        (cons src
+              (relstar-bounded-path (compose-midpoint src dst x closure) dst
+                                    (1- n) x)))))
+  ///
+  (defret relation-path-p-of-<fn>
+    (implies (in (edge src dst) (relstar-bounded n x))
+             (and (relation-path*-p path x)
+                  (equal (car path) src)
+                  (equal (car (last path)) dst)))
+    :hints(("Goal" :induct <call>
+            :in-theory (enable in-of-compose-rw)
+            :expand ((:free (a b) (relation-path*-p (cons a b) x))
+                     (relstar-bounded n x)))))
+
+  (defret len-of-<fn>
+    (<= (len path) (+ 1 (nfix n)))
+    :rule-classes :linear))
+
+(defthmd relstar-bounded-correct
+  (implies (event-p (edge->dst pair))
+           (iff (in pair (relstar-bounded n x))
+                (and (edge-p pair)
+                     (exists-bounded-path* (edge->src pair)
+                                           (edge->dst pair)
+                                           (+ 1 (nfix n))
+                                           x))))
+  :hints (("goal" :use ((:instance exists-bounded-path*-suff
+                         (path (relstar-bounded-path
+                                (edge->src pair)
+                                (edge->dst pair) n x))
+                         (src (edge->src pair))
+                         (dst (edge->dst pair))
+                         (len (+ 1 (nfix n)))))
+           :in-theory (disable exists-bounded-path*-suff))))
+
+
+
+
+
+(local (defthm len-equal-0
+         (equal (equal (len x) 0)
+                (not (consp x)))))
+
+(define max-relstar-path-length ((rel relation-p) (x relation-p))
+  :guard (subset rel (relstar x))
+  :returns (max-len natp :rule-classes :type-prescription)
+  :measure (acl2-count (relation-fix rel))
+  :guard-hints (("goal" :expand ((subset rel (reflexive-transitive-closure x)))))
+  (b* ((rel (relation-fix rel)))
+    (if (emptyp rel)
+        0
+      (b* ((pair (head rel)))
+        (max (if (in pair (relstar x))
+                 (len (relstar-path (edge->src pair)
+                                       (edge->dst pair)
+                                       x))
+               0)
+             (max-relstar-path-length (tail rel) x)))))
+  ///
+  (defret path-length-less-than-<fn>
+    (implies (and (in pair (relation-fix rel))
+                  (in pair (relstar x)))
+             (<= (len (relstar-path (edge->src pair)
+                                       (edge->dst pair)
+                                       x))
+                 max-len))
+    :hints (("Goal" :induct <call>
+             :expand ((in pair (relation-fix rel)))))
+    :rule-classes :linear)
+
+  (defret max-len-when-nonempty
+    (implies (and (not (emptyp (relation-fix rel)))
+                  (subset (relation-fix rel) (relstar x)))
+             (<= 1 max-len))
+    :hints(("Goal" :induct <call>
+            :in-theory (enable len)
+            :expand ((subset (relation-fix rel) (reflexive-transitive-closure x)))))
+    :rule-classes :linear))
+
+(define relstar-bound ((x relation-p))
+  :returns (bound natp :rule-classes :type-prescription)
+  (let* ((closure (relstar x))
+         (max-len (max-relstar-path-length closure x)))
+    (max 0 (- max-len 1)))
+  ///
+  (defthmd in-relstar-when-in-relstar-bounded
+    (implies (and (in pair (relstar-bounded n x))
+                  (event-p (Edge->dst pair)))
+             (in pair (relstar x)))
+    :hints(("Goal" :in-theory (e/d (relstar-correct
+                                      relstar-bounded-correct
+                                      exists-path-when-exists-bounded-path*)
+                                   (relstar)))))
+
+
+  
+  (defretd in-relstar-bounded-when-in-relstar
+    (implies (and (in pair (relstar x))
+                  (event-p (edge->dst pair)))
+             (in pair (relstar-bounded bound x)))
+    :hints(("Goal" :in-theory (e/d ;; relstar-correct
+                               (relstar-bounded-correct
+                                exists-path-when-exists-bounded-path*
+                                in-relstar-implies-relstar-path)
+                               (path-length-less-than-max-relstar-path-length
+                                relstar))
+            :use ((:instance exists-bounded-path*-suff
+                   (src (edge->src pair))
+                   (dst (edge->dst pair))
+                   (len (max-relstar-path-length (relstar x) x))
+                   (path (relstar-path (edge->src pair)
+                                          (edge->dst pair)
+                                          x)))
+                  (:instance path-length-less-than-max-relstar-path-length
+                   (rel (relstar x)))))))
+
+  (defretd relstar-in-terms-of-bounded
+    (implies (event-rel-p x)
+             (equal (relstar x)
+                    (relstar-bounded bound x)))
+    :hints (("goal" :in-theory (e/d (set::double-containment-no-backchain-limit
+                                     pick-a-point-subset-strategy
+                                     in-relstar-when-in-relstar-bounded
+                                     in-relstar-bounded-when-in-relstar)
+                                    (relstar-bound
+                                     relstar)))
+            (SET::PICK-A-POINT-SUBSET-HINT ID acl2::CLAUSE
+                                           WORLD STABLE-UNDER-SIMPLIFICATIONP))))
+
+
+
+(include-book "centaur/meta/fixed-evaluator" :dir :system)
+
+(cmr::defevaluator-fixed tac-ev tac-ev-lst
   ((emptyset)
    (universe)
    (singleton s)
@@ -1315,13 +1702,24 @@
    (relintersect r1 r2)
    (relcompose r1 r2)
    (relstar r)
+   (relstar-bounded n r)
+   (relplus r)
    (relinverse r)
    (relprod s1 s2)
    (pred-false)
+   (pred-true)
    (pred-nonempty s)
    (pred-equal e1 e2)
    (pred-in-set e s)
    (pred-in-rel e1 e2 r)
+   (not-pred-nonempty s)
+   (not-pred-equal e1 e2)
+   (not-pred-in-set e s)
+   (not-pred-in-rel e1 e2 r)
+   (base-set-p x)
+   (base-rel-p x)
+   (not-singleton-set-p x)
+   (mentioned-event-p x)
    
    (event-p x)
    (setp x)
@@ -1345,15 +1743,47 @@
 
 (include-book "std/util/defenum" :dir :system)
 
-(defenum tac-type-p (:event :set :rel))
+(defenum tac-type-p (:event :set :rel :count :pred nil))
 
-(fty::defmap type-ctx :key-type pseudo-var :val-type tac-type-p :true-listp t)
+(fty::deflist tac-typelist :elt-type tac-type-p :true-listp t)
+
+(fty::defmap type-ctx :key-type pseudo-var :val-type tac-type-p :true-listp t
+  ///
+  (defthm tac-type-p-of-cdr-assoc-when-type-ctx-p
+    (implies (type-ctx-p x)
+             (tac-type-p (cdr (assoc-equal k x))))))
 
 (define tac-typed-val-p (val (type tac-type-p))
   (case (tac-type-fix type)
     (:event (event-p val))
     (:set (and (setp val) (event-set-p val)))
-    (t    (and (relation-p val) (event-rel-p val)))))
+    (:count (natp val))
+    (:rel   (and (relation-p val) (event-rel-p val)))
+    (:pred (booleanp val))
+    (t t))
+  ///
+  (defthm tac-typed-val-p-of-nil-type
+    (tac-typed-val-p x nil))
+
+  ;; (defthm tac-typed-val-p-implies-event
+  ;;   (implies (tac-typed-val-p val :event)
+  ;;            (event-p val)))
+
+  ;; (defthm tac-typed-val-p-implies-set
+  ;;   (implies (tac-typed-val-p val :set)
+  ;;            (and (setp val) (event-set-p val))))
+  
+  ;; (defthm tac-typed-val-p-implies-rel
+  ;;   (implies (tac-typed-val-p val :rel)
+  ;;            (and (relation-p val) (event-rel-p val))))
+  )
+
+(define tac-typed-vallist-p (vals (types tac-typelist-p))
+  (if (atom types)
+      t
+    (and (consp vals)
+         (tac-typed-val-p (car vals) (car types))
+         (tac-typed-vallist-p (cdr vals) (cdr types)))))
 
 (define tac-typed-env-p ((env alistp) (ctx type-ctx-p))
   (if (atom ctx)
@@ -1397,223 +1827,389 @@
     :hints (("goal" :use tac-typed-env-p-implies-lookup
              :in-theory (e/d (tac-typed-val-p) (tac-typed-env-p-implies-lookup)))))
 
-  (local (in-theory (enable type-ctx-fix))))
+  (defthm tac-typed-env-p-implies-lookup-natp
+    (implies (and (tac-typed-env-p env ctx)
+                  (equal (cdr (assoc-equal v (type-ctx-fix ctx))) :count)
+                  (pseudo-var-p v))
+             (natp (cdr (assoc-eq v env))))
+    :hints (("goal" :use tac-typed-env-p-implies-lookup
+             :in-theory (e/d (tac-typed-val-p) (tac-typed-env-p-implies-lookup)))))
 
-(define event-term-p ((x pseudo-termp) (ctx type-ctx-p))
-  (pseudo-term-case x
-    :var (eq (cdr (assoc-eq x.name (type-ctx-fix ctx))) :event)
-    :const (event-p x.val)
-    :otherwise nil)
-  ///
-  (defthm event-p-of-eval-when-event-term-p
-    (implies (and (event-term-p x ctx)
-                  (tac-typed-env-p env ctx))
-             (event-p (tac-ev x env)))))
+  (defthm tac-typed-env-p-implies-lookup-booleanp
+    (implies (and (tac-typed-env-p env ctx)
+                  (equal (cdr (assoc-equal v (type-ctx-fix ctx))) :pred)
+                  (pseudo-var-p v))
+             (booleanp (cdr (assoc-eq v env))))
+    :hints (("goal" :use tac-typed-env-p-implies-lookup
+             :in-theory (e/d (tac-typed-val-p) (tac-typed-env-p-implies-lookup)))))
+
+  (local (in-theory (enable type-ctx-fix))))
 
 
 (include-book "tools/easy-simplify" :dir :system)
 
-(defines set/rel-term-p
-  (define set-term-p ((x pseudo-termp) (ctx type-ctx-p))
-    :measure (pseudo-term-count x)
-    :returns (ok)
-    (pseudo-term-case x
-      :var (eq (cdr (assoc-eq x.name (type-ctx-fix ctx))) :set)
-      :const (and (setp x.val) (event-set-p x.val))
-      :lambda nil
-      :fncall (case x.fn
-                (emptyset t)
-                (universe t)
-                (singleton (and (consp x.args)
-                                (event-term-p (first x.args) ctx)))
-                (setunion (and (consp x.args) (consp (cdr x.args))
-                               (set-term-p (first x.args) ctx)
-                               (set-term-p (second x.args) ctx)))
-                (setintersect (and (consp x.args) (consp (cdr x.args))
-                                   (set-term-p (first x.args) ctx)
-                                   (set-term-p (second x.args) ctx)))
-                (setimage (and (consp x.args) (consp (cdr x.args))
-                               (set-term-p (first x.args) ctx)
-                               (rel-term-p (second x.args) ctx)))
-                (setpreimage (and (consp x.args) (consp (cdr x.args))
-                                  (rel-term-p (first x.args) ctx)
-                                  (set-term-p (second x.args) ctx)))
-                (t nil))))
-  (define rel-term-p ((x pseudo-termp) (ctx type-ctx-p))
-    :measure (pseudo-term-count x)
-    :returns (ok)
-    (pseudo-term-case x
-      :var (eq (cdr (assoc-eq x.name (type-ctx-fix ctx))) :rel)
-      :const (and (relation-p x.val) (event-rel-p x.val))
-      :lambda nil
-      :fncall (case x.fn
-                (relidentity (and (consp x.args)
-                                  (set-term-p (first x.args) ctx)))
-                (relunion (and (consp x.args) (consp (cdr x.args))
-                               (rel-term-p (first x.args) ctx)
-                               (rel-term-p (second x.args) ctx)))
-                (relintersect (and (consp x.args) (consp (cdr x.args))
-                                   (rel-term-p (first x.args) ctx)
-                                   (rel-term-p (second x.args) ctx)))
-                (relcompose (and (consp x.args) (consp (cdr x.args))
-                                 (rel-term-p (first x.args) ctx)
-                                 (rel-term-p (second x.args) ctx)))
-                (relstar (and (consp x.args)
-                              (rel-term-p (first x.args) ctx)))
-                (relinverse (and (consp x.args)
-                                 (rel-term-p (first x.args) ctx)))
-                (relprod (and (consp x.args) (consp (cdr x.args))
-                              (set-term-p (first x.args) ctx)
-                              (set-term-p (second x.args) ctx)))
-                (t nil))))
+(defconst *tac-function-argument-types*
+  '((emptyset)
+    (universe)
+    (singleton :event)
+    (setunion :set :set)
+    (setintersect :set :set)
+    (setimage :set :rel)
+    (setpreimage :rel :set)
+    (relidentity :set)
+    (relunion :rel :rel)
+    (relintersect :rel :rel)
+    (relcompose :rel :rel)
+    (relstar :rel)
+    (relstar-bounded :count :rel)
+    (relplus :rel)
+    (relinverse :rel)
+    (relprod :set :set)
+    (pred-false)
+    (pred-true)
+    (pred-nonempty :set)
+    (not-pred-nonempty :set)
+    (pred-equal :event :event)
+    (not-pred-equal :event :event)
+    (pred-in-set :event :set)
+    (not-pred-in-set :event :set)
+    (pred-in-rel :event :event :rel)
+    (not-pred-in-rel :event :event :rel)))
+
+(defconst *tac-function-return-types*
+  '((emptyset . :set)
+    (universe . :set)
+    (singleton . :set)
+    (setunion . :set)
+    (setintersect . :set)
+    (setimage . :set)
+    (setpreimage . :set)
+    (relidentity . :rel)
+    (relunion . :rel)
+    (relintersect . :rel)
+    (relcompose . :rel)
+    (relstar . :rel)
+    (relstar-bounded . :rel)
+    (relplus . :rel)
+    (relinverse . :rel)
+    (relprod . :rel)
+    (pred-false . :pred)
+    (pred-true . :pred)
+    (pred-nonempty . :pred)
+    (not-pred-nonempty . :pred)
+    (pred-equal . :pred)
+    (not-pred-equal . :pred)
+    (pred-in-set . :pred)
+    (not-pred-in-set . :pred)
+    (pred-in-rel . :pred)
+    (not-pred-in-rel . :pred)))
+
+(define tac-function-return-type ((x pseudo-fnsym-p))
+  :returns (type tac-type-p)
+  (cdr (assoc-eq (pseudo-fnsym-fix x) *tac-function-return-types*)))
+
+(define tac-function-argument-types ((x pseudo-fnsym-p))
+  :returns (types tac-typelist-p)
+  (cdr (assoc-eq (pseudo-fnsym-fix x) *tac-function-argument-types*))
   ///
-  (std::defret-mutual type-when-<fn>
-    (defret event-set-p-when-<fn>
-      (implies (and ok
-                    (tac-typed-env-p env ctx))
-               (let ((ev (tac-ev x env)))
-                 (and (setp ev)
-                      (event-set-p ev))))
-      :fn set-term-p)
-    (defret event-rel-p-when-<fn>
-      (implies (and ok
-                    (tac-typed-env-p env ctx))
-               (let ((ev (tac-ev x env)))
-                 (and (relation-p ev)
-                      (event-rel-p ev))))
-      :fn rel-term-p))
+  (defret member-nil-of-<fn>
+    (not (member nil types))))
 
-  (fty::deffixequiv-mutual set/rel-term-p)
 
-  (acl2::defopen set-term-p-when-var
-    (set-term-p x ctx)
+
+(defines tac-term-type
+  (define tac-term-type ((x pseudo-termp) (ctx type-ctx-p))
+    :measure (pseudo-term-count x)
+    :returns (type tac-type-p)
+    (pseudo-term-case x
+      :var (cdr (assoc-eq x.name (type-ctx-fix ctx)))
+      :const nil ;; ?
+      :lambda nil
+      :fncall (b* ((rettype (tac-function-return-type x.fn)))
+                (and rettype
+                     (acl2::prefixp (tac-function-argument-types x.fn)
+                                    (tac-termlist-types x.args ctx))
+                     rettype))))
+  (define tac-termlist-types ((x pseudo-term-listp)
+                              (ctx type-ctx-p))
+    :measure (pseudo-term-list-count x)
+    :returns (types tac-typelist-p)
+    (if (atom x)
+        nil
+      (cons (tac-term-type (car x) ctx)
+            (tac-termlist-types (cdr x) ctx))))
+  ///
+  (defthm consp-of-tac-termlist-types
+    (iff (consp (tac-termlist-types x ctx))
+         (consp x))
+    :hints (("goal" :expand ((tac-termlist-types x ctx)
+                             (tac-termlist-types nil ctx)))))
+  (defthm cdr-of-tac-termlist-types
+    (equal (cdr (tac-termlist-types x ctx))
+           (tac-termlist-types (cdr x) ctx))
+    :hints (("goal" :expand ((tac-termlist-types x ctx)
+                             (tac-termlist-types nil ctx)))))
+
+  (defthm car-of-tac-termlist-types
+    (equal (car (tac-termlist-types x ctx))
+           (tac-term-type (car x) ctx))
+    :hints (("goal" :expand ((tac-termlist-types x ctx)
+                             (tac-termlist-types nil ctx)))))
+
+  (defthm tac-termlist-types-of-append
+    (equal (Tac-termlist-types (append x y) ctx)
+           (append (tac-termlist-types x ctx)
+                   (tac-termlist-types y ctx)))
+    :hints (("goal" :induct (append x y)
+             :expand ((:free (a b) (tac-termlist-types (cons a b) ctx))))))
+
+  
+
+  (local (defthm open-prefixp
+           (equal (acl2::prefixp (cons a b) x)
+                  (and (consp x)
+                       (equal (car x) a)
+                       (acl2::prefixp b (cdr x))))
+           :hints(("Goal" :in-theory (enable acl2::prefixp)))))
+
+  (local (defthm prefixp-of-nil
+           (acl2::prefixp nil x)
+           :hints(("Goal" :in-theory (enable acl2::prefixp)))))
+  
+  (local (in-theory (disable tac-term-type tac-termlist-types)))
+  
+  (std::defret-mutual tac-typed-val-p-when-term-type
+    (defret tac-typed-val-p-when-term-type
+      (implies (tac-typed-env-p env ctx)
+               (tac-typed-val-p (tac-ev x env) type))
+      :hints ('(:expand (<call>
+                         (:free (a b x) (tac-typed-vallist-p (cons a b) x)))
+                :in-theory (enable tac-function-return-type
+                                   tac-typed-val-p
+                                   tac-function-argument-types)))
+      :fn tac-term-type)
+    (defret tac-typed-vallist-p-when-termlist-types
+      (implies (tac-typed-env-p env ctx)
+               (tac-typed-vallist-p (tac-ev-lst x env) types))
+      :hints ('(:expand (<call>
+                         (:free (a b x) (tac-typed-vallist-p x (cons a b))))))
+      :fn tac-termlist-types))
+
+  (defret type-of-tac-ev-by-term-type
+    (implies (tac-typed-env-p env ctx)
+             (and (implies (equal type :set)
+                           (and (setp (tac-ev x env))
+                                (event-set-p (tac-ev x env))))
+                  (implies (equal type :rel)
+                           (and (relation-p (tac-ev x env))
+                                (event-rel-p (tac-ev x env))))
+                  (implies (equal type :event)
+                           (event-p (tac-ev x env)))))
+    :hints (("Goal" :use tac-typed-val-p-when-term-type
+             :in-theory (e/d (tac-typed-val-p)
+                             (tac-typed-val-p-when-term-type))))
+    :fn tac-term-type)
+
+  (acl2::defopen tac-tgerm-type-when-var
+    (tac-term-type x ctx)
     :hyp (acl2::pseudo-term-case x :var)
-    :hint (:expand ((set-term-p x ctx))))
+    :hint (:expand ((tac-term-type x ctx))))
 
-  (acl2::defopen set-term-p-when-const
-    (set-term-p x ctx)
+  (acl2::defopen tac-term-type-when-const
+    (tac-term-type x ctx)
     :hyp (acl2::pseudo-term-case x :const)
-    :hint (:expand ((set-term-p x ctx))))
+    :hint (:expand ((tac-term-type x ctx))))
 
-  (acl2::defopen set-term-p-when-lambda
-    (set-term-p x ctx)
+  (acl2::defopen tac-term-type-when-lambda
+    (tac-term-type x ctx)
     :hyp (acl2::pseudo-term-case x :lambda)
-    :hint (:expand ((set-term-p x ctx))))
+    :hint (:expand ((tac-term-type x ctx))))
 
-  (acl2::defopen set-term-p-when-emptyset
-    (set-term-p x ctx)
+  (acl2::defopen tac-term-type-when-emptyset
+    (tac-term-type x ctx)
     :hyp (and (acl2::pseudo-term-case x :fncall)
               (equal (acl2::pseudo-term-fncall->fn x) 'emptyset))
-    :hint (:expand ((set-term-p x ctx))))
+    :hint (:expand ((tac-term-type x ctx))))
 
-  (acl2::defopen set-term-p-when-universe
-    (set-term-p x ctx)
+  (acl2::defopen tac-term-type-when-universe
+    (tac-term-type x ctx)
     :hyp (and (acl2::pseudo-term-case x :fncall)
               (equal (acl2::pseudo-term-fncall->fn x) 'universe))
-    :hint (:expand ((set-term-p x ctx))))
+    :hint (:expand ((tac-term-type x ctx))))
 
-  (acl2::defopen set-term-p-when-singleton
-    (set-term-p x ctx)
+  (acl2::defopen tac-term-type-when-singleton
+    (tac-term-type x ctx)
     :hyp (and (acl2::pseudo-term-case x :fncall)
               (equal (acl2::pseudo-term-fncall->fn x) 'singleton))
-    :hint (:expand ((set-term-p x ctx))))
+    :hint (:expand ((tac-term-type x ctx))))
 
-  (acl2::defopen set-term-p-when-setunion
-    (set-term-p x ctx)
+  (acl2::defopen tac-term-type-when-setunion
+    (tac-term-type x ctx)
     :hyp (and (acl2::pseudo-term-case x :fncall)
               (equal (acl2::pseudo-term-fncall->fn x) 'setunion))
-    :hint (:expand ((set-term-p x ctx))))
+    :hint (:expand ((tac-term-type x ctx))))
 
-  (acl2::defopen set-term-p-when-setintersect
-    (set-term-p x ctx)
+  (acl2::defopen tac-term-type-when-setintersect
+    (tac-term-type x ctx)
     :hyp (and (acl2::pseudo-term-case x :fncall)
               (equal (acl2::pseudo-term-fncall->fn x) 'setintersect))
-    :hint (:expand ((set-term-p x ctx))))
+    :hint (:expand ((tac-term-type x ctx))))
 
-  (acl2::defopen set-term-p-when-setimage
-    (set-term-p x ctx)
+  (acl2::defopen tac-term-type-when-setimage
+    (tac-term-type x ctx)
     :hyp (and (acl2::pseudo-term-case x :fncall)
               (equal (acl2::pseudo-term-fncall->fn x) 'setimage))
-    :hint (:expand ((set-term-p x ctx))))
+    :hint (:expand ((tac-term-type x ctx))))
 
-  (acl2::defopen set-term-p-when-setpreimage
-    (set-term-p x ctx)
+  (acl2::defopen tac-term-type-when-setpreimage
+    (tac-term-type x ctx)
     :hyp (and (acl2::pseudo-term-case x :fncall)
               (equal (acl2::pseudo-term-fncall->fn x) 'setpreimage))
-    :hint (:expand ((set-term-p x ctx))))
+    :hint (:expand ((tac-term-type x ctx))))
 
-  (acl2::defopen set-term-p-when-bad-fncall
-    (set-term-p x ctx)
-    :hyp (and (acl2::pseudo-term-case x :fncall)
-              (not (member-equal (acl2::pseudo-term-fncall->fn x)
-                                 '(emptyset universe singleton setunion setintersect setimage setpreimage))))
-    :hint (:expand ((set-term-p x ctx))
-           :in-theory (enable member-equal)))
-
-  (acl2::defopen rel-term-p-when-var
-    (rel-term-p x ctx)
+  (acl2::defopen tac-term-type-when-var
+    (tac-term-type x ctx)
     :hyp (acl2::pseudo-term-case x :var)
-    :hint (:expand ((rel-term-p x ctx))))
+    :hint (:expand ((tac-term-type x ctx))))
 
-  (acl2::defopen rel-term-p-when-const
-    (rel-term-p x ctx)
+  (acl2::defopen tac-term-type-when-const
+    (tac-term-type x ctx)
     :hyp (acl2::pseudo-term-case x :const)
-    :hint (:expand ((rel-term-p x ctx))))
+    :hint (:expand ((tac-term-type x ctx))))
 
-  (acl2::defopen rel-term-p-when-lambda
-    (rel-term-p x ctx)
+  (acl2::defopen tac-term-type-when-lambda
+    (tac-term-type x ctx)
     :hyp (acl2::pseudo-term-case x :lambda)
-    :hint (:expand ((rel-term-p x ctx))))
+    :hint (:expand ((tac-term-type x ctx))))
 
-  (acl2::defopen rel-term-p-when-relidentity
-    (rel-term-p x ctx)
+  (acl2::defopen tac-term-type-when-relidentity
+    (tac-term-type x ctx)
     :hyp (and (acl2::pseudo-term-case x :fncall)
               (equal (acl2::pseudo-term-fncall->fn x) 'relidentity))
-    :hint (:expand ((rel-term-p x ctx))))
+    :hint (:expand ((tac-term-type x ctx))))
 
-  (acl2::defopen rel-term-p-when-relunion
-    (rel-term-p x ctx)
+  (acl2::defopen tac-term-type-when-relunion
+    (tac-term-type x ctx)
     :hyp (and (acl2::pseudo-term-case x :fncall)
               (equal (acl2::pseudo-term-fncall->fn x) 'relunion))
-    :hint (:expand ((rel-term-p x ctx))))
+    :hint (:expand ((tac-term-type x ctx))))
 
-  (acl2::defopen rel-term-p-when-relintersect
-    (rel-term-p x ctx)
+  (acl2::defopen tac-term-type-when-relintersect
+    (tac-term-type x ctx)
     :hyp (and (acl2::pseudo-term-case x :fncall)
               (equal (acl2::pseudo-term-fncall->fn x) 'relintersect))
-    :hint (:expand ((rel-term-p x ctx))))
+    :hint (:expand ((tac-term-type x ctx))))
 
-  (acl2::defopen rel-term-p-when-relcompose
-    (rel-term-p x ctx)
+  (acl2::defopen tac-term-type-when-relcompose
+    (tac-term-type x ctx)
     :hyp (and (acl2::pseudo-term-case x :fncall)
               (equal (acl2::pseudo-term-fncall->fn x) 'relcompose))
-    :hint (:expand ((rel-term-p x ctx))))
+    :hint (:expand ((tac-term-type x ctx))))
 
-  (acl2::defopen rel-term-p-when-relstar
-    (rel-term-p x ctx)
+  (acl2::defopen tac-term-type-when-relstar
+    (tac-term-type x ctx)
     :hyp (and (acl2::pseudo-term-case x :fncall)
               (equal (acl2::pseudo-term-fncall->fn x) 'relstar))
-    :hint (:expand ((rel-term-p x ctx))))
+    :hint (:expand ((tac-term-type x ctx))))
 
-  (acl2::defopen rel-term-p-when-relinverse
-    (rel-term-p x ctx)
+  (acl2::defopen tac-term-type-when-relstar-bounded
+    (tac-term-type x ctx)
+    :hyp (and (acl2::pseudo-term-case x :fncall)
+              (equal (acl2::pseudo-term-fncall->fn x) 'relstar-bounded))
+    :hint (:expand ((tac-term-type x ctx))))
+
+  (acl2::defopen tac-term-type-when-relplus
+    (tac-term-type x ctx)
+    :hyp (and (acl2::pseudo-term-case x :fncall)
+              (equal (acl2::pseudo-term-fncall->fn x) 'relplus))
+    :hint (:expand ((tac-term-type x ctx))))
+
+  (acl2::defopen tac-term-type-when-relinverse
+    (tac-term-type x ctx)
     :hyp (and (acl2::pseudo-term-case x :fncall)
               (equal (acl2::pseudo-term-fncall->fn x) 'relinverse))
-    :hint (:expand ((rel-term-p x ctx))))
+    :hint (:expand ((tac-term-type x ctx))))
 
-  (acl2::defopen rel-term-p-when-relprod
-    (rel-term-p x ctx)
+  (acl2::defopen tac-term-type-when-relprod
+    (tac-term-type x ctx)
     :hyp (and (acl2::pseudo-term-case x :fncall)
               (equal (acl2::pseudo-term-fncall->fn x) 'relprod))
-    :hint (:expand ((rel-term-p x ctx))))
+    :hint (:expand ((tac-term-type x ctx))))
 
-  (acl2::defopen rel-term-p-when-bad-fncall
-    (rel-term-p x ctx)
+  (acl2::defopen tac-term-type-when-pred-false
+    (tac-term-type x ctx)
+    :hyp (and (acl2::pseudo-term-case x :fncall)
+              (equal (acl2::pseudo-term-fncall->fn x) 'pred-false))
+    :hint (:expand ((tac-term-type x ctx))))
+  
+  (acl2::defopen tac-term-type-when-pred-true
+    (tac-term-type x ctx)
+    :hyp (and (acl2::pseudo-term-case x :fncall)
+              (equal (acl2::pseudo-term-fncall->fn x) 'pred-true))
+    :hint (:expand ((tac-term-type x ctx))))
+
+  (acl2::defopen tac-term-type-when-pred-nonempty
+    (tac-term-type x ctx)
+    :hyp (and (acl2::pseudo-term-case x :fncall)
+              (equal (acl2::pseudo-term-fncall->fn x) 'pred-nonempty))
+    :hint (:expand ((tac-term-type x ctx))))
+
+  (acl2::defopen tac-term-type-when-not-pred-nonempty
+    (tac-term-type x ctx)
+    :hyp (and (acl2::pseudo-term-case x :fncall)
+              (equal (acl2::pseudo-term-fncall->fn x) 'not-pred-nonempty))
+    :hint (:expand ((tac-term-type x ctx))))
+
+  (acl2::defopen tac-term-type-when-pred-equal
+    (tac-term-type x ctx)
+    :hyp (and (acl2::pseudo-term-case x :fncall)
+              (equal (acl2::pseudo-term-fncall->fn x) 'pred-equal))
+    :hint (:expand ((tac-term-type x ctx))))
+  (acl2::defopen tac-term-type-when-not-pred-equal
+    (tac-term-type x ctx)
+    :hyp (and (acl2::pseudo-term-case x :fncall)
+              (equal (acl2::pseudo-term-fncall->fn x) 'not-pred-equal))
+    :hint (:expand ((tac-term-type x ctx))))
+  (acl2::defopen tac-term-type-when-pred-in-set
+    (tac-term-type x ctx)
+    :hyp (and (acl2::pseudo-term-case x :fncall)
+              (equal (acl2::pseudo-term-fncall->fn x) 'pred-in-set))
+    :hint (:expand ((tac-term-type x ctx))))
+  (acl2::defopen tac-term-type-when-not-pred-in-set
+    (tac-term-type x ctx)
+    :hyp (and (acl2::pseudo-term-case x :fncall)
+              (equal (acl2::pseudo-term-fncall->fn x) 'not-pred-in-set))
+    :hint (:expand ((tac-term-type x ctx))))
+  (acl2::defopen tac-term-type-when-pred-in-rel
+    (tac-term-type x ctx)
+    :hyp (and (acl2::pseudo-term-case x :fncall)
+              (equal (acl2::pseudo-term-fncall->fn x) 'pred-in-rel))
+    :hint (:expand ((tac-term-type x ctx))))
+  (acl2::defopen tac-term-type-when-not-pred-in-rel
+    (tac-term-type x ctx)
+    :hyp (and (acl2::pseudo-term-case x :fncall)
+              (equal (acl2::pseudo-term-fncall->fn x) 'not-pred-in-rel))
+    :hint (:expand ((tac-term-type x ctx))))
+
+  (acl2::defopen tac-term-type-when-bad-fncall
+    (tac-term-type x ctx)
     :hyp (and (acl2::pseudo-term-case x :fncall)
               (not (member-equal (acl2::pseudo-term-fncall->fn x)
-                                 '(relidentity relunion relintersect relcompose relstar relinverse relprod))))
-    :hint (:expand ((rel-term-p x ctx))
-           :in-theory (enable member-equal))))
+                                 '(emptyset universe singleton setunion setintersect
+                                            setimage setpreimage
+                                            relidentity relunion relintersect relcompose
+                                            relstar relstar-bounded relplus relinverse relprod
+                                            pred-false pred-true
+                                            pred-nonempty not-pred-nonempty
+                                            pred-equal not-pred-equal
+                                            pred-in-set not-pred-in-set
+                                            pred-in-rel not-pred-in-rel))))
+    :hint (:expand ((tac-term-type x ctx))
+           :in-theory (enable member-equal
+                              tac-function-return-type)))
+
+  (fty::deffixequiv-mutual tac-term-type))
+               
 
 (acl2::def-ruleset! tac-rewrites nil)
 
@@ -1645,6 +2241,17 @@
                                     in-of-image-rw
                                     in-of-image-suff)))
   :otf-flg t)
+
+(defthm in-image-of-singleton
+  (iff (in x (image (insert y nil) z))
+       (in (edge y x) (relation-fix z)))
+  :hints(("Goal" :in-theory (enable in-of-image-rw
+                                    in-of-image-suff))))
+
+(defthm in-universe-when-event-p
+  (implies (event-p x)
+           (in x (universe)))
+  :hints(("Goal" :in-theory (enable event-p))))
 
 (defthm image-of-singleton-in-universe
   (implies (event-p e)
@@ -1709,11 +2316,6 @@
                                      in-of-preimage-suff
                                      in-of-inverse))))
 
-(defthm in-image-of-singleton
-  (iff (in x (image (insert y nil) z))
-       (in (edge y x) (relation-fix z)))
-  :hints(("Goal" :in-theory (enable in-of-image-rw
-                                    in-of-image-suff))))
 
 (defthm image-of-singleton-intersect
   (implies (and (relation-p y) (relation-p z))
@@ -1899,10 +2501,6 @@
                                     in-of-image-suff
                                     ))))
 
-(defthm in-universe-when-evt-p
-  (implies (event-p x)
-           (in x (universe)))
-  :hints(("Goal" :in-theory (enable event-p))))
 
 (defthm subset-of-universe-rel
   (implies (and (relation-p x)
@@ -1927,10 +2525,25 @@
            (not (relation-path-p path (id-relation x))))
   :hints(("Goal" :in-theory (enable relation-path-p))))
 
+
+(local (defthm relation-path-p-implies-last-in-set
+         (implies (not (in (car (last path)) x))
+                  (not (relation-path-p path (id-relation x))))
+         :hints(("Goal" :in-theory (enable relation-path-p)))))
+
 (defthm exists-path-of-id-relation
-  (implies (not (equal src dst))
-           (not (exists-path src dst (id-relation x))))
-  :hints(("Goal" :in-theory (enable exists-path))))
+  (iff (exists-path src dst (id-relation x))
+       (and (equal src dst)
+            (in src x)))
+  :hints(("Goal" :in-theory (enable ;; exists-path
+                                    relation-path-p)
+          :use ((:instance exists-path-suff
+                 (path (list src dst))
+                 (x (id-relation x)))))
+         (and stable-under-simplificationp
+              '(:in-theory (enable exists-path))))
+  :otf-flg t)
+
 
 (defthm in-edge-when-not-event-p-dst
   (implies (and (event-rel-p x)
@@ -1964,6 +2577,16 @@
                                     pick-a-point-subset-strategy
                                     transitive-closure-correct))))
 
+
+(defthm transitive-closure-of-id-relation
+  (implies (event-set-p s)
+           (equal (transitive-closure (id-relation s))
+                  (id-relation s)))
+  :hints(("Goal" :in-theory (enable transitive-closure
+                                    set::double-containment-no-backchain-limit
+                                    pick-a-point-subset-strategy
+                                    transitive-closure-correct))))
+
 (defthm exists-path-of-universe-rel
   (implies (and (event-p src)
                 (event-p dst))
@@ -1979,6 +2602,13 @@
          (cartesian (universe) (universe)))
   :hints(("Goal" :in-theory (enable reflexive-transitive-closure
                                     set::double-containment-no-backchain-limit
+                                    pick-a-point-subset-strategy
+                                    transitive-closure-correct))))
+
+(defthm transitive-closure-of-universe-rel
+  (equal (transitive-closure (cartesian (universe) (universe)))
+         (cartesian (universe) (universe)))
+  :hints(("Goal" :in-theory (enable set::double-containment-no-backchain-limit
                                     pick-a-point-subset-strategy
                                     transitive-closure-correct))))
 
@@ -2233,8 +2863,17 @@
            (equal (relstar (relidentity s))
                   (relidentity (universe)))))
 
+(def-tac-rewrite relplus-of-relidentity
+  (implies (event-set-p s)
+           (equal (relplus (relidentity s))
+                  (relidentity s))))
+
 (def-tac-rewrite relstar-of-univrel
   (equal (relstar (relprod (universe) (universe)))
+         (relprod (universe) (universe))))
+
+(def-tac-rewrite relplus-of-univrel
+  (equal (relplus (relprod (universe) (universe)))
          (relprod (universe) (universe))))
 
 (def-tac-rewrite relinverse-of-relidentity
@@ -2287,24 +2926,25 @@
 (include-book "clause-processors/meta-extract-user" :dir :system)
 (include-book "std/util/defconsts" :dir :system)
 
+(define tac-collect-rewrites-aux ((names symbol-listp)
+                                  (wrld plist-worldp))
+  :returns (mv err rules)
+  (if (atom names)
+      (mv nil nil)
+    (b* ((formula (acl2::meta-extract-formula-w (car names) wrld))
+         ((unless (pseudo-termp formula))
+          (mv (msg "~x0 not pseudo-termp: ~x1" (car names) formula) nil))
+         ((mv err rules1)
+          (cmr::parse-rewrites-from-term formula wrld))
+         ((when err)
+          (mv err nil))
+         ((mv err rules2)
+          (tac-collect-rewrites-aux (cdr names) wrld))
+         ((when err)
+          (mv err nil)))
+      (mv nil (append rules1 rules2)))))
+
 (encapsulate nil
-  (local (define tac-collect-rewrites-aux ((names symbol-listp)
-                                           (wrld plist-worldp))
-           :returns (mv err rules)
-           (if (atom names)
-               (mv nil nil)
-             (b* ((formula (acl2::meta-extract-formula-w (car names) wrld))
-                  ((unless (pseudo-termp formula))
-                   (mv (msg "~x0 not pseudo-termp: ~x1" (car names) formula) nil))
-                  ((mv err rules1)
-                   (cmr::parse-rewrites-from-term formula wrld))
-                  ((when err)
-                   (mv err nil))
-                  ((mv err rules2)
-                   (tac-collect-rewrites-aux (cdr names) wrld))
-                  ((when err)
-                   (mv err nil)))
-               (mv nil (append rules1 rules2))))))
 
   (acl2::defconsts *tac-rewrites*
     (b* (((mv err rewrites)
@@ -2326,11 +2966,10 @@
     (forall (x ctx)
             (b* (((cmr::rewrite rule))
                  ((mv unify-ok subst) (cmr::term-unify-strict rule.lhs x nil)))
-              (implies unify-ok
-                       (and (implies (set-term-p x ctx)
-                                     (set-term-p (cmr::term-subst-strict rule.rhs subst) ctx))
-                            (implies (rel-term-p x ctx)
-                                     (rel-term-p (cmr::term-subst-strict rule.rhs subst) ctx))))))
+              (implies (and unify-ok
+                            (tac-term-type x ctx))
+                       (equal (tac-term-type (cmr::term-subst-strict rule.rhs subst) ctx)
+                              (tac-term-type x ctx)))))
     :rewrite :direct)
 
   (in-theory (disable tac-rewrite-rhs-preserved)))
@@ -2356,12 +2995,12 @@
              :in-theory (e/d (cmr::term-subst-strict
                               cmr::termlist-subst-strict
                               cmr::equal-of-pseudo-term-fncall
-                              event-term-p
                               (tac-rewrites))
                              (tac-rewrite-rhs-preserved-necc))))))
 
 
 (define tac-ev-cube ((x pseudo-term-listp) (env alistp))
+  :verify-guards nil
   (if (atom x)
       t
     (and (tac-ev (car x) env)
@@ -2373,8 +3012,7 @@
             (b* (((cmr::rewrite rule))
                  ((mv unify-ok subst) (cmr::term-unify-strict rule.lhs x nil)))
               (implies (and unify-ok
-                            (or (set-term-p x ctx)
-                                (rel-term-p x ctx))
+                            (tac-term-type x ctx)
                             (tac-typed-env-p env ctx))
                        (tac-ev-cube (cmr::termlist-subst-strict rule.hyps subst) env))))
     :rewrite :direct)
@@ -2534,8 +3172,7 @@
                   (tac-ev-theoremp (cmr::rewrite-term rule))
                   (tac-rewrite-hyps-ok rule)
                   (tac-typed-env-p env ctx)
-                  (or (rel-term-p (pseudo-term-fncall fn args) ctx)
-                      (set-term-p (pseudo-term-fncall fn args) ctx)))
+                  (tac-term-type (pseudo-term-fncall fn args) ctx))
              (equal (tac-ev rhs (tac-ev-alist subst env))
                     (tac-ev (pseudo-term-fncall fn args) env)))
     :hints(("Goal" :in-theory (e/d (cmr::rewrite-term)
@@ -2553,11 +3190,11 @@
 
   (defret <fn>-preserves-type
     (implies (and ok
-                  (tac-rewrite-rhs-preserved rule))
-             (and (implies (rel-term-p (pseudo-term-fncall fn args) ctx)
-                           (rel-term-p (cmr::term-subst-strict rhs subst) ctx))
-                  (implies (set-term-p (pseudo-term-fncall fn args) ctx)
-                           (set-term-p (cmr::term-subst-strict rhs subst) ctx))))
+                  (tac-rewrite-rhs-preserved rule)
+                  (equal type (tac-term-type (pseudo-term-fncall fn args) ctx))
+                  type)
+             (equal (tac-term-type (cmr::term-subst-strict rhs subst) ctx)
+                    type))
     :hints (("goal" :use ((:instance tac-rewrite-rhs-preserved-necc
                            (x (pseudo-term-fncall fn args))))
             :expand ((CMR::TERM-UNIFY-STRICT (CMR::REWRITE->LHS RULE)
@@ -2618,64 +3255,58 @@
   (defun termlists-types-preserved (x y subst ctx)
     (if (atom x)
         t
-      (and (implies (rel-term-p (cmr::term-subst-strict (car x) subst) ctx)
-                    (rel-term-p (car y) ctx))
-           (implies (set-term-p (cmr::term-subst-strict (car x) subst) ctx)
-                    (set-term-p (car y) ctx))
-           (implies (event-term-p (cmr::term-subst-strict (car x) subst) ctx)
-                    (event-term-p (car y) ctx))
+      (and (let ((orig (tac-term-type (cmr::term-subst-strict (car x) subst) ctx)))
+             (or (not orig)
+                 (equal orig (tac-term-type (car y) ctx))))
            (termlists-types-preserved (cdr x) (cdr y) subst ctx))))
 
-  (defthm rel-term-p-when-termlists-types-preserved
-    (implies (and (rel-term-p (cmr::term-subst-strict x subst) ctx)
-                  (termlists-types-preserved (pseudo-term-call->args x) rw-args subst ctx)
-                  (equal (len rw-args) (len (pseudo-term-call->args x)))
-                  (pseudo-term-case x :fncall))
-             (rel-term-p (pseudo-term-fncall
-                          (pseudo-term-fncall->fn x) rw-args)
-                         ctx))
-    :hints(("Goal" 
-            :expand ((cmr::term-subst-strict x subst)
-                     (cmr::termlist-subst-strict nil subst)
-                     (cmr::termlist-subst-strict (pseudo-term-call->args x) subst)
-                     (cmr::termlist-subst-strict (cdr (pseudo-term-call->args x)) subst)
-                     (termlists-types-preserved (pseudo-term-call->args x) rw-args subst ctx)
-                     (termlists-types-preserved (cdr (pseudo-term-call->args x)) (cdr rw-args) subst ctx)
-                     (:free (fn args) (rel-term-p (pseudo-term-fncall fn args) ctx))))))
+  (local (defthm open-prefixp
+           (equal (acl2::prefixp (cons a b) x)
+                  (and (consp x)
+                       (equal (car x) a)
+                       (acl2::prefixp b (cdr x))))
+           :hints(("Goal" :in-theory (enable acl2::prefixp)))))
 
-  (defthm set-term-p-when-termlists-types-preserved
-    (implies (and (set-term-p (cmr::term-subst-strict x subst) ctx)
-                  (termlists-types-preserved (pseudo-term-call->args x) rw-args subst ctx)
-                  (equal (len rw-args) (len (pseudo-term-call->args x)))
-                  (pseudo-term-case x :fncall))
-             (set-term-p (pseudo-term-fncall
-                          (pseudo-term-fncall->fn x) rw-args)
-                         ctx))
-    :hints(("Goal" 
-            :expand ((cmr::term-subst-strict x subst)
-                     (cmr::termlist-subst-strict nil subst)
-                     (cmr::termlist-subst-strict (pseudo-term-call->args x) subst)
-                     (cmr::termlist-subst-strict (cdr (pseudo-term-call->args x)) subst)
-                     (termlists-types-preserved (pseudo-term-call->args x) rw-args subst ctx)
-                     (termlists-types-preserved (cdr (pseudo-term-call->args x)) (cdr rw-args) subst ctx)
-                     (:free (fn args) (set-term-p (pseudo-term-fncall fn args) ctx))))))
-
-  (local (defthm event-term-p-of-lambda
-           (not (event-term-p (pseudo-term-lambda formals body args) ctx))
-           :hints(("Goal" :in-theory (enable event-term-p)))))
-
-  (local (defthm event-term-p-of-fncall
-           (not (event-term-p (pseudo-term-fncall fn args) ctx))
-           :hints(("Goal" :in-theory (enable event-term-p)))))
+  (local (defthm prefixp-of-nil
+           (acl2::prefixp nil x)
+           :hints(("Goal" :in-theory (enable acl2::prefixp)))))
+  
+  
+  (local
+   (defthm term-type-when-termlists-types-preserved
+     (implies (and (bind-free '((subst . subst)) (subst))
+                   (termlists-types-preserved (pseudo-term-call->args x) rw-args subst ctx)
+                   (equal xsubst  (cmr::term-subst-strict x subst))
+                   (equal type (tac-term-type xsubst ctx))
+                   type
+                   (equal (len rw-args) (len (pseudo-term-call->args x)))
+                   (pseudo-term-case x :fncall))
+              (equal (tac-term-type (pseudo-term-fncall
+                                     (pseudo-term-fncall->fn x) rw-args)
+                                    ctx)
+                     type))
+     :hints(("Goal"
+             :in-theory (e/d (tac-function-argument-types)
+                             (termlists-types-preserved))
+             :do-not-induct t
+             :expand ((cmr::term-subst-strict x subst)
+                      (cmr::termlist-subst-strict nil subst)
+                      (cmr::termlist-subst-strict (pseudo-term-call->args x) subst)
+                      (cmr::termlist-subst-strict (cdr (pseudo-term-call->args x)) subst)
+                      (:free (fn args) (tac-term-type (pseudo-term-fncall fn args) ctx))))
+            (and stable-under-simplificationp
+                 '(:expand ((termlists-types-preserved (pseudo-term-call->args x) rw-args subst ctx)
+                            (termlists-types-preserved (cdr (pseudo-term-call->args x)) (cdr rw-args) subst ctx))))
+            (and stable-under-simplificationp
+                 '(:expand ((cmr::termlist-subst-strict (cddr (pseudo-term-call->args x)) subst)
+                            (cmr::termlist-subst-strict nil subst)
+                            (termlists-types-preserved (cddr (pseudo-term-call->args x)) (cddr rw-args) subst ctx)))))))
 
   (std::defret-mutual tac-rewrite-types-preserved
     (defret tac-rewrite-types-preserved
-      (and (implies (rel-term-p (cmr::term-subst-strict x subst) ctx)
-                    (rel-term-p new-x ctx))
-           (implies (set-term-p (cmr::term-subst-strict x subst) ctx)
-                    (set-term-p new-x ctx))
-           (implies (event-term-p (cmr::term-subst-strict x subst) ctx)
-                    (event-term-p new-x ctx)))
+      (let ((type (tac-term-type (cmr::term-subst-strict x subst) ctx)))
+        (implies type
+                 (equal (tac-term-type new-x ctx) type)))
       :hints ('(:expand (<call>)
                 :do-not-induct t)
               (and stable-under-simplificationp
@@ -2690,19 +3321,17 @@
       :fn tac-rewrite-list)
 
     (defret tac-rewrite-fncall-types-preserved
-      (and (implies (rel-term-p (pseudo-term-fncall fn args) ctx)
-                    (rel-term-p new-x ctx))
-           (implies (set-term-p (pseudo-term-fncall fn args) ctx)
-                    (set-term-p new-x ctx)))
+      (let ((type (tac-term-type (pseudo-term-fncall fn args) ctx)))
+        (implies type
+                 (equal (tac-term-type new-x ctx) type)))
       :hints ('(:expand (<call>)))
       :fn tac-rewrite-fncall)
 
     (defret tac-rewrite-apply-rules-types-preserved
       (implies (tac-rewrites-rhs-preserved rules)
-               (and (implies (rel-term-p (pseudo-term-fncall fn args) ctx)
-                             (rel-term-p new-x ctx))
-                    (implies (set-term-p (pseudo-term-fncall fn args) ctx)
-                             (set-term-p new-x ctx))))
+               (let ((type (tac-term-type (pseudo-term-fncall fn args) ctx)))
+                 (implies type
+                          (equal (tac-term-type new-x ctx) type))))
       :hints ('(:expand (<call>
                          (tac-rewrites-rhs-preserved rules))))
       :fn tac-rewrite-apply-rules))
@@ -2711,55 +3340,28 @@
     (if (atom x)
         t
       (and (implies (or (not (pseudo-term-case (car x) :fncall))
-                        (rel-term-p (cmr::term-subst-strict (car x) subst) ctx)
-                        (set-term-p (cmr::term-subst-strict (car x) subst) ctx))
+                        (tac-term-type (cmr::term-subst-strict (car x) subst) ctx))
                     (equal (tac-ev (car new-x) env)
                            (tac-ev (car x) (tac-ev-alist subst env))))
            (tac-rewrite-list-evals-preserved (cdr x) (cdr new-x) subst env ctx))))
-
-  (defthm eval-preserved-of-rel-term-when-arg-evals-preserved
-    (implies (and (tac-rewrite-list-evals-preserved
-                   args rw-args subst env ctx)
-                  (equal (len args) (len rw-args))
-                  (rel-term-p (pseudo-term-fncall fn
-                                                  (cmr::termlist-subst-strict args subst))
-                              ctx)
-                  (pseudo-fnsym-p fn))
-             (equal (tac-ev (cons fn rw-args) env)
-                    (tac-ev (cons fn args) (tac-ev-alist subst env))))
-    :hints (("goal" :expand ((:free (args)
-                              (rel-term-p (pseudo-term-fncall fn args)
-                                          ctx))
-                             (cmr::termlist-subst-strict args subst)
-                             (cmr::termlist-subst-strict (cdr args) subst)
-                             (tac-rewrite-list-evals-preserved
-                              args rw-args subst env ctx)
-                             (tac-rewrite-list-evals-preserved
-                              (cdr args) (cdr rw-args) subst env ctx))
-             :do-not-induct t)))
-
-  (local (defthm event-term-p-when-fncall
-           (implies (pseudo-term-case x :fncall)
-                    (not (event-term-p x ctx)))
-           :hints(("Goal" :in-theory (enable event-term-p)))))
 
   (local (defthm fncall-of-term-subst-strict
            (implies (pseudo-term-case x :fncall)
                     (pseudo-term-case (cmr::term-subst-strict x subst) :fncall))
            :hints(("Goal" :expand ((cmr::term-subst-strict x subst))))))
 
-  (defthm eval-preserved-of-set-term-when-arg-evals-preserved
+  (defthm eval-preserved-of-rel-term-when-arg-evals-preserved
     (implies (and (tac-rewrite-list-evals-preserved
                    args rw-args subst env ctx)
                   (equal (len args) (len rw-args))
-                  (set-term-p (pseudo-term-fncall fn
-                                                  (cmr::termlist-subst-strict args subst))
-                              ctx)
+                  (tac-term-type (pseudo-term-fncall fn
+                                                     (cmr::termlist-subst-strict args subst))
+                                 ctx)
                   (pseudo-fnsym-p fn))
              (equal (tac-ev (cons fn rw-args) env)
                     (tac-ev (cons fn args) (tac-ev-alist subst env))))
     :hints (("goal" :expand ((:free (args)
-                              (set-term-p (pseudo-term-fncall fn args)
+                              (tac-term-type (pseudo-term-fncall fn args)
                                           ctx))
                              (cmr::termlist-subst-strict args subst)
                              (cmr::termlist-subst-strict (cdr args) subst)
@@ -2767,14 +3369,18 @@
                               args rw-args subst env ctx)
                              (tac-rewrite-list-evals-preserved
                               (cdr args) (cdr rw-args) subst env ctx))
-             :do-not-induct t)))
+             :in-theory (enable tac-function-return-type
+                                tac-function-argument-types)
+             :do-not-induct t)
+            (and stable-under-simplificationp
+                 '(:expand ((cmr::termlist-subst-strict (cddr args) subst)
+                             (tac-rewrite-list-evals-preserved
+                              (cddr args) (cddr rw-args) subst env ctx))))))
   
   (std::defret-mutual tac-rewrite-correct
     (defret tac-rewrite-correct
-      (implies (and (or (not (pseudo-term-case x :fncall))
-                        (rel-term-p (cmr::term-subst-strict x subst) ctx)
-                        (set-term-p (cmr::term-subst-strict x subst) ctx))
-                   (tac-typed-env-p env ctx))
+      (implies (and (tac-term-type (cmr::term-subst-strict x subst) ctx)
+                    (tac-typed-env-p env ctx))
                (equal (tac-ev new-x env)
                       (tac-ev x (tac-ev-alist subst env))))
       :hints ('(:expand (<call>)
@@ -2795,8 +3401,7 @@
       :fn tac-rewrite-list)
 
     (defret tac-rewrite-fncall-correct
-      (implies (and (or (rel-term-p (pseudo-term-fncall fn args) ctx)
-                        (set-term-p (pseudo-term-fncall fn args) ctx))
+      (implies (and (tac-term-type (pseudo-term-fncall fn args) ctx)
                     (tac-typed-env-p env ctx))
                (equal (tac-ev new-x env)
                       (tac-ev (pseudo-term-fncall fn args) env)))
@@ -2804,8 +3409,7 @@
       :fn tac-rewrite-fncall)
 
     (defret tac-rewrite-apply-rules-correct
-      (implies (and (or (rel-term-p (pseudo-term-fncall fn args) ctx)
-                        (set-term-p (pseudo-term-fncall fn args) ctx))
+      (implies (and (tac-term-type (pseudo-term-fncall fn args) ctx)
                     (tac-typed-env-p env ctx)
                     (tac-ev-theorem-rewritesp rules)
                     (tac-rewrites-hyps-ok rules)
@@ -2850,81 +3454,41 @@
 (local (in-theory (disable set::in-head
                            set::in-tail-or-head)))
 
+(acl2::def-ruleset! tac-positive-normalize-rules nil)
+
+(defmacro def-tac-positive-normalize (name &rest args)
+  `(progn (defthm ,name . ,args)
+          (acl2::add-to-ruleset tac-positive-normalize-rules ,name)))
+
 ;; XL 
-(defthm pred-nonempty-setimage-singleton-prod
-  (iff (pred-nonempty (setimage (singleton e1)
-                                (relprod (singleton e2) s)))
+(def-tac-positive-normalize in-setimage-singleton-prod
+  (iff (pred-in-set w (setimage (singleton e1)
+                       (relprod (singleton e2) s)))
        (and (pred-equal e1 e2)
-            (pred-nonempty s)))
-  :hints(("Goal" :in-theory (e/d (in-of-cartesian)))
-         (and stable-under-simplificationp
-              '(:use ((:instance emptyp-when-in
-                       (e (head s))
-                       (x (image (insert e1 nil)
-                                 (cartesian (insert e1 nil) s)))))
-                :in-theory (e/d (in-of-cartesian)
-                                (emptyp-when-in)))))
+            (pred-in-set w s)))
+  :hints(("Goal" :in-theory (e/d (in-of-cartesian))))
   :otf-flg t)
 
 ;; XR
-(defthm pred-nonempty-setpreimage-singleton-prod
-  (iff (pred-nonempty (setpreimage (relprod s (singleton e2))
-                                   (singleton e1)))
+(def-tac-positive-normalize in-setpreimage-singleton-prod
+  (iff (pred-in-set w (setpreimage (relprod s (singleton e2))
+                          (singleton e1)))
        (and (pred-equal e1 e2)
-            (pred-nonempty s)))
-  :hints(("Goal" :in-theory (e/d (in-of-cartesian)))
-         (and stable-under-simplificationp
-              '(:use ((:instance emptyp-when-in
-                       (e (head s))
-                       (x (preimage (insert e1 nil)
-                                    (cartesian s (insert e1 nil))))))
-                :in-theory (e/d (in-of-cartesian)
-                                (emptyp-when-in)))))
+            (pred-in-set w s)))
+  :hints(("Goal" :in-theory (e/d (in-of-cartesian))))
   :otf-flg t)
 
 ;; U2L
-(defthm pred-nonempty-setimage-singleton-union
-  (iff (pred-nonempty (setimage (singleton e) (relunion r1 r2)))
-       (or (pred-nonempty (setimage (singleton e) r1))
-           (pred-nonempty (setimage (singleton e) r2))))
-  :hints ((and stable-under-simplificationp
-               '(:use ((:instance emptyp-when-in
-                        (e (head (setimage (singleton e) (relunion r1 r2))))
-                        (x (setimage (singleton e) r1)))
-                       (:instance emptyp-when-in
-                        (e (head (setimage (singleton e) (relunion r1 r2))))
-                        (x (setimage (singleton e) r2)))
-                       (:instance emptyp-when-in
-                        (e (head (setimage (singleton e) r1)))
-                        (x (setimage (singleton e) (relunion r1 r2))))
-                       (:instance emptyp-when-in
-                        (e (head (setimage (singleton e) r2)))
-                        (x (setimage (singleton e) (relunion r1 r2)))))
-                 :in-theory (e/d (in-of-image-suff)
-                                 (emptyp-when-in
-                                  set::never-in-empty))))))
+(def-tac-positive-normalize in-setimage-singleton-union
+  (iff (pred-in-set w (setimage (singleton e) (relunion r1 r2)))
+       (or (pred-in-set w (setimage (singleton e) r1))
+           (pred-in-set w (setimage (singleton e) r2)))))
 
 ;; U2R
-(defthm pred-nonempty-setpreimage-singleton-union
-  (iff (pred-nonempty (setpreimage (relunion r1 r2) (singleton e)))
-       (or (pred-nonempty (setpreimage r1 (singleton e)))
-           (pred-nonempty (setpreimage r2 (singleton e)))))
-  :hints ((and stable-under-simplificationp
-               '(:use ((:instance emptyp-when-in
-                        (e (head (setpreimage (relunion r1 r2) (singleton e))))
-                        (x (setpreimage r1 (singleton e))))
-                       (:instance emptyp-when-in
-                        (e (head (setpreimage (relunion r1 r2) (singleton e))))
-                        (x (setpreimage r2 (singleton e))))
-                       (:instance emptyp-when-in
-                        (e (head (setpreimage r1 (singleton e))))
-                        (x (setpreimage (relunion r1 r2) (singleton e))))
-                       (:instance emptyp-when-in
-                        (e (head (setpreimage r2 (singleton e))))
-                        (x (setpreimage (relunion r1 r2) (singleton e)))))
-                 :in-theory (e/d ()
-                                 (emptyp-when-in
-                                  set::never-in-empty))))))
+(def-tac-positive-normalize in-setpreimage-singleton-union
+  (iff (pred-in-set w (setpreimage (relunion r1 r2) (singleton e)))
+       (or (pred-in-set w (setpreimage r1 (singleton e)))
+           (pred-in-set w (setpreimage r2 (singleton e))))))
 
 
 (defthm image-of-relunion
@@ -3035,9 +3599,6 @@
   :hints(("Goal" :in-theory (enable nth take))))
 
 (local (include-book "arithmetic/top" :dir :system))
-(local (defthm len-equal-0
-         (equal (equal (len x) 0)
-                (not (consp x)))))
 
 ;; (local (defthm car-last-cdr
 ;;          (equal (car (last (cdr x)))
@@ -3140,14 +3701,35 @@
 
 
 ;; *L
-(defthm pred-nonempty-setimage-singleton-star
+(def-tac-positive-normalize pred-nonempty-setimage-singleton-star
   (implies (and (event-p e)
                 (event-p w))
-           (iff (in w (setimage (singleton e) (relstar r)))
-                (or (in w (singleton e))
-                    (in w (setimage (setimage (singleton e) r)
-                                    (relstar r))))))
+           (iff (pred-in-set w (setimage (singleton e) (relstar r)))
+                (or (pred-in-set w (singleton e))
+                    (pred-in-set w (setimage (setimage (singleton e) r)
+                                             (relstar r))))))
   :hints(("Goal" :in-theory (e/d (reflexive-transitive-closure
+                                  image-of-compose-inverse)
+                                 (image-of-compose
+                                  in-of-compose-rw)))
+         (and stable-under-simplificationp
+              '(:use ((:instance in-of-transitive-closure-split
+                       (pair (edge e w)))
+                      (:instance in-of-compose-suff
+                       (x r) (y (id-relation (universe)))
+                       (pair (edge e w)) (mid w)))
+                :in-theory (enable in-of-compose-rw))))
+  :otf-flg t)
+
+;; +L
+(def-tac-positive-normalize pred-nonempty-setimage-singleton-plus
+  (implies (and (event-p e)
+                (event-p w))
+           (iff (pred-in-set w (setimage (singleton e) (relplus r)))
+                (or (pred-in-set w (setimage (singleton e) r))
+                    (pred-in-set w (setimage (setimage (singleton e) r)
+                                             (relplus r))))))
+  :hints(("Goal" :in-theory (e/d (transitive-closure
                                   image-of-compose-inverse)
                                  (image-of-compose
                                   in-of-compose-rw)))
@@ -3165,12 +3747,12 @@
          (preimage x (compose z y))))
 
 ;; *R
-(defthm pred-nonempty-setpreimage-singleton-star
+(def-tac-positive-normalize pred-nonempty-setpreimage-singleton-star
   (implies (and (event-p e)
                 (event-p w))
-           (iff (in w (setpreimage (relstar r) (singleton e)))
-                (or (in w (singleton e))
-                    (in w (setpreimage (relstar r)
+           (iff (pred-in-set w (setpreimage (relstar r) (singleton e)))
+                (or (pred-in-set w (singleton e))
+                    (pred-in-set w (setpreimage (relstar r)
                                        (setpreimage r (singleton e)))))))
   :hints(("Goal" :in-theory (e/d (reflexive-transitive-closure
                                   preimage-of-compose-inverse)
@@ -3185,6 +3767,152 @@
                       )
                 :in-theory (enable in-of-compose-rw))))
   :otf-flg t)
+
+;; +R
+(def-tac-positive-normalize pred-nonempty-setpreimage-singleton-plus
+  (implies (and (event-p e)
+                (event-p w))
+           (iff (pred-in-set w (setpreimage (relplus r) (singleton e)))
+                (or (pred-in-set w (setpreimage r (singleton e)))
+                    (pred-in-set w (setpreimage (relplus r)
+                                                (setpreimage r (singleton e)))))))
+  :hints(("Goal" :in-theory (e/d (reflexive-transitive-closure
+                                  preimage-of-compose-inverse)
+                                 (preimage-of-compose
+                                  in-of-compose-rw)))
+         (and stable-under-simplificationp
+              '(:use ((:instance in-of-transitive-closure-split2
+                       (pair (edge w e)))
+                      (:instance in-of-compose-suff
+                       (x (id-relation (universe))) (y r)
+                       (pair (edge w e)) (mid w))
+                      )
+                :in-theory (enable in-of-compose-rw))))
+  :otf-flg t)
+
+
+;; U1
+(def-tac-positive-normalize in-setunion
+  (iff (pred-in-set w (setunion s1 s2))
+       (or (pred-in-set w s1)
+           (pred-in-set w s2))))
+;; eL
+(def-tac-positive-normalize in-singleton-intersect
+  (iff (pred-in-set w (setintersect (singleton e1) (singleton e2)))
+       (and (pred-equal e1 e2)
+            (pred-in-set w (singleton e1)))))
+
+;; \bot1
+(def-tac-positive-normalize in-emptyset
+  (iff (pred-in-set w (emptyset))
+       (pred-false)))
+
+
+(encapsulate nil
+
+  (acl2::defconsts *tac-positive-normalize-rules*
+    (b* (((mv err rewrites)
+          (tac-collect-rewrites-aux
+           (acl2::get-ruleset 'tac-positive-normalize-rules (w state))
+           (w state))))
+      (if err
+          (er hard? '*tac-positive-normalize-rules* "~@0" err)
+        rewrites)))
+
+  (define tac-positive-normalize-rules ()
+    :returns (rewrites cmr::rewritelist-p)
+    *tac-positive-normalize-rules*
+    ///
+    (in-theory (disable (tac-positive-normalize-rules)))))
+
+
+(define collect-if-branches ((x pseudo-termp))
+  :returns (branches pseudo-term-listp)
+  :measure (pseudo-term-count x)
+  (pseudo-term-case x
+    :fncall (if (eq x.fn 'if)
+                (b* (((list a b c) x.args)
+                     ((when (equal c ''nil))
+                      (append (collect-if-branches a)
+                              (collect-if-branches b)))
+                     ((when (equal a b))
+                      (append (collect-if-branches a)
+                              (collect-if-branches c))))
+                  (list (pseudo-term-fix x)))
+              (list (pseudo-term-fix x)))
+    :otherwise (list (pseudo-term-fix x))))
+                     
+
+
+(defsection tac-pred-rewrite-rhs-typed
+  (defun-sk tac-pred-rewrite-rhs-typed (rule)
+    (forall (x ctx)
+            (b* (((cmr::rewrite rule))
+                 ((mv unify-ok subst) (cmr::term-unify-strict rule.lhs x nil)))
+              (implies (and unify-ok
+                            (equal (tac-term-type x ctx) :pred))
+                       (subsetp (tac-termlist-types (collect-if-branches (cmr::term-subst-strict rule.rhs subst)) ctx)
+                                '(:pred)))))
+    :rewrite :direct)
+
+  (in-theory (disable tac-pred-rewrite-rhs-typed)))
+
+
+
+(define tac-pred-rewrites-rhs-typed (rules)
+  :verify-guards nil
+  (if (atom rules)
+      t
+    (and (tac-pred-rewrite-rhs-typed (car rules))
+         (tac-pred-rewrites-rhs-typed (cdr rules))))
+  ///
+  (local (defthm car-when-equal-cons
+           (implies (equal x (cons a b))
+                    (equal (car x) a))))
+  (local (defthm cdr-when-equal-cons
+           (implies (equal x (cons a b))
+                    (equal (cdr x) b))))
+  
+  (defthm tac-pred-rewrites-rhs-typed-of-tac-positive-normalize-rules
+    (tac-pred-rewrites-rhs-typed (tac-positive-normalize-rules))
+    :hints (("goal" :expand ((:free (x) (tac-pred-rewrite-rhs-typed x))
+                             (:free (a b) (tac-pred-rewrites-rhs-typed (cons a b))))
+             :in-theory (e/d (cmr::term-subst-strict
+                              tac-termlist-types
+                              collect-if-branches
+                              cmr::termlist-subst-strict
+                              cmr::equal-of-pseudo-term-fncall
+                              (tac-positive-normalize-rules))
+                             (tac-pred-rewrite-rhs-typed-necc))))))
+
+
+
+(encapsulate nil
+  (local (defthm car-when-equal-cons
+           (implies (equal x (cons a b))
+                    (equal (car x) a))))
+  (local (defthm cdr-when-equal-cons
+           (implies (equal x (cons a b))
+                    (equal (cdr x) b))))
+  
+  (defthm tac-rewrites-hyps-ok-of-tac-positive-normalize-rules
+    (tac-rewrites-hyps-ok (tac-positive-normalize-rules))
+    :hints (("goal" :expand ((:free (x) (tac-rewrite-hyps-ok x))
+                             (:free (a b) (tac-rewrites-hyps-ok (cons a b))))
+             :in-theory (e/d (cmr::term-subst-strict
+                              cmr::termlist-subst-strict
+                              cmr::equal-of-pseudo-term-fncall
+                              tac-ev-cube
+                              (tac-positive-normalize-rules))
+                             (tac-rewrite-hyps-ok-necc))))))
+
+(defthm tac-ev-theorem-rewritesp-of-tac-positive-normalize-rules
+    (tac-ev-theorem-rewritesp (tac-positive-normalize-rules))
+    :hints(("Goal" :in-theory (acl2::e/d* ((tac-positive-normalize-rules))
+                                          (tac-functions
+                                           (emptyset)
+                                           (pred-false)))
+            :expand ((:Free (a b) (tac-ev-theorem-rewritesp (cons a b)))))))
 
 
 ;; Missing negative normalization rules
@@ -3207,9 +3935,1362 @@
 ;; ~=
 
 
+(acl2::def-ruleset! tac-negative-normalize-rules nil)
+
+(defmacro def-tac-negative-normalize (name &rest args)
+  `(progn (defthm ,name . ,args)
+          (acl2::add-to-ruleset tac-negative-normalize-rules ,name)))
+;; ~aL
+(def-tac-negative-normalize not-in-singleton-image-when-pair
+  (implies (and (pred-in-rel e1 e2 a)
+                (relation-p a))
+           (iff (not-pred-in-set w (image (singleton e1) a))
+                (and (not-pred-in-set w (image (singleton e1) a))
+                     (not-pred-in-set w (singleton e2))))))
+
+;; ~aR
+(def-tac-negative-normalize not-in-singleton-preimage-when-pair
+  (implies (and (in (edge e2 e1) a)
+                (relation-p a))
+           (iff (not-pred-in-set w (setpreimage a (singleton e1)))
+                (and (not-pred-in-set w (setpreimage a (singleton e1)))
+                     (not-pred-in-set w (singleton e2))))))
+
+
+(defthm in-compose-id
+  (implies (event-p (edge->dst pair))
+           (iff (in pair
+                    (compose r (id-relation (universe))))
+                (in pair (relation-fix r))))
+  :hints (("goal" :in-theory (enable in-of-compose-rw)
+           :use ((:instance in-of-compose-suff
+                  (pair pair)
+                  (mid (edge->dst pair))
+                  (x r) (y (id-relation (universe))))))))
+
+(defthm in-compose-id2
+  (implies (event-p (edge->src pair))
+           (iff (in pair
+                    (compose (id-relation (universe)) r))
+                (in pair (relation-fix r))))
+  :hints (("goal" :in-theory (enable in-of-compose-rw)
+           :use ((:instance in-of-compose-suff
+                  (pair pair)
+                  (mid (edge->src pair))
+                  (x (id-relation (universe))) (y r))))))
+
+;; ~*L
+(def-tac-negative-normalize not-in-singleton-star-image
+  (implies (event-p w)
+           (iff (not-pred-in-set w (setimage (singleton e) (relstar r)))
+                (and (not-pred-in-set w (singleton e))
+                     (not-pred-in-set w (setimage (setimage (singleton e) r) (relstar r))))))
+  :hints(("Goal" :in-theory (e/d (reflexive-transitive-closure
+                                  image-of-compose-inverse
+                                  in-of-compose-suff
+                                  in-of-compose-suff2
+                                  in-of-compose-rw)
+                                 (image-of-compose))
+          :use ((:instance in-of-transitive-closure-split
+                 (pair (edge e w)))))))
+
+;; ~+L
+(def-tac-negative-normalize not-in-singleton-plus-image
+  (implies (event-p w)
+           (iff (not-pred-in-set w (setimage (singleton e) (relplus r)))
+                (and (not-pred-in-set w (setimage (singleton e) r))
+                     (not-pred-in-set w (setimage (setimage (singleton e) r) (relplus r))))))
+  :hints(("Goal" :in-theory (e/d (reflexive-transitive-closure
+                                  image-of-compose-inverse
+                                  in-of-compose-suff
+                                  in-of-compose-suff2
+                                  in-of-compose-rw)
+                                 (image-of-compose))
+          :use ((:instance in-of-transitive-closure-split
+                 (pair (edge e w)))))))
+
+;; ~*R
+(def-tac-negative-normalize not-in-singleton-star-preimage
+  (implies (event-p w)
+           (iff (not-pred-in-set w (setpreimage (relstar r) (singleton e)))
+                (and (not-pred-in-set w (singleton e))
+                     (not-pred-in-set w (setpreimage (relstar r) (setpreimage r (singleton e)))))))
+  :hints(("Goal" :in-theory (e/d (reflexive-transitive-closure
+                                  preimage-of-compose-inverse
+                                  in-of-compose-suff
+                                  in-of-compose-suff2
+                                  in-of-compose-rw)
+                                 (preimage-of-compose))
+          :use ((:instance in-of-transitive-closure-split2
+                 (pair (edge w e)))))))
+
+
+;; ~+R
+(def-tac-negative-normalize not-in-singleton-plus-preimage
+  (implies (event-p w)
+           (iff (not-pred-in-set w (setpreimage (relplus r) (singleton e)))
+                (and (not-pred-in-set w (setpreimage r (singleton e)))
+                     (not-pred-in-set w (setpreimage (relplus r) (setpreimage r (singleton e)))))))
+  :hints(("Goal" :in-theory (e/d (reflexive-transitive-closure
+                                  preimage-of-compose-inverse
+                                  in-of-compose-suff
+                                  in-of-compose-suff2
+                                  in-of-compose-rw)
+                                 (preimage-of-compose))
+          :use ((:instance in-of-transitive-closure-split2
+                 (pair (edge w e)))))))
+
+;; ~U2L
+(def-tac-negative-normalize not-in-singleton-union-image
+  (iff (not-pred-in-set w (setimage (singleton e) (relunion r1 r2)))
+       (and (not-pred-in-set w (setimage (singleton e) r1))
+            (not-pred-in-set w (setimage (singleton e) r2)))))
+
+;; ~U2R
+(def-tac-negative-normalize not-in-singleton-union-preimage
+  (iff (not-pred-in-set w (setpreimage (relunion r1 r2) (singleton e)))
+       (and (not-pred-in-set w (setpreimage r1 (singleton e)))
+            (not-pred-in-set w (setpreimage r2 (singleton e))))))
+
+;; ~=L
+(def-tac-negative-normalize not-in-singleton
+  (implies (pred-equal e1 e2)
+           (iff (not-pred-in-set w (singleton e1))
+                (and (not-pred-in-set w (singleton e1))
+                     (not-pred-in-set w (singleton e2))))))
+
+;; ~XL
+(def-tac-negative-normalize not-in-singleton-image-prod
+  (iff (not-pred-in-set w (setimage (singleton e) (relprod s1 s2)))
+       (or (not (pred-nonempty (setintersect (singleton e) s1)))
+           (not-pred-in-set w s2)))
+  :hints(("Goal" :in-theory (enable in-of-cartesian))))
+  
+;; ~XR
+(def-tac-negative-normalize not-in-singleton-preimage-prod
+  (iff (not-pred-in-set w (setpreimage (relprod s1 s2) (singleton e)))
+       (or (not (pred-nonempty (setintersect (singleton e) s2)))
+           (not-pred-in-set w s1)))
+  :hints(("Goal" :in-theory (enable in-of-cartesian))))
+
+
+
+;; ~A
+(def-tac-negative-normalize not-in-base-set
+  (implies (and (pred-in-set e a)
+                (base-set-p a))
+           (iff (not-pred-in-set w a)
+                (and (not-pred-in-set w a)
+                     (not-pred-in-set w (singleton e))))))
+           
+;; ~U1
+(def-tac-negative-normalize not-in-setunion
+  (iff (not-pred-in-set w (setunion s1 s2))
+       (and (not-pred-in-set w s1)
+            (not-pred-in-set w s2))))
+
+
+;; ~T1  -- special -- introduces new conjuncts for all e
+(def-tac-negative-normalize not-in-universe
+  (implies (and (mentioned-event-p e)
+                (event-p e))
+           (iff (not-pred-in-set w (universe))
+                (and (not-pred-in-set w (universe))
+                     (not-pred-in-set w (singleton e))))))
+;; ~eL
+(def-tac-negative-normalize not-in-singleton-intersect-1
+  (iff (not-pred-in-set w (setintersect (singleton e) s))
+       (or (not-pred-in-set w (singleton e))
+           (not (pred-nonempty (setintersect (singleton e) s))))))
+
+;; ~eR
+(def-tac-negative-normalize not-in-singleton-intersect-2
+  (iff (not-pred-in-set w (setintersect s (singleton e)))
+       (or (not-pred-in-set w (singleton e))
+           (not (pred-nonempty (setintersect s (singleton e)))))))
+
+
+
+;; (defthm singleton-intersect-image
+;;   (equal (intersect (insert e nil) (image s r))
+;;          (intersect (preimage (insert e nil) r) s))
+;;   :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
+;;                                      pick-a-point-subset-strategy))))
+
+
+;; ~.1,2L
+(def-tac-negative-normalize nonempty-singleton-intersect-image-1
+  (implies (not-singleton-set-p s)
+           (iff (not-pred-nonempty (setintersect (singleton e) (setimage s r)))
+                (not-pred-nonempty (setintersect (setpreimage r (singleton e)) s))))
+  :hints(("Goal" :in-theory (e/d (in-of-image-rw)))
+         (and stable-under-simplificationp
+              '(:in-theory (e/d (in-of-image-rw)
+                                (emptyp-when-in
+                                 set::never-in-empty))
+                :use ((:instance emptyp-when-in
+                       (x (setintersect (setpreimage r (singleton e)) s))
+                       (e (image-witness e s r)))))))
+  :otf-flg t)
+
+;; ~.1,2R
+(def-tac-negative-normalize nonempty-singleton-intersect-image-2
+  (implies (not-singleton-set-p s)
+           (iff (not-pred-nonempty (setintersect (setimage s r) (singleton e)))
+                (not-pred-nonempty (setintersect s (setpreimage r (singleton e))))))
+  :hints(("Goal" :in-theory (e/d (in-of-image-rw)))
+         (and stable-under-simplificationp
+              '(:in-theory (e/d (in-of-image-rw)
+                                (emptyp-when-in
+                                 set::never-in-empty))
+                :use ((:instance emptyp-when-in
+                       (x (setintersect s (setpreimage r (singleton e))))
+                       (e (image-witness e s r)))))))
+  :otf-flg t)
+
+
+
+
+;; ~.2,1L
+(def-tac-negative-normalize nonempty-singleton-intersect-image-3
+  (implies (not-singleton-set-p s)
+           (iff (not-pred-nonempty (setintersect (singleton e) (setpreimage r s)))
+                (not-pred-nonempty (setintersect (setimage (singleton e) r) s))))
+  :hints(("Goal" :in-theory (e/d (in-of-preimage-rw)))
+         (and stable-under-simplificationp
+              '(:in-theory (e/d (in-of-preimage-rw)
+                                (emptyp-when-in
+                                 set::never-in-empty))
+                :use ((:instance emptyp-when-in
+                       (x (setintersect (setimage (singleton e) r) s))
+                       (e (preimage-witness e s r)))))))
+  :otf-flg t)
+;; ~.2,1R
+(def-tac-negative-normalize nonempty-singleton-intersect-image-4
+  (implies (not-singleton-set-p s)
+           (iff (not-pred-nonempty (setintersect (setpreimage r s) (singleton e)))
+                (not-pred-nonempty (setintersect s (setimage (singleton e) r)))))
+  :hints(("Goal" :in-theory (e/d (in-of-preimage-rw)))
+         (and stable-under-simplificationp
+              '(:in-theory (e/d (in-of-preimage-rw)
+                                (emptyp-when-in
+                                 set::never-in-empty))
+                :use ((:instance emptyp-when-in
+                       (x (setintersect s (setimage (singleton e) r)))
+                       (e (preimage-witness e s r)))))))
+  :otf-flg t)
+
+;; ~\cap1L
+(def-tac-negative-normalize nonempty-singleton-intersect-intersect-1
+  (iff (not-pred-nonempty (setintersect (singleton e) (setintersect s1 s2)))
+       (or (not-pred-nonempty (setintersect (singleton e) s1))
+           (not-pred-nonempty (setintersect (singleton e) s2)))))
+;; ~\cap1R
+(def-tac-negative-normalize nonempty-singleton-intersect-intersect-2
+  (iff (not-pred-nonempty (setintersect (setintersect s1 s2) (singleton e)))
+       (or (not-pred-nonempty (setintersect s1 (singleton e)))
+           (not-pred-nonempty (setintersect s2 (singleton e))))))
+
+;; ~\cap_e
+(def-tac-negative-normalize nonempty-singleton-intersect-singleton
+  (iff (not-pred-nonempty (setintersect (singleton e1) (singleton e2)))
+       (not (pred-equal e1 e2))))
+
+;; ~1XL
+(def-tac-negative-normalize not-in-image-product-singleton-1
+  (iff (not-pred-in-set w (setimage s1 (relprod (singleton e) s2)))
+       (or (not-pred-in-set w s2)
+           (not-pred-nonempty (setintersect s1 (singleton e)))))
+  :hints(("Goal" :in-theory (enable in-of-image-rw
+                                    in-of-cartesian))))
+;; ~1XR
+(def-tac-negative-normalize not-in-image-product-singleton-2
+  (iff (not-pred-in-set w (setpreimage (relprod s2 (singleton e)) s1))
+       (or (not-pred-in-set w s2)
+           (not-pred-nonempty (setintersect s1 (singleton e)))))
+  :hints(("Goal" :in-theory (enable in-of-preimage-rw
+                                    in-of-cartesian))))
+;; ~X1L
+(def-tac-negative-normalize not-in-image-product-singleton-3
+  (iff (not-pred-in-set w (setpreimage (relprod (singleton e) s1) s2))
+       (or (not-pred-in-set w (singleton e))
+           (not-pred-nonempty (setintersect s1 s2))))
+  :hints(("Goal" :in-theory (e/d (in-of-preimage-rw
+                                  in-of-cartesian)
+                                 (emptyp-when-in
+                                  set::never-in-empty))
+          :use ((:instance emptyp-when-in
+                 (e (preimage-witness w s2 (cartesian (insert e nil) s1)))
+                 (x (intersect s1 s2)))))))
+
+;; ~X1R
+(def-tac-negative-normalize not-in-image-product-singleton-4
+  (iff (not-pred-in-set w (setimage s2 (relprod s1 (singleton e))))
+       (or (not-pred-in-set w (singleton e))
+           (not-pred-nonempty (setintersect s1 s2))))
+  :hints(("Goal" :in-theory (e/d (in-of-image-rw
+                                  in-of-cartesian)
+                                 (emptyp-when-in
+                                  set::never-in-empty))
+          :use ((:instance emptyp-when-in
+                 (e (image-witness w s2 (cartesian s1 (insert e nil))))
+                 (x (intersect s1 s2)))))))
+;; ~0
+(def-tac-negative-normalize not-pred-nonempty-of-singleton
+  (iff (not-pred-nonempty (singleton e))
+       nil))
+
+;; ~=
+(def-tac-negative-normalize not-pred-equal-same
+  (iff (not-pred-equal e e)
+       nil))
+
+
+
+
+;; Propagation thms
+(defthm propagate-into-setimage
+  (iff (pred-in-set w (setimage s r))
+       (and (pred-in-set (image-witness w s r) s)
+            (pred-in-rel (image-witness w s r) w r))))
+
+(defthm propagate-into-setpreimage
+  (iff (pred-in-set w (setpreimage r s))
+       (and (pred-in-set (preimage-witness w s r) s)
+            (pred-in-rel w (preimage-witness w s r) r))))
+
+(defthm propagate-into-relidentity
+  (iff (pred-in-rel w1 w2 (relidentity s))
+       (and (equal w1 w2)
+            (pred-in-set w1 s))))
+
+(defthm propagate-into-relcompose
+  (iff (pred-in-rel w1 w2 (relcompose r1 r2))
+       (and (pred-in-rel w1 (compose-midpoint w1 w2 r1 r2) r1)
+            (pred-in-rel (compose-midpoint w1 w2 r1 r2) w2 r2)))
+  :hints(("Goal" :in-theory (enable in-of-compose-suff-rw
+                                    in-of-compose-rw))))
+
+(defthm propagate-into-relinverse
+  (iff (pred-in-rel w1 w2 (relinverse r))
+       (pred-in-rel w2 w1 r)))
+
+(defthm propagate-into-relprod
+  (iff (pred-in-rel w1 w2 (relprod s1 s2))
+       (and (pred-in-set w1 s1)
+            (pred-in-set w2 s2)))
+  :hints(("Goal" :in-theory (enable in-of-cartesian))))
+
+(defthm propagate-into-setintersect
+  (iff (pred-in-set w (setintersect s1 s2))
+       (and (pred-in-set w s1)
+            (pred-in-set w s2))))
+
+(defthm propagate-into-relintersect
+  (iff (pred-in-rel w1 w2 (relintersect r1 r2))
+       (and (pred-in-rel w1 w2 r1)
+            (pred-in-rel w1 w2 r2))))
+
 ;; implemented:
 ;; ~2XL/R -- relcompose-singleton-prod-1 relcompose-singleton-prod-2
 ;; ~X2L/R -- relcompose-singleton-prod-3 relcompose-singleton-prod-4
 ;; ~x-1L/R -- relinverse-of-relprod
 ;; ~\capXL/R -- relintersect-relprod-singleton-1 relintersect-relprod-singleton-2
 ;; ~X\capL/R -- relintersect-relprod-singleton-3 relintersect-relprod-singleton-4
+
+
+(fty::deflist pseudo-term-list-list :elt-type pseudo-term-listp
+  :pred acl2::pseudo-term-list-listp
+  :true-listp t)
+
+(defprod tac-positive-rule-result-branch
+  ((assums pseudo-term-listp)
+   (ctx-results pseudo-term-listp))) ;; all conjoined
+
+;; all disjoined
+(deflist tac-positive-rule-result-branchlist :elt-type tac-positive-rule-result-branch :true-listp t)
+
+(defprod tac-positive-rule-result-branch-args
+  ((assums pseudo-term-listp)
+   (ctx-results acl2::pseudo-term-list-listp)))
+
+(deflist tac-positive-rule-result-branch-argslist :elt-type tac-positive-rule-result-branch-args :true-listp t)
+
+
+(define tac-positive-rule-result-branch-typed ((x tac-positive-rule-result-branch-p)
+                                               (type tac-type-p)
+                                               (ctx type-ctx-p))
+  (b* (((tac-positive-rule-result-branch x)))
+    (and (subsetp (tac-termlist-types x.assums ctx) '(:pred))
+         (let ((type (tac-type-fix type)))
+           (or (not type)
+               (subsetp (tac-termlist-types x.ctx-results ctx) (list type))))))
+  ///
+  (defthm tac-positive-rule-result-branch-typed-when-nil
+    (implies (tac-positive-rule-result-branch-typed x type ctx)
+             (tac-positive-rule-result-branch-typed x nil ctx))))
+
+(define tac-positive-rule-result-branchlist-typed ((x tac-positive-rule-result-branchlist-p)
+                                                   (type tac-type-p)
+                                                   (ctx type-ctx-p))
+  (if (atom x)
+      t
+    (and (tac-positive-rule-result-branch-typed (car x) type ctx)
+         (tac-positive-rule-result-branchlist-typed (cdr x) type ctx)))
+  ///
+  (defthm tac-positive-rule-result-branchlist-typed-of-append
+    (iff (tac-positive-rule-result-branchlist-typed (append x y) type ctx)
+         (and (tac-positive-rule-result-branchlist-typed x type ctx)
+              (tac-positive-rule-result-branchlist-typed y type ctx))))
+  
+  (defthm tac-positive-rule-result-branchlist-typed-when-nil
+    (implies (tac-positive-rule-result-branchlist-typed x type ctx)
+             (tac-positive-rule-result-branchlist-typed x nil ctx))))
+
+(deflist tac-typelistlist :elt-type tac-typelist :true-listp t)
+
+(define tac-termlistlist-types ((x acl2::pseudo-term-list-listp)
+                                (ctx type-ctx-p))
+  :returns (types tac-typelistlist-p)
+  (if (atom x)
+      nil
+    (cons (tac-termlist-types (car x) ctx)
+          (tac-termlistlist-types (cdr x) ctx))))
+
+(define prefixp-of-all (x y)
+  (if (atom y)
+      t
+    (and (acl2::prefixp x (car y))
+         (prefixp-of-all x (cdr y))))
+  ///
+  (defthm prefixp-of-all-of-nil
+    (prefixp-of-all nil y)
+    :hints(("Goal" :in-theory (enable acl2::prefixp)))))
+
+(define tac-positive-rule-result-branch-args-typed ((x tac-positive-rule-result-branch-args-p)
+                                                    (types tac-typelist-p)
+                                                    (ctx type-ctx-p))
+  (b* (((tac-positive-rule-result-branch-args x)))
+    (and (subsetp (tac-termlist-types x.assums ctx) '(:pred))
+         (prefixp-of-all (tac-typelist-fix types) (tac-termlistlist-types x.ctx-results ctx))))
+  ///
+  (defthm tac-positive-rule-result-branch-args-typed-of-nil
+    (implies (tac-positive-rule-result-branch-args-typed x types ctx)
+             (tac-positive-rule-result-branch-args-typed x nil ctx))))
+
+(define tac-positive-rule-result-branch-argslist-typed ((x tac-positive-rule-result-branch-argslist-p)
+                                                        (types tac-typelist-p)
+                                                        (ctx type-ctx-p))
+  (if (atom x)
+      t
+    (and (tac-positive-rule-result-branch-args-typed (car x) types ctx)
+         (tac-positive-rule-result-branch-argslist-typed (cdr x) types ctx)))
+  ///
+  (defthm tac-positive-rule-result-branch-argslist-typed-of-nil
+    (implies (tac-positive-rule-result-branch-argslist-typed x types ctx)
+             (tac-positive-rule-result-branch-argslist-typed x nil ctx))))
+
+
+(define tac-parse-positive-rule-result-base ((x pseudo-termp))
+  :returns (mv ok (ctx-res pseudo-termp))
+  (pseudo-term-case x
+    :fncall (if (and (eq x.fn 'pred-in-set)
+                     (eq (first x.args) 'tac-w))
+                (mv t (second x.args))
+              (mv nil nil))
+    :otherwise (mv nil nil))
+  ///
+  (defret <fn>-correct
+    (implies ok
+             (equal (pred-in-set (cdr (assoc 'tac-w env))
+                                 (tac-ev ctx-res env))
+                    (tac-ev x env))))
+
+  (defret <fn>-typed
+    (implies (and ok
+                  (subsetp (tac-termlist-types (collect-if-branches x) ctx) '(:pred)))
+             (equal (tac-term-type ctx-res ctx) :set))
+    :hints(("Goal" :in-theory (enable collect-if-branches
+                                      tac-termlist-types)))))
+
+                
+(local (in-theory (disable acl2::pseudo-termp-opener)))
+
+(defthm tac-ev-cube-of-append
+  (equal (tac-ev-cube (append x y) a)
+         (and (tac-ev-cube x a)
+              (tac-ev-cube y a)))
+  :hints(("Goal" :in-theory (enable tac-ev-cube))))
+
+
+;; (define tac-parse-positive-rule-result-conj1 ((x pseudo-termp))
+;;   :returns (mv (ok)
+;;                (assums pseudo-term-listp))
+;;   :measure (pseudo-term-count x)
+;;   :verify-guards nil
+;;   (pseudo-term-case x
+;;     :fncall (if (eq x.fn 'if)
+;;                 (b* (((list a b c) x.args))
+;;                   (cond ((equal c ''nil)
+;;                          (b* (((mv ok assums1) (tac-parse-positive-rule-result-conj1 a))
+;;                               ((unless ok) (mv nil nil))
+;;                               ((mv ok assums2) (tac-parse-positive-rule-result-conj1 b)))
+;;                            (if ok
+;;                                (mv t (append assums1 assums2))
+;;                              (mv nil nil))))
+;;                         (t (mv nil nil))))
+;;               (mv t (list (pseudo-term-fix x))))
+;;     :const (if x.val
+;;                (mv t nil)
+;;              (mv nil nil))
+;;     :otherwise (mv nil nil))
+;;   ///
+;;   (verify-guards tac-parse-positive-rule-result-conj1)
+;;   (defret <fn>-correct
+;;     (implies ok
+;;              (iff (tac-ev-cube assums env)
+;;                   (tac-ev x env)))
+;;     :hints(("Goal" :in-theory (enable tac-ev-cube)))))
+
+(define tac-rule-conjoin-ctx-results ((x pseudo-term-listp) env)
+  :verify-guards nil
+  (if (atom x)
+      t
+    (and (pred-in-set (cdr (assoc 'tac-w env)) (tac-ev (car x) env))
+         (tac-rule-conjoin-ctx-results (cdr x) env)))
+  ///
+  (defthm tac-rule-conjoin-ctx-results-of-append
+    (equal (tac-rule-conjoin-ctx-results (append x y) env)
+           (and (tac-rule-conjoin-ctx-results x env)
+                (tac-rule-conjoin-ctx-results y env)))))
+
+
+(define tac-eval-positive-rule-result-branch ((x tac-positive-rule-result-branch-p)
+                                              env)
+  :verify-guards nil
+  (b* (((tac-positive-rule-result-branch x)))
+    (and (tac-ev-cube x.assums env)
+         (tac-rule-conjoin-ctx-results x.ctx-results env))))
+
+
+(define tac-parse-positive-rule-result-conj ((x pseudo-termp))
+  :returns (mv (ok)
+               (assums pseudo-term-listp)
+               (ctx-results pseudo-term-listp))
+  :measure (pseudo-term-count x)
+  :verify-guards nil
+  (pseudo-term-case x
+    :fncall (if (eq x.fn 'if)
+                (b* (((list a b c) x.args))
+                  (cond ((equal c ''nil)
+                         (b* (((mv ok assums1 ctx-results1) (tac-parse-positive-rule-result-conj a))
+                              ((unless ok) (mv nil nil nil))
+                              ((mv ok assums2 ctx-results2) (tac-parse-positive-rule-result-conj b))
+                              ((unless ok) (mv nil nil nil)))
+                           (mv t (append assums1 assums2) (append ctx-results1 ctx-results2))))
+                        (t (mv nil nil nil))))
+              (b* (((mv ok ctx-res) (tac-parse-positive-rule-result-base x))
+                   ((when ok) (mv t nil (list ctx-res))))
+                (mv t (list (pseudo-term-fix x)) nil)))
+    :const (if x.val
+               (mv t nil nil)
+             (mv nil nil nil))
+    :otherwise (mv nil nil nil))
+  ///
+  (verify-guards tac-parse-positive-rule-result-conj)
+  (local (in-theory (disable pred-in-set)))
+  (defret <fn>-correct
+    (implies ok
+             (iff (tac-ev x env)
+                  (and (tac-ev-cube assums env)
+                       (tac-rule-conjoin-ctx-results ctx-results env))))
+    :hints(("Goal" :in-theory (enable tac-ev-cube
+                                      tac-rule-conjoin-ctx-results)))
+    :rule-classes nil)
+
+  (defret <fn>-correct-rw
+    (implies ok
+             (iff (tac-eval-positive-rule-result-branch
+                   (tac-positive-rule-result-branch assums ctx-results)
+                   env)
+                  (tac-ev x env)))
+    :hints(("Goal" :in-theory (enable tac-eval-positive-rule-result-branch)
+            :use <fn>-correct)))
+
+  (defret <fn>-typed
+    (implies (subsetp (tac-termlist-types (collect-if-branches x) ctx) '(:pred))
+             (and (subsetp (tac-termlist-types assums ctx) '(:pred))
+                  (subsetp (tac-termlist-types ctx-results ctx) '(:set))))
+    :hints(("Goal" :in-theory (enable tac-termlist-types
+                                      collect-if-branches)))))
+
+(define tac-eval-positive-rule-results ((x tac-positive-rule-result-branchlist-p)
+                                        env)
+  :verify-guards nil
+  (if (atom x)
+      nil
+    (or (tac-eval-positive-rule-result-branch (car x) env)
+        (tac-eval-positive-rule-results (cdr x) env)))
+  ///
+  (defthm tac-eval-positive-rule-results-of-append
+    (equal (tac-eval-positive-rule-results (append x y) env)
+           (or (tac-eval-positive-rule-results x env)
+               (tac-eval-positive-rule-results y env)))))
+
+
+(define tac-parse-positive-rule-result ((x pseudo-termp))
+  :returns (mv (ok)
+               (results tac-positive-rule-result-branchlist-p))
+  :measure (pseudo-term-count x)
+  :verify-guards nil
+  (if (pseudo-term-case x
+        :fncall (and (eq x.fn 'if)
+                     (equal (first x.args) (second x.args)))
+        :otherwise nil)
+      (b* (((list a & c) (acl2::pseudo-term-fncall->args x))
+           ((mv ok results1) (tac-parse-positive-rule-result a))
+           ((unless ok) (mv nil nil))
+           ((mv ok results2) (tac-parse-positive-rule-result c))
+           ((unless ok) (mv nil nil)))
+        (mv t (append results1 results2)))
+    (b* (((mv ok assums ctx-results) (tac-parse-positive-rule-result-conj x))
+         ((unless ok) (mv nil nil)))
+      (mv ok (list (tac-positive-rule-result-branch assums ctx-results)))))
+  ///
+  (verify-guards tac-parse-positive-rule-result)
+  (defret <fn>-correct
+    (implies ok
+             (iff (tac-eval-positive-rule-results results env)
+                  (tac-ev x env)))
+    :hints(("Goal" :in-theory (enable tac-eval-positive-rule-results)))
+    :rule-classes nil)
+
+  (defret <fn>-typed
+    (implies (subsetp (tac-termlist-types (collect-if-branches x) ctx) '(:pred))
+             (tac-positive-rule-result-branchlist-typed results :set ctx))
+    :hints(("Goal" :in-theory (enable tac-positive-rule-result-branchlist-typed
+                                      tac-positive-rule-result-branch-typed
+                                      collect-if-branches)))))
+
+
+
+
+(local (defthm prefixp-transitive
+         (implies (and (acl2::prefixp a b)
+                       (acl2::prefixp b c))
+                  (acl2::prefixp a c))
+         :hints(("Goal" :in-theory (enable acl2::prefixp)))))
+(local (defthm prefixp-reflexive
+         (acl2::prefixp x x)
+         :hints(("Goal" :in-theory (enable acl2::prefixp)))))
+
+(define apply-fn-to-arglists ((fn pseudo-fnsym-p)
+                              (args acl2::pseudo-term-list-listp))
+  :returns (apps pseudo-term-listp)
+  (if (atom args)
+      nil
+    (cons (pseudo-term-fncall fn (car args))
+          (apply-fn-to-arglists fn (cdr args))))
+  ///
+  
+  (defret types-of-apply-fn-to-arglists
+    (implies (and (equal rettype (tac-function-return-type fn))
+                  rettype
+                  (prefixp-of-all argtypes (tac-termlistlist-types args ctx))
+                  (acl2::prefixp (tac-function-argument-types fn) argtypes)
+                  (tac-typelist-p argtypes))
+             (subsetp (tac-termlist-types apps ctx) (list rettype)))
+    :hints(("Goal" :in-theory (enable tac-termlist-types
+                                      prefixp-of-all
+                                      tac-termlistlist-types)
+            :induct <call>)
+           (And stable-under-simplificationp
+                '(:expand ((:free (args) (tac-term-type (pseudo-term-fncall fn args) ctx))))))))
+
+(define apply-fn-to-result-branches ((fn pseudo-fnsym-p)
+                                     (results tac-positive-rule-result-branch-argslist-p))
+  :returns (apps tac-positive-rule-result-branchlist-p)
+  (if (atom results)
+      nil
+    (cons (b* (((tac-positive-rule-result-branch-args x) (car results)))
+            (tac-positive-rule-result-branch x.assums
+                                             (apply-fn-to-arglists fn x.ctx-results)))
+          (apply-fn-to-result-branches fn (cdr results))))
+  ///
+  (defret types-of-apply-fn-to-result-branches
+    (implies (and (equal rettype (tac-function-return-type fn))
+                  rettype
+                  (tac-positive-rule-result-branch-argslist-typed results argtypes ctx)
+                  (acl2::prefixp (tac-function-argument-types fn) argtypes)
+                  (tac-typelist-p argtypes))
+             (tac-positive-rule-result-branchlist-typed apps rettype ctx))
+    :hints(("Goal" :in-theory (enable tac-positive-rule-result-branchlist-typed
+                                      prefixp-of-all
+                                      tac-positive-rule-result-branch-typed
+                                      TAC-POSITIVE-RULE-RESULT-BRANCH-ARGS-TYPED
+                                      TAC-POSITIVE-RULE-RESULT-BRANCH-ARGSLIST-TYPED)
+            :induct <call>)))
+
+  (defret types-of-apply-fn-to-result-branches-bind
+    (implies (and (equal rettype (tac-function-return-type fn))
+                  rettype
+                  (equal argtypes (tac-function-argument-types fn))
+                  (tac-positive-rule-result-branch-argslist-typed results argtypes ctx)
+                  (acl2::prefixp (tac-function-argument-types fn) argtypes)
+                  (tac-typelist-p argtypes))
+             (tac-positive-rule-result-branchlist-typed apps rettype ctx))))
+
+(define append-args-to-each ((firsts pseudo-term-listp) (args pseudo-term-listp))
+  :returns (arglists acl2::pseudo-term-list-listp)
+  (if (atom firsts)
+      nil
+    (cons (cons (pseudo-term-fix (car firsts)) (pseudo-term-list-fix args))
+          (append-args-to-each (cdr firsts) args)))
+  ///
+  (defret types-of-append-args-to-each
+    (implies (and (subsetp (tac-termlist-types firsts ctx) (list (car types)))
+                  (acl2::prefixp (cdr types) (tac-termlist-types args ctx)))
+             (prefixp-of-all types (tac-termlistlist-types arglists ctx)))
+    :hints(("Goal" :in-theory (enable tac-termlistlist-types
+                                      tac-termlist-types
+                                      prefixp-of-all
+                                      acl2::prefixp)))))
+
+(define cons-arg-to-each ((arg pseudo-termp) (arglists acl2::pseudo-term-list-listp))
+  :returns (new-arglists acl2::pseudo-term-list-listp)
+  (if (atom arglists)
+      nil
+    (cons (cons (pseudo-term-fix arg) (pseudo-term-list-fix (car arglists)))
+          (cons-arg-to-each arg (cdr arglists))))
+  ///
+  (defret types-of-cons-arg-to-each
+    (implies (and (equal (tac-term-type arg ctx) (car types))
+                  (prefixp-of-all (cdr types) (tac-termlistlist-types arglists ctx)))
+             (prefixp-of-all types (tac-termlistlist-types new-arglists ctx)))
+    :hints(("Goal" :in-theory (enable tac-termlistlist-types
+                                      acl2::prefixp
+                                      prefixp-of-all
+                                      tac-termlist-types)))))
+
+(define tac-positive-rule-result-branchlist-append-args
+  ((branches tac-positive-rule-result-branchlist-p)
+   (args pseudo-term-listp))
+  :returns (new-branches tac-positive-rule-result-branch-argslist-p)
+  (if (atom branches)
+      nil
+    (cons (B* (((tac-positive-rule-result-branch x) (car branches)))
+            (tac-positive-rule-result-branch-args
+             x.assums
+             (append-args-to-each x.ctx-results args)))
+          (tac-positive-rule-result-branchlist-append-args (cdr branches) args)))
+  ///
+  (defret type-of-<fn>
+    (implies (and (acl2::prefixp (cdr types) (tac-termlist-types args ctx))
+                  (car types)
+                  (tac-positive-rule-result-branchlist-typed branches (car types) ctx)
+                  (tac-typelist-p types))
+             (tac-positive-rule-result-branch-argslist-typed new-branches types ctx))
+    :hints(("Goal" :in-theory (enable tac-positive-rule-result-branch-argslist-typed
+                                      tac-positive-rule-result-branch-args-typed
+                                      tac-positive-rule-result-branchlist-typed
+                                      tac-positive-rule-result-branch-typed
+                                      prefixp-of-all
+                                      tac-typelist-fix))))
+
+  (defret type-of-<fn>-no-types
+    (implies (tac-positive-rule-result-branchlist-typed branches nil ctx)
+             (tac-positive-rule-result-branch-argslist-typed new-branches nil ctx))
+    :hints(("Goal" :in-theory (enable tac-positive-rule-result-branch-argslist-typed
+                                      tac-positive-rule-result-branch-args-typed
+                                      tac-positive-rule-result-branchlist-typed
+                                      tac-positive-rule-result-branch-typed
+                                      prefixp-of-all
+                                      tac-typelist-fix)))))
+
+(define tac-positive-rule-result-branch-argslist-cons-arg
+  ((arg pseudo-termp)
+   (branches tac-positive-rule-result-branch-argslist-p))
+  :returns (new-branches tac-positive-rule-result-branch-argslist-p)
+  (if (atom branches)
+      nil
+    (cons (B* (((tac-positive-rule-result-branch-args x) (car branches)))
+            (tac-positive-rule-result-branch-args
+             x.assums
+             (cons-arg-to-each arg x.ctx-results)))
+          (tac-positive-rule-result-branch-argslist-cons-arg arg (cdr branches))))
+  ///
+  (defret type-of-<fn>
+    (implies (and (equal (tac-term-type arg ctx) (car types))
+                  (tac-positive-rule-result-branch-argslist-typed branches (cdr types) ctx))
+             (tac-positive-rule-result-branch-argslist-typed new-branches types ctx))
+    :hints(("Goal" :in-theory (enable tac-positive-rule-result-branch-argslist-typed
+                                      tac-positive-rule-result-branch-args-typed
+                                      tac-positive-rule-result-branchlist-typed
+                                      tac-positive-rule-result-branch-typed))))
+
+  (defret type-of-<fn>-no-types
+    (implies (tac-positive-rule-result-branch-argslist-typed branches nil ctx)
+             (tac-positive-rule-result-branch-argslist-typed new-branches nil ctx))
+    :hints(("Goal" :in-theory (enable tac-positive-rule-result-branch-argslist-typed
+                                      tac-positive-rule-result-branch-args-typed
+                                      tac-positive-rule-result-branchlist-typed
+                                      tac-positive-rule-result-branch-typed)))))
+
+(define tac-try-basic-rewrites ((rules cmr::rewritelist-p)
+                                (fn pseudo-fnsym-p)
+                                (args pseudo-term-listp))
+  :returns (mv rewrittenp (result pseudo-termp))
+  (if (atom rules)
+      (mv nil nil)
+    (b* (((mv ok rhs subst) (tac-rewrite-apply-rule (car rules) fn args))
+         ((when ok) (mv t (cmr::term-subst-strict rhs subst))))
+      (tac-try-basic-rewrites (cdr rules) fn args)))
+  ///
+  (defret <fn>-correct
+    (implies (and rewrittenp
+                  (tac-ev-theorem-rewritesp rules)
+                  (tac-rewrites-hyps-ok rules)
+                  (tac-typed-env-p env ctx)
+                  (tac-term-type (pseudo-term-fncall fn args) ctx))
+             (equal (tac-ev result env)
+                    (tac-ev (pseudo-term-fncall fn args) env)))
+    :hints(("Goal" :in-theory (enable tac-ev-theorem-rewritesp
+                                      tac-rewrites-hyps-ok))))
+
+  (defret <fn>-preserves-type
+    (implies (and rewrittenp
+                  (tac-rewrites-rhs-preserved rules)
+                  (equal type (tac-term-type (pseudo-term-fncall fn args) ctx))
+                  type)
+             (equal (tac-term-type result ctx) type))
+    :hints(("Goal" :in-theory (enable tac-rewrites-rhs-preserved)))))
+
+
+
+(define tac-rewrite-pred-apply-rule ((rule cmr::rewrite-p)
+                                     (fn pseudo-fnsym-p)
+                                     (args pseudo-term-listp))
+  :returns (mv ok
+               (rhs pseudo-termp)
+               (subst cmr::pseudo-term-subst-p))
+  (b* (((cmr::rewrite rule))
+       ((unless (and (or (eq rule.equiv 'equal)
+                         (eq rule.equiv 'iff))
+                     (pseudo-term-case rule.lhs :fncall)))
+        (mv nil nil nil))
+       ((pseudo-term-fncall rule.lhs))
+       ((unless (eq rule.lhs.fn (pseudo-fnsym-fix fn)))
+        (mv nil nil nil))
+       ((mv ok subst) (cmr::termlist-unify-strict rule.lhs.args args nil))
+       ((unless ok)
+        (mv nil nil nil)))
+    (mv t rule.rhs subst))
+  ///
+  (local (in-theory (enable tac-ev-of-fncall-args)))
+  
+  (local (defthm tac-ev-list-equal-of-termlist-subst-strict
+           (implies (equal (pseudo-term-list-fix x)
+                           (cmr::termlist-subst-strict pat subst))
+                    (equal (tac-ev-lst x a)
+                           (tac-ev-lst pat (tac-ev-alist subst a))))
+           :hints (("goal" :use ((:instance tac-ev-lst-of-pseudo-term-list-fix-x
+                                  (x x) (a a)))
+                    :in-theory (disable tac-ev-lst-of-pseudo-term-list-fix-x
+                                        tac-ev-lst-pseudo-term-list-equiv-congruence-on-x)))))
+  
+  (defret <fn>-correct
+    (implies (and ok
+                  (tac-ev-theoremp (cmr::rewrite-term rule))
+                  (tac-rewrite-hyps-ok rule)
+                  (tac-typed-env-p env ctx)
+                  (tac-term-type (pseudo-term-fncall fn args) ctx))
+             (iff (tac-ev rhs (tac-ev-alist subst env))
+                  (tac-ev (pseudo-term-fncall fn args) env)))
+    :hints(("Goal" :in-theory (e/d (cmr::rewrite-term)
+                                   (tac-rewrite-hyps-ok-necc))
+            :expand ((CMR::TERM-UNIFY-STRICT (CMR::REWRITE->LHS RULE)
+                                             (pseudo-term-fncall fn args) NIL))
+            :use ((:instance tac-ev-falsify
+                   (a (tac-ev-alist (mv-nth 1 (cmr::termlist-unify-strict
+                                               (pseudo-term-call->args (cmr::rewrite->lhs rule))
+                                               args nil))
+                                    env))
+                   (x (cmr::rewrite-term rule)))
+                  (:instance tac-rewrite-hyps-ok-necc
+                   (x (pseudo-term-fncall fn args)))))))
+
+  (defret <fn>-preserves-type
+    (implies (and ok
+                  (tac-pred-rewrite-rhs-typed rule)
+                  (equal (tac-term-type (pseudo-term-fncall fn args) ctx) :pred))
+             (subsetp (tac-termlist-types (collect-if-branches
+                                           (cmr::term-subst-strict rhs subst))
+                                          ctx) '(:pred)))
+    :hints (("goal" :use ((:instance tac-pred-rewrite-rhs-typed-necc
+                           (x (pseudo-term-fncall fn args))))
+            :expand ((CMR::TERM-UNIFY-STRICT (CMR::REWRITE->LHS RULE)
+                                             (pseudo-term-fncall fn args) NIL))
+             :in-theory (disable tac-pred-rewrite-rhs-typed-necc)))))
+
+
+(define tac-try-pred-rewrites ((rules cmr::rewritelist-p)
+                                (fn pseudo-fnsym-p)
+                                (args pseudo-term-listp))
+  :returns (mv rewrittenp (result pseudo-termp))
+  (if (atom rules)
+      (mv nil nil)
+    (b* (((mv ok rhs subst) (tac-rewrite-pred-apply-rule (car rules) fn args))
+         ((when ok) (mv t (cmr::term-subst-strict rhs subst))))
+      (tac-try-pred-rewrites (cdr rules) fn args)))
+  ///
+  (defret <fn>-correct
+    (implies (and rewrittenp
+                  (tac-ev-theorem-rewritesp rules)
+                  (tac-rewrites-hyps-ok rules)
+                  (tac-typed-env-p env ctx)
+                  (tac-term-type (pseudo-term-fncall fn args) ctx))
+             (iff (tac-ev result env)
+                  (tac-ev (pseudo-term-fncall fn args) env)))
+    :hints(("Goal" :in-theory (enable tac-ev-theorem-rewritesp
+                                      tac-rewrites-hyps-ok))))
+
+  (defret <fn>-preserves-pred-type
+    (implies (and rewrittenp
+                  (tac-pred-rewrites-rhs-typed rules)
+                  (equal (tac-term-type (pseudo-term-fncall fn args) ctx) :pred))
+             (subsetp (tac-termlist-types (collect-if-branches result) ctx) '(:pred)))
+    :hints(("Goal" :in-theory (enable tac-pred-rewrites-rhs-typed
+                                      tac-rewrite-apply-rule)))))
+
+
+(defthm tac-term-type-when-function-return-type
+  (implies (and (tac-term-type x ctx)
+                (pseudo-term-case x :fncall))
+           (equal (tac-term-type x ctx)
+                  (tac-function-return-type (pseudo-term-call->fn x))))
+  :hints(("Goal" :expand ((tac-term-type x ctx)))))
+
+
+(define tac-context-fn-p ((x pseudo-fnsym-p))
+  (and (member-eq (pseudo-fnsym-fix x) '(setimage setpreimage setintersect
+                                                  relidentity relcompose relinverse relprod relintersect))
+       t))
+
+
+(defthm tac-termlist-types-when-term-type
+  (implies (and (tac-term-type x ctx)
+                (pseudo-term-case x :fncall))
+           (acl2::prefixp (tac-function-argument-types (pseudo-term-fncall->fn x))
+                          (tac-termlist-types (pseudo-term-call->args x) ctx)))
+  :hints(("Goal" :expand ((tac-term-type x ctx)))))
+
+(defines tac-positive-apply-rule-in-context
+  (define tac-positive-apply-rule-in-context ((x pseudo-termp)
+                                              (assums pseudo-term-listp)
+                                              (ruleset cmr::rewritelist-p))
+    ;; Positive rules replace the term in its context, perhaps splitting into
+    ;; two cases (with the same context) [e.g., union or star rules] or perhaps
+    ;; adding a new assumption [e.g., intersection or product rules].  We
+    ;; generalize this slightly and allow both added assumptions and a list
+    ;; of contextual cases.
+    :returns (mv successp
+                 (results tac-positive-rule-result-branchlist-p))
+    :measure (pseudo-term-count x)
+    :verify-guards nil
+    (b* (((mv rewrittenp result)
+          (pseudo-term-case x
+            :fncall
+            (tac-try-basic-rewrites (tac-rewrites) x.fn x.args)
+            :otherwise (mv nil nil)))
+         ((when rewrittenp)
+          (mv t (list (tac-positive-rule-result-branch nil (list result)))))
+         ((unless (pseudo-term-case x
+                    :fncall (eq (tac-function-return-type x.fn) :set)
+                    :otherwise nil))
+          (mv nil nil))
+         ((mv rewrittenp result)
+          ;; note: important that x not contain variable tac-w
+          (tac-try-pred-rewrites ruleset 'pred-in-set (list 'tac-w x)))
+         ((unless rewrittenp)
+          (pseudo-term-case x
+            :fncall (b* (((unless (tac-context-fn-p x.fn))
+                          (mv nil nil))
+                         ((mv successp results-args)
+                          (tac-positive-apply-rule-in-context-args
+                           (tac-function-argument-types x.fn) x.args assums ruleset))
+                         ((when successp)
+                          (mv t (apply-fn-to-result-branches x.fn results-args))))
+                      (mv nil nil))
+            :otherwise (mv nil nil))))
+      (tac-parse-positive-rule-result result)))
+
+  (define tac-positive-apply-rule-in-context-args ((types tac-typelist-p)
+                                                   (x pseudo-term-listp)
+                                                   (assums pseudo-term-listp)
+                                                   (ruleset cmr::rewritelist-p))
+    :measure (pseudo-term-list-count x)
+    :returns (mv successp
+                 (results tac-positive-rule-result-branch-argslist-p))
+    (b* (((when (or (atom types)
+                    (atom x)))
+          (mv nil nil))
+         ((mv successp results) (tac-positive-apply-rule-in-context (car x) assums ruleset))
+         ((when successp)
+          (mv t (tac-positive-rule-result-branchlist-append-args results (cdr x))))
+         ((mv successp results) (tac-positive-apply-rule-in-context-args (cdr types) (cdr x) assums ruleset))
+         ((when successp)
+          (mv t (tac-positive-rule-result-branch-argslist-cons-arg (car x) results))))
+      (mv nil nil)))
+  ///
+  (verify-guards tac-positive-apply-rule-in-context)
+  ;; (local (defun-sk preserves-type-list-cond (x results ctx)
+  ;;          (forall types
+  ;;                  (implies (and (tac-typelist-p types)
+  ;;                                (not (member-equal nil types))
+  ;;                                (acl2::prefixp types (tac-termlist-types x ctx)))
+  ;;                           (tac-positive-rule-result-branch-argslist-typed
+  ;;                            results types ctx)))
+  ;;          :rewrite :direct))
+  ;; (local (in-theory (disable preserves-type-list-cond)))
+  
+  (std::defret-mutual <fn>-preserves-type-lemma
+    (defret <fn>-preserves-type
+      (implies (and (tac-pred-rewrites-rhs-typed ruleset)
+                    (tac-term-type x ctx)
+                    successp
+                    (equal (cdr (assoc-equal 'tac-w (type-ctx-fix ctx))) :event))
+               (tac-positive-rule-result-branchlist-typed results (tac-term-type x ctx) ctx))
+      :hints ('(:expand (<call>)
+                :in-theory (enable tac-positive-rule-result-branchlist-typed
+                                   TAC-POSITIVE-RULE-RESULT-BRANCH-TYPED
+                                   tac-termlist-types)))
+      :fn tac-positive-apply-rule-in-context)
+    (defret <fn>-preserves-type-lemma
+      (implies (and (tac-pred-rewrites-rhs-typed ruleset)
+                    (tac-typelist-p types)
+                    (not (member-equal nil types))
+                    (acl2::prefixp types (tac-termlist-types x ctx))
+                    successp
+                    (equal (cdr (assoc-equal 'tac-w (type-ctx-fix ctx))) :event))
+               (tac-positive-rule-result-branch-argslist-typed
+                results types ctx))
+      :hints ('(:expand (<call>
+                         (:free (a b c) (acl2::prefixp a (cons b c))))
+                :in-theory (enable tac-positive-rule-result-branch-argslist-typed
+                                   tac-termlist-types
+                                   acl2::prefixp))
+              ;; (and stable-under-simplificationp
+              ;;      `(:expand (,(car (last clause))
+              ;;                 (:free (a b c) (acl2::prefixp a (cons b c))))))
+              )
+      :fn tac-positive-apply-rule-in-context-args)))
+         
+         
+                           
+
+  
+
+(define tac-positive-rule-result-disjoin-cases ((x pseudo-term-listp) env)
+  :verify-guards nil
+  (if (atom x)
+      nil
+    (or (pred-in-set (cdr (assoc-eq 'tac-w env))
+                     (tac-ev (car x) env))
+        (tac-positive-rule-result-disjoin-cases (cdr x) env))))
+
+
+
+
+
+(define parse-conjunction ((x pseudo-termp))
+  :returns (conj pseudo-term-listp)
+  :measure (acl2-count (pseudo-term-fix x))
+  (b* ((x (pseudo-term-fix x)))
+    (case-match x
+      (('if a b ''nil) (append (parse-conjunction a) (parse-conjunction b)))
+      (& (list x))))
+  ///
+  (defret tac-ev-cube-of-<fn>
+    (iff (tac-ev-cube conj a)
+         (tac-ev x a))
+    :hints(("Goal" :in-theory (enable tac-ev-cube)
+            :induct <call>
+            :expand (<call>))
+           (and stable-under-simplificationp
+                '(:use ((:instance TAC-EV-OF-PSEUDO-TERM-FIX-X (x x) (a a)))
+                  :in-theory (disable tac-ev-of-pseudo-term-fix-x
+                                      tac-ev-pseudo-term-equiv-congruence-on-x))))))
+
+
+(define tac-ev-dnf ((x acl2::pseudo-term-list-listp) (env alistp))
+  :verify-guards nil
+  (if (atom x)
+      nil
+    (or (tac-ev-cube (car x) env)
+        (tac-ev-dnf (cdr x) env)))
+  ///
+  (defthm tac-ev-dnf-of-append
+    (equal (tac-ev-dnf (append x y) env)
+           (or (tac-ev-dnf x env)
+               (tac-ev-dnf y env)))))
+
+(define parse-disjunction-of-conjunctions ((x pseudo-termp))
+  :returns (disj acl2::pseudo-term-list-listp)
+  :measure (acl2-count (pseudo-term-fix x))
+  (b* ((x (pseudo-term-fix x)))
+    (case-match x
+      (('if a a b) (append (parse-disjunction-of-conjunctions a)
+                           (parse-disjunction-of-conjunctions b)))
+      (& (list (parse-conjunction x)))))
+  ///
+  (defret tac-ev-dnf-of-<fn>
+    (iff (tac-ev-dnf disj a)
+         (tac-ev x a))
+    :hints(("Goal" :in-theory (enable tac-ev-dnf)
+            :induct <call>
+            :expand (<call>))
+           (and stable-under-simplificationp
+                '(:use ((:instance TAC-EV-OF-PSEUDO-TERM-FIX-X (x x) (a a)))
+                  :in-theory (disable tac-ev-of-pseudo-term-fix-x
+                                      tac-ev-pseudo-term-equiv-congruence-on-x))))))
+
+
+
+
+
+
+;; Suppose we have an assumption (cube of literals which we want to disprove)
+;; in this relational language that has some star operators in positive (set
+;; non-emptiness) literals. The outermost star operators in these positive
+;; literals may be replaced by fixed repetition operators r{n_i} such that the
+;; repetition counts n_i are minimal, i.e. if they are all replaced by lesser
+;; or equal values (with at least one lesser) then the assumption is
+;; unsatisfiable.  (The same can't be done with inner star operators because
+;; they may need different numbers of repetitions in different repetition of
+;; the outer operator.)
+
+
+
+(define tac-cube-p ((x pseudo-term-listp) (ctx type-ctx-p))
+  (if (atom x)
+      t
+    (and (pred-term-p (car x) ctx)
+         (tac-cube-p (cdr x) ctx))))
+
+
+
+
+
+(encapsulate nil
+  (defun-sk tac-ev*-cube-satisfiable (x)
+    (exists (ctx env)
+            (and (tac-cube-p x ctx)
+                 (tac-typed-env-p env ctx) 
+                 (tac-ev*-cube x env))))
+
+  (in-theory (disable tac-ev*-cube-satisfiable)))
+
+
+
+
+
+
+
+
+
+
+
+
+(define relstar-unrolled ((n natp) (x relation-p))
+  :returns (star relation-p)
+  (relstar-bounded (max 0 (- (relstar-bound x) (lnfix n))) x)
+  ///
+  (defret event-rel-p-of-<fn>
+    (implies (event-rel-p x)
+             (event-rel-p star)))
+
+  (defretd relstar-in-terms-of-unrolled
+    (implies (event-rel-p x)
+             (equal (relstar x)
+                    (relstar-unrolled 0 x)))
+    :hints(("Goal" :in-theory (e/d (relstar-in-terms-of-bounded)
+                                   (relstar)))))
+
+  (defretd in-relstar-unrolled
+    (iff (in pair (relstar-unrolled n x))
+         (or (in pair (relidentity (universe)))
+             (and (< (nfix n) (relstar-bound x))
+                  (in pair (compose x (relstar-unrolled (1+ (nfix n)) x))))))
+    :hints(("Goal" :expand ((relstar-bounded (relstar-bound x) x)
+                            (relstar-bounded (+ (- n) (relstar-bound x)) x)
+                            (relstar-bounded 0 x)))))
+
+  (defthmd relstar-unrolled-redef
+    (equal (relstar-unrolled n x)
+           (if (< (nfix n) (relstar-bound x))
+               (union (relidentity (universe))
+                      (compose x (relstar-unrolled (1+ (nfix n)) x)))
+             (relidentity (universe))))
+    :hints (("goal" :in-theory (e/d (set::double-containment-no-backchain-limit
+                                     pick-a-point-subset-strategy
+                                     in-relstar-unrolled)
+                                    (relstar-unrolled)))
+            (SET::PICK-A-POINT-SUBSET-HINT ID acl2::CLAUSE
+                                           WORLD STABLE-UNDER-SIMPLIFICATIONP))
+    :rule-classes ((:definition :controller-alist ((relstar-unrolled t nil)))))
+
+  (defthmd relstar-unrolled-of-gte-bound
+    (implies (<= (relstar-bound x) (nfix n))
+             (equal (relstar-unrolled n x)
+                    (id-relation (universe))))
+    :hints(("Goal" :in-theory (enable relstar-bounded)))))
+                         
+
+
+
+
+
+
+
+
+
+(thm
+ (implies (pred-nonempty
+           (relimage (singleton e)
+                     (relintersect
+                      (relplus
+                       (relunion (relcompose (relidentity r)
+                                             (relcompose poloc
+                                                         (relcompose
+                                                          (relidentity r)
+                                                          (relcompose caext
+                                                                      (relidentity w)))))
+                                 (relunion (relcompose (relidentity w)
+                                                       (relcompose rfext
+                                                                   (relcompose (relidentity r))))
+                                           (relcompose (relidentity (setunion r w))
+                                                       (relcompose caext
+                                                                   (relidentity w))))))
+                      (relidentity (universe)))))
+          (not (not-pred-nonempty
+                (relimage (singleton e)
+                          (relintersect
+                           (relplus
+                            (relunion (relcompose (relidentity w)
+                                                  (relcompose rfext
+                                                              (relcompose
+                                                               (relidentity r)
+                                                               (relcompose poloc
+                                                                           (relidentity r)))))
+                                      (relunion (relcompose (relidentity w)
+                                                            (relcompose rfext
+                                                                        (relcompose (relidentity r))))
+                                                (relcompose (relidentity (setunion r w))
+                                                            (relcompose caext
+                                                                        (relidentity w))))))
+                           (relidentity (universe))))))))
+
+
+(tac-rewrite 1000
+             '(setimage (singleton e)
+                        (relintersect
+                         (relplus
+                          (relunion (relcompose (relidentity r)
+                                                (relcompose poloc
+                                                            (relcompose
+                                                             (relidentity r)
+                                                             (relcompose caext
+                                                                         (relidentity w)))))
+                                    (relunion (relcompose (relidentity w)
+                                                          (relcompose rfext
+                                                                      (relidentity r)))
+                                              (relcompose (relidentity (setunion r w))
+                                                          (relcompose caext
+                                                                      (relidentity w))))))
+                         (relidentity (universe))))
+             '((r . r) (poloc . poloc) (caext . caext) (rfext . rfext) (w . w) (e . e)))
+                                                          
+
+
+
+
+
+
+(encapsulate
+  (((tac-cyclic-pred *) => *)
+   ((tac-cyclic-pairs *) => *)
+   ((tac-cyclic-rels) => *)
+   ((tac-cyclic-unroll) => *)
+   ((tac-cyclic-step *) => *))
+
+  (set-ignore-ok t)
+  (set-irrelevant-formals-ok t)
+  (local (defun tac-cyclic-pred (x) t))
+  (local (defun tac-cyclic-rel () nil))
+  (local (defun tac-cyclic-src (x) nil))
+  (local (defun tac-cyclic-dst (x) t))
+  (local (defun tac-cyclic-unroll () 0))
+  (local (defun tac-cyclic-step (x) x))
+
+  (defthm tac-cyclic-pred-of-step
+    (implies (tac-cyclic-pred x)
+             (tac-cyclic-pred (tac-cyclic-step x))))
+
+  (defthm relation-p-of-tac-cyclic-rel
+    (relation-p (tac-cyclic-rel)))
+
+  (defthm event-rel-p-of-tac-cyclic-rel
+    (event-rel-p (tac-cyclic-rel)))
+
+  (defthm posp-of-tac-cyclic-unroll
+    (natp (tac-cyclic-unroll))
+    :rule-classes :type-prescription)
+
+  (local (defthm relstar-bounded-of-nil
+           (equal (relstar-bounded n nil)
+                  (id-relation (universe)))
+           :hints(("Goal" :in-theory (enable relstar-bounded)))))
+
+  (local (defthm relstar-unrolled-of-nil
+           (equal (relstar-unrolled n nil)
+                  (id-relation (universe)))
+           :hints(("Goal" :in-theory (enable relstar-unrolled)))))
+
+  (defthm tac-cyclic-pred-implies-nontrivial-edge
+    (implies (tac-cyclic-pred x)
+             (not (equal (tac-cyclic-src x)
+                         (tac-cyclic-dst x)))))
+  
+  (defthmd tac-cyclic-step-preserves-in-relstar
+    (implies (and (tac-cyclic-pred x)
+                  (in (edge (tac-cyclic-src x)
+                            (tac-cyclic-dst x))
+                      (relstar-unrolled n (tac-cyclic-rel)))
+                  (natp n))
+             (in (edge (tac-cyclic-src (tac-cyclic-step x))
+                       (tac-cyclic-dst (tac-cyclic-step x)))
+                 (relstar-unrolled (+ 1 (tac-cyclic-unroll) n) (tac-cyclic-rel))))))
+
+
+(encapsulate nil
+  (local (defun ind (n x rel)
+           (declare (xargs :measure (nfix (- (relstar-bound rel) (nfix n)))))
+           (if (zp (- (relstar-bound rel) (nfix n)))
+               x
+             (ind (+ 1 (tac-cyclic-unroll)
+                     (nfix n))
+                  (tac-cyclic-step x) rel))))
+
+  
+  (defthm tac-cyclic-step-implies-not-in-relstar
+    (implies (tac-cyclic-pred x)
+             (not (in (edge (tac-cyclic-src x)
+                            (tac-cyclic-dst x))
+                      (relstar-unrolled n (tac-cyclic-rel)))))
+    :hints (("Goal" :induct (ind n x (tac-cyclic-rel))
+             :in-theory (enable relstar-unrolled-of-gte-bound))
+            '(:use ((:instance tac-cyclic-step-preserves-in-relstar
+                     (n (nfix n))))))))
+                
+    
+
