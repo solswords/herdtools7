@@ -3991,20 +3991,20 @@
   `(progn (defthm ,name . ,args)
           (acl2::add-to-ruleset tac-negative-normalize-rules ,name)))
 ;; ~aL
-(def-tac-negative-normalize not-in-singleton-image-when-pair
+(def-tac-negative-normalize in-singleton-image-when-pair
   (implies (and (pred-in-rel e1 e2 a)
                 (relation-p a))
-           (iff (not-pred-in-set w (image (singleton e1) a))
-                (and (not-pred-in-set w (image (singleton e1) a))
-                     (not-pred-in-set w (singleton e2))))))
+           (iff (pred-in-set w (image (singleton e1) a))
+                (or (pred-in-set w (image (singleton e1) a))
+                    (pred-in-set w (singleton e2))))))
 
 ;; ~aR
-(def-tac-negative-normalize not-in-singleton-preimage-when-pair
+(def-tac-negative-normalize in-singleton-preimage-when-pair
   (implies (and (in (edge e2 e1) a)
                 (relation-p a))
-           (iff (not-pred-in-set w (setpreimage a (singleton e1)))
-                (and (not-pred-in-set w (setpreimage a (singleton e1)))
-                     (not-pred-in-set w (singleton e2))))))
+           (iff (pred-in-set w (setpreimage a (singleton e1)))
+                (or (pred-in-set w (setpreimage a (singleton e1)))
+                    (pred-in-set w (singleton e2))))))
 
 
 (defthm in-compose-id
@@ -4030,11 +4030,11 @@
                   (x (id-relation (universe))) (y r))))))
 
 ;; ~*L
-(def-tac-negative-normalize not-in-singleton-star-image
+(def-tac-negative-normalize in-singleton-star-image
   (implies (event-p w)
-           (iff (not-pred-in-set w (setimage (singleton e) (relstar r)))
-                (and (not-pred-in-set w (singleton e))
-                     (not-pred-in-set w (setimage (setimage (singleton e) r) (relstar r))))))
+           (iff (pred-in-set w (setimage (singleton e) (relstar r)))
+                (or (pred-in-set w (singleton e))
+                    (pred-in-set w (setimage (setimage (singleton e) r) (relstar r))))))
   :hints(("Goal" :in-theory (e/d (reflexive-transitive-closure
                                   image-of-compose-inverse
                                   in-of-compose-suff
@@ -4045,11 +4045,11 @@
                  (pair (edge e w)))))))
 
 ;; ~+L
-(def-tac-negative-normalize not-in-singleton-plus-image
+(def-tac-negative-normalize in-singleton-plus-image
   (implies (event-p w)
-           (iff (not-pred-in-set w (setimage (singleton e) (relplus r)))
-                (and (not-pred-in-set w (setimage (singleton e) r))
-                     (not-pred-in-set w (setimage (setimage (singleton e) r) (relplus r))))))
+           (iff (pred-in-set w (setimage (singleton e) (relplus r)))
+                (or (pred-in-set w (setimage (singleton e) r))
+                     (pred-in-set w (setimage (setimage (singleton e) r) (relplus r))))))
   :hints(("Goal" :in-theory (e/d (reflexive-transitive-closure
                                   image-of-compose-inverse
                                   in-of-compose-suff
@@ -4060,11 +4060,11 @@
                  (pair (edge e w)))))))
 
 ;; ~*R
-(def-tac-negative-normalize not-in-singleton-star-preimage
+(def-tac-negative-normalize in-singleton-star-preimage
   (implies (event-p w)
-           (iff (not-pred-in-set w (setpreimage (relstar r) (singleton e)))
-                (and (not-pred-in-set w (singleton e))
-                     (not-pred-in-set w (setpreimage (relstar r) (setpreimage r (singleton e)))))))
+           (iff (pred-in-set w (setpreimage (relstar r) (singleton e)))
+                (or (pred-in-set w (singleton e))
+                    (pred-in-set w (setpreimage (relstar r) (setpreimage r (singleton e)))))))
   :hints(("Goal" :in-theory (e/d (reflexive-transitive-closure
                                   preimage-of-compose-inverse
                                   in-of-compose-suff
@@ -4076,11 +4076,11 @@
 
 
 ;; ~+R
-(def-tac-negative-normalize not-in-singleton-plus-preimage
+(def-tac-negative-normalize in-singleton-plus-preimage
   (implies (event-p w)
-           (iff (not-pred-in-set w (setpreimage (relplus r) (singleton e)))
-                (and (not-pred-in-set w (setpreimage r (singleton e)))
-                     (not-pred-in-set w (setpreimage (relplus r) (setpreimage r (singleton e)))))))
+           (iff (pred-in-set w (setpreimage (relplus r) (singleton e)))
+                (or (pred-in-set w (setpreimage r (singleton e)))
+                    (pred-in-set w (setpreimage (relplus r) (setpreimage r (singleton e)))))))
   :hints(("Goal" :in-theory (e/d (reflexive-transitive-closure
                                   preimage-of-compose-inverse
                                   in-of-compose-suff
@@ -4091,73 +4091,73 @@
                  (pair (edge w e)))))))
 
 ;; ~U2L
-(def-tac-negative-normalize not-in-singleton-union-image
-  (iff (not-pred-in-set w (setimage (singleton e) (relunion r1 r2)))
-       (and (not-pred-in-set w (setimage (singleton e) r1))
-            (not-pred-in-set w (setimage (singleton e) r2)))))
+(def-tac-negative-normalize in-singleton-union-image
+  (iff (pred-in-set w (setimage (singleton e) (relunion r1 r2)))
+       (or (pred-in-set w (setimage (singleton e) r1))
+           (pred-in-set w (setimage (singleton e) r2)))))
 
 ;; ~U2R
-(def-tac-negative-normalize not-in-singleton-union-preimage
-  (iff (not-pred-in-set w (setpreimage (relunion r1 r2) (singleton e)))
-       (and (not-pred-in-set w (setpreimage r1 (singleton e)))
-            (not-pred-in-set w (setpreimage r2 (singleton e))))))
+(def-tac-negative-normalize in-singleton-union-preimage
+  (iff (pred-in-set w (setpreimage (relunion r1 r2) (singleton e)))
+       (or (pred-in-set w (setpreimage r1 (singleton e)))
+           (pred-in-set w (setpreimage r2 (singleton e))))))
 
 ;; ~=L
-(def-tac-negative-normalize not-in-singleton
+(def-tac-negative-normalize in-singleton
   (implies (pred-equal e1 e2)
-           (iff (not-pred-in-set w (singleton e1))
-                (and (not-pred-in-set w (singleton e1))
-                     (not-pred-in-set w (singleton e2))))))
+           (iff (pred-in-set w (singleton e1))
+                (or (pred-in-set w (singleton e1))
+                    (pred-in-set w (singleton e2))))))
 
 ;; ~XL
-(def-tac-negative-normalize not-in-singleton-image-prod
-  (iff (not-pred-in-set w (setimage (singleton e) (relprod s1 s2)))
-       (or (not (pred-nonempty (setintersect (singleton e) s1)))
-           (not-pred-in-set w s2)))
+(def-tac-negative-normalize in-singleton-image-prod
+  (iff (pred-in-set w (setimage (singleton e) (relprod s1 s2)))
+       (and (pred-nonempty (setintersect (singleton e) s1))
+            (pred-in-set w s2)))
   :hints(("Goal" :in-theory (enable in-of-cartesian))))
   
 ;; ~XR
-(def-tac-negative-normalize not-in-singleton-preimage-prod
-  (iff (not-pred-in-set w (setpreimage (relprod s1 s2) (singleton e)))
-       (or (not (pred-nonempty (setintersect (singleton e) s2)))
-           (not-pred-in-set w s1)))
+(def-tac-negative-normalize in-singleton-preimage-prod
+  (iff (pred-in-set w (setpreimage (relprod s1 s2) (singleton e)))
+       (and (pred-nonempty (setintersect (singleton e) s2))
+            (pred-in-set w s1)))
   :hints(("Goal" :in-theory (enable in-of-cartesian))))
 
 
 
 ;; ~A
-(def-tac-negative-normalize not-in-base-set
+(def-tac-negative-normalize in-base-set
   (implies (and (pred-in-set e a)
                 (base-set-p a))
-           (iff (not-pred-in-set w a)
-                (and (not-pred-in-set w a)
-                     (not-pred-in-set w (singleton e))))))
+           (iff (pred-in-set w a)
+                (or (pred-in-set w a)
+                    (pred-in-set w (singleton e))))))
            
 ;; ~U1
-(def-tac-negative-normalize not-in-setunion
-  (iff (not-pred-in-set w (setunion s1 s2))
-       (and (not-pred-in-set w s1)
-            (not-pred-in-set w s2))))
+(def-tac-negative-normalize in-setunion
+  (iff (pred-in-set w (setunion s1 s2))
+       (or (pred-in-set w s1)
+           (pred-in-set w s2))))
 
 
 ;; ~T1  -- special -- introduces new conjuncts for all e
-(def-tac-negative-normalize not-in-universe
+(def-tac-negative-normalize in-universe
   (implies (and (mentioned-event-p e)
                 (event-p e))
-           (iff (not-pred-in-set w (universe))
-                (and (not-pred-in-set w (universe))
-                     (not-pred-in-set w (singleton e))))))
+           (iff (pred-in-set w (universe))
+                (or (pred-in-set w (universe))
+                    (pred-in-set w (singleton e))))))
 ;; ~eL
-(def-tac-negative-normalize not-in-singleton-intersect-1
-  (iff (not-pred-in-set w (setintersect (singleton e) s))
-       (or (not-pred-in-set w (singleton e))
-           (not (pred-nonempty (setintersect (singleton e) s))))))
+(def-tac-negative-normalize in-singleton-intersect-1
+  (iff (pred-in-set w (setintersect (singleton e) s))
+       (and (pred-in-set w (singleton e))
+            (pred-nonempty (setintersect (singleton e) s)))))
 
 ;; ~eR
-(def-tac-negative-normalize not-in-singleton-intersect-2
-  (iff (not-pred-in-set w (setintersect s (singleton e)))
-       (or (not-pred-in-set w (singleton e))
-           (not (pred-nonempty (setintersect s (singleton e)))))))
+(def-tac-negative-normalize in-singleton-intersect-2
+  (iff (pred-in-set w (setintersect s (singleton e)))
+       (and (pred-in-set w (singleton e))
+            (pred-nonempty (setintersect s (singleton e))))))
 
 
 
@@ -4171,8 +4171,8 @@
 ;; ~.1,2L
 (def-tac-negative-normalize nonempty-singleton-intersect-image-1
   (implies (not-singleton-set-p s)
-           (iff (not-pred-nonempty (setintersect (singleton e) (setimage s r)))
-                (not-pred-nonempty (setintersect (setpreimage r (singleton e)) s))))
+           (iff (pred-nonempty (setintersect (singleton e) (setimage s r)))
+                (pred-nonempty (setintersect (setpreimage r (singleton e)) s))))
   :hints(("Goal" :in-theory (e/d (in-of-image-rw)))
          (and stable-under-simplificationp
               '(:in-theory (e/d (in-of-image-rw)
@@ -4186,8 +4186,8 @@
 ;; ~.1,2R
 (def-tac-negative-normalize nonempty-singleton-intersect-image-2
   (implies (not-singleton-set-p s)
-           (iff (not-pred-nonempty (setintersect (setimage s r) (singleton e)))
-                (not-pred-nonempty (setintersect s (setpreimage r (singleton e))))))
+           (iff (pred-nonempty (setintersect (setimage s r) (singleton e)))
+                (pred-nonempty (setintersect s (setpreimage r (singleton e))))))
   :hints(("Goal" :in-theory (e/d (in-of-image-rw)))
          (and stable-under-simplificationp
               '(:in-theory (e/d (in-of-image-rw)
@@ -4204,8 +4204,8 @@
 ;; ~.2,1L
 (def-tac-negative-normalize nonempty-singleton-intersect-image-3
   (implies (not-singleton-set-p s)
-           (iff (not-pred-nonempty (setintersect (singleton e) (setpreimage r s)))
-                (not-pred-nonempty (setintersect (setimage (singleton e) r) s))))
+           (iff (pred-nonempty (setintersect (singleton e) (setpreimage r s)))
+                (pred-nonempty (setintersect (setimage (singleton e) r) s))))
   :hints(("Goal" :in-theory (e/d (in-of-preimage-rw)))
          (and stable-under-simplificationp
               '(:in-theory (e/d (in-of-preimage-rw)
@@ -4218,8 +4218,8 @@
 ;; ~.2,1R
 (def-tac-negative-normalize nonempty-singleton-intersect-image-4
   (implies (not-singleton-set-p s)
-           (iff (not-pred-nonempty (setintersect (setpreimage r s) (singleton e)))
-                (not-pred-nonempty (setintersect s (setimage (singleton e) r)))))
+           (iff (pred-nonempty (setintersect (setpreimage r s) (singleton e)))
+                (pred-nonempty (setintersect s (setimage (singleton e) r)))))
   :hints(("Goal" :in-theory (e/d (in-of-preimage-rw)))
          (and stable-under-simplificationp
               '(:in-theory (e/d (in-of-preimage-rw)
@@ -4232,39 +4232,39 @@
 
 ;; ~\cap1L
 (def-tac-negative-normalize nonempty-singleton-intersect-intersect-1
-  (iff (not-pred-nonempty (setintersect (singleton e) (setintersect s1 s2)))
-       (or (not-pred-nonempty (setintersect (singleton e) s1))
-           (not-pred-nonempty (setintersect (singleton e) s2)))))
+  (iff (pred-nonempty (setintersect (singleton e) (setintersect s1 s2)))
+       (and (pred-nonempty (setintersect (singleton e) s1))
+            (pred-nonempty (setintersect (singleton e) s2)))))
 ;; ~\cap1R
 (def-tac-negative-normalize nonempty-singleton-intersect-intersect-2
-  (iff (not-pred-nonempty (setintersect (setintersect s1 s2) (singleton e)))
-       (or (not-pred-nonempty (setintersect s1 (singleton e)))
-           (not-pred-nonempty (setintersect s2 (singleton e))))))
+  (iff (pred-nonempty (setintersect (setintersect s1 s2) (singleton e)))
+       (and (pred-nonempty (setintersect s1 (singleton e)))
+            (pred-nonempty (setintersect s2 (singleton e))))))
 
 ;; ~\cap_e
 (def-tac-negative-normalize nonempty-singleton-intersect-singleton
-  (iff (not-pred-nonempty (setintersect (singleton e1) (singleton e2)))
-       (not (pred-equal e1 e2))))
+  (iff (pred-nonempty (setintersect (singleton e1) (singleton e2)))
+       (pred-equal e1 e2)))
 
 ;; ~1XL
-(def-tac-negative-normalize not-in-image-product-singleton-1
-  (iff (not-pred-in-set w (setimage s1 (relprod (singleton e) s2)))
-       (or (not-pred-in-set w s2)
-           (not-pred-nonempty (setintersect s1 (singleton e)))))
+(def-tac-negative-normalize in-image-product-singleton-1
+  (iff (pred-in-set w (setimage s1 (relprod (singleton e) s2)))
+       (and (pred-in-set w s2)
+            (pred-nonempty (setintersect s1 (singleton e)))))
   :hints(("Goal" :in-theory (enable in-of-image-rw
                                     in-of-cartesian))))
 ;; ~1XR
-(def-tac-negative-normalize not-in-image-product-singleton-2
-  (iff (not-pred-in-set w (setpreimage (relprod s2 (singleton e)) s1))
-       (or (not-pred-in-set w s2)
-           (not-pred-nonempty (setintersect s1 (singleton e)))))
+(def-tac-negative-normalize in-image-product-singleton-2
+  (iff (pred-in-set w (setpreimage (relprod s2 (singleton e)) s1))
+       (and (pred-in-set w s2)
+            (pred-nonempty (setintersect s1 (singleton e)))))
   :hints(("Goal" :in-theory (enable in-of-preimage-rw
                                     in-of-cartesian))))
 ;; ~X1L
-(def-tac-negative-normalize not-in-image-product-singleton-3
-  (iff (not-pred-in-set w (setpreimage (relprod (singleton e) s1) s2))
-       (or (not-pred-in-set w (singleton e))
-           (not-pred-nonempty (setintersect s1 s2))))
+(def-tac-negative-normalize in-image-product-singleton-3
+  (iff (pred-in-set w (setpreimage (relprod (singleton e) s1) s2))
+       (and (pred-in-set w (singleton e))
+            (pred-nonempty (setintersect s1 s2))))
   :hints(("Goal" :in-theory (e/d (in-of-preimage-rw
                                   in-of-cartesian)
                                  (emptyp-when-in
@@ -4274,10 +4274,10 @@
                  (x (intersect s1 s2)))))))
 
 ;; ~X1R
-(def-tac-negative-normalize not-in-image-product-singleton-4
-  (iff (not-pred-in-set w (setimage s2 (relprod s1 (singleton e))))
-       (or (not-pred-in-set w (singleton e))
-           (not-pred-nonempty (setintersect s1 s2))))
+(def-tac-negative-normalize in-image-product-singleton-4
+  (iff (pred-in-set w (setimage s2 (relprod s1 (singleton e))))
+       (and (pred-in-set w (singleton e))
+            (pred-nonempty (setintersect s1 s2))))
   :hints(("Goal" :in-theory (e/d (in-of-image-rw
                                   in-of-cartesian)
                                  (emptyp-when-in
@@ -4286,14 +4286,14 @@
                  (e (image-witness w s2 (cartesian s1 (insert e nil))))
                  (x (intersect s1 s2)))))))
 ;; ~0
-(def-tac-negative-normalize not-pred-nonempty-of-singleton
-  (iff (not-pred-nonempty (singleton e))
-       nil))
+(def-tac-negative-normalize pred-nonempty-of-singleton
+  (iff (pred-nonempty (singleton e))
+       t))
 
 ;; ~=
-(def-tac-negative-normalize not-pred-equal-same
-  (iff (not-pred-equal e e)
-       nil))
+(def-tac-negative-normalize pred-equal-same
+  (iff (pred-equal e e)
+       t))
 
 
 
@@ -5200,7 +5200,8 @@
 
   (defret lists-have-lengths-of-<fn>
     (implies (equal (len x) (nfix n))
-             (lists-have-lengths n product))))
+             (lists-have-lengths n product))
+    :hints(("Goal" :in-theory (enable lists-have-lengths)))))
 
 (define arglist-unions ((x true-list-listp))
   :verify-guards nil
@@ -5656,6 +5657,8 @@
   (equal (remove-entries-with-nil (cons-product x y))
          (cons-product (remove nil x) (remove-entries-with-nil y)))
   :hints(("Goal" :in-theory (enable cons-product remove-entries-with-nil))))
+
+(local (include-book "std/basic/arith-equivs" :dir :System))
 
 (define tac-positive-rule-result-branchlistlist-to-branch-argslist ((x tac-positive-rule-result-branchlistlist-p))
   :returns (arglist tac-positive-rule-result-branch-argslist-p)
@@ -6437,7 +6440,7 @@
                                       tac-ev-cube
                                       union-list)))))
 
-(local (include-book "std/basic/arith-equivs" :dir :System))
+
 
 (defines tac-positive-apply-rule-in-context
   (define tac-positive-apply-rule-in-context ((x pseudo-termp)
@@ -6707,310 +6710,3 @@
       :fn tac-positive-apply-rule-in-context-args)))
          
                            
-
-  
-
-(define tac-positive-rule-result-disjoin-cases ((x pseudo-term-listp) env)
-  :verify-guards nil
-  (if (atom x)
-      nil
-    (or (pred-in-set (cdr (assoc-eq 'tac-w env))
-                     (tac-ev (car x) env))
-        (tac-positive-rule-result-disjoin-cases (cdr x) env))))
-
-
-
-
-
-(define parse-conjunction ((x pseudo-termp))
-  :returns (conj pseudo-term-listp)
-  :measure (acl2-count (pseudo-term-fix x))
-  (b* ((x (pseudo-term-fix x)))
-    (case-match x
-      (('if a b ''nil) (append (parse-conjunction a) (parse-conjunction b)))
-      (& (list x))))
-  ///
-  (defret tac-ev-cube-of-<fn>
-    (iff (tac-ev-cube conj a)
-         (tac-ev x a))
-    :hints(("Goal" :in-theory (enable tac-ev-cube)
-            :induct <call>
-            :expand (<call>))
-           (and stable-under-simplificationp
-                '(:use ((:instance TAC-EV-OF-PSEUDO-TERM-FIX-X (x x) (a a)))
-                  :in-theory (disable tac-ev-of-pseudo-term-fix-x
-                                      tac-ev-pseudo-term-equiv-congruence-on-x))))))
-
-
-(define tac-ev-dnf ((x acl2::pseudo-term-list-listp) (env alistp))
-  :verify-guards nil
-  (if (atom x)
-      nil
-    (or (tac-ev-cube (car x) env)
-        (tac-ev-dnf (cdr x) env)))
-  ///
-  (defthm tac-ev-dnf-of-append
-    (equal (tac-ev-dnf (append x y) env)
-           (or (tac-ev-dnf x env)
-               (tac-ev-dnf y env)))))
-
-(define parse-disjunction-of-conjunctions ((x pseudo-termp))
-  :returns (disj acl2::pseudo-term-list-listp)
-  :measure (acl2-count (pseudo-term-fix x))
-  (b* ((x (pseudo-term-fix x)))
-    (case-match x
-      (('if a a b) (append (parse-disjunction-of-conjunctions a)
-                           (parse-disjunction-of-conjunctions b)))
-      (& (list (parse-conjunction x)))))
-  ///
-  (defret tac-ev-dnf-of-<fn>
-    (iff (tac-ev-dnf disj a)
-         (tac-ev x a))
-    :hints(("Goal" :in-theory (enable tac-ev-dnf)
-            :induct <call>
-            :expand (<call>))
-           (and stable-under-simplificationp
-                '(:use ((:instance TAC-EV-OF-PSEUDO-TERM-FIX-X (x x) (a a)))
-                  :in-theory (disable tac-ev-of-pseudo-term-fix-x
-                                      tac-ev-pseudo-term-equiv-congruence-on-x))))))
-
-
-
-
-
-
-;; Suppose we have an assumption (cube of literals which we want to disprove)
-;; in this relational language that has some star operators in positive (set
-;; non-emptiness) literals. The outermost star operators in these positive
-;; literals may be replaced by fixed repetition operators r{n_i} such that the
-;; repetition counts n_i are minimal, i.e. if they are all replaced by lesser
-;; or equal values (with at least one lesser) then the assumption is
-;; unsatisfiable.  (The same can't be done with inner star operators because
-;; they may need different numbers of repetitions in different repetition of
-;; the outer operator.)
-
-
-
-(define tac-cube-p ((x pseudo-term-listp) (ctx type-ctx-p))
-  (if (atom x)
-      t
-    (and (pred-term-p (car x) ctx)
-         (tac-cube-p (cdr x) ctx))))
-
-
-
-
-
-(encapsulate nil
-  (defun-sk tac-ev*-cube-satisfiable (x)
-    (exists (ctx env)
-            (and (tac-cube-p x ctx)
-                 (tac-typed-env-p env ctx) 
-                 (tac-ev*-cube x env))))
-
-  (in-theory (disable tac-ev*-cube-satisfiable)))
-
-
-
-
-
-
-
-
-
-
-
-
-(define relstar-unrolled ((n natp) (x relation-p))
-  :returns (star relation-p)
-  (relstar-bounded (max 0 (- (relstar-bound x) (lnfix n))) x)
-  ///
-  (defret event-rel-p-of-<fn>
-    (implies (event-rel-p x)
-             (event-rel-p star)))
-
-  (defretd relstar-in-terms-of-unrolled
-    (implies (event-rel-p x)
-             (equal (relstar x)
-                    (relstar-unrolled 0 x)))
-    :hints(("Goal" :in-theory (e/d (relstar-in-terms-of-bounded)
-                                   (relstar)))))
-
-  (defretd in-relstar-unrolled
-    (iff (in pair (relstar-unrolled n x))
-         (or (in pair (relidentity (universe)))
-             (and (< (nfix n) (relstar-bound x))
-                  (in pair (compose x (relstar-unrolled (1+ (nfix n)) x))))))
-    :hints(("Goal" :expand ((relstar-bounded (relstar-bound x) x)
-                            (relstar-bounded (+ (- n) (relstar-bound x)) x)
-                            (relstar-bounded 0 x)))))
-
-  (defthmd relstar-unrolled-redef
-    (equal (relstar-unrolled n x)
-           (if (< (nfix n) (relstar-bound x))
-               (union (relidentity (universe))
-                      (compose x (relstar-unrolled (1+ (nfix n)) x)))
-             (relidentity (universe))))
-    :hints (("goal" :in-theory (e/d (set::double-containment-no-backchain-limit
-                                     pick-a-point-subset-strategy
-                                     in-relstar-unrolled)
-                                    (relstar-unrolled)))
-            (SET::PICK-A-POINT-SUBSET-HINT ID acl2::CLAUSE
-                                           WORLD STABLE-UNDER-SIMPLIFICATIONP))
-    :rule-classes ((:definition :controller-alist ((relstar-unrolled t nil)))))
-
-  (defthmd relstar-unrolled-of-gte-bound
-    (implies (<= (relstar-bound x) (nfix n))
-             (equal (relstar-unrolled n x)
-                    (id-relation (universe))))
-    :hints(("Goal" :in-theory (enable relstar-bounded)))))
-                         
-
-
-
-
-
-
-
-
-
-(thm
- (implies (pred-nonempty
-           (relimage (singleton e)
-                     (relintersect
-                      (relplus
-                       (relunion (relcompose (relidentity r)
-                                             (relcompose poloc
-                                                         (relcompose
-                                                          (relidentity r)
-                                                          (relcompose caext
-                                                                      (relidentity w)))))
-                                 (relunion (relcompose (relidentity w)
-                                                       (relcompose rfext
-                                                                   (relcompose (relidentity r))))
-                                           (relcompose (relidentity (setunion r w))
-                                                       (relcompose caext
-                                                                   (relidentity w))))))
-                      (relidentity (universe)))))
-          (not (not-pred-nonempty
-                (relimage (singleton e)
-                          (relintersect
-                           (relplus
-                            (relunion (relcompose (relidentity w)
-                                                  (relcompose rfext
-                                                              (relcompose
-                                                               (relidentity r)
-                                                               (relcompose poloc
-                                                                           (relidentity r)))))
-                                      (relunion (relcompose (relidentity w)
-                                                            (relcompose rfext
-                                                                        (relcompose (relidentity r))))
-                                                (relcompose (relidentity (setunion r w))
-                                                            (relcompose caext
-                                                                        (relidentity w))))))
-                           (relidentity (universe))))))))
-
-
-(tac-rewrite 1000
-             '(setimage (singleton e)
-                        (relintersect
-                         (relplus
-                          (relunion (relcompose (relidentity r)
-                                                (relcompose poloc
-                                                            (relcompose
-                                                             (relidentity r)
-                                                             (relcompose caext
-                                                                         (relidentity w)))))
-                                    (relunion (relcompose (relidentity w)
-                                                          (relcompose rfext
-                                                                      (relidentity r)))
-                                              (relcompose (relidentity (setunion r w))
-                                                          (relcompose caext
-                                                                      (relidentity w))))))
-                         (relidentity (universe))))
-             '((r . r) (poloc . poloc) (caext . caext) (rfext . rfext) (w . w) (e . e)))
-                                                          
-
-
-
-
-
-
-(encapsulate
-  (((tac-cyclic-pred *) => *)
-   ((tac-cyclic-pairs *) => *)
-   ((tac-cyclic-rels) => *)
-   ((tac-cyclic-unroll) => *)
-   ((tac-cyclic-step *) => *))
-
-  (set-ignore-ok t)
-  (set-irrelevant-formals-ok t)
-  (local (defun tac-cyclic-pred (x) t))
-  (local (defun tac-cyclic-rel () nil))
-  (local (defun tac-cyclic-src (x) nil))
-  (local (defun tac-cyclic-dst (x) t))
-  (local (defun tac-cyclic-unroll () 0))
-  (local (defun tac-cyclic-step (x) x))
-
-  (defthm tac-cyclic-pred-of-step
-    (implies (tac-cyclic-pred x)
-             (tac-cyclic-pred (tac-cyclic-step x))))
-
-  (defthm relation-p-of-tac-cyclic-rel
-    (relation-p (tac-cyclic-rel)))
-
-  (defthm event-rel-p-of-tac-cyclic-rel
-    (event-rel-p (tac-cyclic-rel)))
-
-  (defthm posp-of-tac-cyclic-unroll
-    (natp (tac-cyclic-unroll))
-    :rule-classes :type-prescription)
-
-  (local (defthm relstar-bounded-of-nil
-           (equal (relstar-bounded n nil)
-                  (id-relation (universe)))
-           :hints(("Goal" :in-theory (enable relstar-bounded)))))
-
-  (local (defthm relstar-unrolled-of-nil
-           (equal (relstar-unrolled n nil)
-                  (id-relation (universe)))
-           :hints(("Goal" :in-theory (enable relstar-unrolled)))))
-
-  (defthm tac-cyclic-pred-implies-nontrivial-edge
-    (implies (tac-cyclic-pred x)
-             (not (equal (tac-cyclic-src x)
-                         (tac-cyclic-dst x)))))
-  
-  (defthmd tac-cyclic-step-preserves-in-relstar
-    (implies (and (tac-cyclic-pred x)
-                  (in (edge (tac-cyclic-src x)
-                            (tac-cyclic-dst x))
-                      (relstar-unrolled n (tac-cyclic-rel)))
-                  (natp n))
-             (in (edge (tac-cyclic-src (tac-cyclic-step x))
-                       (tac-cyclic-dst (tac-cyclic-step x)))
-                 (relstar-unrolled (+ 1 (tac-cyclic-unroll) n) (tac-cyclic-rel))))))
-
-
-(encapsulate nil
-  (local (defun ind (n x rel)
-           (declare (xargs :measure (nfix (- (relstar-bound rel) (nfix n)))))
-           (if (zp (- (relstar-bound rel) (nfix n)))
-               x
-             (ind (+ 1 (tac-cyclic-unroll)
-                     (nfix n))
-                  (tac-cyclic-step x) rel))))
-
-  
-  (defthm tac-cyclic-step-implies-not-in-relstar
-    (implies (tac-cyclic-pred x)
-             (not (in (edge (tac-cyclic-src x)
-                            (tac-cyclic-dst x))
-                      (relstar-unrolled n (tac-cyclic-rel)))))
-    :hints (("Goal" :induct (ind n x (tac-cyclic-rel))
-             :in-theory (enable relstar-unrolled-of-gte-bound))
-            '(:use ((:instance tac-cyclic-step-preserves-in-relstar
-                     (n (nfix n))))))))
-                
-    
-
