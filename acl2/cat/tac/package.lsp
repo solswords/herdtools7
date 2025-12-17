@@ -58,6 +58,7 @@
        pseudo-term-lambda pseudo-term-lambda->formals pseudo-term-lambda->body pseudo-term-lambda->fn
        pseudo-term-call pseudo-term-call->fn pseudo-term-call->args
        pseudo-term-const
+       a b c x y z
        ))
    '(std::deflist tag exp condition)))
 

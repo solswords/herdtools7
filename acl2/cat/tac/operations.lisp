@@ -25,10 +25,12 @@
 (include-book "centaur/fty/deftypes" :dir :system)
 (include-book "centaur/fty/basetypes" :dir :system)
 (include-book "tools/templates" :dir :system)
+(include-book "centaur/meta/subst-vars" :dir :system)
 (local (include-book "std/lists/sets" :dir :System))
 (local (std::add-default-post-define-hook :fix))
 
-
+(local (in-theory (disable pseudo-termp
+                           pseudo-term-listp)))
 
 (defprod edge
   ((src) (dst))
@@ -2039,6 +2041,24 @@
                              (tac-typed-val-p-when-term-type))))
     :fn tac-term-type)
 
+  (fty::deffixequiv-mutual tac-term-type)
+  
+  (defret tac-typed-val-p-when-equal-term-type
+    (implies (and (tac-typed-env-p env ctx)
+                  (equal (tac-type-fix ty) type))
+             (tac-typed-val-p (tac-ev x env) ty))
+    :hints (("goal" :use tac-typed-val-p-when-term-type
+             :in-theory (disable tac-typed-val-p-when-term-type)))
+    :fn tac-term-type)
+
+  (defret tac-typed-vallist-p-when-equal-termlist-types
+    (implies (and (tac-typed-env-p env ctx)
+                  (equal (tac-typelist-fix tys) types))
+             (tac-typed-vallist-p (tac-ev-lst x env) tys))
+    :hints (("goal" :use tac-typed-vallist-p-when-termlist-types
+             :in-theory (disable tac-typed-vallist-p-when-termlist-types)))
+    :fn tac-termlist-types)
+
   (std::defret-mutual tac-term-type-of-add-unused
     (defret tac-term-type-of-add-unused-var
       (implies (not (member-equal var (cmr::term-vars x)))
@@ -2084,8 +2104,6 @@
     :hyp (and (acl2::pseudo-term-case x :fncall)
               (tac-function-return-type (acl2::pseudo-term-fncall->fn x)))
     :hint (:expand ((tac-term-type x ctx))))
-
-  (fty::deffixequiv-mutual tac-term-type)
 
   )
 
@@ -2833,6 +2851,10 @@
   (equal (relintersect (relprod z (singleton y)) x)
          (relprod (setintersect z (setpreimage x (singleton y))) (singleton y))))
 
+;; (def-tac-rewrite relintersect-relprod-singleton-bogus
+;;   (equal (relintersect (relprod z (singleton y)) x)
+;;          (cartesian (setintersect z (setpreimage x (singleton y))) (singleton y))))
+
 
 
 (include-book "centaur/meta/parse-rewrite" :dir :system)
@@ -2840,9 +2862,19 @@
 (include-book "clause-processors/meta-extract-user" :dir :system)
 (include-book "std/util/defconsts" :dir :system)
 
+(fty::defalist tac-rewritelist :key-type symbolp :val-type cmr::rewrite :true-listp t)
+
+(define pair-name-with-rules ((name symbolp) (rules cmr::rewritelist-p))
+  :returns (rewrites tac-rewritelist-p)
+  (if (atom rules)
+      nil
+    (cons (cons (mbe :logic (acl2::symbol-fix name) :exec name)
+                (cmr::rewrite-fix (car rules)))
+          (pair-name-with-rules name (cdr rules)))))
+
 (define tac-collect-rewrites-aux ((names symbol-listp)
                                   (wrld plist-worldp))
-  :returns (mv err rules)
+  :returns (mv err (rules tac-rewritelist-p))
   (if (atom names)
       (mv nil nil)
     (b* ((formula (acl2::meta-extract-formula-w (car names) wrld))
@@ -2856,7 +2888,7 @@
           (tac-collect-rewrites-aux (cdr names) wrld))
          ((when err)
           (mv err nil)))
-      (mv nil (append rules1 rules2)))))
+      (mv nil (append (pair-name-with-rules (car names) rules1) rules2)))))
 
 (encapsulate nil
 
@@ -2870,20 +2902,18 @@
         rewrites)))
 
   (define tac-rewrites ()
-    :returns (rewrites cmr::rewritelist-p)
+    :returns (rewrites tac-rewritelist-p)
     *tac-rewrites*
     ///
     (in-theory (disable (tac-rewrites)))))
 
 (defsection tac-rewrite-rhs-preserved
   (defun-sk tac-rewrite-rhs-preserved (rule)
-    (forall (x ctx)
-            (b* (((cmr::rewrite rule))
-                 ((mv unify-ok subst) (cmr::term-unify-strict rule.lhs x nil)))
-              (implies (and unify-ok
-                            (tac-term-type x ctx))
-                       (equal (tac-term-type rule.rhs (tac-subst-ctx subst ctx))
-                              (tac-term-type x ctx)))))
+    (forall (ctx)
+            (b* (((cmr::rewrite rule)))
+              (implies (tac-term-type rule.lhs ctx)
+                       (equal (tac-term-type rule.rhs ctx)
+                              (tac-term-type rule.lhs ctx)))))
     :rewrite :direct)
 
   (in-theory (disable tac-rewrite-rhs-preserved)))
@@ -2900,7 +2930,8 @@
   :verify-guards nil
   (if (atom rules)
       t
-    (and (tac-rewrite-rhs-preserved (car rules))
+    (and (or (not (mbt (consp (car rules))))
+             (tac-rewrite-rhs-preserved (cdar rules)))
          (tac-rewrites-rhs-preserved (cdr rules))))
   ///
   (local (defthm car-when-equal-cons
@@ -2910,17 +2941,17 @@
            (implies (equal x (cons a b))
                     (equal (cdr x) b))))
 
-  (local (defthm tac-term-type-of-tac-subst-ctx
-           (equal (Tac-term-type x (tac-subst-ctx subst ctx))
-                  (tac-term-type (cmr::term-subst-strict x subst) ctx))))
-  (local (in-theory (disable tac-term-type-of-term-subst-strict)))
+  ;; (local (defthm tac-term-type-of-tac-subst-ctx
+  ;;          (equal (Tac-term-type x (tac-subst-ctx subst ctx))
+  ;;                 (tac-term-type (cmr::term-subst-strict x subst) ctx))))
+  ;; (local (in-theory (disable tac-term-type-of-term-subst-strict)))
   
   (defthm tac-rewrites-rhs-preserved-of-tac-rewrites
     (tac-rewrites-rhs-preserved (tac-rewrites))
     :hints (("goal" :expand ((:free (x) (tac-rewrite-rhs-preserved x))
                              (:free (a b) (tac-rewrites-rhs-preserved (cons a b))))
-             :in-theory (e/d (cmr::term-subst-strict
-                              cmr::termlist-subst-strict
+             :in-theory (e/d (;; cmr::term-subst-strict
+                              ;; cmr::termlist-subst-strict
                               cmr::equal-of-pseudo-term-fncall
                               (tac-rewrites))
                              (tac-rewrite-rhs-preserved-necc))))))
@@ -2935,13 +2966,11 @@
 
 (defsection tac-rewrite-hyps-ok
   (defun-sk tac-rewrite-hyps-ok (rule)
-    (forall (x ctx env)
-            (b* (((cmr::rewrite rule))
-                 ((mv unify-ok subst) (cmr::term-unify-strict rule.lhs x nil)))
-              (implies (and unify-ok
-                            (tac-term-type x ctx)
+    (forall (ctx env)
+            (b* (((cmr::rewrite rule)))
+              (implies (and (tac-term-type rule.lhs ctx)
                             (tac-typed-env-p env ctx))
-                       (tac-ev-cube (cmr::termlist-subst-strict rule.hyps subst) env))))
+                       (tac-ev-cube rule.hyps env))))
     :rewrite :direct)
 
   (in-theory (disable tac-rewrite-hyps-ok)))
@@ -2950,7 +2979,8 @@
   :verify-guards nil
   (if (atom rules)
       t
-    (and (tac-rewrite-hyps-ok (car rules))
+    (and (or (not (mbt (consp (car rules))))
+             (tac-rewrite-hyps-ok (cdar rules)))
          (tac-rewrites-hyps-ok (cdr rules))))
   ///
   (local (defthm car-when-equal-cons
@@ -2964,9 +2994,7 @@
     (tac-rewrites-hyps-ok (tac-rewrites))
     :hints (("goal" :expand ((:free (x) (tac-rewrite-hyps-ok x))
                              (:free (a b) (tac-rewrites-hyps-ok (cons a b))))
-             :in-theory (e/d (cmr::term-subst-strict
-                              cmr::termlist-subst-strict
-                              cmr::equal-of-pseudo-term-fncall
+             :in-theory (e/d (cmr::equal-of-pseudo-term-fncall
                               tac-ev-cube
                               (tac-rewrites))
                              (tac-rewrite-hyps-ok-necc))))))
@@ -2978,16 +3006,42 @@
 
 (acl2::def-ev-theoremp tac-ev)
 
+
+(define tac-ev-theoremp* ((x pseudo-termp))
+  :verify-guards nil
+  (and (tac-ev-theoremp x) t)
+  ///
+  (in-theory (disable (tac-ev-theoremp*)))
+  (defthm tac-ev-theoremp*-implies
+    (implies (tac-ev-theoremp* x)
+             (tac-ev x a))
+    :hints (("goal" :use tac-ev-falsify)))
+
+  (defthmd tac-ev-theoremp*-expand
+    (iff (tac-ev-theoremp* x)
+         (tac-ev x (tac-ev-falsify x)))
+    :rule-classes :definition)
+
+  (fty::deffixequiv tac-ev-theoremp*
+    :hints ((and stable-under-simplificationp
+                 (b* ((lit (assoc 'tac-ev clause))
+                      (xx (cadr (caddr lit)))
+                      (other (if (eq xx 'x) '(acl2::pseudo-term-fix$inline x) 'x)))
+                   `(:use ((:instance tac-ev-falsify
+                            (x ,other) (a (tac-ev-falsify ,xx))))))))))
+
 (define tac-ev-theorem-rewritesp (rules)
   :verify-guards nil
   (if (atom rules)
       t
-    (and (tac-ev-theoremp (cmr::rewrite-term (car rules)))
+    (and (or (not (mbt (consp (car rules))))
+             (tac-ev-theoremp* (cmr::rewrite-term (cdar rules))))
          (tac-ev-theorem-rewritesp (cdr rules))))
   ///
   (defthm tac-ev-theorem-rewritesp-of-tac-rewrites
     (tac-ev-theorem-rewritesp (tac-rewrites))
-    :hints(("Goal" :in-theory (enable (tac-rewrites))
+    :hints(("Goal" :in-theory (enable (tac-rewrites)
+                                      tac-ev-theoremp*-expand)
             :expand ((:Free (a b) (tac-ev-theorem-rewritesp (cons a b))))))))
 
 (define tac-ev-alist ((x cmr::pseudo-term-subst-p) a)
@@ -3008,6 +3062,29 @@
                   (and look
                        (cons k (tac-ev (cdr look) a)))))))
 
+  (defthm hons-assoc-equal-lookup-in-tac-ev-alist-split
+    (equal (hons-assoc-equal k (tac-ev-alist x a))
+           (and (pseudo-var-p k)
+                (let ((look (hons-assoc-equal k x)))
+                  (and look
+                       (cons k (tac-ev (cdr look) a)))))))
+
+  (defthm tac-typed-env-p-of-tac-ev-alist
+    (implies (tac-typed-env-p env ctx)
+             (tac-typed-env-p
+              (tac-ev-alist x env)
+              (tac-subst-ctx x ctx)))
+    :hints(("Goal" :in-theory (enable tac-ev-alist tac-subst-ctx
+                                      tac-typed-env-p
+                                      acl2::alist-keys
+                                      tac-typed-env-p-aux))))
+
+  (defthm alist-keys-of-tac-ev-alist
+    (equal (acl2::alist-keys (tac-ev-alist x env))
+           (acl2::alist-keys (cmr::pseudo-term-subst-fix x)))
+    :hints(("Goal" :in-theory (enable cmr::pseudo-term-subst-fix
+                                      acl2::alist-keys))))
+  
   (local (in-theory (enable cmr::pseudo-term-subst-fix))))
 
 (defthm tac-ev-of-term-subst-strict
@@ -3093,6 +3170,25 @@
                                   (x x) (a a)))
                     :in-theory (disable tac-ev-lst-of-pseudo-term-list-fix-x
                                         tac-ev-lst-pseudo-term-list-equiv-congruence-on-x)))))
+
+  (local (defthm tac-rewrite-hyps-ok-necc-special
+           (b* (((cmr::rewrite rule))
+                (subst-env (tac-ev-alist subst env))
+                (subst-ctx (tac-subst-ctx subst ctx)))
+             (implies (and (tac-rewrite-hyps-ok rule)
+                           (tac-typed-env-p env ctx)
+                           ;; unify-ok
+                           (tac-term-type rule.lhs subst-ctx))
+                      (tac-ev-cube rule.hyps subst-env)))
+           :hints (("goal" :use ((:instance tac-rewrite-hyps-ok-necc
+                                  (env (tac-ev-alist subst env))
+                                  (ctx (tac-subst-ctx subst ctx))))
+                    :in-theory (disable tac-rewrite-hyps-ok-necc)))))
+
+  (local (defthm tac-term-type-of-tac-subst-ctx
+           (equal (Tac-term-type x (tac-subst-ctx subst ctx))
+                  (tac-term-type (cmr::term-subst-strict x subst) ctx))))
+  (local (in-theory (disable tac-term-type-of-term-subst-strict)))
   
   (defret <fn>-correct
     (implies (and ok
@@ -3103,18 +3199,33 @@
              (equal (tac-ev rhs (tac-ev-alist subst env))
                     (tac-ev (pseudo-term-fncall fn args) env)))
     :hints(("Goal" :in-theory (e/d (cmr::rewrite-term)
-                                   (tac-rewrite-hyps-ok-necc))
+                                   (;; tac-rewrite-hyps-ok-necc
+                                    ))
             :expand ((CMR::TERM-UNIFY-STRICT (CMR::REWRITE->LHS RULE)
-                                             (pseudo-term-fncall fn args) NIL))
+                                             (pseudo-term-fncall fn args) NIL)
+                     (:free (subst) (cmr::term-subst-strict (cmr::rewrite->lhs rule) subst)))
             :use ((:instance tac-ev-falsify
                    (a (tac-ev-alist (mv-nth 1 (cmr::termlist-unify-strict
                                                (pseudo-term-call->args (cmr::rewrite->lhs rule))
                                                args nil))
                                     env))
                    (x (cmr::rewrite-term rule)))
-                  (:instance tac-rewrite-hyps-ok-necc
-                   (x (pseudo-term-fncall fn args)))))))
+                  ;; (:instance tac-rewrite-hyps-ok-necc
+                  ;;  (x (pseudo-term-fncall fn args)))
+                  ))))
 
+  (local (defthm tac-rewrite-rhs-preserved-necc-special
+           (b* (((cmr::rewrite rule))
+                (type (tac-term-type (cmr::term-subst-strict rule.lhs subst) ctx)))
+             (implies (and (tac-rewrite-rhs-preserved rule)
+                           type)
+                      (equal (tac-term-type (cmr::term-subst-strict rule.rhs subst) ctx)
+                             type)))
+           :hints (("goal" :use ((:instance tac-rewrite-rhs-preserved-necc
+                                  (ctx (tac-subst-ctx subst ctx))))
+                    :in-theory (disable tac-rewrite-rhs-preserved-necc)))))
+                          
+  
   (defret <fn>-preserves-type
     (implies (and ok
                   (tac-rewrite-rhs-preserved rule)
@@ -3122,12 +3233,14 @@
                   type)
              (equal (tac-term-type (cmr::term-subst-strict rhs subst) ctx)
                     type))
-    :hints (("goal" :use ((:instance tac-rewrite-rhs-preserved-necc
-                           (x (pseudo-term-fncall fn args))))
+    :hints (("goal" 
             :expand ((CMR::TERM-UNIFY-STRICT (CMR::REWRITE->LHS RULE)
-                                             (pseudo-term-fncall fn args) NIL))
-             :in-theory (disable tac-rewrite-rhs-preserved-necc)))))
-                           
+                                             (pseudo-term-fncall fn args) NIL)
+                     (:free (subst) (cmr::term-subst-strict (cmr::rewrite->lhs rule) subst))))))
+
+  (defret vars-of-<fn>
+    (implies (not (member v (cmr::termlist-vars args)))
+             (not (member v (cmr::term-subst-vars subst))))))
 
 (local (defthm alistp-when-pseudo-term-subst-p
          (implies (cmr::pseudo-term-subst-p x)
@@ -3165,14 +3278,16 @@
     (tac-rewrite-apply-rules clk (tac-rewrites) fn args))
 
   (define tac-rewrite-apply-rules ((clk natp)
-                                   (rules cmr::rewritelist-p)
+                                   (rules tac-rewritelist-p)
                                    (fn pseudo-fnsym-p)
                                    (args pseudo-term-listp))
     :measure (acl2::nat-list-measure (list clk 0 0 0 (len rules)))
     :returns (new-x pseudo-termp)
     (if (atom rules)
         (pseudo-term-fncall fn args)
-      (b* (((mv ok rhs subst) (tac-rewrite-apply-rule (car rules) fn args))
+      (b* (((unless (mbt (consp (car rules))))
+            (tac-rewrite-apply-rules clk (cdr rules) fn args))
+           ((mv ok rhs subst) (tac-rewrite-apply-rule (cdar rules) fn args))
            ((when (and ok (not (zp clk))))
             (tac-rewrite (1- clk) rhs subst)))
         (tac-rewrite-apply-rules clk (cdr rules) fn args))))
@@ -3352,7 +3467,14 @@
                          (tac-ev-theorem-rewritesp rules)
                          (tac-rewrites-hyps-ok rules)
                          (tac-rewrites-rhs-preserved rules))))
-      :fn tac-rewrite-apply-rules)))
+      :fn tac-rewrite-apply-rules))
+  (local (defthm tac-rewrite-apply-rules-of-0
+           (equal (tac-rewrite-apply-rules 0 rules fn args)
+                  (pseudo-term-fncall fn args))
+           :hints (("goal" :induct (len rules)
+                    :expand ((tac-rewrite-apply-rules 0 rules fn args))))))
+  (local (in-theory (enable tac-rewritelist-fix)))
+  (fty::deffixequiv-mutual tac-rewrite))
 
 
 
@@ -3752,7 +3874,7 @@
         rewrites)))
 
   (define tac-positive-normalize-rules ()
-    :returns (rewrites cmr::rewritelist-p)
+    :returns (rewrites tac-rewritelist-p)
     *tac-positive-normalize-rules*
     ///
     (in-theory (disable (tac-positive-normalize-rules)))))
@@ -3824,13 +3946,13 @@
 (def-tac-negative-normalize in-singleton-image-when-pair
   (implies (and (pred-in-rel e1 e2 a)
                 (relation-p a))
-           (iff (pred-in-set w (image (singleton e1) a))
-                (or (pred-in-set w (image (singleton e1) a))
+           (iff (pred-in-set w (setimage (singleton e1) a))
+                (or (pred-in-set w (setimage (singleton e1) a))
                     (pred-in-set w (singleton e2))))))
 
 ;; ~aR -- looping/free variable instantiation rule
 (def-tac-negative-normalize in-singleton-preimage-when-pair
-  (implies (and (in (edge e2 e1) a)
+  (implies (and (pred-in-rel e2 e1 a)
                 (relation-p a))
            (iff (pred-in-set w (setpreimage a (singleton e1)))
                 (or (pred-in-set w (setpreimage a (singleton e1)))
@@ -3945,6 +4067,13 @@
            (iff (pred-in-set w (singleton e1))
                 (or (pred-in-set w (singleton e1))
                     (pred-in-set w (singleton e2))))))
+
+;; (def-tac-negative-normalize in-singleton-2-bogys
+;;   (implies (and (event-p e1)
+;;                 (pred-equal e2 e1))
+;;            (iff (pred-in-set w (singleton e1))
+;;                 (or (pred-in-set w (singleton e1))
+;;                     (pred-in-set w (singleton e2))))))
 
 ;; ~XL
 (def-tac-negative-normalize in-singleton-image-prod
@@ -4144,7 +4273,7 @@
         rewrites)))
 
   (define tac-negative-normalize-rules ()
-    :returns (rewrites cmr::rewritelist-p)
+    :returns (rewrites tac-rewritelist-p)
     *tac-negative-normalize-rules*
     ///
     (in-theory (disable (tac-negative-normalize-rules)))))
@@ -4189,136 +4318,59 @@
          (intersectp-eq (cmr::term-vars (car x.hyps)) free-vars)
          (car x.hyps))))
 
-
-
-
-(define collect-if-branches ((x pseudo-termp))
-  :returns (branches pseudo-term-listp)
-  :measure (pseudo-term-count x)
-  (pseudo-term-case x
-    :fncall (if (eq x.fn 'if)
-                (b* (((list a b c) x.args)
-                     ((when (equal c ''nil))
-                      (append (collect-if-branches a)
-                              (collect-if-branches b)))
-                     ((when (equal a b))
-                      (append (collect-if-branches a)
-                              (collect-if-branches c))))
-                  (list (pseudo-term-fix x)))
-              (list (pseudo-term-fix x)))
-    :const (if (or (eq x.val nil)
-                   (eq x.val t))
-               nil
-             (list (pseudo-term-fix x)))
-    :otherwise (list (pseudo-term-fix x))))
-                     
-
-;; (defun-sk sub-subst-p (x y)
-;;   (forall v
-;;           (implies (and (pseudo-var-p v)
-;;                         (hons-assoc-equal v x))
-;;                    (and (hons-assoc-equal v y)
-;;                         (pseudo-term-equiv (cdr (hons-assoc-equal v y))
-;;                                            (cdr (hons-assoc-equal v x))))))
-;;   :rewrite :direct)
-
-
-
-
-
-(defsection tac-pred-rewrite-rhs-typed
-  (defun-sk tac-pred-rewrite-rhs-typed (rule)
-    (forall (x ctx)
-            (b* (((cmr::rewrite rule))
-                 ((mv unify-ok subst) (cmr::term-unify-strict rule.lhs x nil)))
-              (implies (and unify-ok
-                            (equal (tac-term-type x ctx) :pred)
-                            
-                            (let* ((binding-hyp (and (is-special-instantiation-rule rule)
-                                                     (special-instantiation-rule-binding-hyp rule))))
-                              (or (not binding-hyp)
-                                  (tac-term-type (term-subst-strict binding-hyp full-subst)
-                                                 ctx))))
-                       (subsetp (tac-termlist-types (collect-if-branches (cmr::term-subst-strict rule.rhs subst)) ctx)
-                                '(:pred)))))
-    :rewrite :direct)
-
-  (in-theory (disable tac-pred-rewrite-rhs-typed)))
-
-
-
-
-
-(define tac-pred-rewrites-rhs-typed (rules)
-  :verify-guards nil
-  (if (atom rules)
-      t
-    (and (tac-pred-rewrite-rhs-typed (car rules))
-         (tac-pred-rewrites-rhs-typed (cdr rules))))
-  ///
-  (local (defthm car-when-equal-cons
-           (implies (equal x (cons a b))
-                    (equal (car x) a))))
-  (local (defthm cdr-when-equal-cons
-           (implies (equal x (cons a b))
-                    (equal (cdr x) b))))
-  
-  (defthm tac-pred-rewrites-rhs-typed-of-tac-positive-normalize-rules
-    (tac-pred-rewrites-rhs-typed (tac-positive-normalize-rules))
-    :hints (("goal" :expand ((:free (x) (tac-pred-rewrite-rhs-typed x))
-                             (:free (a b) (tac-pred-rewrites-rhs-typed (cons a b))))
-             :in-theory (e/d (cmr::term-subst-strict
-                              tac-termlist-types
-                              collect-if-branches
-                              cmr::termlist-subst-strict
-                              cmr::equal-of-pseudo-term-fncall
-                              (tac-positive-normalize-rules))
-                             (tac-pred-rewrite-rhs-typed-necc)))))
-
-  (defthm tac-pred-rewrites-rhs-typed-of-tac-negative-normalize-rules
-    (tac-pred-rewrites-rhs-typed (tac-negative-normalize-rules))
-    :hints (("goal" :expand ((:free (x) (tac-pred-rewrite-rhs-typed x))
-                             (:free (a b) (tac-pred-rewrites-rhs-typed (cons a b))))
-             :in-theory (e/d (cmr::term-subst-strict
-                              tac-termlist-types
-                              collect-if-branches
-                              cmr::termlist-subst-strict
-                              cmr::equal-of-pseudo-term-fncall
-                              (tac-negative-normalize-rules))
-                             (tac-pred-rewrite-rhs-typed-necc)))))
-  )
-
-
-
-
-(encapsulate nil
-  (local (defthm car-when-equal-cons
-           (implies (equal x (cons a b))
-                    (equal (car x) a))))
-  (local (defthm cdr-when-equal-cons
-           (implies (equal x (cons a b))
-                    (equal (cdr x) b))))
-  
-  (defthm tac-rewrites-hyps-ok-of-tac-positive-normalize-rules
-    (tac-rewrites-hyps-ok (tac-positive-normalize-rules))
-    :hints (("goal" :expand ((:free (x) (tac-rewrite-hyps-ok x))
-                             (:free (a b) (tac-rewrites-hyps-ok (cons a b))))
-             :in-theory (e/d (cmr::term-subst-strict
-                              cmr::termlist-subst-strict
-                              cmr::equal-of-pseudo-term-fncall
-                              tac-ev-cube
-                              (tac-positive-normalize-rules))
-                             (tac-rewrite-hyps-ok-necc))))))
-
 (defthm tac-ev-theorem-rewritesp-of-tac-positive-normalize-rules
   (tac-ev-theorem-rewritesp (tac-positive-normalize-rules))
-  :hints(("Goal" :in-theory (acl2::e/d* ((tac-positive-normalize-rules))
+  :hints(("Goal" :in-theory (acl2::e/d* ((tac-positive-normalize-rules)
+                                         tac-ev-theoremp*-expand)
                                         ((:ruleset tac-negative-normalize-rules)
                                          tac-functions
                                          (emptyset)
                                          (pred-false))
                                         ((:ruleset tac-positive-normalize-rules)))
           :expand ((:Free (a b) (tac-ev-theorem-rewritesp (cons a b)))))))
+
+(defsection tac-ev-theorem-rewritesp-of-tac-negative-normalize-rules
+  (local (define tac-ev-theorem-rewrite-p ((name symbolp)
+                                           (rule cmr::rewrite-p))
+           :verify-guards nil
+           (declare (ignore name))
+           (tac-ev-theoremp* (cmr::rewrite-term rule))))
+
+  (local (in-theory (disable (tac-ev-theorem-rewrite-p))))
+  (local (defthm tac-ev-theorem-rewritesp-in-terms-of-rewrite-p
+           (equal (tac-ev-theorem-rewritesp (cons a b))
+                  (and (or (not (consp a))
+                           (tac-ev-theorem-rewrite-p (car a) (cdr a)))
+                       (tac-ev-theorem-rewritesp b)))
+           :hints (("goal" :expand ((tac-ev-theorem-rewritesp (cons a b)))
+                    :in-theory (e/d (tac-ev-theorem-rewrite-p))))))
+
+  (local (defun instance-subst (vars term)
+           (if (atom vars)
+               nil
+             (cons (list (car vars)
+                         `(cdr (assoc-equal ',(car vars)
+                                            (tac-ev-falsify ',term))))
+                   (instance-subst (cdr vars) term)))))
+
+  (defthm tac-ev-theorem-rewritesp-of-tac-negative-normalize-rules
+    (tac-ev-theorem-rewritesp (tac-negative-normalize-rules))
+    :hints(("Goal" :in-theory (acl2::e/d* ((tac-negative-normalize-rules)
+                                           tac-ev-theoremp*-expand)
+                                          ((:ruleset tac-negative-normalize-rules)
+                                           (:ruleset tac-positive-normalize-rules)
+                                           (:ruleset tac-rewrites)
+                                           tac-functions
+                                           (emptyset)
+                                           (pred-false))))
+           (and stable-under-simplificationp
+                (let ((lit (car (last clause))))
+                  (case-match lit
+                    (('tac-ev-theorem-rewrite-p ('quote name) ('quote rule))
+                     (let ((rule-term (cmr::rewrite-term rule)))
+                       `(:use ((:instance ,name
+                                . ,(instance-subst (cmr::term-vars rule-term) rule-term)))
+                         :expand (,lit))))))))))
 
 
 ;; Missing negative normalization rules
@@ -4583,20 +4635,6 @@
 
 ;; ------------- Evaluation of of tac-ruleres objects
 
-
-;; (define tac-rule-conjoin-ctx-results ((x pseudo-term-listp) elem env)
-;;   :verify-guards nil
-;;   (if (atom x)
-;;       t
-;;     (and (in elem (tac-ev (car x) env))
-;;          (tac-rule-conjoin-ctx-results (cdr x) elem env)))
-;;   ///
-;;   (defthm tac-rule-conjoin-ctx-results-of-append
-;;     (equal (tac-rule-conjoin-ctx-results (append x y) elem env)
-;;            (and (tac-rule-conjoin-ctx-results x elem env)
-;;                 (tac-rule-conjoin-ctx-results y elem env)))))
-
-
 (define tac-eval-ruleres-branch ((x tac-ruleres-branch-p)
                                               env)
   :verify-guards nil
@@ -4756,6 +4794,7 @@
                    (tac-eval-ruleres-branch-argslist y env)))))
 
 
+
 ;; ------------ Variables of tac-ruleres objects
 (local (Defthm union-of-pseudo-var-list
          (implies (and (cmr::pseudo-var-list-p x)
@@ -4766,18 +4805,66 @@
          (implies (cmr::pseudo-var-list-p x)
                   (symbol-listp x))))
 
+(cmr::defthm-term-vars-flag
+  (defthm tac-ev-of-cons-non-var
+    (implies (not (member-equal v (cmr::term-vars x)))
+             (equal (tac-ev x (cons (cons v val) env))
+                    (tac-ev x env)))
+    :hints ('(:expand ((cmr::term-vars x))
+              :in-theory (enable tac-ev-when-pseudo-term-call)))
+    :flag cmr::term-vars)
+  (defthm tac-ev-lst-of-cons-non-var
+    (implies (not (member-equal v (cmr::termlist-vars x)))
+             (equal (tac-ev-lst x (cons (cons v val) env))
+                    (tac-ev-lst x env)))
+    :hints ('(:expand ((cmr::termlist-vars x))))
+    :flag cmr::termlist-vars))
+
+(defthm eval-cons-non-var-of-cube
+  (implies (not (member-equal v (cmr::termlist-vars cube)))
+           (equal (tac-ev-cube cube (cons (cons v val) env))
+                  (tac-ev-cube cube env)))
+  :hints(("Goal" :in-theory (enable tac-ev-cube cmr::termlist-vars))))
+
 (define tac-ruleres-branch-vars ((x tac-ruleres-branch-p))
   :returns (vars cmr::pseudo-var-list-p)
   (b* (((tac-ruleres-branch x)))
     (union-eq (cmr::termlist-vars x.assums)
-              (cmr::term-vars x.ctx-result))))
+              (cmr::term-vars x.ctx-result)))
+  ///
+  (defret eval-cons-non-var-of-<fn>
+    (implies (not (member-equal v vars))
+             (equal (tac-eval-ruleres-branch x (cons (cons v val) env))
+                    (tac-eval-ruleres-branch x env)))
+    :hints(("Goal" :in-theory (enable tac-eval-ruleres-branch))))
+
+  (defthm tac-ruleres-branch-typed-of-add-unused-var
+    (implies (not (member-equal v (tac-ruleres-branch-vars x)))
+             (equal (tac-ruleres-branch-typed x type (cons (cons v vtype) ctx))
+                    (tac-ruleres-branch-typed x type ctx)))
+    :hints(("Goal" :in-theory (enable tac-ruleres-branch-typed
+                                      tac-ruleres-branch-vars)))))
+
 
 (define tac-ruleres-branchlist-vars ((x tac-ruleres-branchlist-p))
   :returns (vars cmr::pseudo-var-list-p)
   (if (atom x)
       nil
     (union-eq (tac-ruleres-branch-vars (car x))
-              (tac-ruleres-branchlist-vars (cdr x)))))
+              (tac-ruleres-branchlist-vars (cdr x))))
+  ///
+  (defret eval-cons-non-var-of-<fn>
+    (implies (not (member-equal v vars))
+             (equal (tac-eval-ruleres-branchlist x (cons (cons v val) env))
+                    (tac-eval-ruleres-branchlist x env)))
+    :hints(("Goal" :in-theory (enable tac-eval-ruleres-branchlist))))
+
+  (defthm tac-ruleres-branchlist-typed-of-add-unused-var
+    (implies (not (member-equal v (tac-ruleres-branchlist-vars x)))
+             (equal (tac-ruleres-branchlist-typed x type (cons (cons v vtype) ctx))
+                    (tac-ruleres-branchlist-typed x type ctx)))
+    :hints(("Goal" :in-theory (enable tac-ruleres-branchlist-typed
+                                      tac-ruleres-branchlist-vars)))))
 
 (define tac-ruleres-branchlistlist-vars ((x tac-ruleres-branchlistlist-p))
   :returns (vars cmr::pseudo-var-list-p)
@@ -4800,6 +4887,211 @@
     (union-eq (tac-ruleres-branch-args-vars (car x))
               (tac-ruleres-branch-argslist-vars (cdr x)))))
 
+
+;; Interlude for reasoning about removing a variable from a substitution
+(local (include-book "std/alists/hons-remove-assoc" :dir :system))
+
+(defsection hons-remove-assoc-lemmas
+  
+  
+  (local (defthm assoc-equal-is-hons-assoc-equal
+           (implies k
+                    (equal (assoc-equal k x)
+                           (hons-assoc-equal k x)))))
+
+
+  
+  (cmr::defthm-term-vars-flag
+    (defthm term-subst-strict-of-remove-non-term-var
+      (implies (not (member-equal v (cmr::term-vars x)))
+               (equal (cmr::term-subst-strict x (acl2::hons-remove-assoc v subst))
+                      (cmr::term-subst-strict x subst)))
+      :hints ('(:expand ((cmr::term-vars x)
+                         (:free (Subst) (cmr::term-subst-strict x subst)))))
+      :flag cmr::term-vars)
+    (defthm termlist-subst-strict-of-remove-non-term-var
+      (implies (not (member-equal v (cmr::termlist-vars x)))
+               (equal (cmr::termlist-subst-strict x (acl2::hons-remove-assoc v subst))
+                      (cmr::termlist-subst-strict x subst)))
+      :hints ('(:expand ((cmr::termlist-vars x)
+                         (:free (Subst) (cmr::termlist-subst-strict x subst)))))
+      :flag cmr::termlist-vars))
+
+  #!cmr (flag::make-flag term-unify-strict :local t)
+  (local (in-theory (disable cmr::term-unify-strict-reversible-iff-rw
+                             cmr::termlist-unify-strict-reversible-iff-rw)))
+
+  (local (defthm hons-remove-assoc-of-pseudo-term-subst-fix
+           (equal (cmr::pseudo-term-subst-fix (acl2::hons-remove-assoc v alist))
+                  (acl2::hons-remove-assoc v (cmr::pseudo-term-subst-fix alist)))
+           :hints(("Goal" :in-theory (enable acl2::hons-remove-assoc
+                                             cmr::pseudo-term-subst-fix)))))
+  #!cmr
+  (cmr::defthm-flag-term-unify-strict
+    (defthm term-unify-strict-of-hons-remove-assoc
+      (b* (((mv ok subst) (term-unify-strict pat x alist))
+           ((mv ok1 subst1) (term-unify-strict pat x (acl2::hons-remove-assoc v alist))))
+        (implies (and (not (member-equal v (term-vars pat)))
+                      ok)
+                 (and ok1
+                      (equal (acl2::hons-remove-assoc v subst)
+                             subst1))))
+      :hints ('(:expand ((:free (alist) (term-unify-strict pat x alist))
+                         (term-vars pat))))
+      :flag term-unify-strict)
+    (defthm termlist-unify-strict-of-hons-remove-assoc
+      (b* (((mv ok subst) (termlist-unify-strict pat x alist))
+           ((mv ok1 subst1) (termlist-unify-strict pat x (acl2::hons-remove-assoc v alist))))
+        (implies (and (not (member-equal v (termlist-vars pat)))
+                      ok)
+                 (and ok1
+                      (equal (acl2::hons-remove-assoc v subst)
+                             subst1))))
+      :hints ('(:expand ((:free (alist) (termlist-unify-strict pat x alist))
+                         (termlist-vars pat))))
+      :flag termlist-unify-strict)))
+
+
+;; ------------- Substitution into tac-ruleres objects
+
+(define tac-subst-ruleres-branch ((x tac-ruleres-branch-p)
+                                  (subst cmr::pseudo-term-subst-p))
+  :returns (new-x tac-ruleres-branch-p)
+  (b* (((tac-ruleres-branch x)))
+    (tac-ruleres-branch
+     (cmr::termlist-subst-strict x.assums subst)
+     (cmr::term-subst-strict x.ctx-result subst)))
+  ///
+  (defret eval-of-<fn>
+    (equal (tac-eval-ruleres-branch new-x env)
+           (tac-eval-ruleres-branch x (tac-ev-alist subst env)))
+    :hints(("Goal" :in-theory (enable tac-eval-ruleres-branch))))
+
+  (defret tac-ruleres-branch-typed-of-<fn>
+    (implies (tac-ruleres-branch-typed x type (tac-subst-ctx subst ctx))
+             (tac-ruleres-branch-typed new-x type ctx))
+    :hints(("Goal" :in-theory (enable tac-ruleres-branch-typed))))
+
+  (defret vars-of-<fn>
+    (implies (not (member-equal v (cmr::term-subst-vars subst)))
+             (not (member-equal v (tac-ruleres-branch-vars new-x))))
+    :hints(("Goal" :in-theory (enable tac-ruleres-branch-vars))))
+
+  (defret <fn>-of-remove-unused
+    (implies (not (member-equal v (tac-ruleres-branch-vars x)))
+             (equal (tac-subst-ruleres-branch x (acl2::hons-remove-assoc v subst))
+                    new-x))
+    :hints(("Goal" :in-theory (enable tac-ruleres-branch-vars)))))
+
+(define tac-subst-ruleres-branchlist ((x tac-ruleres-branchlist-p)
+                                      (subst cmr::pseudo-term-subst-p))
+  :returns (new-x tac-ruleres-branchlist-p)
+  (if (atom x)
+      nil
+    (cons (tac-subst-ruleres-branch (car x) subst)
+          (tac-subst-ruleres-branchlist (cdr x) subst)))
+  ///
+  (defthm tac-subst-ruleres-branchlist-of-append
+    (equal (tac-subst-ruleres-branchlist (append x y) env)
+           (append (tac-subst-ruleres-branchlist x env)
+                   (tac-subst-ruleres-branchlist y env))))
+
+  (defret eval-of-<fn>
+    (equal (tac-eval-ruleres-branchlist new-x env)
+           (tac-eval-ruleres-branchlist x (tac-ev-alist subst env)))
+    :hints(("Goal" :in-theory (enable tac-eval-ruleres-branchlist))))
+  
+
+  (defret tac-ruleres-branchlist-typed-of-<fn>
+    (implies (tac-ruleres-branchlist-typed x type (tac-subst-ctx subst ctx))
+             (tac-ruleres-branchlist-typed new-x type ctx))
+    :hints(("Goal" :in-theory (enable tac-ruleres-branchlist-typed))))
+
+  (defret len-of-<fn>
+    (equal (len new-x) (len x)))
+
+  (defret vars-of-<fn>
+    (implies (not (member-equal v (cmr::term-subst-vars subst)))
+             (not (member-equal v (tac-ruleres-branchlist-vars new-x))))
+    :hints(("Goal" :in-theory (enable tac-ruleres-branchlist-vars))))
+
+  (defret <fn>-of-remove-unused
+    (implies (not (member-equal v (tac-ruleres-branchlist-vars x)))
+             (equal (tac-subst-ruleres-branchlist x (acl2::hons-remove-assoc v subst))
+                    new-x))
+    :hints(("Goal" :in-theory (enable tac-ruleres-branchlist-vars)))))
+
+(define tac-subst-ruleres-branchlistlist ((x tac-ruleres-branchlistlist-p)
+                                          (subst cmr::pseudo-term-subst-p))
+  :returns (new-x tac-ruleres-branchlistlist-p)
+  (if (atom x)
+      nil
+    (cons (tac-subst-ruleres-branchlist (car x) subst)
+          (tac-subst-ruleres-branchlistlist (cdr x) subst)))
+  ///
+  (defthm tac-subst-ruleres-branchlistlist-of-append
+    (equal (tac-subst-ruleres-branchlistlist (append x y) env)
+           (append (tac-subst-ruleres-branchlistlist x env)
+                   (tac-subst-ruleres-branchlistlist y env))))
+
+  (defret eval-of-<fn>
+    (equal (tac-eval-ruleres-branchlistlist new-x env)
+           (tac-eval-ruleres-branchlistlist x (tac-ev-alist subst env)))
+    :hints(("Goal" :in-theory (enable tac-eval-ruleres-branchlistlist))))
+
+  (defret tac-ruleres-branchlistlist-typed-of-<fn>
+    (implies (tac-ruleres-branchlistlist-typed x types (tac-subst-ctx subst ctx))
+             (tac-ruleres-branchlistlist-typed new-x types ctx))
+    :hints(("Goal" :in-theory (enable tac-ruleres-branchlistlist-typed))))
+
+  (defret len-of-<fn>
+    (equal (len new-x) (len x))))
+
+(define tac-subst-ruleres-branch-args ((x tac-ruleres-branch-args-p)
+                                       (subst cmr::pseudo-term-subst-p))
+  :returns (new-x tac-ruleres-branch-args-p)
+  (b* (((tac-ruleres-branch-args x)))
+    (tac-ruleres-branch-args
+     (cmr::termlist-subst-strict x.assums subst)
+     (cmr::termlist-subst-strict x.ctx-result-args subst)))
+  ///
+
+  (defret eval-of-<fn>
+    (Equal (tac-eval-ruleres-branch-args new-x env)
+           (tac-eval-ruleres-branch-args x (tac-ev-alist subst env)))
+    :hints(("Goal" :in-theory (enable tac-eval-ruleres-branch-args))))
+
+  (defret tac-ruleres-branch-args-typed-of-<fn>
+    (implies (tac-ruleres-branch-args-typed x types (tac-subst-ctx subst ctx))
+             (tac-ruleres-branch-args-typed new-x types ctx))
+    :hints(("Goal" :in-theory (enable tac-ruleres-branch-args-typed)))))
+
+
+(define tac-subst-ruleres-branch-argslist ((x tac-ruleres-branch-argslist-p)
+                                          (subst cmr::pseudo-term-subst-p))
+  :returns (new-x tac-ruleres-branch-argslist-p)
+  (if (atom x)
+      nil
+    (cons (tac-subst-ruleres-branch-args (car x) subst)
+          (tac-subst-ruleres-branch-argslist (cdr x) subst)))
+  ///
+  (defthm tac-subst-ruleres-branch-argslist-of-append
+    (equal (tac-subst-ruleres-branch-argslist (append x y) env)
+           (append (tac-subst-ruleres-branch-argslist x env)
+                   (tac-subst-ruleres-branch-argslist y env))))
+
+  (defret len-of-<fn>
+    (equal (len new-x) (len x)))
+
+  (defret eval-of-<fn>
+    (equal (tac-eval-ruleres-branch-argslist new-x env)
+           (tac-eval-ruleres-branch-argslist x (tac-ev-alist subst env)))
+    :hints(("Goal" :in-theory (enable tac-eval-ruleres-branch-argslist)))))
+
+
+
+
+
 ;; ------------- Parsing of of tac-ruleres objects
 
 
@@ -4808,23 +5100,24 @@
   :returns (mv ok (ctx-res pseudo-termp))
   (pseudo-term-case x
     :fncall (if (and (eq x.fn 'pred-in-set)
-                     (eq (first x.args) 'tac-w))
+                     (eq (first x.args) 'w))
                 (mv t (second x.args))
               (mv nil nil))
     :otherwise (mv nil nil))
   ///
   (defret <fn>-correct
     (implies ok
-             (equal (in (cdr (assoc 'tac-w env))
-                                 (tac-ev ctx-res env))
+             (equal (in (cdr (assoc 'w env))
+                        (tac-ev ctx-res env))
                     (tac-ev x env))))
 
-  (defret <fn>-typed
-    (implies (and ok
-                  (subsetp (tac-termlist-types (collect-if-branches x) ctx) '(:pred)))
-             (equal (tac-term-type ctx-res ctx) :set))
-    :hints(("Goal" :in-theory (enable collect-if-branches
-                                      tac-termlist-types)))))
+  ;; (defret <fn>-typed
+  ;;   (implies (and ok
+  ;;                 (subsetp (tac-termlist-types (collect-if-branches x) ctx) '(:pred)))
+  ;;            (equal (tac-term-type ctx-res ctx) :set))
+  ;;   :hints(("Goal" :in-theory (enable collect-if-branches
+  ;;                                     tac-termlist-types))))
+  )
 
                 
 (local (in-theory (disable acl2::pseudo-termp-opener)))
@@ -4872,7 +5165,7 @@
              (iff (tac-ev x env)
                   (and (tac-ev-cube assums env)
                        (or (not has-ctx)
-                           (in (cdr (assoc 'tac-w env))
+                           (in (cdr (assoc 'w env))
                                (tac-ev ctx-result env))))))
     :hints(("Goal" :in-theory (enable tac-ev-cube)
             :induct <call>))
@@ -4881,7 +5174,7 @@
   (defret <fn>-correct-rw
     (implies ok
              (and (implies has-ctx
-                           (iff (in (cdr (assoc 'tac-w env))
+                           (iff (in (cdr (assoc 'w env))
                                     (tac-eval-ruleres-branch
                                      (tac-ruleres-branch assums ctx-result)
                                      env))
@@ -4892,13 +5185,14 @@
     :hints(("Goal" :in-theory (enable tac-eval-ruleres-branch)
             :use <fn>-correct)))
 
-  (defret <fn>-typed
-    (implies (subsetp (tac-termlist-types (collect-if-branches x) ctx) '(:pred))
-             (and (subsetp (tac-termlist-types assums ctx) '(:pred))
-                  (implies has-ctx
-                           (equal (tac-term-type ctx-result ctx) :set))))
-    :hints(("Goal" :in-theory (enable tac-termlist-types
-                                      collect-if-branches)))))
+  ;; (defret <fn>-typed
+  ;;   (implies (subsetp (tac-termlist-types (collect-if-branches x) ctx) '(:pred))
+  ;;            (and (subsetp (tac-termlist-types assums ctx) '(:pred))
+  ;;                 (implies has-ctx
+  ;;                          (equal (tac-term-type ctx-result ctx) :set))))
+  ;;   :hints(("Goal" :in-theory (enable tac-termlist-types
+  ;;                                     collect-if-branches))))
+  )
 
 (local (defcong set::sequiv equal (in a b) 2
          :hints(("Goal" :in-theory (enable in)))))
@@ -4950,23 +5244,346 @@
   (verify-guards tac-parse-ruleres)
   (defret <fn>-correct
     (implies ok
-             (iff (in (cdr (assoc 'tac-w env))
+             (iff (in (cdr (assoc 'w env))
                       (union-list
                        (tac-eval-ruleres-branchlist results env)))
                   (tac-ev x env)))
     :hints(("Goal" :in-theory (enable tac-eval-ruleres-branchlist
                                       union-list))))
+)
+  
+  ;; (defret <fn>-typed
+  ;;   (implies (subsetp (tac-termlist-types (collect-if-branches x) ctx) '(:pred))
+  ;;            (tac-ruleres-branchlist-typed results :set ctx))
+  ;;   :hints(("Goal" :in-theory (enable tac-ruleres-branchlist-typed
+  ;;                                     tac-ruleres-branch-typed
+  ;;                                     collect-if-branches))))
 
-  (defret <fn>-typed
-    (implies (subsetp (tac-termlist-types (collect-if-branches x) ctx) '(:pred))
-             (tac-ruleres-branchlist-typed results :set ctx))
-    :hints(("Goal" :in-theory (enable tac-ruleres-branchlist-typed
-                                      tac-ruleres-branch-typed
-                                      collect-if-branches)))))
+
+;; ----------------- Well-formedness of tac positive/negative normalize rules
+
+
+
+;; (define collect-if-branches ((x pseudo-termp))
+;;   :returns (branches pseudo-term-listp)
+;;   :measure (pseudo-term-count x)
+;;   (pseudo-term-case x
+;;     :fncall (if (eq x.fn 'if)
+;;                 (b* (((list a b c) x.args)
+;;                      ((when (equal c ''nil))
+;;                       (append (collect-if-branches a)
+;;                               (collect-if-branches b)))
+;;                      ((when (equal a b))
+;;                       (append (collect-if-branches a)
+;;                               (collect-if-branches c))))
+;;                   (list (pseudo-term-fix x)))
+;;               (list (pseudo-term-fix x)))
+;;     :const (if (or (eq x.val nil)
+;;                    (eq x.val t))
+;;                nil
+;;              (list (pseudo-term-fix x)))
+;;     :otherwise (list (pseudo-term-fix x))))
+                     
+
+;; ;; (defun-sk sub-subst-p (x y)
+;; ;;   (forall v
+;; ;;           (implies (and (pseudo-var-p v)
+;; ;;                         (hons-assoc-equal v x))
+;; ;;                    (and (hons-assoc-equal v y)
+;; ;;                         (pseudo-term-equiv (cdr (hons-assoc-equal v y))
+;; ;;                                            (cdr (hons-assoc-equal v x))))))
+;; ;;   :rewrite :direct)
+
+
+;; (define non-if-fncalllist-p ((x pseudo-term-listp))
+;;   (if (atom x)
+;;       t
+;;     (and (pseudo-term-case (car x) :fncall)
+;;          (not (eq 'if (pseudo-term-fncall->fn (car x))))
+;;          (non-if-fncalllist-p (cdr x))))
+;;   ///
+;;   (defthm non-if-fncalllist-p-of-append
+;;     (iff (non-if-fncalllist-p (append x y))
+;;          (and (non-if-fncalllist-p x)
+;;               (non-if-fncalllist-p y))))
+;;   (local (defthm termlist-subst-strict-of-append
+;;            (equal (cmr::termlist-subst-strict (append x y) subst)
+;;                   (append (cmr::termlist-subst-strict x subst)
+;;                           (cmr::termlist-subst-strict y subst)))
+;;            :hints(("Goal" :in-theory (enable append cmr::termlist-subst-strict)))))
+
+;;   (local (defthmd not-equal-quote-nil-by-pseudo-term-kind
+;;            (implies (not (equal (pseudo-term-kind x) :quote))
+;;                     (not (equal x ''nil)))))
+  
+;;   (defthm not-const-of-term-subst-strict-when-non-if-fncallist-p-of-collect
+;;     (implies (and (non-if-fncalllist-p (collect-if-branches x))
+;;                   (not (equal (pseudo-term-fix x) ''nil)))
+;;              (not (equal (cmr::term-subst-strict x subst) ''nil)))
+;;     :hints(("Goal" :in-theory (enable (:i collect-if-branches)
+;;                                       not-equal-quote-nil-by-pseudo-term-kind)
+;;             :induct (collect-if-branches x)
+;;             :expand ((cmr::term-subst-strict x subst)
+;;                      (collect-if-branches x)))))
+
+;;   (local (defthm cdr-of-termlist-subst-strict
+;;            (equal (cdr (cmr::termlist-subst-strict x subst))
+;;                   (cmr::termlist-subst-strict (cdr x) subst))
+;;            :hints(("Goal" :expand ((cmr::termlist-subst-strict x subst)
+;;                                    (cmr::termlist-subst-strict nil subst))))))
+
+;;   (local (defthm car-of-termlist-subst-strict
+;;            (equal (car (cmr::termlist-subst-strict x subst))
+;;                   (cmr::term-subst-strict (car x) subst))
+;;            :hints(("Goal" :expand ((cmr::termlist-subst-strict x subst)
+;;                                    (cmr::term-subst-strict nil subst))))))
+
+;;   (local (defthm term-subst-strict-of-quote-nil
+;;            (equal (cmr::term-subst-strict ''nil subst)
+;;                   ''nil)
+;;            :hints (("goal" :expand ((cmr::term-subst-strict ''nil subst))))))
+            
+;;   (defthm collect-if-branches-of-term-subst-strict-when-fncallist-p
+;;     (implies (non-if-fncalllist-p (collect-if-branches x))
+;;              (equal (collect-if-branches (cmr::term-subst-strict x subst))
+;;                     (cmr::termlist-subst-strict (collect-if-branches x) subst)))
+;;     :hints(("Goal" :in-theory (enable (:i collect-if-branches))
+;;             :induct (collect-if-branches x)
+;;             :expand ((cmr::term-subst-strict x subst)
+;;                      (cmr::termlist-subst-strict nil subst)
+;;                      (:free (a b) (cmr::termlist-subst-strict (cons a b) subst))
+;;                      (collect-if-branches x)
+;;                      (:free (fn args) (collect-if-branches (pseudo-term-fncall fn args))))))))
+
+;; (define tac-pred-rewrites-branches-are-fncalls ((x tac-rewritelist-p))
+;;   (if (atom x)
+;;       t
+;;     (and (or (not (mbt (consp (car x))))
+;;              (non-if-fncalllist-p (collect-if-branches (cmr::rewrite->rhs (cdar x)))))
+;;          (tac-pred-rewrites-branches-are-fncalls (cdr x))))
+;;   ///
+;;   (defthm tac-pred-rewrites-branches-are-fncalls-of-tac-positive-normalize-rules
+;;     (tac-pred-rewrites-branches-are-fncalls (tac-positive-normalize-rules))
+;;     :hints(("Goal" :in-theory (enable (tac-positive-normalize-rules)))))
+
+;;   (defthm tac-pred-rewrites-branches-are-fncalls-of-tac-negative-normalize-rules
+;;     (tac-pred-rewrites-branches-are-fncalls (tac-negative-normalize-rules))
+;;     :hints(("Goal" :in-theory (enable (tac-negative-normalize-rules)))))
+  
+;;   (local (in-theory (enable tac-rewritelist-fix))))
+
+(define is-pred-in-set ((x pseudo-termp))
+  (pseudo-term-case x
+    :fncall (eq x.fn 'pred-in-set)
+    :otherwise nil))
+
+(defsection tac-pred-rewrite-rhs-typed
+  (defun-sk tac-pred-rewrite-rhs-typed (rule)
+    (forall (ctx)
+            (b* (((cmr::rewrite rule))
+                 (lhs-type (tac-term-type rule.lhs ctx))
+                 ((mv ok rhs-parsed) (tac-parse-ruleres rule.rhs)))
+              (implies (and lhs-type
+                            (is-pred-in-set rule.lhs)
+                            (let* ((binding-hyp (and (is-special-instantiation-rule rule)
+                                                     (special-instantiation-rule-binding-hyp rule))))
+                              (or (not binding-hyp)
+                                  (tac-term-type binding-hyp ctx))))
+                       (and ok
+                            (tac-ruleres-branchlist-typed rhs-parsed :set ctx))
+                       ;; (subsetp (tac-termlist-types (collect-if-branches rule.rhs) ctx)
+                       ;;          '(:pred))
+                       )))
+    :rewrite :direct)
+
+  (in-theory (disable tac-pred-rewrite-rhs-typed)))
 
 
 
 
+
+(define tac-pred-rewrites-rhs-typed (rules)
+  :verify-guards nil
+  (if (atom rules)
+      t
+    (and (or (not (mbt (consp (car rules))))
+             (tac-pred-rewrite-rhs-typed (cdar rules)))
+         (tac-pred-rewrites-rhs-typed (cdr rules))))
+  ///
+  (local (defthm car-when-equal-cons
+           (implies (equal x (cons a b))
+                    (equal (car x) a))))
+  (local (defthm cdr-when-equal-cons
+           (implies (equal x (cons a b))
+                    (equal (cdr x) b))))
+  
+  (defthm tac-pred-rewrites-rhs-typed-of-tac-positive-normalize-rules
+    (tac-pred-rewrites-rhs-typed (tac-positive-normalize-rules))
+    :hints (("goal" :expand ((:free (a b) (tac-pred-rewrites-rhs-typed (cons a b)))
+                             (:free (x) (tac-pred-rewrite-rhs-typed x))
+                             (:free (a b) (tac-pred-rewrites-rhs-typed (cons a b)))
+                             (:free (a b ctx) (tac-ruleres-branchlist-typed (cons a b) :set ctx))
+                             (:free (a b ctx) (tac-ruleres-branchlist-typed nil :set ctx)))
+             :in-theory (e/d (cmr::term-subst-strict
+                              tac-ruleres-branch-typed
+                              tac-termlist-types
+                              cmr::termlist-subst-strict
+                              cmr::equal-of-pseudo-term-fncall
+                              (tac-positive-normalize-rules))
+                             (tac-pred-rewrite-rhs-typed-necc)))))
+
+  (defthm tac-pred-rewrites-rhs-typed-of-tac-negative-normalize-rules
+    (tac-pred-rewrites-rhs-typed (tac-negative-normalize-rules))
+    :hints (("goal" :expand ((:free (a b) (tac-pred-rewrites-rhs-typed (cons a b)))
+                             (:free (x) (tac-pred-rewrite-rhs-typed x))
+                             (:free (a b) (tac-pred-rewrites-rhs-typed (cons a b)))
+                             (:free (a b ctx) (tac-ruleres-branchlist-typed (cons a b) :set ctx))
+                             (:free (a b ctx) (tac-ruleres-branchlist-typed nil :set ctx)))
+             :in-theory (e/d (cmr::term-subst-strict
+                              tac-ruleres-branch-typed
+                              tac-termlist-types
+                              cmr::termlist-subst-strict
+                              cmr::equal-of-pseudo-term-fncall
+                              (tac-negative-normalize-rules))
+                             (tac-pred-rewrite-rhs-typed-necc)))))
+  )
+
+(defsection tac-pred-rewrite-hyps-ok
+  (defun-sk tac-pred-rewrite-hyps-ok (rule)
+    (forall (ctx env)
+            (b* (((cmr::rewrite rule)))
+              (implies (and (tac-typed-env-p env ctx)
+                            (tac-term-type rule.lhs ctx))
+                       (and (implies (and (is-special-instantiation-rule rule)
+                                          (tac-term-type (special-instantiation-rule-binding-hyp rule) ctx)
+                                          (tac-ev (special-instantiation-rule-binding-hyp rule) env))
+                                     (tac-ev-cube rule.hyps env))
+                            (implies (not (is-special-instantiation-rule rule))
+                                     (tac-ev-cube rule.hyps env))))))
+    :rewrite :direct)
+
+  (in-theory (disable tac-pred-rewrite-hyps-ok)))
+
+
+
+(define tac-pred-rewrites-hyps-ok (rules)
+  :verify-guards nil
+  (if (atom rules)
+      t
+    (and (or (not (mbt (consp (car rules))))
+             (tac-pred-rewrite-hyps-ok (cdar rules)))
+         (tac-pred-rewrites-hyps-ok (cdr rules))))
+  ///
+  (local (defthm car-when-equal-cons
+           (implies (equal x (cons a b))
+                    (equal (car x) a))))
+  (local (defthm cdr-when-equal-cons
+           (implies (equal x (cons a b))
+                    (equal (cdr x) b))))
+  
+  (defthm tac-pred-rewrites-hyps-ok-of-tac-positive-normalize-rules
+    (tac-pred-rewrites-hyps-ok (tac-positive-normalize-rules))
+    :hints (("goal" :expand ((:free (x) (tac-pred-rewrite-hyps-ok x))
+                             (:free (a b) (tac-pred-rewrites-hyps-ok (cons a b))))
+             :in-theory (e/d (cmr::term-subst-strict
+                              cmr::termlist-subst-strict
+                              cmr::equal-of-pseudo-term-fncall
+                              tac-ev-cube
+                              (tac-positive-normalize-rules))
+                             (tac-pred-rewrite-hyps-ok-necc)))))
+
+  (defthm tac-pred-rewrites-hyps-ok-of-tac-negative-normalize-rules
+    (tac-pred-rewrites-hyps-ok (tac-negative-normalize-rules))
+    :hints (("goal" :expand ((:free (x) (tac-pred-rewrite-hyps-ok x))
+                             (:free (a b) (tac-pred-rewrites-hyps-ok (cons a b))))
+             :in-theory (e/d (cmr::term-subst-strict
+                              cmr::termlist-subst-strict
+                              cmr::equal-of-pseudo-term-fncall
+                              tac-ev-cube
+                              (tac-negative-normalize-rules))
+                             (tac-pred-rewrite-hyps-ok-necc))))))
+
+
+
+(define is-pred-in-set-w ((x pseudo-termp))
+  (pseudo-term-case x
+    :fncall (and (eq x.fn 'pred-in-set)
+                 (consp x.args)
+                 (eq (first x.args) 'w))
+    :otherwise nil))
+
+(define tac-pred-rewrite-parse-ok ((rule cmr::rewrite-p))
+  :guard-hints (("goal" :in-theory (enable is-pred-in-set-w)))
+  (b* (((cmr::rewrite rule))
+       ((mv ok results) (tac-parse-ruleres rule.rhs)))
+    (or (not (is-pred-in-set rule.lhs))
+        (and (is-pred-in-set-w rule.lhs)
+             (not (member-equal 'w (cmr::term-vars (cadr (pseudo-term-call->args rule.lhs)))))
+             (or (not (is-special-instantiation-rule rule))
+                 (not (member-equal 'w (cmr::term-vars
+                                        (special-instantiation-rule-binding-hyp rule)))))
+             ok
+             (not (member-equal 'w (tac-ruleres-branchlist-vars results))))))
+  ///
+  (defthmd tac-pred-rewrite-parse-ok-implies
+    (b* (((cmr::rewrite rule))
+         ((mv ok results) (tac-parse-ruleres rule.rhs)))
+      (implies (and (tac-pred-rewrite-parse-ok rule)
+                    (is-pred-in-set rule.lhs))
+               (and (equal (pseudo-term-kind rule.lhs) :fncall)
+                    (equal (pseudo-term-fncall->fn rule.lhs) 'pred-in-set)
+                    (equal (first (pseudo-term-call->args rule.lhs)) 'w)
+                    (is-pred-in-set-w rule.lhs)
+                    (not (member-equal 'w (cmr::term-vars (cadr (pseudo-term-call->args rule.lhs)))))
+                    ok
+                    (not (member-equal 'w (tac-ruleres-branchlist-vars results)))
+                    (implies (is-special-instantiation-rule rule)
+                             (not (member-equal 'w (cmr::term-vars
+                                                    (special-instantiation-rule-binding-hyp rule))))))))
+    :hints(("Goal" :in-theory (enable is-pred-in-set-w)))))
+                    
+
+(define tac-pred-rewrites-parse-ok ((rules tac-rewritelist-p))
+  (if (atom rules)
+      t
+    (and (or (not (mbt (consp (car rules))))
+             (tac-pred-rewrite-parse-ok (cdar rules)))
+         (tac-pred-rewrites-parse-ok (cdr rules))))
+  ///
+  (defthm tac-pred-rewriteso-parse-ok-of-positive-normalize
+    (tac-pred-rewrites-parse-ok (tac-positive-normalize-rules))
+    :hints(("Goal" :in-theory (enable (tac-positive-normalize-rules)))))
+
+  (defthm tac-pred-rewrites-parse-ok-of-negative-normalize
+    (tac-pred-rewrites-parse-ok (tac-negative-normalize-rules))
+    :hints(("Goal" :in-theory (enable (tac-negative-normalize-rules)))))
+
+  (local (in-theory (enable tac-rewritelist-fix))))
+
+
+
+
+
+(define collect-is-special-instantiation-rule ((x tac-rewritelist-p))
+  (if (atom x)
+      nil
+    (if (mbt (consp (car x)))
+        (cons (is-special-instantiation-rule (cdar x))
+              (collect-is-special-instantiation-rule (cdr x)))
+      (collect-is-special-instantiation-rule (cdr x))))
+  ///
+  (local (in-theory (enable tac-rewritelist-fix))))
+
+(define collect-special-instantiation-rule-hyps ((x tac-rewritelist-p))
+  (if (atom x)
+      nil
+    (if (and (mbt (consp (car x)))
+             (is-special-instantiation-rule (cdar x)))
+        (cons (special-instantiation-rule-binding-hyp (cdar x))
+              (collect-special-instantiation-rule-hyps (cdr x)))
+      (collect-special-instantiation-rule-hyps (cdr x))))
+  ///
+  (local (in-theory (enable tac-rewritelist-fix))))
 
 
 (local (defthm prefixp-transitive
@@ -5439,6 +6056,13 @@
                   (tac-ruleres-branch-argslist-no-assums-without-args y))
              (tac-ruleres-branch-argslist-no-assums-without-args (append x y)))))
 
+(local (defthm termlist-vars-of-append
+         (iff (member v (cmr::termlist-vars (append a b)))
+              (or (member v (cmr::termlist-vars a))
+                  (member v (cmr::termlist-vars b))))
+         :hints(("Goal" :in-theory (enable cmr::termlist-vars)))))
+                
+
 (define tac-ruleres-branch-product-with-branch-argslist ((x tac-ruleres-branch-p)
                                                                       (y tac-ruleres-branch-argslist-p))
   :returns (new-y tac-ruleres-branch-argslist-p)
@@ -5450,6 +6074,15 @@
                                                   (cons x.ctx-result y1.ctx-result-args)))
           (tac-ruleres-branch-product-with-branch-argslist x (cdr y))))
   ///
+  (defret vars-of-<fn>
+    (implies (and (not (member v (tac-ruleres-branch-vars x)))
+                  (not (member v (tac-ruleres-branch-argslist-vars y))))
+             (not (member v (tac-ruleres-branch-argslist-vars new-y))))
+    :hints(("Goal" :in-theory (enable tac-ruleres-branch-vars
+                                      tac-ruleres-branch-argslist-vars
+                                      tac-ruleres-branch-args-vars
+                                      cmr::termlist-vars))))
+  
   (local (defthm remove-entries-with-nil-of-cons-to-each-nil
            (equal (remove-entries-with-nil (cons-to-each nil x)) nil)
            :hints(("Goal" :in-theory (enable remove-entries-with-nil cons-to-each)))))
@@ -5489,6 +6122,12 @@
                                       tac-termlist-types acl2::prefixp tac-typelist-fix)
             :induct <call>))))
 
+(local (defthm member-tac-ruleres-branch-arslist-vars-of-append
+         (iff (member v (tac-ruleres-branch-argslist-vars (append a b)))
+              (or (member v (tac-ruleres-branch-argslist-vars a))
+                  (member v (tac-ruleres-branch-argslist-vars b))))
+         :hints(("Goal" :in-theory (enable tac-ruleres-branch-argslist-vars)))))
+
 (define tac-ruleres-branchlist-product-with-branch-argslist ((x tac-ruleres-branchlist-p)
                                                                           (y tac-ruleres-branch-argslist-p))
   :Returns (new-y tac-ruleres-branch-argslist-p)
@@ -5497,6 +6136,13 @@
     (append (tac-ruleres-branch-product-with-branch-argslist (car x) y)
             (tac-ruleres-branchlist-product-with-branch-argslist (cdr x) y)))
   ///
+  (defret vars-of-<fn>
+    (implies (and (not (member v (tac-ruleres-branchlist-vars x)))
+                  (not (member v (tac-ruleres-branch-argslist-vars y))))
+             (not (member v (tac-ruleres-branch-argslist-vars new-y))))
+    :hints(("Goal" :in-theory (enable tac-ruleres-branchlist-vars
+                                      tac-ruleres-branch-argslist-vars
+                                      tac-ruleres-branch-args-vars))))
   (defret eval-of-<fn>
     (implies (tac-ruleres-branch-argslist-no-assums-without-args y)
              (equal (remove-entries-with-nil
@@ -5584,7 +6230,14 @@
             :expand (<call>))
            (and stable-under-simplificationp
                 '(:in-theory (enable tac-ruleres-branch-args-typed
-                                     tac-termlist-types acl2::prefixp))))))
+                                     tac-termlist-types acl2::prefixp)))))
+
+  (defret vars-of-<fn>
+    (implies (not (member v (tac-ruleres-branchlistlist-vars x)))
+             (not (member v (tac-ruleres-branch-argslist-vars arglist))))
+    :hints(("Goal" :in-theory (enable tac-ruleres-branchlistlist-vars
+                                      tac-ruleres-branch-argslist-vars
+                                      tac-ruleres-branch-args-vars)))))
 
 (defthm lengths-of-tac-eval-ruleres-branch-argslist-when-have-lengths
   (equal (lists-have-lengths n (tac-eval-ruleres-branch-argslist x env))
@@ -5638,18 +6291,33 @@
                                       TAC-RULERES-BRANCH-ARGSLIST-TYPED)
             :induct <call>)
            (And stable-under-simplificationp
-                '(:expand ((:free (args) (tac-term-type (pseudo-term-fncall fn args) ctx))))))))
+                '(:expand ((:free (args) (tac-term-type (pseudo-term-fncall fn args) ctx)))))))
 
-(define tac-try-basic-rewrites ((rules cmr::rewritelist-p)
+  (defret vars-of-<fn>
+    (implies (not (member v (tac-ruleres-branch-argslist-vars results)))
+             (not (member v (tac-ruleres-branchlist-vars apps))))
+    :hints(("Goal" :in-theory (enable tac-ruleres-branch-argslist-vars
+                                      tac-ruleres-branch-args-vars
+                                      tac-ruleres-branchlist-vars
+                                      tac-ruleres-branch-vars
+                                      cmr::term-vars)))))
+
+(define tac-try-basic-rewrites ((rules tac-rewritelist-p)
                                 (fn pseudo-fnsym-p)
                                 (args pseudo-term-listp))
   :returns (mv rewrittenp (result pseudo-termp))
   (if (atom rules)
       (mv nil nil)
-    (b* (((mv ok rhs subst) (tac-rewrite-apply-rule (car rules) fn args))
+    (b* (((unless (mbt (consp (car rules))))
+          (tac-try-basic-rewrites (cdr rules) fn args))
+         ((mv ok rhs subst) (tac-rewrite-apply-rule (cdar rules) fn args))
          ((when ok) (mv t (cmr::term-subst-strict rhs subst))))
       (tac-try-basic-rewrites (cdr rules) fn args)))
   ///
+  (defret <fn>-preserves-vars
+    (implies (not (member v (cmr::termlist-vars args)))
+             (not (member v (cmr::term-vars result)))))
+  
   (defret <fn>-correct
     (implies (and rewrittenp
                   (tac-ev-theorem-rewritesp rules)
@@ -5661,487 +6329,699 @@
     :hints(("Goal" :in-theory (enable tac-ev-theorem-rewritesp
                                       tac-rewrites-hyps-ok))))
 
+  (local (in-theory (disable tac-term-type-of-term-subst-strict)))
+  
   (defret <fn>-preserves-type
     (implies (and rewrittenp
                   (tac-rewrites-rhs-preserved rules)
                   (equal type (tac-term-type (pseudo-term-fncall fn args) ctx))
                   type)
              (equal (tac-term-type result ctx) type))
-    :hints(("Goal" :in-theory (enable tac-rewrites-rhs-preserved)))))
+    :hints(("Goal" :in-theory (enable tac-rewrites-rhs-preserved))))
+
+  (local (in-theory (enable tac-rewritelist-fix))))
 
 
 
-(include-book "centaur/meta/subst-vars" :dir :system)
+
+(fty::deflist pseudo-term-substlist :elt-type cmr::pseudo-term-subst :true-listp t)
+
+(include-book "std/alists/alist-equiv" :dir :system)
+
+(local (defthm assoc-equal-is-hons-assoc-equal
+         (implies k
+                  (equal (assoc-equal k x)
+                         (hons-assoc-equal k x)))))
+
+(defsection tac-ev-when-preserves-vars
+  
+  
+
+  (local (defthm member-alist-keys
+           (iff (member-equal v (acl2::alist-keys x))
+                (hons-assoc-equal v x))
+           :hints(("Goal" :in-theory (enable acl2::alist-keys)))))
+  
+  (cmr::defthm-term-vars-flag
+    (defthm tac-ev-when-sub-alistp
+      (implies (and (acl2::sub-alistp sub super)
+                    (subsetp-equal (cmr::term-vars x)
+                                   (acl2::alist-keys sub)))
+               (equal (tac-ev x super)
+                      (tac-ev x sub)))
+      :hints ('(:expand ((cmr::term-vars x))
+                :in-theory (enable tac-ev-of-fncall-args
+                                   tac-ev-when-pseudo-term-call
+                                   acl2::sub-alistp-hons-assoc-equal)))
+      :flag cmr::term-vars)
+
+    (defthm tac-ev-lst-when-sub-alistp
+      (implies (and (acl2::sub-alistp sub super)
+                    (subsetp-equal (cmr::termlist-vars x)
+                                   (acl2::alist-keys sub)))
+               (equal (tac-ev-lst x super)
+                      (tac-ev-lst x sub)))
+      :hints ('(:expand ((cmr::termlist-vars x))))
+      :flag cmr::termlist-vars))
+
+  (cmr::defthm-term-vars-flag
+    (defthm term-subst-strict-when-sub-alistp
+      (implies (and (acl2::sub-alistp (cmr::pseudo-term-subst-fix sub)
+                                      (cmr::pseudo-term-subst-fix super))
+                    (subsetp-equal (cmr::term-vars x)
+                                   (acl2::alist-keys
+                                    (cmr::pseudo-term-subst-fix sub))))
+               (equal (cmr::term-subst-strict x super)
+                      (cmr::term-subst-strict x sub)))
+      :hints ('(:expand ((cmr::term-vars x)
+                         (:free (s) (cmr::term-subst-strict x s)))
+                :in-theory (enable acl2::sub-alistp-hons-assoc-equal)))
+      :flag cmr::term-vars)
+
+    (defthm termlist-subst-strict-when-sub-alistp
+      (implies (and (acl2::sub-alistp (cmr::pseudo-term-subst-fix sub)
+                                      (cmr::pseudo-term-subst-fix super))
+                    (subsetp-equal (cmr::termlist-vars x)
+                                   (acl2::alist-keys
+                                    (cmr::pseudo-term-subst-fix sub))))
+               (equal (cmr::termlist-subst-strict x super)
+                      (cmr::termlist-subst-strict x sub)))
+      :hints ('(:expand ((cmr::termlist-vars x)
+                         (:free (s) (cmr::termlist-subst-strict x s)))))
+      :flag cmr::termlist-vars))
+
+  (local (defthm lookup-under-iff-when-sub-alistp
+           (implies (and (acl2::sub-alistp (cmr::pseudo-term-subst-fix sub)
+                                           (cmr::pseudo-term-subst-fix super))
+                         (hons-assoc-equal var sub)
+                         (pseudo-var-p var))
+                    (hons-assoc-equal var super))
+           :hints (("goal" :use ((:instance acl2::sub-alistp-hons-assoc-equal
+                                  (x var) (a (cmr::pseudo-term-subst-fix sub))
+                                  (b (cmr::pseudo-term-subst-fix super))))))))
+  
+  (local (defthm cdr-lookup-under-pseudo-term-equiv-when-sub-alistp
+           (implies (and (acl2::sub-alistp (cmr::pseudo-term-subst-fix sub)
+                                           (cmr::pseudo-term-subst-fix super))
+                         (hons-assoc-equal var sub)
+                         (pseudo-var-p var))
+                    (pseudo-term-equiv (cdr (hons-assoc-equal var super))
+                                       (cdr (hons-assoc-equal var sub))))
+           :hints (("goal" :use ((:instance acl2::sub-alistp-hons-assoc-equal
+                                  (x var) (a (cmr::pseudo-term-subst-fix sub))
+                                  (b (cmr::pseudo-term-subst-fix super))))))))
+
+  (defthm sub-alistp-of-tac-ev-alist
+    (implies (acl2::sub-alistp (cmr::pseudo-term-subst-fix sub)
+                               (cmr::pseudo-term-subst-fix super))
+             (acl2::sub-alistp (tac-ev-alist sub a) (tac-ev-alist super a)))
+    :hints(("goal" :in-theory (enable acl2::sub-alistp-iff-witness
+                                      acl2::sub-alistp-hons-assoc-equal)
+            :restrict ((acl2::sub-alistp-iff-witness
+                        ((acl2::a (tac-ev-alist sub a))))))))
+
+  (defthm sub-alistp-of-tac-ev-alist-no-fix
+    (implies (and (acl2::sub-alistp (cmr::pseudo-term-subst-fix sub) super)
+                  (cmr::pseudo-term-subst-p super))
+             (acl2::sub-alistp (tac-ev-alist sub a) (tac-ev-alist super a)))
+    :hints(("goal" :use ((:instance sub-alistp-of-tac-ev-alist))
+            :in-theory (disable sub-alistp-of-tac-ev-alist))))
+
+  (in-theory (disable tac-ev-when-sub-alistp
+                      tac-ev-lst-when-sub-alistp)))
+
+
+(define tac-rewrite-pred-find-subst ((assums pseudo-term-listp)
+                                     (hyp pseudo-termp)
+                                     (unify-subst cmr::pseudo-term-subst-p)
+                                     (used-unify-substs pseudo-term-substlist-p))
+  ;; The hyp has some free variables and also potentially some variables bound
+  ;; in unify-subst.  Find an assumption that unifies with hyp with the
+  ;; starting unify-subst, and that isn't already used in used-unify-substs.
+  :returns (new-subst cmr::pseudo-term-subst-p)
+  (b* (((When (atom assums)) nil)
+       ((mv ok subst) (cmr::term-unify-strict hyp (car assums) unify-subst))
+       ((when (and ok
+                   (not (member-equal subst (pseudo-term-substlist-fix used-unify-substs)))))
+        subst))
+    (tac-rewrite-pred-find-subst (cdr assums) hyp unify-subst used-unify-substs))
+  ///
+  (defret <fn>-preserves-bound-vars
+    (implies (and new-subst
+                  (hons-assoc-equal var unify-subst)
+                  (pseudo-var-p var))
+             (and (equal (hons-assoc-equal var new-subst)
+                         (hons-assoc-equal var (cmr::pseudo-term-subst-fix unify-subst)))
+                  (hons-assoc-equal var new-subst))))
+
+  (defret sub-alistp-of-<fn>
+    (implies new-subst
+             (acl2::sub-alistp (cmr::pseudo-term-subst-fix unify-subst) new-subst))
+    :hints(("Goal" :in-theory (enable acl2::sub-alistp-iff-witness))))
+
+  (defret <fn>-correct
+    (implies new-subst
+             (member-equal (cmr::term-subst-strict hyp new-subst)
+                           (pseudo-term-list-fix assums))))
+
+  (local (defthm equal-of-pseudo-term-fix
+           (implies (equal x (pseudo-term-fix y))
+                    (acl2::pseudo-term-equiv x y))
+           :rule-classes :forward-chaining))
+  
+  (local (defthm tac-term-type-of-tac-subst-ctx
+           (equal (Tac-term-type x (tac-subst-ctx subst ctx))
+                  (tac-term-type (cmr::term-subst-strict x subst) ctx))))
+  (local (in-theory (disable tac-term-type-of-term-subst-strict)))
+  
+  (defret <fn>-type
+    (implies (and new-subst
+                  (subsetp-equal (tac-termlist-types assums ctx) '(:pred)))
+             (equal (tac-term-type hyp (tac-subst-ctx new-subst ctx)) :pred))
+    :hints(("Goal" :induct t
+            :expand ((tac-termlist-types assums ctx)))))
+
+  (defret <fn>-type-subst
+    (implies (and new-subst
+                  (subsetp-equal (tac-termlist-types assums ctx) '(:pred)))
+             (equal (tac-term-type (cmr::term-subst-strict hyp new-subst) ctx) :pred))
+    :hints (("goal" :use <fn>-type
+             :in-theory (disable <fn> <fn>-type))))
+
+  (defret tac-ev-of-tac-rewrite-pred-find-subst
+    (implies (and (subsetp-equal (cmr::term-vars x)
+                                 (acl2::alist-keys (cmr::pseudo-term-subst-fix unify-subst)))
+                  new-subst)
+             (equal (tac-ev x (tac-ev-alist new-subst env))
+                    (tac-ev x (tac-ev-alist unify-subst env))))
+    :hints(("Goal" :in-theory (e/d ()
+                                   (<fn>))
+            :use ((:instance tac-ev-when-sub-alistp
+                   (x x)
+                   (sub (tac-ev-alist unify-subst env))
+                   (super (tac-ev-alist
+                           (tac-rewrite-pred-find-subst
+                            assums hyp unify-subst used-unify-substs)
+                           env)))))))
+
+  (defret tac-ev-lst-of-tac-rewrite-pred-find-subst
+    (implies (and (subsetp-equal (cmr::termlist-vars x)
+                                 (acl2::alist-keys (cmr::pseudo-term-subst-fix unify-subst)))
+                  new-subst)
+             (equal (tac-ev-lst x (tac-ev-alist new-subst env))
+                    (tac-ev-lst x (tac-ev-alist unify-subst env))))
+    :hints(("Goal" :in-theory (e/d ()
+                                   (<fn>))
+            :use ((:instance tac-ev-lst-when-sub-alistp
+                   (x x)
+                   (sub (tac-ev-alist unify-subst env))
+                   (super (tac-ev-alist
+                           (tac-rewrite-pred-find-subst
+                            assums hyp unify-subst used-unify-substs)
+                           env)))))))
+
+  (defret termlist-subst-strict-of-tac-rewrite-pred-find-subst
+    (implies (and (subsetp-equal (cmr::termlist-vars x)
+                                 (acl2::alist-keys (cmr::pseudo-term-subst-fix unify-subst)))
+                  new-subst)
+             (equal (cmr::termlist-subst-strict x new-subst)
+                    (cmr::termlist-subst-strict x unify-subst)))
+    :hints(("Goal" :in-theory (e/d ()
+                                   (<fn>))
+            :use ((:instance termlist-subst-strict-when-sub-alistp
+                   (x x)
+                   (sub unify-subst)
+                   (super (tac-rewrite-pred-find-subst
+                           assums hyp unify-subst used-unify-substs)))))))
+  
+
+  (defret vars-of-<fn>
+    (implies (and (not (member v (cmr::term-subst-vars unify-subst)))
+                  (not (member v (cmr::termlist-vars assums))))
+             (not (member v (cmr::term-subst-vars new-subst))))
+    :hints (("goal" :induct <call>
+             :expand ((cmr::termlist-vars assums)))))
+
+  (defret tac-w-not-present-of-<fn>
+    (implies (and (not (member 'tac-w (cmr::term-subst-vars
+                                       (acl2::hons-remove-assoc 'w unify-subst))))
+                  (not (member 'tac-w (cmr::termlist-vars assums)))
+                  (not (member 'w (cmr::term-vars hyp))))
+             (not (member 'tac-w (cmr::term-subst-vars
+                                  (acl2::hons-remove-assoc 'w new-subst)))))
+    :hints (("goal" :induct <call>
+             :expand ((cmr::termlist-vars assums))))))
+
+
+
+(define tac-rewrite-pred-subst ((rule cmr::rewrite-p)
+                                (fn pseudo-fnsym-p)
+                                (args pseudo-term-listp)
+                                (assums pseudo-term-listp)
+                                (used-unify-substs pseudo-term-substlist-p))
+  :returns (mv ok (subst cmr::pseudo-term-subst-p))
+  (b* (((cmr::rewrite rule))
+       ((unless (pseudo-term-case rule.lhs
+                  :fncall (eq rule.lhs.fn (pseudo-fnsym-fix fn))
+                  :otherwise nil))
+        (mv nil nil))
+       ((mv ok subst1) (cmr::termlist-unify-strict (pseudo-term-call->args rule.lhs)
+                                                   args nil))
+       ((unless ok) (mv nil nil))
+       ((unless (is-special-instantiation-rule rule))
+        (mv t subst1))
+       (hyp (special-instantiation-rule-binding-hyp rule))
+       (new-subst (tac-rewrite-pred-find-subst assums hyp subst1 used-unify-substs))
+       ((unless new-subst)
+        (mv nil nil)))
+    (mv t new-subst))
+  ///
+  (defret <fn>-lhs-subst
+    (implies ok
+             (equal (cmr::term-subst-strict
+                     (cmr::rewrite->lhs rule) subst)
+                    (pseudo-term-fncall fn args)))
+    :hints (("goal" :expand ((:free (subst)
+                              (cmr::term-subst-strict (cmr::rewrite->lhs rule) subst))))))
+
+  (defret <fn>-lhs-eval
+    (implies ok
+             (equal (tac-ev (cmr::rewrite->lhs rule)
+                            (tac-ev-alist subst env))
+                    (tac-ev (pseudo-term-fncall fn args) env)))
+    :hints (("goal" :use ((:instance tac-ev-of-term-subst-strict
+                           (a (mv-nth 1 (tac-rewrite-pred-subst rule fn args assums used-unify-substs)))
+                           (x (cmr::rewrite->lhs rule))))
+             :in-theory (disable tac-ev-of-term-subst-strict
+                                 <fn>))))
+
+  (defret <fn>-hyp-member
+    (implies (and (is-special-instantiation-rule rule)
+                  ok)
+             (member-equal (cmr::term-subst-strict
+                            (special-instantiation-rule-binding-hyp rule) subst)
+                           (pseudo-term-list-fix assums))))
+
+  (local (defthm tac-ev-when-member-cube
+           (implies (and (tac-ev-cube assums env)
+                         (member-equal hyp (pseudo-term-list-fix assums)))
+                    (tac-ev hyp env))
+           :hints(("Goal" :in-theory (enable tac-ev-cube pseudo-term-list-fix)))))
+  
+  (defret <fn>-hyp-satisfied
+    (implies (and (is-special-instantiation-rule rule)
+                  (tac-ev-cube assums env)
+                  ok)
+             (tac-ev (special-instantiation-rule-binding-hyp rule)
+                     (tac-ev-alist subst env)))
+    :hints (("goal" :use ((:instance tac-ev-of-term-subst-strict
+                           (a (mv-nth 1 (tac-rewrite-pred-subst rule fn args assums used-unify-substs)))
+                           (x (special-instantiation-rule-binding-hyp rule))))
+             :in-theory (disable tac-ev-of-term-subst-strict
+                                 <fn>))))
+
+  (local (defthm tac-term-type-of-term-subst-strict-inverse
+           (equal (tac-term-type x (tac-subst-ctx y z))
+                  (tac-term-type (cmr::term-subst-strict x y) z))))
+  (local (in-theory (disable tac-term-type-of-term-subst-strict)))
+
+  (local (defthm tac-term-type-when-member-and-subsetp-singleton
+           (implies (and (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
+                         (member-equal hyp (pseudo-term-list-fix assums)))
+                    (equal (tac-term-type hyp ctx) :pred))
+           :hints(("Goal" 
+                   :induct (len assums)
+                   :expand ((pseudo-term-list-fix assums)
+                            (tac-termlist-types assums ctx))))))
+  
+  (defret <fn>-typed
+    (implies (and ok
+                  (equal (tac-termlist-types args ctx)
+                         (tac-function-argument-types fn)))
+             (and (equal (tac-term-type (cmr::rewrite->lhs rule)
+                                        (tac-subst-ctx subst ctx))
+                         (tac-function-return-type fn))
+                  (implies (and (is-special-instantiation-rule rule)
+                                (subsetp-equal (tac-termlist-types assums ctx) '(:pred)))
+                           (equal (tac-term-type (special-instantiation-rule-binding-hyp rule)
+                                                 (tac-subst-ctx subst ctx))
+                                  :pred))))
+    :hints(("Goal" :in-theory (e/d ()
+                                   (<fn>))
+            :expand ((tac-term-type (pseudo-term-fncall fn args) ctx)))))
+
+  (defret <fn>-implies-is-pred-in-set
+    :pre-bind ((fn 'pred-in-set))
+    (implies ok
+             (is-pred-in-set (cmr::rewrite->lhs rule)))
+    :hints(("Goal" :in-theory (enable is-pred-in-set)))
+    :rule-classes :forward-chaining)
+
+  (defret <fn>-binds-w-when-tac-pred-rewrite-parse-ok
+    :pre-bind ((fn 'pred-in-set))
+    (implies (And (tac-pred-rewrite-parse-ok rule)
+                  ok)
+             (hons-assoc-equal 'w subst))
+    :hints(("Goal" :in-theory (enable tac-pred-rewrite-parse-ok
+                                      is-pred-in-set
+                                      is-pred-in-set-w)
+            :expand ((CMR::TERMLIST-VARS (PSEUDO-TERM-CALL->ARGS (CMR::REWRITE->LHS RULE)))))))
+
+  (defret <fn>-lookup-of-w-when-tac-pred-rewrite-parse-ok
+    :pre-bind ((fn 'pred-in-set)
+               (args (list 'tac-w x)))
+    (implies (And (tac-pred-rewrite-parse-ok rule)
+                  ok)
+             (equal (cdr (hons-assoc-equal 'w subst))
+                    'tac-w))
+    :hints(("Goal" :in-theory (enable tac-pred-rewrite-parse-ok
+                                      is-pred-in-set
+                                      is-pred-in-set-w)
+            :expand ((CMR::TERMLIST-VARS (PSEUDO-TERM-CALL->ARGS (CMR::REWRITE->LHS RULE)))
+                     (:free (subst) (cmr::term-subst-strict 'w subst))
+                     (:free (subst)
+                      (cmr::termlist-subst-strict
+                       (PSEUDO-TERM-CALL->ARGS (CMR::REWRITE->LHS RULE))
+                       subst))))))
+  (local (defthm hons-remove-assoc-when-not-present
+           (implies (and (not (hons-assoc-equal v x))
+                         (cmr::pseudo-term-subst-p x))
+                    (equal (acl2::hons-remove-assoc v x) x))
+           :hints(("Goal" :in-theory (enable acl2::hons-remove-assoc)))))
+                    
+
+  (defret tac-w-not-present-of-<fn>
+    :pre-bind ((fn 'pred-in-set)
+               (args (list 'tac-w x)))
+    (implies (and (tac-pred-rewrite-parse-ok rule)
+                  (not (member 'tac-w (cmr::term-vars x)))
+                  (not (member 'tac-w (cmr::termlist-vars assums))))
+             (not (member 'tac-w (cmr::term-subst-vars
+                                  (acl2::hons-remove-assoc 'w subst)))))
+    :hints (("goal" :in-theory (enable tac-pred-rewrite-parse-ok
+                                       IS-PRED-IN-SET-W
+                                       is-pred-in-set)
+             :expand ((:free (args a b subst)
+                       (cmr::termlist-unify-strict args (cons a b) subst))
+                      (:free (args subst)
+                       (cmr::termlist-unify-strict args nil subst))))))
+
+  (defret vars-of-<fn>
+    (implies (and (not (member v (cmr::termlist-vars args)))
+                  (not (member v (cmr::termlist-vars assums))))
+             (not (member v (cmr::term-subst-vars subst))))))
+               
+    
+
+
+(defthm-tac-term-type-flag
+  (defthm tac-term-type-of-cons-non-var
+    (implies (not (member-equal v (cmr::term-vars x)))
+             (equal (tac-term-type x (cons (cons v type) ctx))
+                    (tac-term-type x ctx)))
+    :hints ('(:expand ((cmr::term-vars x)
+                       (:free (ctx) (tac-term-type x ctx)))))
+    :flag tac-term-type)
+  (defthm tac-termlist-types-of-cons-non-var
+    (implies (not (member-equal v (cmr::termlist-vars x)))
+             (equal (tac-termlist-types x (cons (cons v type) ctx))
+                    (tac-termlist-types x ctx)))
+    :hints ('(:expand ((cmr::termlist-vars x)
+                       (:free (ctx) (tac-termlist-types x ctx)))))
+    :flag tac-termlist-types))
+
+
 
 (define tac-rewrite-pred-apply-rule ((rule cmr::rewrite-p)
-                                     (fn pseudo-fnsym-p)
-                                     (args pseudo-term-listp))
+                                     (x pseudo-termp)
+                                     (assums pseudo-term-listp)
+                                     (used-unify-substs pseudo-term-substlist-p))
   :returns (mv ok
-               (rhs pseudo-termp)
+               (result tac-ruleres-branchlist-p)
                (subst cmr::pseudo-term-subst-p))
   (b* (((cmr::rewrite rule))
        ((unless (and (or (eq rule.equiv 'equal)
-                         (eq rule.equiv 'iff))
-                     (pseudo-term-case rule.lhs :fncall)))
+                         (eq rule.equiv 'iff))))
         (mv nil nil nil))
-       ((pseudo-term-fncall rule.lhs))
-       ((unless (eq rule.lhs.fn (pseudo-fnsym-fix fn)))
-        (mv nil nil nil))
-       ((mv ok subst) (cmr::termlist-unify-strict rule.lhs.args args nil))
-       ((unless ok)
-        (mv nil nil nil)))
-    (mv t rule.rhs subst))
+       ((mv ok subst) (tac-rewrite-pred-subst rule 'pred-in-set (list 'tac-w x)
+                                              assums used-unify-substs))
+       ((unless ok) (mv nil nil nil))
+       ((mv ok res-pattern) (tac-parse-ruleres rule.rhs))
+       ((unless ok) (mv nil nil nil))
+       (res (tac-subst-ruleres-branchlist res-pattern subst)))
+    (mv t res subst))
   ///
   (local (in-theory (enable tac-ev-of-fncall-args)))
   
-  (local (defthm tac-ev-list-equal-of-termlist-subst-strict
-           (implies (equal (pseudo-term-list-fix x)
-                           (cmr::termlist-subst-strict pat subst))
-                    (equal (tac-ev-lst x a)
-                           (tac-ev-lst pat (tac-ev-alist subst a))))
-           :hints (("goal" :use ((:instance tac-ev-lst-of-pseudo-term-list-fix-x
-                                  (x x) (a a)))
-                    :in-theory (disable tac-ev-lst-of-pseudo-term-list-fix-x
-                                        tac-ev-lst-pseudo-term-list-equiv-congruence-on-x)))))
-  
-  (defret <fn>-correct
-    (implies (and ok
-                  (tac-ev-theoremp (cmr::rewrite-term rule))
-                  (tac-rewrite-hyps-ok rule)
-                  (tac-typed-env-p env ctx)
-                  (tac-term-type (pseudo-term-fncall fn args) ctx))
-             (iff (tac-ev rhs (tac-ev-alist subst env))
-                  (tac-ev (pseudo-term-fncall fn args) env)))
-    :hints(("Goal" :in-theory (e/d (cmr::rewrite-term)
-                                   (tac-rewrite-hyps-ok-necc))
-            :expand ((CMR::TERM-UNIFY-STRICT (CMR::REWRITE->LHS RULE)
-                                             (pseudo-term-fncall fn args) NIL))
-            :use ((:instance tac-ev-falsify
-                   (a (tac-ev-alist (mv-nth 1 (cmr::termlist-unify-strict
-                                               (pseudo-term-call->args (cmr::rewrite->lhs rule))
-                                               args nil))
-                                    env))
-                   (x (cmr::rewrite-term rule)))
-                  (:instance tac-rewrite-hyps-ok-necc
-                   (x (pseudo-term-fncall fn args)))))))
-
-  (defret <fn>-preserves-type
-    (implies (and ok
-                  (tac-pred-rewrite-rhs-typed rule)
-                  (equal (tac-term-type (pseudo-term-fncall fn args) ctx) :pred))
-             (subsetp (tac-termlist-types (collect-if-branches
-                                           (cmr::term-subst-strict rhs subst))
-                                          ctx) '(:pred)))
-    :hints (("goal" :use ((:instance tac-pred-rewrite-rhs-typed-necc
-                           (x (pseudo-term-fncall fn args))))
-            :expand ((CMR::TERM-UNIFY-STRICT (CMR::REWRITE->LHS RULE)
-                                             (pseudo-term-fncall fn args) NIL))
-            :in-theory (disable tac-pred-rewrite-rhs-typed-necc))))
-
-  (defret term-subst-vars-of-<fn>
-    (implies (not (member v (cmr::termlist-vars args)))
-             (not (member v (cmr::term-subst-vars subst))))))
-
-
-
-
-(defsection tac-pred-rewrite-rhs-vars-subset
-  (defun-sk tac-pred-rewrite-rhs-vars-subset (rule)
-    (forall (v x)
-            (b* (((mv ok1 rhs subst) (tac-rewrite-pred-apply-rule rule 'pred-in-set (list 'tac-w x)))
-                 (res-term (cmr::term-subst-strict rhs subst))
-                 ((mv ok2 result) (tac-parse-ruleres res-term)))
-              (implies (and (not (member v (cmr::term-vars x)))
-                            ok1)
-                       (and ok2
-                            (not (member v (tac-ruleres-branchlist-vars result)))))))
-    :rewrite :direct)
-
-  (in-theory (disable tac-pred-rewrite-rhs-vars-subset)))
-
-
-
-(define tac-pred-rewrites-rhs-vars-subset (rules)
-  :verify-guards nil
-  (if (atom rules)
-      t
-    (and (tac-pred-rewrite-rhs-vars-subset (car rules))
-         (tac-pred-rewrites-rhs-vars-subset (cdr rules))))
-  ///
-  (local (defthm car-when-equal-cons
-           (implies (equal x (cons a b))
-                    (equal (car x) a))))
-  (local (defthm cdr-when-equal-cons
-           (implies (equal x (cons a b))
-                    (equal (cdr x) b))))
-
-  (local (defthm member-tac-ruleres-branchlist-vars-of-cons
-           (iff (member v (tac-ruleres-branchlist-vars (cons a b)))
-                (or (member v (tac-ruleres-branch-vars a))
-                    (member v (tac-ruleres-branchlist-vars b))))
-           :hints(("Goal" :in-theory (enable tac-ruleres-branchlist-vars)))))
-
-  (local (defthm tac-ruleres-branch-vars-of-tac-ruleres-branch
-           (equal (tac-ruleres-branch-vars
-                   (tac-ruleres-branch assums ctx-result))
-                  (union-equal (cmr::termlist-vars assums)
-                               (cmr::term-vars ctx-result)))
-           :hints(("Goal" :in-theory (enable tac-ruleres-branch-vars)))))
-
-  (local (defthm termlist-vars-of-cons
-           (equal (cmr::termlist-vars (cons a b))
-                  (union-equal (cmr::termlist-vars b)
-                               (cmr::term-vars a)))
-           :hints(("Goal" :in-theory (enable cmr::termlist-vars)))))
-  (local (defthm term-vars-when-pseudo-term-fncall
-           (implies (pseudo-term-case x :fncall)
-                    (equal (cmr::term-vars x)
-                           (cmr::termlist-vars (pseudo-term-call->args x))))
-           :hints(("Goal" :expand ((cmr::term-vars x))))))
-  
-  (defthm tac-pred-rewrites-rhs-vars-subset-of-tac-positive-normalize-rules
-    (tac-pred-rewrites-rhs-vars-subset (tac-positive-normalize-rules))
-    :hints (("goal" :expand ((:free (x) (tac-pred-rewrite-rhs-vars-subset x))
-                             (:free (a b) (tac-pred-rewrites-rhs-vars-subset (cons a b))))
-             :in-theory (e/d (cmr::term-subst-strict
-                              tac-termlist-types
-                              tac-rewrite-pred-apply-rule
-                              tac-parse-ruleres
-                              tac-parse-ruleres-conj
-                              tac-parse-ruleres-base
-                              collect-if-branches
-                              cmr::termlist-subst-strict
-                              cmr::equal-of-pseudo-term-fncall
-                              (tac-positive-normalize-rules))
-                             (tac-pred-rewrite-rhs-vars-subset-necc))
-             :do-not-induct t))))
-
-
-
-
-(defthm tac-term-type-when-function-return-type
-  (implies (and (tac-term-type x ctx)
-                (pseudo-term-case x :fncall))
-           (equal (tac-term-type x ctx)
-                  (tac-function-return-type (pseudo-term-call->fn x))))
-  :hints(("Goal" :expand ((tac-term-type x ctx)))))
-
-
-
-
-(defthm tac-termlist-types-when-term-type
-  (implies (and (tac-term-type x ctx)
-                (pseudo-term-case x :fncall))
-           (acl2::prefixp (tac-function-argument-types (pseudo-term-fncall->fn x))
-                          (tac-termlist-types (pseudo-term-call->args x) ctx)))
-  :hints(("Goal" :expand ((tac-term-type x ctx)))))
-
-(defthm tac-ev-when-agree-on-term-vars
-  (implies (cmr::eval-alists-agree (cmr::term-vars x) a b)
-           (equal (equal (tac-ev x a)
-                         (tac-ev x b))
-                  t))
-  :hints (("goal" :use ((:instance (:functional-instance
-                                    cmr::base-ev-when-agree-on-term-vars
-                                    (cmr::base-ev tac-ev)
-                                    (cmr::base-ev-list tac-ev-lst))
-                         (x x) (a a) (b b))))))
-
-(defthm tac-ev-lst-when-agree-on-termlist-vars
-  (implies (cmr::eval-alists-agree (cmr::termlist-vars x) a b)
-           (equal (equal (tac-ev-lst x a)
-                         (tac-ev-lst x b))
-                  t))
-  :hints (("goal" :use ((:instance (:functional-instance
-                                    cmr::base-ev-list-when-agree-on-termlist-vars
-                                    (cmr::base-ev tac-ev)
-                                    (cmr::base-ev-list tac-ev-lst))
-                         (x x) (a a) (b b))))))
- 
-
-(define tac-try-pred-rewrite ((rule cmr::rewrite-p)
-                              (args pseudo-term-listp))
-  :returns (mv rewrittenp (results tac-ruleres-branchlist-p))
-  (b* (((mv rewrittenp rhs subst)
-        (tac-rewrite-pred-apply-rule rule 'pred-in-set args))
-       ((unless rewrittenp) (mv nil nil)))
-    (tac-parse-ruleres (cmr::term-subst-strict rhs subst)))
-  ///
-  (defthm tac-typed-env-p-aux-of-add-var
-    (implies (and (tac-typed-env-p-aux vars env ctx)
-                  (tac-typed-val-p val type))
-             (tac-typed-env-p-aux vars
-                                  (cons (cons var val) env)
-                                  (cons (cons var type) ctx)))
-    :hints(("Goal" :in-theory (enable tac-typed-env-p-aux))))
-  
-  (defthm tac-typed-env-p-of-add-var
-    (implies (and (tac-typed-env-p env ctx)
-                  (tac-typed-val-p val type))
-             (tac-typed-env-p (cons (cons var val) env)
-                              (cons (cons var type) ctx)))
-    :hints(("Goal" :in-theory (enable tac-typed-env-p
-                                      tac-typed-env-p-aux
-                                      acl2::alist-keys))))
-
-  (local (defthm eval-alists-agree-of-cons-non-member
-           (implies (not (member v vars))
-                    (acl2::eval-alists-agree vars (cons (cons v val) env) env))
-           :hints(("Goal" :in-theory (enable acl2::eval-alists-agree-by-bad-guy)))))
-
-  (local (defthm tac-ev-of-add-unused-var
-           (implies (not (member-equal v (cmr::term-vars x)))
-                    (equal (tac-ev x (cons (cons v val) env))
-                           (tac-ev x env)))
-           :hints(("Goal" :in-theory (enable tac-ev-when-agree-on-term-vars
-                                             acl2::eval-alists-agree-by-bad-guy)))))
-
-  (local (defthm tac-ev-cube-of-add-unused-var
-           (implies (not (member-equal v (cmr::termlist-vars x)))
-                    (equal (tac-ev-cube x (cons (cons v val) env))
-                           (tac-ev-cube x env)))
-           :hints(("Goal" :in-theory (enable tac-ev-cube)
-                   :induct (len x)
-                   :expand ((cmr::termlist-vars x))))))
-
-  (local (defthm tac-ev-alist-of-add-unused-var
-           (implies (not (member-equal v (cmr::term-subst-vars x)))
-                    (equal (tac-ev-alist x (cons (cons v val) env))
-                           (tac-ev-alist x env)))
-           :hints(("Goal" :in-theory (enable tac-ev-alist)
-                   :induct (len x)
-                   :expand ((cmr::term-subst-vars x))))))
-
-  ;; (local (defthm tac-rule-conjoin-ctx-results-of-add-unused-var
-  ;;          (implies (not (member-equal v (cmr::termlist-vars x)))
-  ;;                   (equal (tac-rule-conjoin-ctx-results x elem (cons (cons v val) env))
-  ;;                          (tac-rule-conjoin-ctx-results x elem env)))
-  ;;          :hints(("Goal" :in-theory (enable tac-rule-conjoin-ctx-results)
-  ;;                  :induct (len x)
-  ;;                  :expand ((cmr::termlist-vars x))))))
-
-  (local (defthm tac-eval-ruleres-branch-of-add-unused-var
-           (implies (not (member-equal v (tac-ruleres-branch-vars x)))
-                    (equal (tac-eval-ruleres-branch x (cons (cons v val) env))
-                           (tac-eval-ruleres-branch x env)))
-           :hints(("Goal" :in-theory (enable tac-eval-ruleres-branch
-                                             tac-ruleres-branch-vars)))))
-
-  (local (defthm tac-eval-ruleres-branchlist-of-add-unused-var
-           (implies (not (member-equal v (tac-ruleres-branchlist-vars x)))
-                    (equal (tac-eval-ruleres-branchlist x (cons (cons v val) env))
-                           (tac-eval-ruleres-branchlist x env)))
-           :hints(("Goal" :in-theory (enable tac-eval-ruleres-branchlist
-                                             tac-ruleres-branchlist-vars)))))
-
-  (defthm event-set-p-of-union-list
-    (implies (tac-1typed-vallist-p x :set)
-             (event-set-p (union-list x)))
-    :hints (("goal" :use ((:instance tac-typed-val-p-of-union-list
-                           (type :set)))
-             :in-theory (e/d (tac-typed-val-p)
-                             (tac-typed-val-p-of-union-list)))))
-
-  (defthm not-in-event-set-p-when-not-event-p
-    (implies (and (not (event-p e))
-                  (event-set-p x))
-             (not (in e x)))
-    :hints(("Goal" :in-theory (enable event-set-p
-                                      in))))
-             
+  (local (defthm hons-assoc-equal-when-cdr-hons-assoc-equal
+           (implies (cdr (hons-assoc-equal k x))
+                    (hons-assoc-equal k x))
+           :rule-classes :forward-chaining))
   
   (defret <fn>-correct-lemma
-    :pre-bind ((args (list 'tac-w x)))
-    (implies (and rewrittenp
-                  (not (member-equal 'tac-w (cmr::term-vars x)))
-                  (tac-ev-theoremp (cmr::rewrite-term rule))
-                  (tac-rewrite-hyps-ok rule)
+    (implies (and ok
+                  (tac-ev-theoremp* (cmr::rewrite-term rule))
+                  (tac-pred-rewrite-hyps-ok rule)
                   (tac-typed-env-p env ctx)
+                  (tac-ev-cube assums env)
+                  (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
+                  ;; (equal (tac-termlist-types args ctx)
+                  ;;        (tac-function-argument-types fn))
+                  ;; (equal (tac-function-return-type fn) :pred)
                   (equal (tac-term-type x ctx) :set)
-                  (tac-pred-rewrite-rhs-vars-subset rule)
-                  ;; (tac-pred-rewrite-rhs-typed rule)
-                  (event-p elem))
-             (iff (in elem
+                  (equal (cdr (hons-assoc-equal 'tac-w ctx)) :event)
+                  (tac-pred-rewrite-parse-ok rule))
+             (iff (in (cdr (assoc 'tac-w env))
                       (union-list
-                       (tac-eval-ruleres-branchlist results env)))
-                  (in elem
+                       (tac-eval-ruleres-branchlist result env)))
+                  (in (cdr (assoc 'tac-w env))
                       (tac-ev x env))))
     :hints (("goal" :use ((:instance tac-parse-ruleres-correct
-                           (x (b* (((mv & rhs subst) (tac-rewrite-pred-apply-rule
-                                                      rule 'pred-in-set (list 'tac-w x))))
-                                (cmr::term-subst-strict rhs subst)))
-                           (env (cons (Cons 'tac-w elem) env)))
-                          (:instance TAC-REWRITE-PRED-APPLY-RULE-CORRECT
-                           (fn 'pred-in-set) (args (list 'tac-w x))
-                           (env (cons (cons 'tac-w elem) env))
-                           (ctx (cons (cons 'tac-w :event) ctx))))
-             :cases ((event-p elem))
-             :in-theory (disable tac-parse-ruleres-correct)
-             :expand ((tac-typed-val-p elem :event))
-             :do-not-induct t))
-    :otf-flg t)
+                           (x (cmr::rewrite->rhs rule))
+                           (env
+                            (tac-ev-alist
+                             (mv-nth 1 (tac-rewrite-pred-subst rule 'pred-in-set (list 'tac-w x)
+                                                               assums used-unify-substs))
+                             env)))
+                          (:instance tac-ev-theoremp*-implies
+                           (x (cmr::rewrite-term rule))
+                           (a (tac-ev-alist
+                               (mv-nth 1 (tac-rewrite-pred-subst rule 'pred-in-set (list 'tac-w x)
+                                                                 assums used-unify-substs))
+                               env)))
+                          (:instance tac-pred-rewrite-hyps-ok-necc
+                           (env (tac-ev-alist
+                                   (mv-nth 1 (tac-rewrite-pred-subst rule 'pred-in-set (list 'tac-w x)
+                                                                     assums used-unify-substs))
+                                   env))
+                           (ctx (tac-subst-ctx
+                                 (mv-nth 1 (tac-rewrite-pred-subst rule 'pred-in-set (list 'tac-w x)
+                                                                   assums used-unify-substs))
+                                 ctx)))
+                          )
+             :expand ((:free (a b) (tac-termlist-types (cons a b) ctx))
+                      (tac-termlist-types nil ctx))
+             :in-theory (enable cmr::rewrite-term))))
 
-  (local
-   (defthm tac-ruleres-branch-typed-of-add-unused-var
-     (implies (not (member-equal v (tac-ruleres-branch-vars x)))
-              (equal (tac-ruleres-branch-typed x type (cons (cons v vtype) ctx))
-                     (tac-ruleres-branch-typed x type ctx)))
-     :hints(("Goal" :in-theory (enable tac-ruleres-branch-typed
-                                       tac-ruleres-branch-vars)))))
-
-  (local
-   (defthm tac-ruleres-branchlist-typed-of-add-unused-var
-     (implies (not (member-equal v (tac-ruleres-branchlist-vars x)))
-              (equal (tac-ruleres-branchlist-typed x type (cons (cons v vtype) ctx))
-                     (tac-ruleres-branchlist-typed x type ctx)))
-     :hints(("Goal" :in-theory (enable tac-ruleres-branchlist-typed
-                                       tac-ruleres-branchlist-vars)))))
-
-  (defret <fn>-preserves-type
-    :pre-bind ((args (list 'tac-w x)))
-    (implies (and rewrittenp
-                  (not (member-equal 'tac-w (cmr::term-vars x)))
+  (local (DEFTHM TAC-PRED-REWRITE-RHS-TYPED-NECC-force
+           (IMPLIES
+            (TAC-PRED-REWRITE-RHS-TYPED RULE)
+            (B* (((CMR::REWRITE RULE))
+                 (LHS-TYPE (TAC-TERM-TYPE RULE.LHS CTX))
+                 ((MV OK RHS-PARSED)
+                  (TAC-PARSE-RULERES RULE.RHS)))
+              (IMPLIES
+               (AND
+                LHS-TYPE (IS-PRED-IN-SET RULE.LHS)
+                (case-split (LET*
+                             ((BINDING-HYP
+                               (AND (IS-SPECIAL-INSTANTIATION-RULE RULE)
+                                    (SPECIAL-INSTANTIATION-RULE-BINDING-HYP RULE))))
+                             (OR (NOT BINDING-HYP)
+                                 (TAC-TERM-TYPE BINDING-HYP CTX)))))
+               (AND OK
+                    (TAC-RULERES-BRANCHLIST-TYPED RHS-PARSED
+                                                  :SET CTX)))))))
+  
+  (defret <fn>-type-lemma
+    (implies (and ok
                   (tac-pred-rewrite-rhs-typed rule)
+                  (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
                   (equal (tac-term-type x ctx) :set)
-                  (tac-pred-rewrite-rhs-vars-subset rule))
-             (tac-ruleres-branchlist-typed results :set ctx))
-    :hints (("goal" :use ((:instance tac-parse-ruleres-typed
-                           (x (b* (((mv & rhs subst) (tac-rewrite-pred-apply-rule
-                                                      rule 'pred-in-set (list 'tac-w x))))
-                                (cmr::term-subst-strict rhs subst)))
-                           (ctx (cons (Cons 'tac-w :event) ctx)))
-                          (:instance TAC-REWRITE-PRED-APPLY-RULE-preserves-type
-                           (fn 'pred-in-set) (args (list 'tac-w x))
-                           (ctx (cons (cons 'tac-w :event) ctx))))
-             :in-theory (disable tac-parse-ruleres-typed
-                                 tac-rewrite-pred-apply-rule-preserves-type)
-             :do-not-induct t))
-    :otf-flg t)
+                  (equal (cdr (hons-assoc-equal 'tac-w ctx)) :event))
+             (tac-ruleres-branchlist-typed result :set ctx))
+    :hints (("goal" 
+             :expand ((:free (a b) (tac-termlist-types (cons a b) ctx))
+                      (tac-termlist-types nil ctx)))))
 
-  (defret <fn>-correct
-    :pre-bind ((args (list 'tac-w x)))
-    (implies (and rewrittenp
-                  (not (member-equal 'tac-w (cmr::term-vars x)))
-                  (tac-ev-theoremp (cmr::rewrite-term rule))
-                  (tac-rewrite-hyps-ok rule)
-                  (tac-typed-env-p env ctx)
+  (local (defthm member-term-subst-vars-of-hons-remove-assoc
+           (implies (not (member v (cmr::term-subst-vars x)))
+                    (not (member v (cmr::term-subst-vars (acl2::hons-remove-assoc v1 x)))))
+           :hints(("Goal" :in-theory (enable cmr::term-subst-vars
+                                             acl2::hons-remove-assoc)))))
+  
+  (defret <fn>-does-not-introduce-vars
+    (implies (and ok
+                  (tac-pred-rewrite-parse-ok rule)
+                  (not (member-equal v (cmr::term-vars x)))
+                  (not (member-equal v (cmr::termlist-vars assums))))
+             (not (member-equal v (tac-ruleres-branchlist-vars result))))
+    :hints(("Goal" :in-theory (e/d (tac-pred-rewrite-parse-ok-implies)
+                                   (;; tac-subst-ruleres-branchlist-of-remove-unused
+                                    vars-of-tac-subst-ruleres-branchlist))
+            :cases ((equal v 'tac-w))
+            :expand ((:free (a b) (cmr::termlist-vars (cons a b))))
+            :use ((:instance vars-of-tac-subst-ruleres-branchlist
+                   (x (mv-nth 1 (tac-parse-ruleres (cmr::rewrite->rhs rule))))
+                   (subst (acl2::hons-remove-assoc
+                           'w
+                           (mv-nth 1 (tac-rewrite-pred-subst
+                                      rule 'pred-in-set (list 'tac-w x)
+                                      assums used-unify-substs)))))))))
+    
+                  
+  
+  (defret <fn>-type
+    (implies (and ok
+                  (tac-pred-rewrite-rhs-typed rule)
+                  (tac-pred-rewrite-parse-ok rule)
+                  (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
                   (equal (tac-term-type x ctx) :set)
-                  (tac-pred-rewrite-rhs-vars-subset rule)
-                  (tac-pred-rewrite-rhs-typed rule))
+                  (not (member-equal 'tac-w (cmr::term-vars x)))
+                  (not (member-equal 'tac-w (cmr::termlist-vars assums))))
+             (tac-ruleres-branchlist-typed result :set ctx))
+    :hints (("goal" :use ((:instance <fn>-type-lemma
+                           (ctx (cons (cons 'tac-w :event) ctx))))
+             :in-theory (disable <fn> <fn>-type-lemma))))
+                  
+
+  
+  (local (defthm tac-typed-env-p-aux-of-cons
+           (implies (and (tac-typed-env-p-aux vars env ctx)
+                         (or (not (pseudo-var-p v))
+                             (tac-typed-val-p val type)))
+                    (tac-typed-env-p-aux vars (cons (cons v val) env)
+                                         (cons (cons v type) ctx)))
+           :hints(("Goal" 
+                   :induct (len vars)
+                   :expand ((:free (env ctx)
+                             (tac-typed-env-p-aux vars env ctx)))))))
+
+  (local (defthm tac-typed-env-p-of-cons
+           (implies (tac-typed-env-p env ctx)
+                    (iff (tac-typed-env-p (cons (cons v val) env)
+                                          (cons (cons v type) ctx))
+                         (or (not (pseudo-var-p v))
+                             (tac-typed-val-p val type))))
+           :hints(("Goal" :in-theory (enable tac-typed-env-p
+                                             acl2::alist-keys
+                                             tac-typed-env-p-aux)))))
+
+  (local (defthm non-event-in-typed-val
+           (implies (and (tac-typed-val-p x :set)
+                         (not (tac-typed-val-p e :event)))
+                    (not (in e x)))
+           :hints(("Goal" :in-theory (enable tac-typed-val-p)))))
+  
+  (defret <fn>-correct
+    (implies (and ok
+                  (tac-ev-theoremp* (cmr::rewrite-term rule))
+                  (tac-pred-rewrite-hyps-ok rule)
+                  (tac-typed-env-p env ctx)
+                  (tac-ev-cube assums env)
+                  (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
+                  ;; (equal (tac-termlist-types args ctx)
+                  ;;        (tac-function-argument-types fn))
+                  ;; (equal (tac-function-return-type fn) :pred)
+                  (equal (tac-term-type x ctx) :set)
+                  (tac-pred-rewrite-parse-ok rule)
+                  (tac-pred-rewrite-rhs-typed rule)
+                  (not (member-equal 'tac-w (cmr::term-vars x)))
+                  (not (member-equal 'tac-w (cmr::termlist-vars assums))))
              (equal (union-list
-                     (tac-eval-ruleres-branchlist results env))
+                     (tac-eval-ruleres-branchlist result env))
                     (tac-ev x env)))
     :hints (("goal" :in-theory (e/d (set::double-containment-no-backchain-limit
-                                     pick-a-point-subset-strategy
-                                     in-of-image-rw)
-                                    (<fn>)))
+                                     pick-a-point-subset-strategy)
+                                    (<fn> <fn>-correct-lemma)))
             (set::pick-a-point-subset-hint id clause world stable-under-simplificationp)
             (and stable-under-simplificationp
-                 '(:cases ((event-p set::arbitrary-element)))))
-    :otf-flg t)
+                 '(:use ((:instance <fn>-correct-lemma
+                          (env (cons (cons 'tac-w set::arbitrary-element) env))
+                          (ctx (cons (cons 'tac-w :event) ctx)))))))))
 
-  (defret <fn>-preserves-vars
-    :pre-bind ((args (list 'tac-w x)))
-    (implies (and (tac-pred-rewrite-rhs-vars-subset rule)
-                  (not (member v (cmr::term-vars x))))
-             (not (member v (tac-ruleres-branchlist-vars results))))))
+(fty::defmap rule-used-substs :key-type symbolp :val-type pseudo-term-substlist-p :true-listp t)
 
-(define tac-try-pred-rewrites ((rules cmr::rewritelist-p)
-                               (args pseudo-term-listp))
-  :returns (mv rewrittenp (results tac-ruleres-branchlist-p))
-  (if (atom rules)
-      (mv nil nil)
-    (b* (((mv ok results) (tac-try-pred-rewrite (car rules) args))
-         ((when ok) (mv ok results)))
-      (tac-try-pred-rewrites (cdr rules) args)))
+(define tac-rewrite-pred-try-rules ((rules tac-rewritelist-p)
+                                    (x pseudo-termp)
+                                    (assums pseudo-term-listp)
+                                    (rule-used-substs rule-used-substs-p))
+  :returns (mv ok
+               (result tac-ruleres-branchlist-p)
+               (new-rule-used-substs rule-used-substs-p)
+               (rule-used-substs-updatedp))
+  (b* (((when (atom rules)) (mv nil nil nil nil))
+       ((unless (mbt (consp (car rules))))
+        (tac-rewrite-pred-try-rules (cdr rules) x assums rule-used-substs))
+       ((cons name rule) (car rules))
+       (name (mbe :logic (acl2::symbol-fix name) :exec name))
+       (rule-used-substs (rule-used-substs-fix rule-used-substs))
+       (used-substs (cdr (hons-assoc-equal name rule-used-substs)))
+       ((mv ok result subst) (tac-rewrite-pred-apply-rule rule x assums used-substs))
+       ((unless ok) (tac-rewrite-pred-try-rules (cdr rules) x assums rule-used-substs)))
+    (if (is-special-instantiation-rule rule)
+        (mv t result (cons (cons name (cons subst used-substs)) rule-used-substs) t)
+      (mv t result nil nil)))
   ///
-  (defret <fn>-correct
-    :pre-bind ((args (list 'tac-w x)))
-    (implies (and rewrittenp
-                  (not (member-equal 'tac-w (cmr::term-vars x)))
-                  (tac-ev-theorem-rewritesp rules)
-                  (tac-rewrites-hyps-ok rules)
-                  (tac-typed-env-p env ctx)
-                  (equal (tac-term-type x ctx) :set)
-                  (tac-pred-rewrites-rhs-vars-subset rules)
-                  (tac-pred-rewrites-rhs-typed rules))
-             (equal (union-list
-                     (tac-eval-ruleres-branchlist results env))
-                    (tac-ev x env)))
-    :hints(("Goal" :in-theory (enable tac-ev-theorem-rewritesp
-                                      tac-rewrites-hyps-ok
-                                      tac-pred-rewrites-rhs-vars-subset
-                                      tac-pred-rewrites-rhs-typed)
-            :induct (len rules)
-            :expand ((:free (args) <call>)))))
 
-  (defret <fn>-preserves-type
-    :pre-bind ((args (list 'tac-w x)))
-    (implies (and rewrittenp
-                  (not (member-equal 'tac-w (cmr::term-vars x)))
+  (defret <fn>-does-not-introduce-vars
+    (implies (and ok
+                  (tac-pred-rewrites-parse-ok rules)
+                  (not (member-equal v (cmr::term-vars x)))
+                  (not (member-equal v (cmr::termlist-vars assums))))
+             (not (member-equal v (tac-ruleres-branchlist-vars result))))
+    :hints(("Goal" :in-theory (enable tac-pred-rewrites-parse-ok))))
+    
+                  
+  
+  (defret <fn>-type
+    (implies (and ok
                   (tac-pred-rewrites-rhs-typed rules)
+                  (tac-pred-rewrites-parse-ok rules)
+                  (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
                   (equal (tac-term-type x ctx) :set)
-                  (tac-pred-rewrites-rhs-vars-subset rules))
-             (tac-ruleres-branchlist-typed results :set ctx))
-    :hints(("Goal" :in-theory (enable tac-pred-rewrites-rhs-typed
-                                      tac-pred-rewrites-rhs-vars-subset)
-            :induct (len rules)
-            :expand ((:free (args) <call>)))))
+                  (not (member-equal 'tac-w (cmr::term-vars x)))
+                  (not (member-equal 'tac-w (cmr::termlist-vars assums))))
+             (tac-ruleres-branchlist-typed result :set ctx))
+    :hints (("goal" :in-theory (enable tac-pred-rewrites-rhs-typed
+                                       tac-pred-rewrites-parse-ok))))
+                  
 
-  (defret <fn>-preserves-vars
-    :pre-bind ((args (list 'tac-w x)))
-    (implies (and (tac-pred-rewrites-rhs-vars-subset rules)
-                  (not (member v (cmr::term-vars x))))
-             (not (member v (tac-ruleres-branchlist-vars results))))
-    :hints(("Goal" :in-theory (enable tac-pred-rewrites-rhs-vars-subset)))))
-
-
-
-
-
-(define tac-try-pred-rewrites-on-pred-in-set ((x pseudo-termp)
-                                              (rules cmr::rewritelist-p))
-  :returns (mv rewrittenp (results tac-ruleres-branchlist-p))
-  (tac-try-pred-rewrites rules (list 'tac-w x))
-  ///
+  
   (defret <fn>-correct
-    (implies (and rewrittenp
-                  (not (member-equal 'tac-w (cmr::term-vars x)))
+    (implies (and ok
                   (tac-ev-theorem-rewritesp rules)
-                  (tac-rewrites-hyps-ok rules)
+                  (tac-pred-rewrites-hyps-ok rules)
                   (tac-typed-env-p env ctx)
+                  (tac-ev-cube assums env)
+                  (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
+                  ;; (equal (tac-termlist-types args ctx)
+                  ;;        (tac-function-argument-types fn))
+                  ;; (equal (tac-function-return-type fn) :pred)
                   (equal (tac-term-type x ctx) :set)
-                  (tac-pred-rewrites-rhs-vars-subset rules)
-                  (tac-pred-rewrites-rhs-typed rules))
-             (equal (union-list
-                     (tac-eval-ruleres-branchlist results env))
-                    (tac-ev x env)))
-    :hints(("Goal" :in-theory (enable tac-ev-theorem-rewritesp
-                                      tac-rewrites-hyps-ok
-                                      tac-pred-rewrites-rhs-vars-subset
-                                      tac-pred-rewrites-rhs-typed)
-            :induct (len rules)
-            :expand ((:free (args) <call>)))))
-
-  (defret <fn>-preserves-type
-    (implies (and rewrittenp
-                  (not (member-equal 'tac-w (cmr::term-vars x)))
+                  (tac-pred-rewrites-parse-ok rules)
                   (tac-pred-rewrites-rhs-typed rules)
-                  (equal (tac-term-type x ctx) :set)
-                  (tac-pred-rewrites-rhs-vars-subset rules))
-             (tac-ruleres-branchlist-typed results :set ctx))
-    :hints(("Goal" :in-theory (enable tac-pred-rewrites-rhs-typed
-                                      tac-pred-rewrites-rhs-vars-subset)
-            :induct (len rules)
-            :expand ((:free (args) <call>)))))
+                  (not (member-equal 'tac-w (cmr::term-vars x)))
+                  (not (member-equal 'tac-w (cmr::termlist-vars assums))))
+             (equal (union-list
+                     (tac-eval-ruleres-branchlist result env))
+                    (tac-ev x env)))
+    :hints (("goal" :in-theory (enable tac-ev-theorem-rewritesp
+                                       tac-pred-rewrites-hyps-ok
+                                       tac-pred-rewrites-parse-ok
+                                       tac-pred-rewrites-rhs-typed))))
 
-  (defret <fn>-preserves-vars
-    (implies (and (tac-pred-rewrites-rhs-vars-subset rules)
-                  (not (member v (cmr::term-vars x))))
-             (not (member v (tac-ruleres-branchlist-vars results))))
-    :hints(("Goal" :in-theory (enable tac-pred-rewrites-rhs-vars-subset)))))
-
-
+  (local (in-theory (enable tac-rewritelist-fix))))
 
 
 
@@ -6183,74 +7063,116 @@
                                       union-multiarglists
                                       tac-termlist-types
                                       tac-ev-cube
-                                      union-list)))))
+                                      union-list))))
+
+  (defret vars-of-<fn>
+    (implies (not (member v (cmr::termlist-vars x)))
+             (not (member v (tac-ruleres-branchlistlist-vars branch-args))))
+    :hints(("Goal" :in-theory (enable tac-ruleres-branchlistlist-vars
+                                      tac-ruleres-branchlist-vars
+                                      tac-ruleres-branch-vars
+                                      cmr::termlist-vars)))))
+
+(deftypes used-subst-database
+  (defprod term-used-subst-database
+    ((rule-substs rule-used-substs-p)
+     (arg-substs arg-used-subst-database))
+    :layout :tree ;; so that nil is valid
+    :measure (acl2::two-nats-measure (acl2-count x) 1))
+  (fty::defmap arg-used-subst-database :key-type natp :val-type term-used-subst-database
+    :true-listp t
+    :valp-of-nil t
+    :measure (acl2::two-nats-measure (acl2-count x) 0)))
 
 
 
-(defines tac-positive-apply-rule-in-context
-  (define tac-positive-apply-rule-in-context ((x pseudo-termp)
-                                              (assums pseudo-term-listp)
-                                              (ruleset cmr::rewritelist-p))
+(defines tac-apply-rule-in-context
+  (define tac-apply-rule-in-context ((x pseudo-termp)
+                                     (assums pseudo-term-listp)
+                                     (ruleset tac-rewritelist-p)
+                                     (subst-database term-used-subst-database-p))
     ;; Positive rules replace the term in its context, perhaps splitting into
     ;; two cases (with the same context) [e.g., union or star rules] or perhaps
     ;; adding a new assumption [e.g., intersection or product rules].  We
     ;; generalize this slightly and allow both added assumptions and a list
     ;; of contextual cases.
     :returns (mv successp
-                 (results tac-ruleres-branchlist-p))
+                 (results tac-ruleres-branchlist-p)
+                 (new-subst-database term-used-subst-database-p)
+                 (subst-database-updatedp))
     :measure (pseudo-term-count x)
     :verify-guards nil
     (b* (((unless (pseudo-term-case x :fncall))
-          (mv nil nil))
+          (mv nil nil nil nil))
          ((pseudo-term-fncall x))
          (rettype (tac-function-return-type x.fn))
          ((unless (member-eq rettype '(:set :rel)))
-          (mv nil nil))
+          (mv nil nil nil nil))
          ((mv rewrittenp result)
           (pseudo-term-case x
             :fncall
             (tac-try-basic-rewrites (tac-rewrites) x.fn x.args)
             :otherwise (mv nil nil)))
          ((when rewrittenp)
-          (mv t (list (tac-ruleres-branch nil result))))
-         ((mv rewrittenp result)
+          (mv t (list (tac-ruleres-branch nil result)) nil nil))
+         ((term-used-subst-database subst-database))
+         ((mv rewrittenp result new-rule-substs rule-substs-updatedp)
           (if (eq rettype :set)
               ;; note: important that x not contain variable tac-w
-              (tac-try-pred-rewrites-on-pred-in-set x ruleset)
-            (mv nil nil)))
-         ((when rewrittenp) (mv t result))
+              (tac-rewrite-pred-try-rules ruleset x assums subst-database.rule-substs)
+            (mv nil nil nil nil)))
+         ((when rewrittenp)
+          (mv t result
+              (and rule-substs-updatedp
+                   (change-term-used-subst-database subst-database :rule-substs new-rule-substs))
+              rule-substs-updatedp))
          ((unless (tac-context-fn-p x.fn))
-          (mv nil nil))
-         ((mv successp results-args)
-          (tac-positive-apply-rule-in-context-args
-           (tac-function-argument-types x.fn) x.args assums ruleset))
+          (mv nil nil nil nil))
+         ((mv successp results-args new-arg-substs arg-substs-updatedp)
+          (tac-apply-rule-in-context-args
+           0 (tac-function-argument-types x.fn) x.args assums ruleset subst-database.arg-substs))
          ((when successp)
           (mv t (apply-fn-to-result-branches
                  x.fn
-                 (tac-ruleres-branchlistlist-to-branch-argslist results-args)))))
-      (mv nil nil)))
+                 (tac-ruleres-branchlistlist-to-branch-argslist results-args))
+              (and arg-substs-updatedp
+                   (change-term-used-subst-database subst-database :arg-substs new-arg-substs))
+              arg-substs-updatedp)))
+      (mv nil nil nil nil)))
 
-  (define tac-positive-apply-rule-in-context-args ((types tac-typelist-p)
-                                                   (x pseudo-term-listp)
-                                                   (assums pseudo-term-listp)
-                                                   (ruleset cmr::rewritelist-p))
+  (define tac-apply-rule-in-context-args ((n natp)
+                                          (types tac-typelist-p)
+                                          (x pseudo-term-listp)
+                                          (assums pseudo-term-listp)
+                                          (ruleset tac-rewritelist-p)
+                                          (arg-substs arg-used-subst-database-p))
     :measure (pseudo-term-list-count x)
     :returns (mv successp
-                 (results tac-ruleres-branchlistlist-p))
+                 (results tac-ruleres-branchlistlist-p)
+                 (new-arg-substs arg-used-subst-database-p)
+                 (arg-substs-updatedp))
     (b* (((when (or (atom types)
                     (atom x)))
-          (mv nil nil))
-         ((mv successp results) (tac-positive-apply-rule-in-context (car x) assums ruleset))
+          (mv nil nil nil nil))
+         (arg-substs (arg-used-subst-database-fix arg-substs))
+         (term-substs (cdr (hons-assoc-equal (lnfix n) arg-substs)))
+         ((mv successp results new-term-substs term-substs-updatedp)
+          (tac-apply-rule-in-context (car x) assums ruleset term-substs))
          ((when successp)
           (mv t
               (cons results
-                    (args-to-tac-ruleres-branchlistlist (take (1- (len types)) (cdr x))))))
-         ((mv successp results) (tac-positive-apply-rule-in-context-args (cdr types) (cdr x) assums ruleset))
+                    (args-to-tac-ruleres-branchlistlist (take (1- (len types)) (cdr x))))
+              (and term-substs-updatedp
+                   (cons (cons (lnfix n) new-term-substs) arg-substs))
+              term-substs-updatedp))
+         ((mv successp results new-arg-substs arg-substs-updatedp)
+          (tac-apply-rule-in-context-args (+ 1 (lnfix n)) (cdr types) (cdr x) assums ruleset arg-substs))
          ((when successp)
-          (mv t (cons (list (tac-ruleres-branch nil (car x))) results))))
-      (mv nil nil)))
+          (mv t (cons (list (tac-ruleres-branch nil (car x))) results)
+              new-arg-substs arg-substs-updatedp)))
+      (mv nil nil nil nil)))
   ///
-  (verify-guards tac-positive-apply-rule-in-context)
+  (verify-guards tac-apply-rule-in-context)
  
   (local (defthm tac-ruleres-branchlist-typed-of-single
            (equal (tac-ruleres-branchlist-typed
@@ -6263,14 +7185,14 @@
                                              tac-ruleres-branch-typed)
                    :do-not-induct t))))
   
-  (std::defret-mutual len-of-tac-positive-apply-rule-in-context-args
+  (std::defret-mutual len-of-tac-apply-rule-in-context-args
     (defret len-of-<fn>
       (implies successp
                (equal (len results)
                       (len types)))
       :hints ('(:expand (<call>
                          (len types))))
-      :fn tac-positive-apply-rule-in-context-args)
+      :fn tac-apply-rule-in-context-args)
     :skip-others t)
 
   (local (defthm tac-termlist-types-of-take
@@ -6289,9 +7211,11 @@
   (std::defret-mutual <fn>-preserves-type-lemma
     (defret <fn>-preserves-type-lemma
       (implies (and (tac-pred-rewrites-rhs-typed ruleset)
-                    (tac-pred-rewrites-rhs-vars-subset ruleset)
+                    (tac-pred-rewrites-parse-ok ruleset)
                     (tac-term-type x ctx)
+                    (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
                     (not (member-equal 'tac-w (cmr::term-vars x)))
+                    (not (member-equal 'tac-w (cmr::termlist-vars assums)))
                     successp)
                (tac-ruleres-branchlist-typed results (tac-term-type x ctx) ctx))
       :hints ('(:expand (<call>
@@ -6299,14 +7223,16 @@
                 :in-theory (enable tac-ruleres-branchlist-typed
                                    TAC-RULERES-BRANCH-TYPED
                                    tac-termlist-types)))
-      :fn tac-positive-apply-rule-in-context)
+      :fn tac-apply-rule-in-context)
     (defret <fn>-preserves-type
       (implies (and (tac-pred-rewrites-rhs-typed ruleset)
-                    (tac-pred-rewrites-rhs-vars-subset ruleset)
+                    (tac-pred-rewrites-parse-ok ruleset)
                     (tac-typelist-p types)
                     (not (member-equal nil types))
                     (acl2::prefixp types (tac-termlist-types x ctx))
+                    (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
                     (not (member-equal 'tac-w (cmr::termlist-vars x)))
+                    (not (member-equal 'tac-w (cmr::termlist-vars assums)))
                     successp)
                (tac-ruleres-branchlistlist-typed
                 results types ctx))
@@ -6323,18 +7249,20 @@
               ;;      `(:expand (,(car (last clause))
               ;;                 (:free (a b c) (acl2::prefixp a (cons b c))))))
               )
-      :fn tac-positive-apply-rule-in-context-args))
+      :fn tac-apply-rule-in-context-args))
 
 
   (defret <fn>-preserves-type
     (implies (and (tac-pred-rewrites-rhs-typed ruleset)
-                  (tac-pred-rewrites-rhs-vars-subset ruleset)
+                  (tac-pred-rewrites-parse-ok ruleset)
                   (equal type (tac-term-type x ctx))
                   type
+                  (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
                   (not (member-equal 'tac-w (cmr::term-vars x)))
+                  (not (member-equal 'tac-w (cmr::termlist-vars assums)))
                   successp)
              (tac-ruleres-branchlist-typed results type ctx))
-    :fn tac-positive-apply-rule-in-context)
+    :fn tac-apply-rule-in-context)
 
   (defret not-set-or-rel-type-implies-not-successp-<fn>
     (implies (and (not (equal (tac-function-return-type
@@ -6344,7 +7272,8 @@
                                (pseudo-term-fncall->fn x))
                               :rel)))
              (not successp))
-    :fn tac-positive-apply-rule-in-context)
+    :hints(("Goal" :in-theory (enable tac-apply-rule-in-context)))
+    :fn tac-apply-rule-in-context)
 
   (local (defthm tac-eval-ruleres-branchlist-singleton
            (implies (and (tac-typed-env-p env ctx)
@@ -6383,11 +7312,14 @@
       (implies (and ;; (member-equal (tac-term-type x ctx) '(:set :rel))
                     (tac-typed-env-p env ctx)
                     (tac-ev-theorem-rewritesp ruleset)
-                    (tac-rewrites-hyps-ok ruleset)
+                    (tac-pred-rewrites-hyps-ok ruleset)
                     (tac-pred-rewrites-rhs-typed ruleset)
-                    (tac-pred-rewrites-rhs-vars-subset ruleset)
+                    (tac-pred-rewrites-parse-ok ruleset)
                     (not (member-equal 'tac-w (cmr::term-vars x)))
+                    (not (member-equal 'tac-w (cmr::termlist-vars assums)))
                     (tac-term-type x ctx)
+                    (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
+                    (tac-ev-cube assums env)
                     successp)
                (equal (union-list
                        (tac-eval-ruleres-branchlist results env))
@@ -6399,17 +7331,20 @@
                    '(:expand ((tac-ev (cons (pseudo-term-fncall->fn x)
                                             (pseudo-term-call->args x))
                                       env)))))
-      :fn tac-positive-apply-rule-in-context)
+      :fn tac-apply-rule-in-context)
 
     (defret <fn>-eval-correct
       (implies (and (tac-typed-env-p env ctx)
                     (tac-ev-theorem-rewritesp ruleset)
-                    (tac-rewrites-hyps-ok ruleset)
+                    (tac-pred-rewrites-hyps-ok ruleset)
                     (tac-pred-rewrites-rhs-typed ruleset)
-                    (tac-pred-rewrites-rhs-vars-subset ruleset)
+                    (tac-pred-rewrites-parse-ok ruleset)
                     (subsetp-equal types '(:set :rel))
                     (acl2::prefixp types (tac-termlist-types x ctx))
+                    (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
                     (not (member-equal 'tac-w (cmr::termlist-vars x)))
+                    (not (member-equal 'tac-w (cmr::termlist-vars assums)))
+                    (tac-ev-cube assums env)
                     successp)
                (equal (union-multiarglists
                        (tac-eval-ruleres-branchlistlist results env))
@@ -6425,4 +7360,38 @@
                               (tac-termlist-types x ctx)
                               (:free (a b) (acl2::prefixp types (cons a b))))
                      :do-not-induct t)))
-      :fn tac-positive-apply-rule-in-context-args)))
+      :fn tac-apply-rule-in-context-args))
+
+  (local (defthm termlist-vars-of-take
+           (implies (not (member-equal v (cmr::termlist-vars x)))
+                    (not (member-equal v (cmr::termlist-vars (take n x)))))
+           :hints(("Goal" :in-theory (enable cmr::termlist-vars)))))
+
+  (std::defret-mutual <fn>-preserves-vars
+    (defret <fn>-preserves-vars
+      (implies (and successp
+                    (tac-pred-rewrites-parse-ok ruleset)
+                    (not (member-equal v (cmr::term-vars x)))
+                    (not (member-equal v (cmr::termlist-vars assums))))
+               (not (member-equal v (tac-ruleres-branchlist-vars results))))
+      :hints ('(:expand (<call>))
+              (and stable-under-simplificationp
+                   '(:expand ((cmr::term-vars x)
+                              (:free (a b) (tac-ruleres-branchlist-vars (cons a b)))
+                              (:free (a b) (tac-ruleres-branch-vars (tac-ruleres-branch a b)))))))
+      :fn tac-apply-rule-in-context)
+    (defret <fn>-preserves-vars
+      (implies (and successp
+                    (tac-pred-rewrites-parse-ok ruleset)
+                    (not (member-equal v (cmr::termlist-vars x)))
+                    (not (member-equal v (cmr::termlist-vars assums))))
+               (not (member-equal v (tac-ruleres-branchlistlist-vars results))))
+      :hints ('(:expand (<call>
+                         (cmr::termlist-vars x)
+                         (:free (a b) (tac-ruleres-branchlistlist-vars (cons a b)))
+                         (:free (a b) (tac-ruleres-branchlist-vars (cons a b)))
+                         (:free (a b) (tac-ruleres-branch-vars (tac-ruleres-branch a b))))))
+      :fn tac-apply-rule-in-context-args)))
+
+
+
