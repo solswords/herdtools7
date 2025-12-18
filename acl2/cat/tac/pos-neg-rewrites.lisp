@@ -401,84 +401,6 @@
 ;;                                      pick-a-point-subset-strategy))))
 
 
-;; ~.1,2L
-(def-tac-negative-normalize nonempty-singleton-intersect-image-1
-  (implies (not-singleton-set-p s)
-           (iff (pred-nonempty (setintersect (singleton e) (setimage s r)))
-                (pred-nonempty (setintersect (setpreimage r (singleton e)) s))))
-  :hints(("Goal" :in-theory (e/d (in-of-image-rw)))
-         (and stable-under-simplificationp
-              '(:in-theory (e/d (in-of-image-rw)
-                                (emptyp-when-in
-                                 set::never-in-empty))
-                :use ((:instance emptyp-when-in
-                       (x (setintersect (setpreimage r (singleton e)) s))
-                       (e (image-witness e s r)))))))
-  :otf-flg t)
-
-;; ~.1,2R
-(def-tac-negative-normalize nonempty-singleton-intersect-image-2
-  (implies (not-singleton-set-p s)
-           (iff (pred-nonempty (setintersect (setimage s r) (singleton e)))
-                (pred-nonempty (setintersect s (setpreimage r (singleton e))))))
-  :hints(("Goal" :in-theory (e/d (in-of-image-rw)))
-         (and stable-under-simplificationp
-              '(:in-theory (e/d (in-of-image-rw)
-                                (emptyp-when-in
-                                 set::never-in-empty))
-                :use ((:instance emptyp-when-in
-                       (x (setintersect s (setpreimage r (singleton e))))
-                       (e (image-witness e s r)))))))
-  :otf-flg t)
-
-
-
-
-;; ~.2,1L
-(def-tac-negative-normalize nonempty-singleton-intersect-image-3
-  (implies (not-singleton-set-p s)
-           (iff (pred-nonempty (setintersect (singleton e) (setpreimage r s)))
-                (pred-nonempty (setintersect (setimage (singleton e) r) s))))
-  :hints(("Goal" :in-theory (e/d (in-of-preimage-rw)))
-         (and stable-under-simplificationp
-              '(:in-theory (e/d (in-of-preimage-rw)
-                                (emptyp-when-in
-                                 set::never-in-empty))
-                :use ((:instance emptyp-when-in
-                       (x (setintersect (setimage (singleton e) r) s))
-                       (e (preimage-witness e s r)))))))
-  :otf-flg t)
-;; ~.2,1R
-(def-tac-negative-normalize nonempty-singleton-intersect-image-4
-  (implies (not-singleton-set-p s)
-           (iff (pred-nonempty (setintersect (setpreimage r s) (singleton e)))
-                (pred-nonempty (setintersect s (setimage (singleton e) r)))))
-  :hints(("Goal" :in-theory (e/d (in-of-preimage-rw)))
-         (and stable-under-simplificationp
-              '(:in-theory (e/d (in-of-preimage-rw)
-                                (emptyp-when-in
-                                 set::never-in-empty))
-                :use ((:instance emptyp-when-in
-                       (x (setintersect s (setimage (singleton e) r)))
-                       (e (preimage-witness e s r)))))))
-  :otf-flg t)
-
-;; ~\cap1L
-(def-tac-negative-normalize nonempty-singleton-intersect-intersect-1
-  (iff (pred-nonempty (setintersect (singleton e) (setintersect s1 s2)))
-       (and (pred-nonempty (setintersect (singleton e) s1))
-            (pred-nonempty (setintersect (singleton e) s2)))))
-;; ~\cap1R
-(def-tac-negative-normalize nonempty-singleton-intersect-intersect-2
-  (iff (pred-nonempty (setintersect (setintersect s1 s2) (singleton e)))
-       (and (pred-nonempty (setintersect s1 (singleton e)))
-            (pred-nonempty (setintersect s2 (singleton e))))))
-
-;; ~\cap_e
-(def-tac-negative-normalize nonempty-singleton-intersect-singleton
-  (iff (pred-nonempty (setintersect (singleton e1) (singleton e2)))
-       (pred-equal e1 e2)))
-
 ;; ~1XL
 (def-tac-negative-normalize in-image-product-singleton-1
   (iff (pred-in-set w (setimage s1 (relprod (singleton e) s2)))
@@ -518,12 +440,100 @@
           :use ((:instance emptyp-when-in
                  (e (image-witness w s2 (cartesian s1 (insert e nil))))
                  (x (intersect s1 s2)))))))
+
+
+(acl2::def-ruleset tac-negative-toplevel-normalize-rules nil)
+(defmacro def-tac-negative-toplevel-normalize (name &rest args)
+  `(progn (defthm ,name . ,args)
+          (acl2::add-to-ruleset tac-negative-toplevel-normalize-rules ,name)))
+
+
+
+;; ~.1,2L
+(def-tac-negative-toplevel-normalize nonempty-singleton-intersect-image-1
+  (implies (not-singleton-set-p s)
+           (iff (pred-nonempty (setintersect (singleton e) (setimage s r)))
+                (pred-nonempty (setintersect (setpreimage r (singleton e)) s))))
+  :hints(("Goal" :in-theory (e/d (in-of-image-rw)))
+         (and stable-under-simplificationp
+              '(:in-theory (e/d (in-of-image-rw)
+                                (emptyp-when-in
+                                 set::never-in-empty))
+                :use ((:instance emptyp-when-in
+                       (x (setintersect (setpreimage r (singleton e)) s))
+                       (e (image-witness e s r)))))))
+  :otf-flg t)
+
+;; ~.1,2R
+(def-tac-negative-toplevel-normalize nonempty-singleton-intersect-image-2
+  (implies (not-singleton-set-p s)
+           (iff (pred-nonempty (setintersect (setimage s r) (singleton e)))
+                (pred-nonempty (setintersect s (setpreimage r (singleton e))))))
+  :hints(("Goal" :in-theory (e/d (in-of-image-rw)))
+         (and stable-under-simplificationp
+              '(:in-theory (e/d (in-of-image-rw)
+                                (emptyp-when-in
+                                 set::never-in-empty))
+                :use ((:instance emptyp-when-in
+                       (x (setintersect s (setpreimage r (singleton e))))
+                       (e (image-witness e s r)))))))
+  :otf-flg t)
+
+
+
+
+;; ~.2,1L
+(def-tac-negative-toplevel-normalize nonempty-singleton-intersect-image-3
+  (implies (not-singleton-set-p s)
+           (iff (pred-nonempty (setintersect (singleton e) (setpreimage r s)))
+                (pred-nonempty (setintersect (setimage (singleton e) r) s))))
+  :hints(("Goal" :in-theory (e/d (in-of-preimage-rw)))
+         (and stable-under-simplificationp
+              '(:in-theory (e/d (in-of-preimage-rw)
+                                (emptyp-when-in
+                                 set::never-in-empty))
+                :use ((:instance emptyp-when-in
+                       (x (setintersect (setimage (singleton e) r) s))
+                       (e (preimage-witness e s r)))))))
+  :otf-flg t)
+;; ~.2,1R
+(def-tac-negative-toplevel-normalize nonempty-singleton-intersect-image-4
+  (implies (not-singleton-set-p s)
+           (iff (pred-nonempty (setintersect (setpreimage r s) (singleton e)))
+                (pred-nonempty (setintersect s (setimage (singleton e) r)))))
+  :hints(("Goal" :in-theory (e/d (in-of-preimage-rw)))
+         (and stable-under-simplificationp
+              '(:in-theory (e/d (in-of-preimage-rw)
+                                (emptyp-when-in
+                                 set::never-in-empty))
+                :use ((:instance emptyp-when-in
+                       (x (setintersect s (setimage (singleton e) r)))
+                       (e (preimage-witness e s r)))))))
+  :otf-flg t)
+
+;; ~\cap1L
+(def-tac-negative-toplevel-normalize nonempty-singleton-intersect-intersect-1
+  (iff (pred-nonempty (setintersect (singleton e) (setintersect s1 s2)))
+       (and (pred-nonempty (setintersect (singleton e) s1))
+            (pred-nonempty (setintersect (singleton e) s2)))))
+;; ~\cap1R
+(def-tac-negative-toplevel-normalize nonempty-singleton-intersect-intersect-2
+  (iff (pred-nonempty (setintersect (setintersect s1 s2) (singleton e)))
+       (and (pred-nonempty (setintersect s1 (singleton e)))
+            (pred-nonempty (setintersect s2 (singleton e))))))
+
+;; ~\cap_e
+(def-tac-negative-toplevel-normalize nonempty-singleton-intersect-singleton
+  (iff (pred-nonempty (setintersect (singleton e1) (singleton e2)))
+       (pred-equal e1 e2)))
+
 ;; ~0
-(def-tac-negative-normalize pred-nonempty-of-singleton
+(def-tac-negative-toplevel-normalize pred-nonempty-of-singleton
   (iff (pred-nonempty (singleton e))
-       t))
+       (pred-true)))
 
 ;; ~=
-(def-tac-negative-normalize pred-equal-same
+(def-tac-negative-toplevel-normalize pred-equal-same
   (iff (pred-equal e e)
-       t))
+       (pred-true)))
+

@@ -59,13 +59,6 @@
     (in-theory (disable (tac-negative-normalize-rules)))))
 
 
-
-
-(define is-pred-in-set ((x pseudo-termp))
-  (pseudo-term-case x
-    :fncall (eq x.fn 'pred-in-set)
-    :otherwise nil))
-
 (define is-special-instantiation-rule ((x cmr::rewrite-p))
   (b* (((cmr::rewrite x)))
     (pseudo-term-case x.rhs
@@ -117,7 +110,6 @@
                  (lhs-type (tac-term-type rule.lhs ctx))
                  ((mv ok rhs-parsed) (tac-parse-ruleres rule.rhs)))
               (implies (and lhs-type
-                            (is-pred-in-set rule.lhs)
                             (let* ((binding-hyp (and (is-special-instantiation-rule rule)
                                                      (special-instantiation-rule-binding-hyp rule))))
                               (or (not binding-hyp)
@@ -249,20 +241,18 @@
   :guard-hints (("goal" :in-theory (enable is-pred-in-set-w)))
   (b* (((cmr::rewrite rule))
        ((mv ok results) (tac-parse-ruleres rule.rhs)))
-    (or (not (is-pred-in-set rule.lhs))
-        (and (is-pred-in-set-w rule.lhs)
-             (not (member-equal 'w (cmr::term-vars (cadr (pseudo-term-call->args rule.lhs)))))
-             (or (not (is-special-instantiation-rule rule))
-                 (not (member-equal 'w (cmr::term-vars
-                                        (special-instantiation-rule-binding-hyp rule)))))
-             ok
-             (not (member-equal 'w (tac-ruleres-branchlist-vars results))))))
+    (and (is-pred-in-set-w rule.lhs)
+         (not (member-equal 'w (cmr::term-vars (cadr (pseudo-term-call->args rule.lhs)))))
+         (or (not (is-special-instantiation-rule rule))
+             (not (member-equal 'w (cmr::term-vars
+                                    (special-instantiation-rule-binding-hyp rule)))))
+         ok
+         (not (member-equal 'w (tac-ruleres-branchlist-vars results)))))
   ///
   (defthmd tac-pred-rewrite-parse-ok-implies
     (b* (((cmr::rewrite rule))
          ((mv ok results) (tac-parse-ruleres rule.rhs)))
-      (implies (and (tac-pred-rewrite-parse-ok rule)
-                    (is-pred-in-set rule.lhs))
+      (implies (tac-pred-rewrite-parse-ok rule)
                (and (equal (pseudo-term-kind rule.lhs) :fncall)
                     (equal (pseudo-term-fncall->fn rule.lhs) 'pred-in-set)
                     (equal (first (pseudo-term-call->args rule.lhs)) 'w)
@@ -293,3 +283,63 @@
 
   (local (in-theory (enable tac-rewritelist-fix))))
 
+
+
+
+(defthm tac-ev-theorem-rewritesp-of-tac-positive-normalize-rules
+  (tac-ev-theoremlist-p (tac-rewritelist-terms (tac-positive-normalize-rules)))
+  :hints(("Goal" :in-theory (acl2::e/d* ((tac-positive-normalize-rules)
+                                         tac-ev-theoremp*-expand
+                                         tac-ev-theoremlist-p)
+                                        ((:ruleset tac-negative-normalize-rules)
+                                         (tac-ev-theoremlist-p)
+                                         tac-functions
+                                         (emptyset)
+                                         (pred-false))
+                                        ((:ruleset tac-positive-normalize-rules)))
+          :expand ((:Free (a b) (tac-rewritelist-terms (cons a b)))))))
+
+(defsection tac-ev-theorem-rewritesp-of-tac-negative-normalize-rules
+  (local (define tac-ev-theorem-rewrite-p ((name symbolp)
+                                           (rule cmr::rewrite-p))
+           :verify-guards nil
+           (declare (ignore name))
+           (tac-ev-theoremp* (cmr::rewrite-term rule))))
+
+  (local (in-theory (disable (tac-ev-theorem-rewrite-p))))
+  (local (defthm tac-ev-theoremlist-of-tac-rewritelist-terms-in-terms-of-rewrite-p
+           (equal (tac-ev-theoremlist-p (tac-rewritelist-terms (cons a b)))
+                  (and (or (not (consp a))
+                           (tac-ev-theorem-rewrite-p (car a) (cdr a)))
+                       (tac-ev-theoremlist-p (tac-rewritelist-terms b))))
+           :hints (("goal" :in-theory (enable tac-rewritelist-terms
+                                              tac-ev-theorem-rewrite-p
+                                              tac-ev-theoremlist-p)))))
+
+  (local (defun instance-subst (vars term)
+           (if (atom vars)
+               nil
+             (cons (list (car vars)
+                         `(cdr (assoc-equal ',(car vars)
+                                            (tac-ev-falsify ',term))))
+                   (instance-subst (cdr vars) term)))))
+
+  (defthm tac-ev-theorem-rewritesp-of-tac-negative-normalize-rules
+    (tac-ev-theoremlist-p (tac-rewritelist-terms (tac-negative-normalize-rules)))
+    :hints(("Goal" :in-theory (acl2::e/d* ((tac-negative-normalize-rules)
+                                           tac-ev-theoremp*-expand)
+                                          ((:ruleset tac-negative-normalize-rules)
+                                           (:ruleset tac-positive-normalize-rules)
+                                           tac-functions
+                                           (tac-rewritelist-terms)
+                                           (emptyset)
+                                           (pred-false)))
+            :expand ((tac-rewritelist-terms nil)))
+           (and stable-under-simplificationp
+                (let ((lit (car (last clause))))
+                  (case-match lit
+                    (('tac-ev-theorem-rewrite-p ('quote name) ('quote rule))
+                     (let ((rule-term (cmr::rewrite-term rule)))
+                       `(:use ((:instance ,name
+                                . ,(instance-subst (cmr::term-vars rule-term) rule-term)))
+                         :expand (,lit))))))))))

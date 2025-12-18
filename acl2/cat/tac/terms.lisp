@@ -72,6 +72,10 @@
    (typespec-check ts x))
   :namedp t)
 
+(defthm len-of-tac-ev-lst
+  (equal (len (tac-ev-lst x a))
+         (len x)))
+
 (include-book "clause-processors/pseudo-term-fty" :Dir :system)
 
 (acl2::def-ev-pseudo-term-fty-support tac-ev tac-ev-lst)

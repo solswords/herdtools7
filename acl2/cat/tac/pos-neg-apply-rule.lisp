@@ -390,12 +390,12 @@
                                    (<fn>))
             :expand ((tac-term-type (pseudo-term-fncall fn args) ctx)))))
 
-  (defret <fn>-implies-is-pred-in-set
-    :pre-bind ((fn 'pred-in-set))
-    (implies ok
-             (is-pred-in-set (cmr::rewrite->lhs rule)))
-    :hints(("Goal" :in-theory (enable is-pred-in-set)))
-    :rule-classes :forward-chaining)
+  ;; (defret <fn>-implies-is-pred-in-set
+  ;;   :pre-bind ((fn 'pred-in-set))
+  ;;   (implies ok
+  ;;            (is-pred-in-set (cmr::rewrite->lhs rule)))
+  ;;   :hints(("Goal" :in-theory (enable is-pred-in-set)))
+  ;;   :rule-classes :forward-chaining)
 
   (defret <fn>-binds-w-when-tac-pred-rewrite-parse-ok
     :pre-bind ((fn 'pred-in-set))
@@ -403,7 +403,6 @@
                   ok)
              (hons-assoc-equal 'w subst))
     :hints(("Goal" :in-theory (enable tac-pred-rewrite-parse-ok
-                                      is-pred-in-set
                                       is-pred-in-set-w)
             :expand ((CMR::TERMLIST-VARS (PSEUDO-TERM-CALL->ARGS (CMR::REWRITE->LHS RULE)))))))
 
@@ -415,7 +414,6 @@
              (equal (cdr (hons-assoc-equal 'w subst))
                     'tac-w))
     :hints(("Goal" :in-theory (enable tac-pred-rewrite-parse-ok
-                                      is-pred-in-set
                                       is-pred-in-set-w)
             :expand ((CMR::TERMLIST-VARS (PSEUDO-TERM-CALL->ARGS (CMR::REWRITE->LHS RULE)))
                      (:free (subst) (cmr::term-subst-strict 'w subst))
@@ -439,8 +437,7 @@
              (not (member 'tac-w (cmr::term-subst-vars
                                   (acl2::hons-remove-assoc 'w subst)))))
     :hints (("goal" :in-theory (enable tac-pred-rewrite-parse-ok
-                                       IS-PRED-IN-SET-W
-                                       is-pred-in-set)
+                                       IS-PRED-IN-SET-W)
              :expand ((:free (args a b subst)
                        (cmr::termlist-unify-strict args (cons a b) subst))
                       (:free (args subst)
@@ -552,7 +549,7 @@
                   (TAC-PARSE-RULERES RULE.RHS)))
               (IMPLIES
                (AND
-                LHS-TYPE (IS-PRED-IN-SET RULE.LHS)
+                LHS-TYPE
                 (case-split (LET*
                              ((BINDING-HYP
                                (AND (IS-SPECIAL-INSTANTIATION-RULE RULE)

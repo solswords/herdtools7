@@ -27,6 +27,11 @@
 (local (include-book "std/basic/arith-equivs" :dir :System))
 (local (std::add-default-post-define-hook :fix))
 
+
+(local (defthm len-equal-0
+         (equal (equal (len x) 0)
+                (not (consp x)))))
+
 (define remove-entries-with-nil ((x true-list-listp))
   (if (atom x)
       nil
@@ -90,6 +95,11 @@
                   (lists-have-lengths (1- n) y))
              (lists-have-lengths n new-y))
     :hints(("Goal" :in-theory (enable lists-have-lengths)))))
+
+(local (defthm true-list-listp-of-append
+         (implies (and (true-list-listp x)
+                       (true-list-listp y))
+                  (true-list-listp (append x y)))))
 
 (define cons-product ((x true-listp)
                       (y true-list-listp))
@@ -181,6 +191,13 @@
     (implies (and (tac-ruleres-branch-argslist-no-assums-without-args x)
                   (tac-ruleres-branch-argslist-no-assums-without-args y))
              (tac-ruleres-branch-argslist-no-assums-without-args (append x y)))))
+
+
+(local (defthm termlist-vars-of-append
+         (iff (member v (cmr::termlist-vars (append a b)))
+              (or (member v (cmr::termlist-vars a))
+                  (member v (cmr::termlist-vars b))))
+         :hints(("Goal" :in-theory (enable cmr::termlist-vars)))))
 
 (define tac-ruleres-branch-product-with-branch-argslist ((x tac-ruleres-branch-p)
                                                                       (y tac-ruleres-branch-argslist-p))
@@ -307,11 +324,6 @@
 
 
 
-(local (defthm termlist-vars-of-append
-         (iff (member v (cmr::termlist-vars (append a b)))
-              (or (member v (cmr::termlist-vars a))
-                  (member v (cmr::termlist-vars b))))
-         :hints(("Goal" :in-theory (enable cmr::termlist-vars)))))
 
 
 (define tac-ruleres-branchlistlist-to-branch-argslist ((x tac-ruleres-branchlistlist-p))
@@ -825,9 +837,6 @@
     :valp-of-nil t
     :measure (acl2::two-nats-measure (acl2-count x) 0)))
 
-(local (defthm len-equal-0
-         (equal (equal (len x) 0)
-                (not (consp x)))))
 
 (local
  (defthm lengths-of-tac-eval-ruleres-branch-argslist-when-have-lengths
@@ -1143,5 +1152,6 @@
                          (:free (a b) (tac-ruleres-branchlistlist-vars (cons a b)))
                          (:free (a b) (tac-ruleres-branchlist-vars (cons a b)))
                          (:free (a b) (tac-ruleres-branch-vars (tac-ruleres-branch a b))))))
-      :fn tac-apply-rule-in-context-args)))
+      :fn tac-apply-rule-in-context-args))
 
+  (fty::deffixequiv-mutual tac-apply-rule-in-context))
