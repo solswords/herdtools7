@@ -20,6 +20,7 @@
 (include-book "pos-neg-rewrites")
 (include-book "utils")
 (include-book "ruleresults")
+(local (include-book "common-thms"))
 (local (std::add-default-post-define-hook :fix))
 
 (encapsulate nil
@@ -67,10 +68,7 @@
                    (equal (first x.rhs.args) x.lhs))
       :otherwise nil)))
 
-(local
- (defthm symbol-listp-when-pseudo-var-list-p
-   (implies (cmr::pseudo-var-list-p x)
-            (symbol-listp x))))
+
 
 (define special-instantiation-rule-free-vars ((x cmr::rewrite-p))
   :guard (is-special-instantiation-rule x)

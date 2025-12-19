@@ -170,7 +170,6 @@
 
 (fty::deflist pseudo-term-substlist :elt-type cmr::pseudo-term-subst :true-listp t)
 
-
 (define tac-rewrite-pred-find-subst ((assums pseudo-term-listp)
                                      (hyp pseudo-termp)
                                      (unify-subst cmr::pseudo-term-subst-p)
@@ -297,7 +296,8 @@
 (define tac-rewrite-pred-subst ((rule cmr::rewrite-p)
                                 (fn pseudo-fnsym-p)
                                 (args pseudo-term-listp)
-                                (assums pseudo-term-listp)
+                                (assums1 pseudo-term-listp)
+                                (assums2 pseudo-term-listp)
                                 (used-unify-substs pseudo-term-substlist-p))
   :returns (mv ok (subst cmr::pseudo-term-subst-p))
   (b* (((cmr::rewrite rule))
@@ -311,7 +311,8 @@
        ((unless (is-special-instantiation-rule rule))
         (mv t subst1))
        (hyp (special-instantiation-rule-binding-hyp rule))
-       (new-subst (tac-rewrite-pred-find-subst assums hyp subst1 used-unify-substs))
+       (new-subst (or (tac-rewrite-pred-find-subst assums1 hyp subst1 used-unify-substs)
+                      (tac-rewrite-pred-find-subst assums2 hyp subst1 used-unify-substs)))
        ((unless new-subst)
         (mv nil nil)))
     (mv t new-subst))
@@ -330,17 +331,21 @@
                             (tac-ev-alist subst env))
                     (tac-ev (pseudo-term-fncall fn args) env)))
     :hints (("goal" :use ((:instance tac-ev-of-term-subst-strict
-                           (a (mv-nth 1 (tac-rewrite-pred-subst rule fn args assums used-unify-substs)))
+                           (a (mv-nth 1 (tac-rewrite-pred-subst rule fn args assums1 assums2 used-unify-substs)))
                            (x (cmr::rewrite->lhs rule))))
              :in-theory (disable tac-ev-of-term-subst-strict
                                  <fn>))))
 
   (defret <fn>-hyp-member
     (implies (and (is-special-instantiation-rule rule)
-                  ok)
+                  ok
+                  (case-split
+                    (not (member-equal (cmr::term-subst-strict
+                                        (special-instantiation-rule-binding-hyp rule) subst)
+                                       (pseudo-term-list-fix assums1)))))
              (member-equal (cmr::term-subst-strict
                             (special-instantiation-rule-binding-hyp rule) subst)
-                           (pseudo-term-list-fix assums))))
+                           (pseudo-term-list-fix assums2))))
 
   (local (defthm tac-ev-when-member-cube
            (implies (and (tac-ev-cube assums env)
@@ -350,12 +355,13 @@
   
   (defret <fn>-hyp-satisfied
     (implies (and (is-special-instantiation-rule rule)
-                  (tac-ev-cube assums env)
+                  (tac-ev-cube assums1 env)
+                  (tac-ev-cube assums2 env)
                   ok)
              (tac-ev (special-instantiation-rule-binding-hyp rule)
                      (tac-ev-alist subst env)))
     :hints (("goal" :use ((:instance tac-ev-of-term-subst-strict
-                           (a (mv-nth 1 (tac-rewrite-pred-subst rule fn args assums used-unify-substs)))
+                           (a (mv-nth 1 (tac-rewrite-pred-subst rule fn args assums1 assums2 used-unify-substs)))
                            (x (special-instantiation-rule-binding-hyp rule))))
              :in-theory (disable tac-ev-of-term-subst-strict
                                  <fn>))))
@@ -382,7 +388,8 @@
                                         (tac-subst-ctx subst ctx))
                          (tac-function-return-type fn))
                   (implies (and (is-special-instantiation-rule rule)
-                                (subsetp-equal (tac-termlist-types assums ctx) '(:pred)))
+                                (subsetp-equal (tac-termlist-types assums1 ctx) '(:pred))
+                                (subsetp-equal (tac-termlist-types assums2 ctx) '(:pred)))
                            (equal (tac-term-type (special-instantiation-rule-binding-hyp rule)
                                                  (tac-subst-ctx subst ctx))
                                   :pred))))
@@ -433,7 +440,8 @@
                (args (list 'tac-w x)))
     (implies (and (tac-pred-rewrite-parse-ok rule)
                   (not (member 'tac-w (cmr::term-vars x)))
-                  (not (member 'tac-w (cmr::termlist-vars assums))))
+                  (not (member 'tac-w (cmr::termlist-vars assums1)))
+                  (not (member 'tac-w (cmr::termlist-vars assums2))))
              (not (member 'tac-w (cmr::term-subst-vars
                                   (acl2::hons-remove-assoc 'w subst)))))
     :hints (("goal" :in-theory (enable tac-pred-rewrite-parse-ok
@@ -445,7 +453,8 @@
 
   (defret vars-of-<fn>
     (implies (and (not (member v (cmr::termlist-vars args)))
-                  (not (member v (cmr::termlist-vars assums))))
+                  (not (member v (cmr::termlist-vars assums1)))
+                  (not (member v (cmr::termlist-vars assums2))))
              (not (member v (cmr::term-subst-vars subst))))))
                
     
@@ -471,7 +480,8 @@
 
 (define tac-rewrite-pred-apply-rule ((rule cmr::rewrite-p)
                                      (x pseudo-termp)
-                                     (assums pseudo-term-listp)
+                                     (assums1 pseudo-term-listp)
+                                     (assums2 pseudo-term-listp)
                                      (used-unify-substs pseudo-term-substlist-p))
   :returns (mv ok
                (result tac-ruleres-branchlist-p)
@@ -481,7 +491,7 @@
                          (eq rule.equiv 'iff))))
         (mv nil nil nil))
        ((mv ok subst) (tac-rewrite-pred-subst rule 'pred-in-set (list 'tac-w x)
-                                              assums used-unify-substs))
+                                              assums1 assums2 used-unify-substs))
        ((unless ok) (mv nil nil nil))
        ((mv ok res-pattern) (tac-parse-ruleres rule.rhs))
        ((unless ok) (mv nil nil nil))
@@ -500,8 +510,10 @@
                   (tac-ev-theoremp* (cmr::rewrite-term rule))
                   (tac-pred-rewrite-hyps-ok rule)
                   (tac-typed-env-p env ctx)
-                  (tac-ev-cube assums env)
-                  (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
+                  (tac-ev-cube assums1 env)
+                  (tac-ev-cube assums2 env)
+                  (subsetp-equal (tac-termlist-types assums1 ctx) '(:pred))
+                  (subsetp-equal (tac-termlist-types assums2 ctx) '(:pred))
                   ;; (equal (tac-termlist-types args ctx)
                   ;;        (tac-function-argument-types fn))
                   ;; (equal (tac-function-return-type fn) :pred)
@@ -518,22 +530,22 @@
                            (env
                             (tac-ev-alist
                              (mv-nth 1 (tac-rewrite-pred-subst rule 'pred-in-set (list 'tac-w x)
-                                                               assums used-unify-substs))
+                                                               assums1 assums2 used-unify-substs))
                              env)))
                           (:instance tac-ev-theoremp*-implies
                            (x (cmr::rewrite-term rule))
                            (a (tac-ev-alist
                                (mv-nth 1 (tac-rewrite-pred-subst rule 'pred-in-set (list 'tac-w x)
-                                                                 assums used-unify-substs))
+                                                                 assums1 assums2 used-unify-substs))
                                env)))
                           (:instance tac-pred-rewrite-hyps-ok-necc
                            (env (tac-ev-alist
                                    (mv-nth 1 (tac-rewrite-pred-subst rule 'pred-in-set (list 'tac-w x)
-                                                                     assums used-unify-substs))
+                                                                     assums1 assums2 used-unify-substs))
                                    env))
                            (ctx (tac-subst-ctx
                                  (mv-nth 1 (tac-rewrite-pred-subst rule 'pred-in-set (list 'tac-w x)
-                                                                   assums used-unify-substs))
+                                                                   assums1 assums2 used-unify-substs))
                                  ctx)))
                           )
              :expand ((:free (a b) (tac-termlist-types (cons a b) ctx))
@@ -563,7 +575,8 @@
   (defret <fn>-type-lemma
     (implies (and ok
                   (tac-pred-rewrite-rhs-typed rule)
-                  (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
+                  (subsetp-equal (tac-termlist-types assums1 ctx) '(:pred))
+                  (subsetp-equal (tac-termlist-types assums2 ctx) '(:pred))
                   (equal (tac-term-type x ctx) :set)
                   (equal (cdr (hons-assoc-equal 'tac-w ctx)) :event))
              (tac-ruleres-branchlist-typed result :set ctx))
@@ -581,7 +594,8 @@
     (implies (and ok
                   (tac-pred-rewrite-parse-ok rule)
                   (not (member-equal v (cmr::term-vars x)))
-                  (not (member-equal v (cmr::termlist-vars assums))))
+                  (not (member-equal v (cmr::termlist-vars assums1)))
+                  (not (member-equal v (cmr::termlist-vars assums2))))
              (not (member-equal v (tac-ruleres-branchlist-vars result))))
     :hints(("Goal" :in-theory (e/d (tac-pred-rewrite-parse-ok-implies)
                                    (;; tac-subst-ruleres-branchlist-of-remove-unused
@@ -594,7 +608,7 @@
                            'w
                            (mv-nth 1 (tac-rewrite-pred-subst
                                       rule 'pred-in-set (list 'tac-w x)
-                                      assums used-unify-substs)))))))))
+                                      assums1 assums2 used-unify-substs)))))))))
     
                   
   
@@ -602,10 +616,12 @@
     (implies (and ok
                   (tac-pred-rewrite-rhs-typed rule)
                   (tac-pred-rewrite-parse-ok rule)
-                  (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
+                  (subsetp-equal (tac-termlist-types assums1 ctx) '(:pred))
+                  (subsetp-equal (tac-termlist-types assums2 ctx) '(:pred))
                   (equal (tac-term-type x ctx) :set)
                   (not (member-equal 'tac-w (cmr::term-vars x)))
-                  (not (member-equal 'tac-w (cmr::termlist-vars assums))))
+                  (not (member-equal 'tac-w (cmr::termlist-vars assums1)))
+                  (not (member-equal 'tac-w (cmr::termlist-vars assums2))))
              (tac-ruleres-branchlist-typed result :set ctx))
     :hints (("goal" :use ((:instance <fn>-type-lemma
                            (ctx (cons (cons 'tac-w :event) ctx))))
@@ -645,8 +661,10 @@
                   (tac-ev-theoremp* (cmr::rewrite-term rule))
                   (tac-pred-rewrite-hyps-ok rule)
                   (tac-typed-env-p env ctx)
-                  (tac-ev-cube assums env)
-                  (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
+                  (tac-ev-cube assums1 env)
+                  (tac-ev-cube assums2 env)
+                  (subsetp-equal (tac-termlist-types assums1 ctx) '(:pred))
+                  (subsetp-equal (tac-termlist-types assums2 ctx) '(:pred))
                   ;; (equal (tac-termlist-types args ctx)
                   ;;        (tac-function-argument-types fn))
                   ;; (equal (tac-function-return-type fn) :pred)
@@ -654,7 +672,8 @@
                   (tac-pred-rewrite-parse-ok rule)
                   (tac-pred-rewrite-rhs-typed rule)
                   (not (member-equal 'tac-w (cmr::term-vars x)))
-                  (not (member-equal 'tac-w (cmr::termlist-vars assums))))
+                  (not (member-equal 'tac-w (cmr::termlist-vars assums1)))
+                  (not (member-equal 'tac-w (cmr::termlist-vars assums2))))
              (equal (union-list
                      (tac-eval-ruleres-branchlist result env))
                     (tac-ev x env)))
@@ -671,7 +690,8 @@
 
 (define tac-rewrite-pred-try-rules ((rules tac-rewritelist-p)
                                     (x pseudo-termp)
-                                    (assums pseudo-term-listp)
+                                    (assums1 pseudo-term-listp)
+                                    (assums2 pseudo-term-listp)
                                     (rule-used-substs rule-used-substs-p))
   :returns (mv ok
                (result tac-ruleres-branchlist-p)
@@ -679,13 +699,13 @@
                (rule-used-substs-updatedp))
   (b* (((when (atom rules)) (mv nil nil nil nil))
        ((unless (mbt (consp (car rules))))
-        (tac-rewrite-pred-try-rules (cdr rules) x assums rule-used-substs))
+        (tac-rewrite-pred-try-rules (cdr rules) x assums1 assums2 rule-used-substs))
        ((cons name rule) (car rules))
        (name (mbe :logic (acl2::symbol-fix name) :exec name))
        (rule-used-substs (rule-used-substs-fix rule-used-substs))
        (used-substs (cdr (hons-assoc-equal name rule-used-substs)))
-       ((mv ok result subst) (tac-rewrite-pred-apply-rule rule x assums used-substs))
-       ((unless ok) (tac-rewrite-pred-try-rules (cdr rules) x assums rule-used-substs)))
+       ((mv ok result subst) (tac-rewrite-pred-apply-rule rule x assums1 assums2 used-substs))
+       ((unless ok) (tac-rewrite-pred-try-rules (cdr rules) x assums1 assums2 rule-used-substs)))
     (if (is-special-instantiation-rule rule)
         (mv t result (cons (cons name (cons subst used-substs)) rule-used-substs) t)
       (mv t result nil nil)))
@@ -695,7 +715,8 @@
     (implies (and ok
                   (tac-pred-rewrites-parse-ok rules)
                   (not (member-equal v (cmr::term-vars x)))
-                  (not (member-equal v (cmr::termlist-vars assums))))
+                  (not (member-equal v (cmr::termlist-vars assums1)))
+                  (not (member-equal v (cmr::termlist-vars assums2))))
              (not (member-equal v (tac-ruleres-branchlist-vars result))))
     :hints(("Goal" :in-theory (enable tac-pred-rewrites-parse-ok))))
     
@@ -705,10 +726,12 @@
     (implies (and ok
                   (tac-pred-rewrites-rhs-typed rules)
                   (tac-pred-rewrites-parse-ok rules)
-                  (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
+                  (subsetp-equal (tac-termlist-types assums1 ctx) '(:pred))
+                  (subsetp-equal (tac-termlist-types assums2 ctx) '(:pred))
                   (equal (tac-term-type x ctx) :set)
                   (not (member-equal 'tac-w (cmr::term-vars x)))
-                  (not (member-equal 'tac-w (cmr::termlist-vars assums))))
+                  (not (member-equal 'tac-w (cmr::termlist-vars assums1)))
+                  (not (member-equal 'tac-w (cmr::termlist-vars assums2))))
              (tac-ruleres-branchlist-typed result :set ctx))
     :hints (("goal" :in-theory (enable tac-pred-rewrites-rhs-typed
                                        tac-pred-rewrites-parse-ok))))
@@ -720,8 +743,10 @@
                   (tac-ev-theoremlist-p (tac-rewritelist-terms rules))
                   (tac-pred-rewrites-hyps-ok rules)
                   (tac-typed-env-p env ctx)
-                  (tac-ev-cube assums env)
-                  (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
+                  (tac-ev-cube assums1 env)
+                  (tac-ev-cube assums2 env)
+                  (subsetp-equal (tac-termlist-types assums1 ctx) '(:pred))
+                  (subsetp-equal (tac-termlist-types assums2 ctx) '(:pred))
                   ;; (equal (tac-termlist-types args ctx)
                   ;;        (tac-function-argument-types fn))
                   ;; (equal (tac-function-return-type fn) :pred)
@@ -729,7 +754,8 @@
                   (tac-pred-rewrites-parse-ok rules)
                   (tac-pred-rewrites-rhs-typed rules)
                   (not (member-equal 'tac-w (cmr::term-vars x)))
-                  (not (member-equal 'tac-w (cmr::termlist-vars assums))))
+                  (not (member-equal 'tac-w (cmr::termlist-vars assums1)))
+                  (not (member-equal 'tac-w (cmr::termlist-vars assums2))))
              (equal (union-list
                      (tac-eval-ruleres-branchlist result env))
                     (tac-ev x env)))

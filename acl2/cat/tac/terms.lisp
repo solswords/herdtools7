@@ -494,7 +494,12 @@
   (defthm tac-ev-of-conjoin
     (iff (tac-ev (acl2::conjoin lst) env)
          (tac-ev-cube lst env))
-    :hints(("Goal" :in-theory (enable tac-ev-cube)))))
+    :hints(("Goal" :in-theory (enable tac-ev-cube))))
+
+  (defthm tac-ev-cube-of-append
+    (iff (tac-ev-cube (append x y) env)
+         (and (tac-ev-cube x env)
+              (tac-ev-cube y env)))))
 
 (define tac-ev-theoremp* ((x pseudo-termp))
   :verify-guards nil

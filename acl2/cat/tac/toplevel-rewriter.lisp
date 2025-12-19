@@ -41,18 +41,6 @@
     ///
     (in-theory (disable (tac-negative-toplevel-normalize-rules)))))
 
-(local (defthm tac-ev-cube-of-append
-         (iff (tac-ev-cube (append x y) env)
-              (and (tac-ev-cube x env)
-                   (tac-ev-cube y env)))
-         :hints(("Goal" :in-theory (enable tac-ev-cube)))))
-
-(local (defthm termlist-vars-of-append
-         (acl2::set-equiv (cmr::termlist-vars (append x y))
-                          (append (cmr::termlist-vars x)
-                                  (cmr::termlist-vars y)))
-         :hints(("Goal" :in-theory (enable cmr::termlist-vars)))))
-
 (define collect-conjunction ((x pseudo-termp))
   :measure (pseudo-term-count x)
   :returns (cube pseudo-term-listp)

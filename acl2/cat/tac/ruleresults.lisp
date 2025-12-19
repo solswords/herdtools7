@@ -19,6 +19,7 @@
 (in-package "TAC")
 (include-book "terms")
 (include-book "centaur/meta/subst-vars" :dir :system)
+(local (include-book "common-thms"))
 (local (include-book "std/lists/sets" :dir :system))
 (local (include-book "std/lists/append" :dir :system))
 (local (std::add-default-post-define-hook :fix))
@@ -271,15 +272,6 @@
 
 
 ;; ------------ Variables of tac-ruleres objects
-(local (Defthm union-of-pseudo-var-list
-         (implies (and (cmr::pseudo-var-list-p x)
-                       (cmr::pseudo-var-list-p y))
-                  (cmr::pseudo-var-list-p (union-equal x y)))))
-
-(local (defthm symbol-listp-when-pseudo-var-list-p
-         (implies (cmr::pseudo-var-list-p x)
-                  (symbol-listp x))))
-
 (cmr::defthm-term-vars-flag
   (defthm tac-ev-of-cons-non-var
     (implies (not (member-equal v (cmr::term-vars x)))
@@ -565,12 +557,6 @@
 
                 
 (local (in-theory (disable acl2::pseudo-termp-opener)))
-
-(defthm tac-ev-cube-of-append
-  (equal (tac-ev-cube (append x y) a)
-         (and (tac-ev-cube x a)
-              (tac-ev-cube y a)))
-  :hints(("Goal" :in-theory (enable tac-ev-cube))))
 
 
 (define tac-parse-ruleres-conj ((x pseudo-termp))

@@ -21,6 +21,7 @@
 (include-book "pos-neg-apply-rule")
 (include-book "basic-rewriter")
 (include-book "centaur/fty/baselists" :dir :system)
+(local (include-book "common-thms"))
 (local (include-book "std/lists/sets" :dir :system))
 (local (include-book "std/lists/repeat" :dir :system))
 (local (include-book "std/lists/take" :dir :system))
@@ -192,12 +193,6 @@
                   (tac-ruleres-branch-argslist-no-assums-without-args y))
              (tac-ruleres-branch-argslist-no-assums-without-args (append x y)))))
 
-
-(local (defthm termlist-vars-of-append
-         (iff (member v (cmr::termlist-vars (append a b)))
-              (or (member v (cmr::termlist-vars a))
-                  (member v (cmr::termlist-vars b))))
-         :hints(("Goal" :in-theory (enable cmr::termlist-vars)))))
 
 (define tac-ruleres-branch-product-with-branch-argslist ((x tac-ruleres-branch-p)
                                                                       (y tac-ruleres-branch-argslist-p))
@@ -849,7 +844,8 @@
 
 (defines tac-apply-rule-in-context
   (define tac-apply-rule-in-context ((x pseudo-termp)
-                                     (assums pseudo-term-listp)
+                                     (assums1 pseudo-term-listp)
+                                     (assums2 pseudo-term-listp)
                                      (ruleset tac-rewritelist-p)
                                      (subst-database term-used-subst-database-p))
     ;; Positive rules replace the term in its context, perhaps splitting into
@@ -880,7 +876,7 @@
          ((mv rewrittenp result new-rule-substs rule-substs-updatedp)
           (if (eq rettype :set)
               ;; note: important that x not contain variable tac-w
-              (tac-rewrite-pred-try-rules ruleset x assums subst-database.rule-substs)
+              (tac-rewrite-pred-try-rules ruleset x assums1 assums2 subst-database.rule-substs)
             (mv nil nil nil nil)))
          ((when rewrittenp)
           (mv t result
@@ -891,7 +887,7 @@
           (mv nil nil nil nil))
          ((mv successp results-args new-arg-substs arg-substs-updatedp)
           (tac-apply-rule-in-context-args
-           0 (tac-function-argument-types x.fn) x.args assums ruleset subst-database.arg-substs))
+           0 (tac-function-argument-types x.fn) x.args assums1 assums2 ruleset subst-database.arg-substs))
          ((when successp)
           (mv t (apply-fn-to-result-branches
                  x.fn
@@ -904,7 +900,8 @@
   (define tac-apply-rule-in-context-args ((n natp)
                                           (types tac-typelist-p)
                                           (x pseudo-term-listp)
-                                          (assums pseudo-term-listp)
+                                          (assums1 pseudo-term-listp)
+                                          (assums2 pseudo-term-listp)
                                           (ruleset tac-rewritelist-p)
                                           (arg-substs arg-used-subst-database-p))
     :measure (pseudo-term-list-count x)
@@ -918,7 +915,7 @@
          (arg-substs (arg-used-subst-database-fix arg-substs))
          (term-substs (cdr (hons-assoc-equal (lnfix n) arg-substs)))
          ((mv successp results new-term-substs term-substs-updatedp)
-          (tac-apply-rule-in-context (car x) assums ruleset term-substs))
+          (tac-apply-rule-in-context (car x) assums1 assums2 ruleset term-substs))
          ((when successp)
           (mv t
               (cons results
@@ -927,7 +924,7 @@
                    (cons (cons (lnfix n) new-term-substs) arg-substs))
               term-substs-updatedp))
          ((mv successp results new-arg-substs arg-substs-updatedp)
-          (tac-apply-rule-in-context-args (+ 1 (lnfix n)) (cdr types) (cdr x) assums ruleset arg-substs))
+          (tac-apply-rule-in-context-args (+ 1 (lnfix n)) (cdr types) (cdr x) assums1 assums2 ruleset arg-substs))
          ((when successp)
           (mv t (cons (list (tac-ruleres-branch nil (car x))) results)
               new-arg-substs arg-substs-updatedp)))
@@ -974,9 +971,11 @@
       (implies (and (tac-pred-rewrites-rhs-typed ruleset)
                     (tac-pred-rewrites-parse-ok ruleset)
                     (tac-term-type x ctx)
-                    (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
+                    (subsetp-equal (tac-termlist-types assums1 ctx) '(:pred))
+                    (subsetp-equal (tac-termlist-types assums2 ctx) '(:pred))
                     (not (member-equal 'tac-w (cmr::term-vars x)))
-                    (not (member-equal 'tac-w (cmr::termlist-vars assums)))
+                    (not (member-equal 'tac-w (cmr::termlist-vars assums1)))
+                    (not (member-equal 'tac-w (cmr::termlist-vars assums2)))
                     successp)
                (tac-ruleres-branchlist-typed results (tac-term-type x ctx) ctx))
       :hints ('(:expand (<call>
@@ -991,9 +990,11 @@
                     (tac-typelist-p types)
                     (not (member-equal nil types))
                     (acl2::prefixp types (tac-termlist-types x ctx))
-                    (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
+                    (subsetp-equal (tac-termlist-types assums1 ctx) '(:pred))
+                    (subsetp-equal (tac-termlist-types assums2 ctx) '(:pred))
                     (not (member-equal 'tac-w (cmr::termlist-vars x)))
-                    (not (member-equal 'tac-w (cmr::termlist-vars assums)))
+                    (not (member-equal 'tac-w (cmr::termlist-vars assums1)))
+                    (not (member-equal 'tac-w (cmr::termlist-vars assums2)))
                     successp)
                (tac-ruleres-branchlistlist-typed
                 results types ctx))
@@ -1018,9 +1019,11 @@
                   (tac-pred-rewrites-parse-ok ruleset)
                   (equal type (tac-term-type x ctx))
                   type
-                  (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
+                  (subsetp-equal (tac-termlist-types assums1 ctx) '(:pred))
+                  (subsetp-equal (tac-termlist-types assums2 ctx) '(:pred))
                   (not (member-equal 'tac-w (cmr::term-vars x)))
-                  (not (member-equal 'tac-w (cmr::termlist-vars assums)))
+                  (not (member-equal 'tac-w (cmr::termlist-vars assums1)))
+                  (not (member-equal 'tac-w (cmr::termlist-vars assums2)))
                   successp)
              (tac-ruleres-branchlist-typed results type ctx))
     :fn tac-apply-rule-in-context)
@@ -1077,10 +1080,13 @@
                     (tac-pred-rewrites-rhs-typed ruleset)
                     (tac-pred-rewrites-parse-ok ruleset)
                     (not (member-equal 'tac-w (cmr::term-vars x)))
-                    (not (member-equal 'tac-w (cmr::termlist-vars assums)))
+                    (not (member-equal 'tac-w (cmr::termlist-vars assums1)))
+                    (not (member-equal 'tac-w (cmr::termlist-vars assums2)))
                     (tac-term-type x ctx)
-                    (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
-                    (tac-ev-cube assums env)
+                    (subsetp-equal (tac-termlist-types assums1 ctx) '(:pred))
+                    (subsetp-equal (tac-termlist-types assums2 ctx) '(:pred))
+                    (tac-ev-cube assums1 env)
+                    (tac-ev-cube assums2 env)
                     successp)
                (equal (union-list
                        (tac-eval-ruleres-branchlist results env))
@@ -1102,10 +1108,13 @@
                     (tac-pred-rewrites-parse-ok ruleset)
                     (subsetp-equal types '(:set :rel))
                     (acl2::prefixp types (tac-termlist-types x ctx))
-                    (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
+                    (subsetp-equal (tac-termlist-types assums1 ctx) '(:pred))
+                    (subsetp-equal (tac-termlist-types assums2 ctx) '(:pred))
                     (not (member-equal 'tac-w (cmr::termlist-vars x)))
-                    (not (member-equal 'tac-w (cmr::termlist-vars assums)))
-                    (tac-ev-cube assums env)
+                    (not (member-equal 'tac-w (cmr::termlist-vars assums1)))
+                    (not (member-equal 'tac-w (cmr::termlist-vars assums2)))
+                    (tac-ev-cube assums1 env)
+                    (tac-ev-cube assums2 env)
                     successp)
                (equal (union-multiarglists
                        (tac-eval-ruleres-branchlistlist results env))
@@ -1133,7 +1142,8 @@
       (implies (and successp
                     (tac-pred-rewrites-parse-ok ruleset)
                     (not (member-equal v (cmr::term-vars x)))
-                    (not (member-equal v (cmr::termlist-vars assums))))
+                    (not (member-equal v (cmr::termlist-vars assums1)))
+                    (not (member-equal v (cmr::termlist-vars assums2))))
                (not (member-equal v (tac-ruleres-branchlist-vars results))))
       :hints ('(:expand (<call>))
               (and stable-under-simplificationp
@@ -1145,7 +1155,8 @@
       (implies (and successp
                     (tac-pred-rewrites-parse-ok ruleset)
                     (not (member-equal v (cmr::termlist-vars x)))
-                    (not (member-equal v (cmr::termlist-vars assums))))
+                    (not (member-equal v (cmr::termlist-vars assums1)))
+                    (not (member-equal v (cmr::termlist-vars assums2))))
                (not (member-equal v (tac-ruleres-branchlistlist-vars results))))
       :hints ('(:expand (<call>
                          (cmr::termlist-vars x)
