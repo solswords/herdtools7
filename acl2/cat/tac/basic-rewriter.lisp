@@ -130,6 +130,9 @@
          (implies (cmr::pseudo-term-subst-p x)
                   (alistp x))))
 
+(local (in-theory (disable pseudo-termp
+                           pseudo-term-listp)))
+
 (defines tac-rewrite
   (define tac-rewrite ((clk natp)
                        (x pseudo-termp)
@@ -186,6 +189,14 @@
                  (equal orig (tac-term-type (car y) ctx))))
            (termlists-types-preserved (cdr x) (cdr y) subst ctx))))
 
+  (local (defthmd termlists-types-preserved-when-consp
+           (implies (consp x)
+                    (equal (termlists-types-preserved x y subst ctx)
+                           (and (let ((orig (tac-term-type (cmr::term-subst-strict (car x) subst) ctx)))
+                                  (or (not orig)
+                                      (equal orig (tac-term-type (car y) ctx))))
+                                (termlists-types-preserved (cdr x) (cdr y) subst ctx))))))
+  
   (local (defthm open-prefixp
            (equal (acl2::prefixp (cons a b) x)
                   (and (consp x)
@@ -212,21 +223,24 @@
                                     ctx)
                      type))
      :hints(("Goal"
-             :in-theory (e/d (tac-function-argument-types)
+             :in-theory (e/d (tac-function-argument-types
+                              termlists-types-preserved-when-consp)
                              (termlists-types-preserved))
              :do-not-induct t
              :expand ((cmr::term-subst-strict x subst)
-                      (cmr::termlist-subst-strict nil subst)
-                      (cmr::termlist-subst-strict (pseudo-term-call->args x) subst)
-                      (cmr::termlist-subst-strict (cdr (pseudo-term-call->args x)) subst)
+                      ;; (cmr::termlist-subst-strict nil subst)
+                      ;; (cmr::termlist-subst-strict (pseudo-term-call->args x) subst)
+                      ;; (cmr::termlist-subst-strict (cdr (pseudo-term-call->args x)) subst)
+                      ;; (cmr::termlist-subst-strict (cddr (pseudo-term-call->args x)) subst)
                       (:free (fn args) (tac-term-type (pseudo-term-fncall fn args) ctx))))
-            (and stable-under-simplificationp
-                 '(:expand ((termlists-types-preserved (pseudo-term-call->args x) rw-args subst ctx)
-                            (termlists-types-preserved (cdr (pseudo-term-call->args x)) (cdr rw-args) subst ctx))))
-            (and stable-under-simplificationp
-                 '(:expand ((cmr::termlist-subst-strict (cddr (pseudo-term-call->args x)) subst)
-                            (cmr::termlist-subst-strict nil subst)
-                            (termlists-types-preserved (cddr (pseudo-term-call->args x)) (cddr rw-args) subst ctx)))))))
+            ;; (and stable-under-simplificationp
+            ;;      '(:expand ((termlists-types-preserved (pseudo-term-call->args x) rw-args subst ctx)
+            ;;                 (termlists-types-preserved (cdr (pseudo-term-call->args x)) (cdr rw-args) subst ctx))))
+            ;; (and stable-under-simplificationp
+            ;;      '(:expand ((cmr::termlist-subst-strict (cddr (pseudo-term-call->args x)) subst)
+            ;;                 (cmr::termlist-subst-strict nil subst)
+            ;;                 (termlists-types-preserved (cddr (pseudo-term-call->args x)) (cddr rw-args) subst ctx))))
+            )))
 
 
   (local (defthm tac-term-type-of-tac-subst-ctx
@@ -276,6 +290,16 @@
                            (tac-ev (car x) (tac-ev-alist subst env))))
            (tac-rewrite-list-evals-preserved (cdr x) (cdr new-x) subst env ctx))))
 
+  (local (defthmd tac-rewrite-list-evals-preserved-when-consp
+           (implies (consp x)
+                    (equal (tac-rewrite-list-evals-preserved x new-x subst env ctx)
+                           (and (implies (or (not (pseudo-term-case (car x) :fncall))
+                                             (tac-term-type (cmr::term-subst-strict (car x) subst) ctx))
+                                         (equal (tac-ev (car new-x) env)
+                                                (tac-ev (car x) (tac-ev-alist subst env))))
+                                (tac-rewrite-list-evals-preserved (cdr x) (cdr new-x) subst env ctx))))))
+           
+
   (local (defthm fncall-of-term-subst-strict
            (implies (pseudo-term-case x :fncall)
                     (pseudo-term-case (cmr::term-subst-strict x subst) :fncall))
@@ -293,15 +317,10 @@
                     (tac-ev (cons fn args) (tac-ev-alist subst env))))
     :hints (("goal" :expand ((:free (args)
                               (tac-term-type (pseudo-term-fncall fn args)
-                                          ctx))
-                             (cmr::termlist-subst-strict args subst)
-                             (cmr::termlist-subst-strict (cdr args) subst)
-                             (tac-rewrite-list-evals-preserved
-                              args rw-args subst env ctx)
-                             (tac-rewrite-list-evals-preserved
-                              (cdr args) (cdr rw-args) subst env ctx))
+                                          ctx)))
              :in-theory (enable tac-function-return-type
-                                tac-function-argument-types)
+                                tac-function-argument-types
+                                tac-rewrite-list-evals-preserved-when-consp)
              :do-not-induct t)
             (and stable-under-simplificationp
                  '(:expand ((cmr::termlist-subst-strict (cddr args) subst)

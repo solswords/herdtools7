@@ -22,6 +22,10 @@
 (local (include-book "theory-thms"))
 (acl2::def-ruleset! tac-rewrites nil)
 
+(in-theory (enable set::union-with-subset-left
+                   set::union-with-subset-right
+                   set::intersect-with-subset-left
+                   set::intersect-with-subset-right))
 
 
 

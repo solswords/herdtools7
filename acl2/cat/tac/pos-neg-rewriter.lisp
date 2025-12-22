@@ -776,6 +776,13 @@
                                      lists-have-lengths
                                      tac-eval-ruleres-branch-args)))))
 
+(local (in-theory (disable subsetp-equal
+                           pseudo-termp
+                           pseudo-term-listp
+                           take
+                           hons-assoc-equal
+                           member-equal)))
+
 (defines tac-apply-rule-in-context
   (define tac-apply-rule-in-context ((x pseudo-termp)
                                      (assums1 pseudo-term-listp)
@@ -864,8 +871,10 @@
               new-arg-substs arg-substs-updatedp)))
       (mv nil nil nil nil)))
   ///
+  (local (in-theory (disable tac-apply-rule-in-context-args
+                             tac-apply-rule-in-context)))
   (verify-guards tac-apply-rule-in-context)
- 
+
   (local (defthm tac-ruleres-branchlist-typed-of-single
            (equal (tac-ruleres-branchlist-typed
                    (list (tac-ruleres-branch nil x))
@@ -1069,7 +1078,7 @@
   (local (defthm termlist-vars-of-take
            (implies (not (member-equal v (cmr::termlist-vars x)))
                     (not (member-equal v (cmr::termlist-vars (take n x)))))
-           :hints(("Goal" :in-theory (enable cmr::termlist-vars)))))
+           :hints(("Goal" :in-theory (enable cmr::termlist-vars take)))))
 
   (std::defret-mutual <fn>-preserves-vars
     (defret <fn>-preserves-vars

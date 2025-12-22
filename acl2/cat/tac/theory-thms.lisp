@@ -21,10 +21,10 @@
 (include-book "logic")
 (local (include-book "std/util/termhints" :dir :system))
 
-(in-theory (enable set::union-with-subset-left
-                   set::union-with-subset-right
-                   set::intersect-with-subset-left
-                   set::intersect-with-subset-right))
+;; (in-theory (enable set::union-with-subset-left
+;;                    set::union-with-subset-right
+;;                    set::intersect-with-subset-left
+;;                    set::intersect-with-subset-right))
 
 (defthmd in-universe-when-in-event-set
   (implies (and (in e x)

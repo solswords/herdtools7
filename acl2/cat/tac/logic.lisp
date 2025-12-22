@@ -1461,8 +1461,13 @@
   t)
 
 (acl2::def-ruleset! tac-functions
-  '(emptyset singleton setunion setintersect setimage setpreimage relidentity
-             relunion relintersect relcompose relstar relstar-bounded relplus relinverse relprod
+  '(emptyset singleton setunion setintersect
+             setimage setimage-witness
+             setpreimage setpreimage-witness
+             relidentity relunion relintersect
+             relcompose relcompose-midpoint
+             relstar relstar-bounded relplus
+             relinverse relprod
              pred-false pred-true pred-nonempty pred-equal pred-in-set pred-in-rel
              base-set-p base-rel-p not-singleton-set-p mentioned-event-p))
 
