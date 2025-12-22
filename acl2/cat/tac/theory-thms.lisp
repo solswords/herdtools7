@@ -365,7 +365,7 @@
   (equal (relcompose nil x) nil)
   :hints(("Goal" :in-theory (enable relcompose))))
 
-(defthm relcompose-of-nil-2
+(defthm relcompose-of-nil2
   (equal (relcompose x nil) nil)
   :hints(("Goal" :in-theory (enable relcompose compose1))))
 
@@ -480,7 +480,7 @@
   (equal (relprod nil r) nil)
   :hints(("Goal" :in-theory (enable relprod))))
 
-(defthm relprod-of-nil-2
+(defthm relprod-of-nil2
   (equal (relprod r nil) nil)
   :hints(("Goal" :in-theory (enable relprod
                                     cartesian1))))
