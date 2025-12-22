@@ -21,523 +21,567 @@
 (include-book "logic")
 (local (include-book "std/util/termhints" :dir :system))
 
-(defthm union-of-subset2
-  (implies (subset y x)
-           (equal (union y x) (sfix x)))
-  :hints(("Goal" :in-theory (enable set::union-with-subset-left))))
+(in-theory (enable set::union-with-subset-left
+                   set::union-with-subset-right
+                   set::intersect-with-subset-left
+                   set::intersect-with-subset-right))
 
-(defthm intersect-with-subset
-  (implies (subset y x)
-           (equal (intersect y x) (sfix y)))
-  :hints(("Goal" :in-theory (enable set::intersect-with-subset-left))))
+(defthmd in-universe-when-in-event-set
+  (implies (and (in e x)
+                (event-set-p x))
+           (in e (universe)))
+  :hints(("goal" :use ((:instance event-set-p-implies-not-in-when-not-event))
+          :in-theory (enable event-p))))
 
-(defthm intersect-with-subset2
-  (implies (subset y x)
-           (equal (intersect x y) (sfix y)))
-  :hints(("Goal" :in-theory (enable set::intersect-with-subset-right))))
+(defthm subset-of-universe-when-event-set-p
+  (implies (event-set-p s)
+           (subset s (universe)))
+  :hints(("Goal" :in-theory (enable pick-a-point-subset-strategy
+                                    in-universe-when-in-event-set))))
 
-(defthm image-of-nil
-  (equal (image nil x)
+(defthm setimage-of-nil
+  (equal (setimage nil x)
          nil)
-  :hints(("Goal" :in-theory (enable image))))
+  :hints(("Goal" :in-theory (enable setimage))))
 
-(defthm image-of-id-relation
-  (equal (image x (id-relation y))
-         (intersect x y))
+;; (local (defthm in-of-event-set-fix-forward
+;;          (implies (in e (event-set-fix x))
+;;                   (event-p e))
+;;          :hints(("Goal" :in-theory (enable event-set-p-implies-not-in-when-not-event)))
+;;          :rule-classes :forward-chaining))
+
+(defthm setimage-of-id-relation
+  (equal (setimage x (relidentity y))
+         (setintersect x y))
   :hints(("Goal" :in-theory (enable set::double-containment-no-backchain-limit
                                     pick-a-point-subset-strategy
-                                    in-of-image-rw
-                                    in-of-image-suff)))
+                                    in-of-setimage-rw
+                                    in-of-setimage-suff3
+                                    ;; in-of-relation-fix
+                                    in-of-event-set-fix)))
   :otf-flg t)
 
-(defthm in-image-of-singleton
-  (iff (in x (image (insert y nil) z))
-       (in (edge y x) (relation-fix z)))
-  :hints(("Goal" :in-theory (enable in-of-image-rw
-                                    in-of-image-suff))))
+(defthm in-setimage-of-singleton
+  (iff (in x (setimage (singleton y) z))
+       (and (event-p x)
+            (in (edge y x) (relation-fix z))))
+  :hints(("Goal" :in-theory (enable in-of-setimage-rw
+                                    in-of-setimage-suff
+                                    in-of-event-set-fix))))
 
 (defthm in-universe-when-event-p
   (implies (event-p x)
            (in x (universe)))
   :hints(("Goal" :in-theory (enable event-p))))
 
-(defthm image-of-singleton-in-universe
+(defthm setimage-of-singleton-in-universe
   (implies (event-p e)
-           (equal (image (insert e nil) (cartesian (universe) (universe)))
+           (equal (setimage (singleton e) (relprod (universe) (universe)))
                   (universe)))
   :hints(("Goal" :in-theory (enable set::double-containment-no-backchain-limit
                                     pick-a-point-subset-strategy
-                                    in-of-image-rw
-                                    in-of-image-suff
-                                    in-of-cartesian))
+                                    in-of-setimage-rw
+                                    in-of-setimage-suff
+                                    in-of-relprod))
          (set::pick-a-point-subset-hint id clause world stable-under-simplificationp)
          (and stable-under-simplificationp
-              '(:use ((:instance in-of-image-suff
+              '(:use ((:instance in-of-setimage-suff
                        (s (insert e nil))
-                       (r (cartesian (universe) (universe)))
+                       (r (relprod (universe) (universe)))
                        (w e)
-                       (v set::arbitrary-element)))))))
+                       (v set::arbitrary-element)))
+                :in-theory (enable event-p)))))
 
-(defthm image-of-union
-  (equal (image (union x y) z)
-         (union (image x z) (image y z)))
+(defthm setimage-of-setunion
+  (equal (setimage (setunion x y) z)
+         (setunion (setimage x z) (setimage y z)))
   :hints(("Goal" :in-theory (enable set::double-containment-no-backchain-limit
                                     pick-a-point-subset-strategy
-                                    in-of-image-rw
-                                    in-of-image-suff)))
+                                    in-of-setimage-rw
+                                    in-of-setimage-suff)))
   :otf-flg t)
 
-(defthm image-of-compose
-  (equal (image x (compose y z))
-         (image (image x y) z))
+(defthm setimage-of-relcompose
+  (equal (setimage x (relcompose y z))
+         (setimage (setimage x y) z))
   :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
                                      pick-a-point-subset-strategy
-                                     in-of-image-rw
-                                     in-of-compose-rw
-                                     in-of-compose-suff))
+                                     in-of-setimage-rw
+                                     in-of-relcompose-rw
+                                     in-of-relcompose-suff))
           (set::pick-a-point-subset-hint id clause world stable-under-simplificationp)
           (and stable-under-simplificationp
-               '(:use ((:instance in-of-image-suff
+               '(:use ((:instance in-of-setimage-suff
                         (v set::arbitrary-element)
-                        (s x) (r (compose y z))
-                        (w (image-witness (image-witness
+                        (s x) (r (relcompose y z))
+                        (w (setimage-witness (setimage-witness
                                            set::arbitrary-element
-                                           (image x y) z)
+                                           (setimage x y) z)
                                           x y)))
-                       (:instance in-of-compose-suff
-                        (pair (edge (image-witness (image-witness
+                       (:instance in-of-relcompose-suff
+                        (pair (edge (setimage-witness (setimage-witness
                                                     set::arbitrary-element
-                                                    (image x y) z)
+                                                    (setimage x y) z)
                                                    x y)
                                     set::arbitrary-element))
                         (x y) (y z)
-                        (mid (image-witness set::arbitrary-element (image x y) z))))))))
+                        (mid (setimage-witness set::arbitrary-element (setimage x y) z))))))))
 
-(defthm image-of-inverse
-  (equal (image x (inverse y))
-         (preimage x y))
+(defthm setimage-of-relinverse
+  (equal (setimage x (relinverse y))
+         (setpreimage y x))
   :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
                                      pick-a-point-subset-strategy
-                                     in-of-image-rw
-                                     in-of-preimage-rw
-                                     in-of-image-suff
-                                     in-of-preimage-suff
-                                     in-of-inverse))))
+                                     in-of-setimage-rw
+                                     in-of-setpreimage-rw
+                                     in-of-setimage-suff
+                                     in-of-setpreimage-suff
+                                     in-of-relinverse))))
 
 
-(defthm image-of-singleton-intersect
-  (implies (and (relation-p y) (relation-p z))
-           (equal (image (insert x nil) (intersect y z))
-                  (intersect (image (insert x nil) y) (image (insert x nil) z))))
+(defthm setimage-of-singleton-intersect
+  (equal (setimage (singleton e) (relintersect x y))
+         (setintersect (setimage (singleton e) x)
+                       (setimage (singleton e) y)))
   :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
                                      pick-a-point-subset-strategy
-                                     in-of-image-rw))))
+                                     in-of-setimage-rw))))
 
-(defthm preimage-of-nil
-  (equal (preimage nil x)
+(defthm setpreimage-of-nil
+  (equal (setpreimage x nil)
          nil)
-  :hints(("Goal" :in-theory (enable preimage))))
+  :hints(("Goal" :in-theory (enable setpreimage))))
 
-(defthm preimage-of-id-relation
-  (equal (preimage x (id-relation y))
-         (intersect y x))
+(defthm setpreimage-of-relidentity
+  (equal (setpreimage (relidentity s1) s2)
+         (setintersect s1 s2))
   :hints(("Goal" :in-theory (enable set::double-containment-no-backchain-limit
                                     pick-a-point-subset-strategy
-                                    in-of-preimage-rw
-                                    in-of-preimage-suff)))
+                                    in-of-setpreimage-rw
+                                    in-of-setpreimage-suff
+                                    in-of-event-set-fix)))
   :otf-flg t)
 
-(defthm preimage-of-singleton-in-universe
+
+(defthm setpreimage-of-singleton-in-universe
   (implies (event-p e)
-           (equal (preimage (insert e nil) (cartesian (universe) (universe)))
+           (equal (setpreimage (relprod (universe) (universe)) (singleton e))
                   (universe)))
   :hints(("Goal" :in-theory (enable set::double-containment-no-backchain-limit
                                     pick-a-point-subset-strategy
-                                    in-of-image-rw
-                                    in-of-preimage-suff
-                                    in-of-cartesian))
+                                    in-of-setimage-rw
+                                    in-of-setpreimage-suff
+                                    in-of-relprod))
          (set::pick-a-point-subset-hint id clause world stable-under-simplificationp)
          (and stable-under-simplificationp
-              '(:use ((:instance in-of-preimage-suff
-                       (s (insert e nil))
-                       (r (cartesian (universe) (universe)))
+              '(:use ((:instance in-of-setpreimage-suff
+                       (s (singleton e))
+                       (r (relprod (universe) (universe)))
                        (w e)
-                       (v set::arbitrary-element)))))))
+                       (v set::arbitrary-element)))))
+         (and stable-under-simplificationp
+              '(:in-theory (enable in-universe-when-in-event-set
+                                   event-p)))))
 
-(defthm preimage-of-union
-  (equal (preimage (union x y) z)
-         (union (preimage x z) (preimage y z)))
+(defthm setpreimage-of-setunion
+  (equal (setpreimage z (setunion x y))
+         (setunion (setpreimage z x) (setpreimage z y)))
   :hints(("Goal" :in-theory (enable set::double-containment-no-backchain-limit
                                     pick-a-point-subset-strategy
-                                    in-of-preimage-rw
-                                    in-of-preimage-suff)))
+                                    in-of-setpreimage-rw
+                                    in-of-setpreimage-suff)))
   :otf-flg t)
 
-(defthm preimage-of-compose
-  (equal (preimage x (compose z y))
-         (preimage (preimage x y) z))
-  :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
-                                     pick-a-point-subset-strategy
-                                     in-of-preimage-rw
-                                     in-of-compose-rw
-                                     in-of-compose-suff))
+(defthm setpreimage-of-relcompose
+  (equal (setpreimage (relcompose z y) x)
+         (setpreimage z (setpreimage y x)))
+  :hints (("goal"
+           :in-theory (e/d (set::double-containment-no-backchain-limit
+                            pick-a-point-subset-strategy)))
           (set::pick-a-point-subset-hint id clause world stable-under-simplificationp)
           (and stable-under-simplificationp
-               '(:use ((:instance in-of-preimage-suff
-                        (v set::arbitrary-element)
-                        (s x) (r (compose z y))
-                        (w (preimage-witness (preimage-witness
-                                              set::arbitrary-element
-                                              (preimage x y) z)
-                                             x y)))
-                       (:instance in-of-compose-suff
-                        (pair (edge set::arbitrary-element
-                                    (preimage-witness (preimage-witness
-                                                       set::arbitrary-element
-                                                       (preimage x y) z)
-                                                      x y)))
-                        (x z) (y y)
-                        (mid (preimage-witness set::arbitrary-element (preimage x y) z))))))))
+               (acl2::use-termhint
+                (b* ((set1 (setpreimage (relcompose z y) x))
+                     ;; (set2 (setpreimage z (setpreimage y x)))
+                     (e set::arbitrary-element)
+                     ((when (in e set1))
+                      (b* ((w1 (setpreimage-witness e (relcompose z y) x))
+                           (w2 (relcompose-midpoint e w1 z y)))
+                        `(:use ((:instance in-of-setpreimage-suff
+                                 (v ,(acl2::hq e))
+                                 (r z) (s (setpreimage y x))
+                                 (w ,(acl2::hq w2)))
+                                (:instance in-of-setpreimage-suff
+                                 (v ,(acl2::hq w2))
+                                 (r y) (s x)
+                                 (w ,(acl2::hq w1)))))))
+                     (w1 (setpreimage-witness e z (setpreimage y x)))
+                     (w2 (setpreimage-witness w1 y x)))
+                  `(:use ((:instance in-of-setpreimage-suff
+                           (v ,(acl2::hq e))
+                           (r (relcompose z y))
+                           (s x) (w ,(acl2::hq w2)))
+                          (:instance in-of-relcompose-suff
+                           (pair (edge ,(acl2::hq e) ,(acl2::hq w2)))
+                           (mid ,(acl2::hq w1))
+                           (x z) (y y)))))
+                :immediate-hints
+                ('(:in-theory (e/d (set::double-containment-no-backchain-limit
+                                    pick-a-point-subset-strategy
+                                    in-of-setpreimage-rw
+                                    in-of-relcompose-rw
+                                    ;; in-of-relcompose-suff
+                                    in-of-event-set-fix
+                                    in-of-relation-fix)
+                                   (in-of-setpreimage-suff
+                                    in-of-setpreimage-suff2
+                                    in-of-setpreimage-suff3
+                                    in-of-relcompose-suff))))))))
 
-(defthm preimage-of-inverse
-  (equal (preimage x (inverse y))
-         (image x y))
+(defthm setpreimage-of-relinverse
+  (equal (setpreimage (relinverse y) x)
+         (setimage x y))
   :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
                                      pick-a-point-subset-strategy
-                                     in-of-image-rw
-                                     in-of-preimage-rw
-                                     in-of-image-suff
-                                     in-of-preimage-suff
-                                     in-of-inverse))))
+                                     in-of-setimage-rw
+                                     in-of-setpreimage-rw
+                                     in-of-setimage-suff
+                                     in-of-setpreimage-suff
+                                     in-of-relinverse))))
 
-(defthm in-preimage-of-singleton
-  (iff (in x (preimage (insert y nil) z))
-       (in (edge x y) (relation-fix z)))
-  :hints(("Goal" :in-theory (enable in-of-preimage-rw
-                                    in-of-preimage-suff))))
+(defthm in-setpreimage-of-singleton
+  (iff (in x (setpreimage z (singleton y)))
+       (and (event-p x)
+            (in (edge x y) (relation-fix z))))
+  :hints(("Goal" :in-theory (enable in-of-setpreimage-rw
+                                    in-of-setpreimage-suff3))))
 
-(defthm preimage-of-singleton-intersect
-  (implies (and (relation-p y) (relation-p z))
-           (equal (preimage (insert x nil) (intersect y z))
-                  (intersect (preimage (insert x nil) y) (preimage (insert x nil) z))))
+(defthm setpreimage-of-singleton-intersect
+  (equal (setpreimage (relintersect x y) (singleton e))
+         (setintersect (setpreimage x (singleton e))
+                       (setpreimage y (singleton e))))
   :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
                                      pick-a-point-subset-strategy
-                                     in-of-preimage-rw))))
+                                     in-of-setpreimage-rw))))
 
 
 
-(defthm id-relation-of-union
-  (equal (id-relation (union x y))
-         (union (id-relation x) (id-relation y)))
+(defthm relidentity-of-union
+  (equal (relidentity (setunion x y))
+         (relunion (relidentity x) (relidentity y)))
   :hints(("Goal" :in-theory (enable pick-a-point-subset-strategy
                                     set::double-containment-no-backchain-limit
-                                    in-of-id-relation))))
+                                    in-of-relidentity))))
 
-(defthm id-relation-of-intersect
-  (equal (id-relation (intersect x y))
-         (intersect (id-relation x) (id-relation y)))
+(defthm relidentity-of-intersect
+  (equal (relidentity (setintersect x y))
+         (relintersect (relidentity x) (relidentity y)))
   :hints(("Goal" :in-theory (enable pick-a-point-subset-strategy
                                     set::double-containment-no-backchain-limit
-                                    in-of-id-relation))))
+                                    in-of-relidentity))))
 
 
 
-(defthm inverse-of-union
-  (implies (and (relation-p x) (relation-p y))
-           (equal (inverse (union x y))
-                  (union (inverse x) (inverse y))))
+(defthm relinverse-of-union
+  (equal (relinverse (relunion x y))
+         (relunion (relinverse x) (relinverse y)))
   :hints(("Goal" :in-theory (enable pick-a-point-subset-strategy
                                     set::double-containment-no-backchain-limit
-                                    in-of-inverse))))
+                                    in-of-relinverse))))
 
-(defthm inverse-of-intersect
-  (implies (and (relation-p x) (relation-p y))
-           (equal (inverse (intersect x y))
-                  (intersect (inverse x) (inverse y))))
+(defthm relinverse-of-intersect
+  (equal (relinverse (relintersect x y))
+         (relintersect (relinverse x) (relinverse y)))
   :hints(("Goal" :in-theory (enable pick-a-point-subset-strategy
                                     set::double-containment-no-backchain-limit
-                                    in-of-inverse))))
+                                    in-of-relinverse))))
 
 
-(defthm compose-singleton-prod-1
-  (equal (compose x (cartesian (insert y nil) z))
-         (cartesian (preimage (insert y nil) x) z))
+(defthm relcompose-singleton-prod-1
+  (equal (relcompose x (relprod (singleton y) z))
+         (relprod (setpreimage x (singleton y)) z))
   :hints(("Goal" :in-theory (enable pick-a-point-subset-strategy
                                     set::double-containment-no-backchain-limit
-                                    in-of-cartesian
-                                    in-of-compose-rw
-                                    in-of-compose-suff
-                                    in-of-preimage-rw
-                                    in-of-preimage-suff)))
+                                    in-of-relprod
+                                    in-of-relcompose-rw
+                                    in-of-relcompose-suff
+                                    in-of-setpreimage-rw
+                                    in-of-setpreimage-suff3
+                                    in-of-event-set-fix)))
   :otf-flg t)
 
-(defthm compose-singleton-prod-2
-  (equal (compose (cartesian z (insert y nil)) x)
-         (cartesian z (image (insert y nil) x)))
+(defthm relcompose-singleton-prod-2
+  (equal (relcompose (relprod z (singleton y)) x)
+         (relprod z (setimage (singleton y) x)))
   :hints(("Goal" :in-theory (enable pick-a-point-subset-strategy
                                     set::double-containment-no-backchain-limit
-                                    in-of-cartesian
-                                    in-of-compose-rw
-                                    in-of-compose-suff2
-                                    in-of-image-rw
-                                    in-of-image-suff)))
+                                    in-of-relprod
+                                    in-of-relcompose-rw
+                                    in-of-relcompose-suff2
+                                    in-of-setimage-rw
+                                    in-of-setimage-suff3
+                                    in-of-event-set-fix)))
   :otf-flg t)
 
-(defthm compose-singleton-prod-3
-  (equal (compose x (cartesian z (insert y nil)))
-         (cartesian (preimage z x) (insert y nil)))
+(defthm relcompose-singleton-prod-3
+  (equal (relcompose x (relprod z (singleton y)))
+         (relprod (setpreimage x z) (singleton y)))
   :hints(("Goal" :in-theory (enable pick-a-point-subset-strategy
                                     set::double-containment-no-backchain-limit
-                                    in-of-cartesian
-                                    in-of-compose-rw
-                                    in-of-compose-suff
-                                    in-of-compose-suff2
-                                    in-of-preimage-rw
-                                    in-of-preimage-suff
+                                    in-of-relprod
+                                    in-of-relcompose-rw
+                                    in-of-relcompose-suff
+                                    in-of-relcompose-suff2
+                                    in-of-setpreimage-rw
+                                    in-of-setpreimage-suff3
+                                    in-of-event-set-fix
                                     ))))
 
-(defthm compose-singleton-prod-4
-  (equal (compose (cartesian (insert y nil) z) x)
-         (cartesian (insert y nil) (image z x)))
+(defthm relcompose-singleton-prod-4
+  (equal (relcompose (relprod (singleton y) z) x)
+         (relprod (singleton y) (setimage z x)))
   :hints(("Goal" :in-theory (enable pick-a-point-subset-strategy
                                     set::double-containment-no-backchain-limit
-                                    in-of-cartesian
-                                    in-of-compose-rw
-                                    in-of-compose-suff
-                                    in-of-compose-suff2
-                                    in-of-image-rw
-                                    in-of-image-suff
+                                    in-of-relprod
+                                    in-of-relcompose-rw
+                                    in-of-relcompose-suff
+                                    in-of-relcompose-suff2
+                                    in-of-setimage-rw
+                                    in-of-setimage-suff3
+                                    in-of-event-set-fix
                                     ))))
 
 
 (defthm subset-of-universe-rel
-  (implies (and (relation-p x)
-                (event-rel-p x))
-           (subset x (cartesian (universe) (universe))))
+  (implies (relation-p x)
+           (subset x (relprod (universe) (universe))))
   :hints(("Goal" :in-theory (enable pick-a-point-subset-strategy
-                                    in-of-cartesian)))
+                                    in-of-relprod
+                                    relation-p-implies-not-in-when-not-edge)))
   :otf-flg t)
 
 
-(defthm compose-of-nil
-  (equal (compose nil x) nil)
-  :hints(("Goal" :in-theory (enable compose))))
+(defthm relcompose-of-nil
+  (equal (relcompose nil x) nil)
+  :hints(("Goal" :in-theory (enable relcompose))))
 
-(defthm compose-of-nil-2
-  (equal (compose x nil) nil)
-  :hints(("Goal" :in-theory (enable compose compose1))))
+(defthm relcompose-of-nil-2
+  (equal (relcompose x nil) nil)
+  :hints(("Goal" :in-theory (enable relcompose compose1))))
 
-(defthm relation-path-p-of-id-relation
-  (implies (not (equal (car path)
-                       (car (last path))))
-           (not (relation-path-p path (id-relation x))))
+(defthm relation-path-p-of-relidentity
+  (implies (not (event-equiv (car path)
+                             (car (last path))))
+           (not (relation-path-p path (relidentity x))))
   :hints(("Goal" :in-theory (enable relation-path-p))))
 
 
 (local (defthm relation-path-p-implies-last-in-set
-         (implies (not (in (car (last path)) x))
-                  (not (relation-path-p path (id-relation x))))
+         (implies (not (in (event-fix (car (last path))) (event-set-fix x)))
+                  (not (relation-path-p path (relidentity x))))
          :hints(("Goal" :in-theory (enable relation-path-p)))))
 
-(defthm exists-path-of-id-relation
-  (iff (exists-path src dst (id-relation x))
-       (and (equal src dst)
-            (in src x)))
+(defthm exists-path-of-relidentity
+  (iff (exists-path src dst (relidentity x))
+       (and (event-equiv src dst)
+            (in (event-fix src) (event-set-fix x))))
   :hints(("Goal" :in-theory (enable ;; exists-path
                              relation-path-p)
           :use ((:instance exists-path-suff
                  (path (list src dst))
-                 (x (id-relation x)))))
+                 (x (relidentity x)))))
          (and stable-under-simplificationp
               '(:in-theory (enable exists-path))))
   :otf-flg t)
 
 
-(defthm in-edge-when-not-event-p-dst
-  (implies (and (event-rel-p x)
-                (not (event-p dst)))
-           (not (in (edge src dst) (relation-fix x))))
-  :hints(("Goal" :in-theory (enable event-rel-p in))))
+;; (defthm in-edge-when-not-event-p-dst
+;;   (implies (and (event-rel-p x)
+;;                 (not (event-p dst)))
+;;            (not (in (edge src dst) (relation-fix x))))
+;;   :hints(("Goal" :in-theory (enable event-rel-p in))))
 
-(defthm relation-path-p-when-not-event-p-dst
-  (implies (and (event-rel-p x)
-                (not (event-p (car (last path)))))
-           (not (relation-path-p path x)))
-  :hints(("Goal" :in-theory (enable relation-path-p))))
+;; (defthm relation-path-p-when-not-event-p-dst
+;;   (implies (and (event-rel-p x)
+;;                 (not (event-p (car (last path)))))
+;;            (not (relation-path-p path x)))
+;;   :hints(("Goal" :in-theory (enable relation-path-p))))
 
-(defthm exists-path-when-not-event-p-last
-  (implies (and (event-rel-p x)
-                (not (event-p dst)))
-           (not (exists-path src dst x)))
-  :hints(("Goal" :in-theory (enable exists-path))))
+;; (defthm exists-path-when-not-event-p-last
+;;   (implies (and (event-rel-p x)
+;;                 (not (event-p dst)))
+;;            (not (exists-path src dst x)))
+;;   :hints(("Goal" :in-theory (enable exists-path))))
 
-(local (defthm not-event-p-when-not-in-universe
-         (implies (not (in x (universe)))
-                  (not (event-p x)))
-         :hints(("Goal" :in-theory (enable event-p)))))
+;; (local (defthm not-event-p-when-not-in-universe
+;;          (implies (not (in x (universe)))
+;;                   (not (event-p x)))
+;;          :hints(("Goal" :in-theory (enable event-p)))))
 
-(defthm reflexive-transitive-closure-of-id-relation
-  (implies (event-set-p s)
-           (equal (reflexive-transitive-closure (id-relation s))
-                  (id-relation (universe))))
-  :hints(("Goal" :in-theory (enable reflexive-transitive-closure
+(defthm relstar-of-relidentity
+  (equal (relstar (relidentity s))
+         (relidentity (universe)))
+  :hints(("Goal" :in-theory (enable relstar
                                     set::double-containment-no-backchain-limit
                                     pick-a-point-subset-strategy
-                                    transitive-closure-correct))))
+                                    relplus-correct))))
 
 
-(defthm transitive-closure-of-id-relation
-  (implies (event-set-p s)
-           (equal (transitive-closure (id-relation s))
-                  (id-relation s)))
-  :hints(("Goal" :in-theory (enable transitive-closure
+(defthm relplus-of-relidentity
+  (equal (relplus (relidentity s))
+         (relidentity s))
+  :hints(("Goal" :in-theory (enable relplus
                                     set::double-containment-no-backchain-limit
                                     pick-a-point-subset-strategy
-                                    transitive-closure-correct))))
+                                    relplus-correct))))
 
 (defthm exists-path-of-universe-rel
-  (implies (and (event-p src)
-                (event-p dst))
-           (exists-path src dst (cartesian (universe) (universe))))
+  (exists-path src dst (relprod (universe) (universe)))
   :hints (("goal" :use ((:instance exists-path-suff
                          (path (list src dst))
-                         (x (cartesian (universe) (universe)))))
+                         (x (relprod (universe) (universe)))))
            :in-theory (enable relation-path-p
-                              in-of-cartesian))))
+                              in-of-relprod))))
 
-(defthm reflexive-transitive-closure-of-universe-rel
-  (equal (reflexive-transitive-closure (cartesian (universe) (universe)))
-         (cartesian (universe) (universe)))
-  :hints(("Goal" :in-theory (enable reflexive-transitive-closure
+(defthm relstar-of-universe-rel
+  (equal (relstar (relprod (universe) (universe)))
+         (relprod (universe) (universe)))
+  :hints(("Goal" :in-theory (enable relstar
                                     set::double-containment-no-backchain-limit
                                     pick-a-point-subset-strategy
-                                    transitive-closure-correct))))
+                                    relplus-correct
+                                    in-of-relprod))))
 
-(defthm transitive-closure-of-universe-rel
-  (equal (transitive-closure (cartesian (universe) (universe)))
-         (cartesian (universe) (universe)))
+(defthm relplus-of-universe-rel
+  (equal (relplus (relprod (universe) (universe)))
+         (relprod (universe) (universe)))
   :hints(("Goal" :in-theory (enable set::double-containment-no-backchain-limit
                                     pick-a-point-subset-strategy
-                                    transitive-closure-correct))))
+                                    relplus-correct
+                                    in-of-relprod))))
 
-(defthm inverse-of-id-relation
-  (equal (inverse (id-relation r))
-         (id-relation r))
+(defthm relinverse-of-relidentity
+  (equal (relinverse (relidentity r))
+         (relidentity r))
   :hints(("Goal" :in-theory (enable set::double-containment-no-backchain-limit
                                     pick-a-point-subset-strategy
-                                    in-of-inverse))))
+                                    in-of-relinverse))))
 
-(defthm inverse-of-cartesian
-  (equal (inverse (cartesian d r))
-         (cartesian r d))
+(defthm relinverse-of-relprod
+  (equal (relinverse (relprod s1 s2))
+         (relprod s2 s1))
   :hints(("Goal" :in-theory (enable set::double-containment-no-backchain-limit
                                     pick-a-point-subset-strategy
-                                    in-of-inverse
-                                    in-of-cartesian))))
+                                    in-of-relinverse
+                                    in-of-relprod))))
 
 
-(defthm cartesian-of-nil
-  (equal (cartesian nil r) nil)
-  :hints(("Goal" :in-theory (enable cartesian))))
+(defthm relprod-of-nil
+  (equal (relprod nil r) nil)
+  :hints(("Goal" :in-theory (enable relprod))))
 
-(defthm cartesian-of-nil-2
-  (equal (cartesian r nil) nil)
-  :hints(("Goal" :in-theory (enable cartesian
+(defthm relprod-of-nil-2
+  (equal (relprod r nil) nil)
+  :hints(("Goal" :in-theory (enable relprod
                                     cartesian1))))
 
 
-(defthm intersect-cartesian-singleton-1
-  (implies (relation-p x)
-           (equal (intersect x (cartesian (insert y nil) z))
-                  (cartesian (insert y nil) (intersect (image (insert y nil) x) z))))
+(local (defthm edge-of-dst-and-equiv-src
+         (implies (event-equiv src (edge->src x) )
+                  (equal (edge src (edge->dst x))
+                         (edge-fix x)))))
+
+(local (defthm edge-of-src-and-equiv-dst
+         (implies (event-equiv dst (edge->dst x))
+                  (equal (edge (edge->src x) dst)
+                         (edge-fix x)))))
+
+(defthm intersect-relprod-singleton-1
+  (equal (relintersect x (relprod (singleton y) z))
+         (relprod (singleton y) (setintersect (setimage (singleton y) x) z)))
   :hints(("Goal" :in-theory (enable pick-a-point-subset-strategy
                                     set::double-containment-no-backchain-limit
-                                    in-of-cartesian
-                                    in-of-image-rw
-                                    in-of-image-suff
+                                    in-of-relprod
+                                    in-of-setimage-rw
+                                    in-of-setimage-suff
+                                    in-of-event-set-fix
                                     ))))
 
-(defthm intersect-cartesian-singleton-2
-  (implies (relation-p x)
-           (equal (intersect x (cartesian z (insert y nil)))
-                  (cartesian (intersect (preimage (insert y nil) x) z) (insert y nil))))
+(defthm intersect-relprod-singleton-2
+  (equal (relintersect x (relprod z (singleton y)))
+         (relprod (setintersect (setpreimage x (singleton y)) z) (singleton y)))
   :hints(("Goal" :in-theory (enable pick-a-point-subset-strategy
                                     set::double-containment-no-backchain-limit
-                                    in-of-cartesian
-                                    in-of-preimage-rw
-                                    in-of-preimage-suff
+                                    in-of-relprod
+                                    in-of-setpreimage-rw
+                                    in-of-setpreimage-suff3
+                                    in-of-event-set-fix
                                     ))))
 
-(defthm intersect-cartesian-singleton-3
-  (implies (relation-p x)
-           (equal (intersect (cartesian (insert y nil) z) x)
-                  (cartesian (insert y nil) (intersect z (image (insert y nil) x)))))
+(defthm intersect-relprod-singleton-3
+  (equal (relintersect (relprod (singleton y) z) x)
+         (relprod (singleton y) (setintersect z (setimage (singleton y) x))))
   :hints(("Goal" :in-theory (enable pick-a-point-subset-strategy
                                     set::double-containment-no-backchain-limit
-                                    in-of-cartesian
-                                    in-of-image-rw
-                                    in-of-image-suff
-                                    ))))
+                                    in-of-relprod
+                                    in-of-setimage-rw
+                                    in-of-setimage-suff
+                                    in-of-event-set-fix))))
 
-(defthm intersect-cartesian-singleton-4
-  (implies (relation-p x)
-           (equal (intersect (cartesian z (insert y nil)) x)
-                  (cartesian (intersect z (preimage (insert y nil) x)) (insert y nil))))
+(defthm intersect-relprod-singleton-4
+  (equal (relintersect (relprod z (singleton y)) x)
+         (relprod (setintersect z (setpreimage x (singleton y))) (singleton y)))
   :hints(("Goal" :in-theory (enable pick-a-point-subset-strategy
                                     set::double-containment-no-backchain-limit
-                                    in-of-cartesian
-                                    in-of-preimage-rw
-                                    in-of-preimage-suff
+                                    in-of-relprod
+                                    in-of-setpreimage-rw
+                                    in-of-setpreimage-suff
+                                    in-of-event-set-fix
                                     ))))
 
-(defthm union-of-subset
-  (implies (subset x y)
-           (equal (union y x) (sfix y)))
-  :hints(("Goal" :in-theory (enable pick-a-point-subset-strategy
-                                    set::subset-in
-                                    set::double-containment-no-backchain-limit))))
+;; (defthm union-of-subset
+;;   (implies (subset x y)
+;;            (equal (union y x) (sfix y)))
+;;   :hints(("Goal" :in-theory (enable pick-a-point-subset-strategy
+;;                                     set::subset-in
+;;                                     set::double-containment-no-backchain-limit))))
 
 
-(defthm image-of-relunion
-  (implies (and (relation-p r1)
-                (relation-p r2))
-           (equal (image s (union r1 r2))
-                  (union (image s r1) (image s r2))))
+(defthm setimage-of-relunion
+  (equal (setimage s (relunion r1 r2))
+         (setunion (setimage s r1) (setimage s r2)))
   :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
                                      pick-a-point-subset-strategy
-                                     in-of-image-rw))))
+                                     in-of-setimage-rw))))
 
-(defthm compose-of-relunion
-  (implies (and (relation-p r1)
-                (relation-p r2))
-           (equal (compose r (union r1 r2))
-                  (union (compose r r1) (compose r r2))))
+(defthm relcompose-of-relunion
+  (equal (relcompose r (relunion r1 r2))
+         (relunion (relcompose r r1) (relcompose r r2)))
   :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
                                      pick-a-point-subset-strategy
-                                     in-of-compose-rw
-                                     in-of-compose-suff
-                                     in-of-compose-suff2))))
+                                     in-of-relcompose-rw
+                                     in-of-relcompose-suff
+                                     in-of-relcompose-suff2))))
 
-(defthm compose-of-relunion-2
-  (implies (and (relation-p r1)
-                (relation-p r2))
-           (equal (compose (union r1 r2) r)
-                  (union (compose r1 r) (compose r2 r))))
+(defthm relcompose-of-relunion-2
+  (equal (relcompose (relunion r1 r2) r)
+         (relunion (relcompose r1 r) (relcompose r2 r)))
   :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
                                      pick-a-point-subset-strategy
-                                     in-of-compose-rw
-                                     in-of-compose-suff
-                                     in-of-compose-suff2))))
+                                     in-of-relcompose-rw
+                                     in-of-relcompose-suff
+                                     in-of-relcompose-suff2))))
 
 
-(defthmd in-of-transitive-closure-split
-  (iff (in pair (transitive-closure r))
+(defthmd in-of-relplus-split
+  (iff (in pair (relplus r))
        (or (in pair (relation-fix r))
-           (in pair (compose r (transitive-closure r)))))
-  :hints (("goal" :in-theory (enable transitive-closure-correct
-                                     in-of-compose-rw))
+           (in pair (relcompose r (relplus r)))))
+  :hints (("goal" :in-theory (enable relplus-correct
+                                     in-of-relcompose-rw
+                                     in-of-relation-fix))
           (acl2::use-termhint
-           (cond ((in pair (transitive-closure r))
+           (cond ((in pair (relplus r))
                   (let ((path (exists-path-witness
                                (edge->src pair) (edge->dst pair) r)))
                     `(:expand ((exists-path (edge->src pair)
@@ -545,8 +589,8 @@
                                             r)
                                (relation-path-p ,(acl2::hq path) r))
                       . ,(and (consp (cddr path))
-                              `(:use ((:instance in-of-compose-suff
-                                       (x r) (y (transitive-closure r))
+                              `(:use ((:instance in-of-relcompose-suff
+                                       (x r) (y (relplus r))
                                        (pair pair)
                                        (mid (cadr ,(acl2::hq path))))))))))
                  ((in pair (relation-fix r))
@@ -557,9 +601,9 @@
                            (dst (edge->dst pair))
                            (x r)))
                     :expand ((:Free (a b) (relation-path-p (list a b) r)))))
-                 (t (b* ((mid (compose-midpoint (edge->src pair)
+                 (t (b* ((mid (relcompose-midpoint (edge->src pair)
                                                 (edge->dst pair)
-                                                r (transitive-closure r)))
+                                                r (relplus r)))
                          (?path (exists-path-witness mid (edge->dst pair) r)))
                       `(:expand ((exists-path ,(acl2::hq mid)
                                               (edge->dst pair)
@@ -621,13 +665,24 @@
             (in (edge (nth (- (len path) 2) path) (car (last path))) (relation-fix r)))
    :hints(("Goal" :in-theory (enable relation-path-p)))))
 
+
 (local
  (defthmd relation-path-p-implies-last-edge
    (implies (and (relation-path-p path r)
-                 (equal dst (car (last path)))
+                 (equal dst (event-fix (car (last path))))
                  (equal n (- (len path) 2)))
             (in (edge (nth n path) dst) (relation-fix r)))
    :hints(("Goal" :in-theory (enable relation-path-p-implies-last-edge-lemma)))))
+
+(local
+ (defthmd relation-path-p-implies-last-edge2
+   (implies (and (relation-path-p path r)
+                 (equal dst (event-fix (car (last path))))
+                 (equal n (- (len path) 2)))
+            (in (edge (nth n path) dst) r))
+   :hints(("Goal" :use relation-path-p-implies-last-edge
+           :in-theory (e/d (in-of-relation-fix)
+                           (relation-path-p-implies-last-edge))))))
 
 (defthm relation-path-p-of-take
   (implies (and (relation-path-p path r)
@@ -644,17 +699,21 @@
          (equal (car (append x y))
                 (if (consp x) (car x) (car y)))))
 
+(local (defthm len-when-consp
+         (implies (consp x)
+                  (<= 1 (len x)))
+         :rule-classes :type-prescription))
 
-(defthmd compose-transitive-closure-invert
-  (iff (in pair (compose (transitive-closure r) r))
-       (in pair (compose r (transitive-closure r))))
-  :hints (("goal" :in-theory (enable transitive-closure-correct
-                                     in-of-compose-rw))
+(defthmd relcompose-relplus-invert
+  (iff (in pair (relcompose (relplus r) r))
+       (in pair (relcompose r (relplus r))))
+  :hints (("goal" :in-theory (disable acl2::take-of-cons
+                                      car-last-of-take))
           (acl2::use-termhint
            (b* (((edge pair)))
-             (cond ((in pair (compose (transitive-closure r) r))
-                    (b* ((mid (compose-midpoint pair.src pair.dst
-                                                (transitive-closure r) r))
+             (cond ((in pair (relcompose (relplus r) r))
+                    (b* ((mid (relcompose-midpoint pair.src pair.dst
+                                                (relplus r) r))
                          (path1 (exists-path-witness
                                  pair.src mid r))
                          (path (append path1 (list pair.dst))))
@@ -663,20 +722,21 @@
                                               r)
                                  (relation-path-p ,(acl2::hq path1) r)
                                  (:free (a b) (relation-path-p (list a b) r)))
-                        :use ((:instance in-of-compose-suff
+                        :use ((:instance in-of-relcompose-suff
                                (pair pair)
                                (mid ,(acl2::hq (cadr path)))
-                               (x r) (y (transitive-closure r)))
+                               (x r) (y (relplus r)))
                               (:instance exists-path-suff
                                (src ,(acl2::hq (cadr path)))
                                (dst ,(acl2::hq pair.dst))
                                (path ,(acl2::hq (cdr path)))
                                (x r)))
-                        :in-theory (e/d (transitive-closure-correct
-                                         in-of-compose-rw)
+                        :in-theory (e/d (relplus-correct
+                                         in-of-relcompose-rw
+                                         in-of-relation-fix)
                                         (exists-path-suff)))))
-                   (t (b* ((mid (compose-midpoint pair.src pair.dst
-                                                  r (transitive-closure r)))
+                   (t (b* ((mid (relcompose-midpoint pair.src pair.dst
+                                                  r (relplus r)))
                            (path1 (exists-path-witness
                                    mid pair.dst r))
                            (path (cons pair.src path1))
@@ -687,59 +747,59 @@
                                               r)
                                  (relation-path-p ,(acl2::hq path1) r)
                                  (:free (a b) (relation-path-p (cons a b) r)))
-                        :use ((:instance in-of-compose-suff
+                        :use ((:instance in-of-relcompose-suff
                                (pair pair)
                                (mid ,(acl2::hq new-mid))
-                               (x (transitive-closure r)) (y r))
+                               (x (relplus r)) (y r))
                               (:instance exists-path-suff
                                (src ,(acl2::hq pair.src))
                                (dst ,(acl2::hq new-mid))
                                (path ,(acl2::hq new-path))
                                (x r)))
-                        :in-theory (e/d (transitive-closure-correct
-                                         in-of-compose-rw
-                                         relation-path-p-implies-last-edge)
-                                        (exists-path-suff)))))))))
-  :otf-flg t)
+                        :in-theory (e/d (relplus-correct
+                                         in-of-relcompose-rw
+                                         relation-path-p-implies-last-edge2
+                                         in-of-relation-fix)
+                                        (exists-path-suff))))))))))
 
-(defthmd in-of-transitive-closure-split2
-  (iff (in pair (transitive-closure r))
+(defthmd in-of-relplus-split2
+  (iff (in pair (relplus r))
        (or (in pair (relation-fix r))
-           (in pair (compose (transitive-closure r) r))))
-  :hints (("goal" :use in-of-transitive-closure-split
-           :in-theory (e/d (compose-transitive-closure-invert)))))
+           (in pair (relcompose (relplus r) r))))
+  :hints (("goal" :use in-of-relplus-split
+           :in-theory (e/d (relcompose-relplus-invert)))))
                               
 
-(defthmd image-of-compose-inverse
-  (equal (image (image x y) z)
-         (image x (compose y z))))
+(defthmd setimage-of-relcompose-inverse
+  (equal (setimage (setimage x y) z)
+         (setimage x (relcompose y z))))
 
-(defthmd preimage-of-compose-inverse
-  (equal (preimage (preimage x y) z)
-         (preimage x (compose z y))))
+(defthmd setpreimage-of-relcompose-inverse
+  (equal (setpreimage z (setpreimage y x))
+         (setpreimage (relcompose z y) x)))
 
 
-(defthm in-compose-id
-  (implies (event-p (edge->dst pair))
-           (iff (in pair
-                    (compose r (id-relation (universe))))
-                (in pair (relation-fix r))))
-  :hints (("goal" :in-theory (enable in-of-compose-rw)
-           :use ((:instance in-of-compose-suff
+(defthm in-relcompose-id
+  (iff (in pair
+           (relcompose r (relidentity (universe))))
+       (in pair (relation-fix r)))
+  :hints (("goal" :in-theory (enable in-of-relcompose-rw
+                                     in-of-relation-fix)
+           :use ((:instance in-of-relcompose-suff
                   (pair pair)
                   (mid (edge->dst pair))
-                  (x r) (y (id-relation (universe))))))))
+                  (x r) (y (relidentity (universe))))))))
 
-(defthm in-compose-id2
-  (implies (event-p (edge->src pair))
-           (iff (in pair
-                    (compose (id-relation (universe)) r))
-                (in pair (relation-fix r))))
-  :hints (("goal" :in-theory (enable in-of-compose-rw)
-           :use ((:instance in-of-compose-suff
+(defthm in-relcompose-id2
+  (iff (in pair
+           (relcompose (relidentity (universe)) r))
+       (in pair (relation-fix r)))
+  :hints (("goal" :in-theory (enable in-of-relcompose-rw
+                                     in-of-relation-fix)
+           :use ((:instance in-of-relcompose-suff
                   (pair pair)
                   (mid (edge->src pair))
-                  (x (id-relation (universe))) (y r))))))
+                  (x (relidentity (universe))) (y r))))))
 
 
 (defthm emptyp-when-in

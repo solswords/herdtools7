@@ -36,43 +36,50 @@
 
 
 (def-tac-rewrite setunion-of-emptyset
-  (implies (setp s)
+  (implies (event-set-p s)
            (equal (setunion (emptyset) s)
-                  s)))
+                  s))
+  :hints(("Goal" :in-theory (enable setunion))))
 
 (def-tac-rewrite setunion-of-emptyset-2
-  (implies (setp s)
+  (implies (event-set-p s)
            (equal (setunion s (emptyset))
-                  s)))
+                  s))
+  :hints(("Goal" :in-theory (enable setunion))))
+
 
 (def-tac-rewrite setunion-of-universe
   (implies (event-set-p s)
            (equal (setunion (universe) s)
-                  (universe))))
+                  (universe)))
+  :hints(("Goal" :in-theory (enable setunion))))
 
 (def-tac-rewrite setunion-of-universe-2
   (implies (event-set-p s)
            (equal (setunion s (universe))
-                  (universe))))
+                  (universe)))
+  :hints(("Goal" :in-theory (enable setunion))))
 
 (def-tac-rewrite setintersect-of-emptyset
-  (equal (setintersect (emptyset) s) (emptyset)))
+  (equal (setintersect (emptyset) s) (emptyset))
+  :hints(("Goal" :in-theory (enable setintersect))))
 
 (def-tac-rewrite setintersect-of-emptyset-2
   (equal (setintersect s (emptyset))
-         (emptyset)))
+         (emptyset))
+  :hints(("Goal" :in-theory (enable setintersect))))
 
 (def-tac-rewrite setintersect-of-universe
-  (implies (and (setp s)
-                (event-set-p s))
+  (implies (event-set-p s)
            (equal (setintersect (universe) s)
-                  s)))
+                  s))
+  :hints(("Goal" :in-theory (enable setintersect))))
 
 (def-tac-rewrite setintersect-of-universe-2
-  (implies (and (setp s)
-                (event-set-p s))
+  (implies (event-set-p s)
            (equal (setintersect s (universe))
-                  s)))
+                  s))
+  :hints(("Goal" :in-theory (enable setintersect))))
 
 (def-tac-rewrite setimage-of-emptyset
   (equal (setimage (emptyset) s) (emptyset)))
@@ -116,8 +123,8 @@
          (setpreimage r (setunion s1 s2))))
 
 (def-tac-rewrite setpreimage-of-relcompose
-  (equal (setpreimage (relcompose y z) x)
-         (setpreimage y (setpreimage z x))))
+  (equal (setpreimage (relcompose z y) x)
+         (setpreimage z (setpreimage y x))))
 
 (def-tac-rewrite setpreimage-of-relinverse
   (equal (setpreimage (relinverse y) x)
@@ -139,22 +146,26 @@
 (def-tac-rewrite relunion-of-empty
   (implies (relation-p r)
            (equal (relunion (relidentity (emptyset)) r)
-                  r)))
+                  r))
+  :hints(("Goal" :in-theory (enable relunion))))
 
 (def-tac-rewrite relunion-of-empty-2
   (implies (relation-p r)
            (equal (relunion r (relidentity (emptyset)))
-                  r)))
+                  r))
+  :hints(("Goal" :in-theory (enable relunion))))
 
 (def-tac-rewrite relunion-of-universe
-  (implies (event-rel-p r)
+  (implies (relation-p r)
            (equal (relunion (relprod (universe) (universe)) r)
-                  (relprod (universe) (universe)))))
+                  (relprod (universe) (universe))))
+  :hints(("Goal" :in-theory (enable relunion))))
 
 (def-tac-rewrite relunion-of-universe-2
-  (implies (event-rel-p r)
+  (implies (relation-p r)
            (equal (relunion r (relprod (universe) (universe)))
-                  (relprod (universe) (universe)))))
+                  (relprod (universe) (universe))))
+  :hints(("Goal" :in-theory (enable relunion))))
 
 (def-tac-rewrite relunion-of-relinverses
   (equal (relunion (relinverse x) (relinverse y))
@@ -166,23 +177,27 @@
 
 (def-tac-rewrite relintersect-of-emptyrel
   (equal (relintersect (relidentity (emptyset)) r)
-         (relidentity (emptyset))))
+         (relidentity (emptyset)))
+  :hints(("Goal" :in-theory (enable relintersect))))
 
 (def-tac-rewrite relintersect-of-emptyrel-2
   (equal (relintersect r (relidentity (emptyset)))
-         (relidentity (emptyset))))
+         (relidentity (emptyset)))
+  :hints(("Goal" :in-theory (enable relintersect))))
 
 (def-tac-rewrite relintersect-of-univrel
   (implies (and (relation-p r)
-                (event-rel-p r))
+                (relation-p r))
            (equal (relintersect (relprod (universe) (universe)) r)
-                  r)))
+                  r))
+  :hints(("Goal" :in-theory (enable relintersect))))
 
 (def-tac-rewrite relintersect-of-univrel-2
   (implies (and (relation-p r)
-                (event-rel-p r))
+                (relation-p r))
            (equal (relintersect r (relprod (universe) (universe)))
-                  r)))
+                  r))
+  :hints(("Goal" :in-theory (enable relintersect))))
 
 (def-tac-rewrite relprod-of-emptyset
   (equal (relprod (emptyset) s) (relidentity (emptyset))))
@@ -199,14 +214,12 @@
          (relidentity (emptyset))))
 
 (def-tac-rewrite relstar-of-relidentity
-  (implies (event-set-p s)
-           (equal (relstar (relidentity s))
-                  (relidentity (universe)))))
+  (equal (relstar (relidentity s))
+         (relidentity (universe))))
 
 (def-tac-rewrite relplus-of-relidentity
-  (implies (event-set-p s)
-           (equal (relplus (relidentity s))
-                  (relidentity s))))
+  (equal (relplus (relidentity s))
+         (relidentity s)))
 
 (def-tac-rewrite relstar-of-univrel
   (equal (relstar (relprod (universe) (universe)))

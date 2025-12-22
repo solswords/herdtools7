@@ -33,7 +33,7 @@
                        (relprod (singleton e2) s)))
        (and (pred-equal e1 e2)
             (pred-in-set w s)))
-  :hints(("Goal" :in-theory (e/d (in-of-cartesian))))
+  :hints(("Goal" :in-theory (e/d (in-of-relprod))))
   :otf-flg t)
 
 ;; XR
@@ -42,7 +42,7 @@
                           (singleton e1)))
        (and (pred-equal e1 e2)
             (pred-in-set w s)))
-  :hints(("Goal" :in-theory (e/d (in-of-cartesian))))
+  :hints(("Goal" :in-theory (e/d (in-of-relprod))))
   :otf-flg t)
 
 ;; U2L
@@ -62,90 +62,61 @@
 
 
 ;; *L
-(def-tac-positive-normalize pred-nonempty-setimage-singleton-star
-  (implies (and (event-p e)
-                (event-p w))
-           (iff (pred-in-set w (setimage (singleton e) (relstar r)))
-                (or (pred-in-set w (singleton e))
-                    (pred-in-set w (setimage (setimage (singleton e) r)
-                                             (relstar r))))))
-  :hints(("Goal" :in-theory (e/d (reflexive-transitive-closure
-                                  image-of-compose-inverse)
-                                 (image-of-compose
-                                  in-of-compose-rw)))
-         (and stable-under-simplificationp
-              '(:use ((:instance in-of-transitive-closure-split
-                       (pair (edge e w)))
-                      (:instance in-of-compose-suff
-                       (x r) (y (id-relation (universe)))
-                       (pair (edge e w)) (mid w)))
-                :in-theory (enable in-of-compose-rw))))
+(def-tac-positive-normalize in-setimage-singleton-star
+  (iff (pred-in-set w (setimage (singleton e) (relstar r)))
+       (or (pred-in-set w (singleton e))
+           (pred-in-set w (setimage (setimage (singleton e) r)
+                                    (relstar r)))))
+  :hints(("Goal" :in-theory (e/d (relstar
+                                  setimage-of-relcompose-inverse
+                                  in-of-relcompose-rw
+                                  in-of-relplus-split
+                                  in-of-relcompose-suff-rw)
+                                 (setimage-of-relcompose))))
   :otf-flg t)
 
 ;; +L
-(def-tac-positive-normalize pred-nonempty-setimage-singleton-plus
-  (implies (and (event-p e)
-                (event-p w))
-           (iff (pred-in-set w (setimage (singleton e) (relplus r)))
-                (or (pred-in-set w (setimage (singleton e) r))
-                    (pred-in-set w (setimage (setimage (singleton e) r)
-                                             (relplus r))))))
-  :hints(("Goal" :in-theory (e/d (transitive-closure
-                                  image-of-compose-inverse)
-                                 (image-of-compose
-                                  in-of-compose-rw)))
-         (and stable-under-simplificationp
-              '(:use ((:instance in-of-transitive-closure-split
-                       (pair (edge e w)))
-                      (:instance in-of-compose-suff
-                       (x r) (y (id-relation (universe)))
-                       (pair (edge e w)) (mid w)))
-                :in-theory (enable in-of-compose-rw))))
+(def-tac-positive-normalize in-setimage-singleton-plus
+  (iff (pred-in-set w (setimage (singleton e) (relplus r)))
+       (or (pred-in-set w (setimage (singleton e) r))
+           (pred-in-set w (setimage (setimage (singleton e) r)
+                                    (relplus r)))))
+  :hints(("Goal" :in-theory (e/d (relplus
+                                  setimage-of-relcompose-inverse
+                                  in-of-relplus-split
+                                  in-of-relcompose-rw
+                                  in-of-relcompose-suff-rw)
+                                 (setimage-of-relcompose))))
   :otf-flg t)
 
 
 ;; *R
-(def-tac-positive-normalize pred-nonempty-setpreimage-singleton-star
-  (implies (and (event-p e)
-                (event-p w))
-           (iff (pred-in-set w (setpreimage (relstar r) (singleton e)))
-                (or (pred-in-set w (singleton e))
-                    (pred-in-set w (setpreimage (relstar r)
-                                       (setpreimage r (singleton e)))))))
-  :hints(("Goal" :in-theory (e/d (reflexive-transitive-closure
-                                  preimage-of-compose-inverse)
-                                 (preimage-of-compose
-                                  in-of-compose-rw)))
-         (and stable-under-simplificationp
-              '(:use ((:instance in-of-transitive-closure-split2
-                       (pair (edge w e)))
-                      (:instance in-of-compose-suff
-                       (x (id-relation (universe))) (y r)
-                       (pair (edge w e)) (mid w))
-                      )
-                :in-theory (enable in-of-compose-rw))))
+(def-tac-positive-normalize in-setpreimage-singleton-star
+  (iff (pred-in-set w (setpreimage (relstar r) (singleton e)))
+       (or (pred-in-set w (singleton e))
+           (pred-in-set w (setpreimage (relstar r)
+                                       (setpreimage r (singleton e))))))
+  :hints(("Goal" :in-theory (e/d (relstar
+                                  setpreimage-of-relcompose-inverse
+                                  in-of-relplus-split2
+                                  in-of-relcompose-suff-rw2
+                                  in-of-relcompose-rw)
+                                 (setpreimage-of-relcompose))))
   :otf-flg t)
 
 ;; +R
-(def-tac-positive-normalize pred-nonempty-setpreimage-singleton-plus
-  (implies (and (event-p e)
-                (event-p w))
-           (iff (pred-in-set w (setpreimage (relplus r) (singleton e)))
-                (or (pred-in-set w (setpreimage r (singleton e)))
-                    (pred-in-set w (setpreimage (relplus r)
-                                                (setpreimage r (singleton e)))))))
-  :hints(("Goal" :in-theory (e/d (reflexive-transitive-closure
-                                  preimage-of-compose-inverse)
-                                 (preimage-of-compose
-                                  in-of-compose-rw)))
-         (and stable-under-simplificationp
-              '(:use ((:instance in-of-transitive-closure-split2
-                       (pair (edge w e)))
-                      (:instance in-of-compose-suff
-                       (x (id-relation (universe))) (y r)
-                       (pair (edge w e)) (mid w))
-                      )
-                :in-theory (enable in-of-compose-rw))))
+(def-tac-positive-normalize in-setpreimage-singleton-plus
+  (iff (pred-in-set w (setpreimage (relplus r) (singleton e)))
+       (or (pred-in-set w (setpreimage r (singleton e)))
+           (pred-in-set w (setpreimage (relplus r)
+                                       (setpreimage r (singleton e))))))
+  :hints(("Goal" :in-theory (e/d (relstar
+                                  in-of-relplus-split2
+                                  in-of-relcompose-rw
+                                  in-of-relcompose-suff-rw
+                                  setpreimage-of-relcompose-inverse)
+                                 (setpreimage-of-relcompose
+                                  in-of-relcompose-rw))))
   :otf-flg t)
 
 
@@ -250,64 +221,60 @@
 
 ;; ~*L
 (def-tac-negative-normalize in-singleton-star-image
-  (implies (event-p w)
-           (iff (pred-in-set w (setimage (singleton e) (relstar r)))
-                (or (pred-in-set w (singleton e))
-                    (pred-in-set w (setimage (setimage (singleton e) r) (relstar r))))))
-  :hints(("Goal" :in-theory (e/d (reflexive-transitive-closure
-                                  image-of-compose-inverse
-                                  in-of-compose-suff
-                                  in-of-compose-suff2
-                                  in-of-compose-rw)
-                                 (image-of-compose))
-          :use ((:instance in-of-transitive-closure-split
-                 (pair (edge e w)))))))
+  (iff (pred-in-set w (setimage (singleton e) (relstar r)))
+       (or (pred-in-set w (singleton e))
+           (pred-in-set w (setimage (setimage (singleton e) r) (relstar r)))))
+  :hints(("Goal" :in-theory (e/d (relstar
+                                  setimage-of-relcompose-inverse
+                                  in-of-relplus-split
+                                  in-of-relcompose-suff
+                                  in-of-relcompose-suff2
+                                  in-of-relcompose-suff-rw
+                                  in-of-relcompose-rw)
+                                 (setimage-of-relcompose)))))
 
 ;; ~+L
 (def-tac-negative-normalize in-singleton-plus-image
-  (implies (event-p w)
-           (iff (pred-in-set w (setimage (singleton e) (relplus r)))
-                (or (pred-in-set w (setimage (singleton e) r))
-                     (pred-in-set w (setimage (setimage (singleton e) r) (relplus r))))))
-  :hints(("Goal" :in-theory (e/d (reflexive-transitive-closure
-                                  image-of-compose-inverse
-                                  in-of-compose-suff
-                                  in-of-compose-suff2
-                                  in-of-compose-rw)
-                                 (image-of-compose))
-          :use ((:instance in-of-transitive-closure-split
-                 (pair (edge e w)))))))
+  (iff (pred-in-set w (setimage (singleton e) (relplus r)))
+       (or (pred-in-set w (setimage (singleton e) r))
+           (pred-in-set w (setimage (setimage (singleton e) r) (relplus r)))))
+  :hints(("Goal" :in-theory (e/d (relstar
+                                  setimage-of-relcompose-inverse
+                                  in-of-relcompose-suff
+                                  in-of-relcompose-suff2
+                                  in-of-relcompose-suff-rw
+                                  in-of-relplus-split
+                                  in-of-relcompose-rw)
+                                 (setimage-of-relcompose)))))
 
 ;; ~*R
 (def-tac-negative-normalize in-singleton-star-preimage
-  (implies (event-p w)
-           (iff (pred-in-set w (setpreimage (relstar r) (singleton e)))
-                (or (pred-in-set w (singleton e))
-                    (pred-in-set w (setpreimage (relstar r) (setpreimage r (singleton e)))))))
-  :hints(("Goal" :in-theory (e/d (reflexive-transitive-closure
-                                  preimage-of-compose-inverse
-                                  in-of-compose-suff
-                                  in-of-compose-suff2
-                                  in-of-compose-rw)
-                                 (preimage-of-compose))
-          :use ((:instance in-of-transitive-closure-split2
-                 (pair (edge w e)))))))
+  (iff (pred-in-set w (setpreimage (relstar r) (singleton e)))
+       (or (pred-in-set w (singleton e))
+           (pred-in-set w (setpreimage (relstar r) (setpreimage r (singleton e))))))
+  :hints(("Goal" :in-theory (e/d (relstar
+                                  setpreimage-of-relcompose-inverse
+                                  in-of-relplus-split2
+                                  in-of-relcompose-suff
+                                  in-of-relcompose-suff2
+                                  in-of-relcompose-suff-rw2
+                                  in-of-relcompose-rw)
+                                 (setpreimage-of-relcompose)))))
 
 
 ;; ~+R
 (def-tac-negative-normalize in-singleton-plus-preimage
-  (implies (event-p w)
-           (iff (pred-in-set w (setpreimage (relplus r) (singleton e)))
-                (or (pred-in-set w (setpreimage r (singleton e)))
-                    (pred-in-set w (setpreimage (relplus r) (setpreimage r (singleton e)))))))
-  :hints(("Goal" :in-theory (e/d (reflexive-transitive-closure
-                                  preimage-of-compose-inverse
-                                  in-of-compose-suff
-                                  in-of-compose-suff2
-                                  in-of-compose-rw)
-                                 (preimage-of-compose))
-          :use ((:instance in-of-transitive-closure-split2
-                 (pair (edge w e)))))))
+  (iff (pred-in-set w (setpreimage (relplus r) (singleton e)))
+       (or (pred-in-set w (setpreimage r (singleton e)))
+           (pred-in-set w (setpreimage (relplus r) (setpreimage r (singleton e))))))
+  :hints(("Goal" :in-theory (e/d (relstar
+                                  setpreimage-of-relcompose-inverse
+                                  in-of-relplus-split2
+                                  in-of-relcompose-suff
+                                  in-of-relcompose-suff2
+                                  in-of-relcompose-suff-rw
+                                  in-of-relcompose-rw)
+                                 (setpreimage-of-relcompose)))))
 
 ;; ~U2L
 (def-tac-negative-normalize in-singleton-union-image
@@ -342,19 +309,37 @@
 ;;                 (or (pred-in-set w (singleton e1))
 ;;                     (pred-in-set w (singleton e2))))))
 
+(local (defthm emptyp-intersect-singleton
+         (iff (emptyp (setintersect (singleton e) s))
+              (not (in (event-fix e) (event-set-fix s))))
+         :hints (("goal" :use ((:instance emptyp-when-in
+                                (x (setintersect (singleton e) s))
+                                (e (event-fix e))))
+                  :in-theory (disable emptyp-when-in)))))
+
+(local (defthm emptyp-intersect-singleton2
+         (iff (emptyp (setintersect s (singleton e)))
+              (not (in (event-fix e) (event-set-fix s))))
+         :hints (("goal" :use ((:instance emptyp-when-in
+                                (x (setintersect s (singleton e)))
+                                (e (event-fix e))))
+                  :in-theory (disable emptyp-when-in)))))
+
+
+
 ;; ~XL
 (def-tac-negative-normalize in-singleton-image-prod
   (iff (pred-in-set w (setimage (singleton e) (relprod s1 s2)))
        (and (pred-nonempty (setintersect (singleton e) s1))
             (pred-in-set w s2)))
-  :hints(("Goal" :in-theory (enable in-of-cartesian))))
+  :hints(("Goal" :in-theory (enable in-of-relprod))))
   
 ;; ~XR
 (def-tac-negative-normalize in-singleton-preimage-prod
   (iff (pred-in-set w (setpreimage (relprod s1 s2) (singleton e)))
        (and (pred-nonempty (setintersect (singleton e) s2))
             (pred-in-set w s1)))
-  :hints(("Goal" :in-theory (enable in-of-cartesian))))
+  :hints(("Goal" :in-theory (enable in-of-relprod))))
 
 
 
@@ -406,40 +391,49 @@
   (iff (pred-in-set w (setimage s1 (relprod (singleton e) s2)))
        (and (pred-in-set w s2)
             (pred-nonempty (setintersect s1 (singleton e)))))
-  :hints(("Goal" :in-theory (enable in-of-image-rw
-                                    in-of-cartesian))))
+  :hints(("Goal" :in-theory (enable in-of-setimage-rw
+                                    in-of-relprod))))
 ;; ~1XR
 (def-tac-negative-normalize in-image-product-singleton-2
   (iff (pred-in-set w (setpreimage (relprod s2 (singleton e)) s1))
        (and (pred-in-set w s2)
             (pred-nonempty (setintersect s1 (singleton e)))))
-  :hints(("Goal" :in-theory (enable in-of-preimage-rw
-                                    in-of-cartesian))))
+  :hints(("Goal" :in-theory (enable in-of-setpreimage-rw
+                                    in-of-relprod))))
+
+(local (defthm emptyp-rw-when-event-set-p
+         (implies (and (acl2::rewriting-positive-literal `(emptyp ,x))
+                       (event-set-p x))
+                  (iff (emptyp x)
+                       (not (and (in (head x) x)
+                                 (event-p (head x))))))))
+(local (in-theory (disable emptyp-rw)))
+
 ;; ~X1L
-(def-tac-negative-normalize in-image-product-singleton-3
+(def-tac-negative-normalize in-setimage-product-singleton-3
   (iff (pred-in-set w (setpreimage (relprod (singleton e) s1) s2))
        (and (pred-in-set w (singleton e))
             (pred-nonempty (setintersect s1 s2))))
-  :hints(("Goal" :in-theory (e/d (in-of-preimage-rw
-                                  in-of-cartesian)
+  :hints(("Goal" :in-theory (e/d (in-of-setpreimage-rw
+                                  in-of-relprod)
                                  (emptyp-when-in
                                   set::never-in-empty))
           :use ((:instance emptyp-when-in
-                 (e (preimage-witness w s2 (cartesian (insert e nil) s1)))
-                 (x (intersect s1 s2)))))))
+                 (e (setpreimage-witness w (relprod (singleton e) s1) s2))
+                 (x (setintersect s1 s2)))))))
 
 ;; ~X1R
-(def-tac-negative-normalize in-image-product-singleton-4
+(def-tac-negative-normalize in-setimage-product-singleton-4
   (iff (pred-in-set w (setimage s2 (relprod s1 (singleton e))))
        (and (pred-in-set w (singleton e))
             (pred-nonempty (setintersect s1 s2))))
-  :hints(("Goal" :in-theory (e/d (in-of-image-rw
-                                  in-of-cartesian)
+  :hints(("Goal" :in-theory (e/d (in-of-setimage-rw
+                                  in-of-relprod)
                                  (emptyp-when-in
                                   set::never-in-empty))
           :use ((:instance emptyp-when-in
-                 (e (image-witness w s2 (cartesian s1 (insert e nil))))
-                 (x (intersect s1 s2)))))))
+                 (e (setimage-witness w s2 (relprod s1 (singleton e))))
+                 (x (setintersect s1 s2)))))))
 
 
 (acl2::def-ruleset tac-negative-toplevel-normalize-rules nil)
@@ -450,65 +444,65 @@
 
 
 ;; ~.1,2L
-(def-tac-negative-toplevel-normalize nonempty-singleton-intersect-image-1
+(def-tac-negative-toplevel-normalize nonempty-singleton-intersect-setimage-1
   (implies (not-singleton-set-p s)
            (iff (pred-nonempty (setintersect (singleton e) (setimage s r)))
                 (pred-nonempty (setintersect (setpreimage r (singleton e)) s))))
-  :hints(("Goal" :in-theory (e/d (in-of-image-rw)))
+  :hints(("Goal" :in-theory (e/d (in-of-setimage-rw)))
          (and stable-under-simplificationp
-              '(:in-theory (e/d (in-of-image-rw)
+              '(:in-theory (e/d (in-of-setimage-rw)
                                 (emptyp-when-in
                                  set::never-in-empty))
                 :use ((:instance emptyp-when-in
                        (x (setintersect (setpreimage r (singleton e)) s))
-                       (e (image-witness e s r)))))))
+                       (e (setimage-witness e s r)))))))
   :otf-flg t)
 
 ;; ~.1,2R
-(def-tac-negative-toplevel-normalize nonempty-singleton-intersect-image-2
+(def-tac-negative-toplevel-normalize nonempty-singleton-intersect-setimage-2
   (implies (not-singleton-set-p s)
            (iff (pred-nonempty (setintersect (setimage s r) (singleton e)))
                 (pred-nonempty (setintersect s (setpreimage r (singleton e))))))
-  :hints(("Goal" :in-theory (e/d (in-of-image-rw)))
+  :hints(("Goal" :in-theory (e/d (in-of-setimage-rw)))
          (and stable-under-simplificationp
-              '(:in-theory (e/d (in-of-image-rw)
+              '(:in-theory (e/d (in-of-setimage-rw)
                                 (emptyp-when-in
                                  set::never-in-empty))
                 :use ((:instance emptyp-when-in
                        (x (setintersect s (setpreimage r (singleton e))))
-                       (e (image-witness e s r)))))))
+                       (e (setimage-witness e s r)))))))
   :otf-flg t)
 
 
 
 
 ;; ~.2,1L
-(def-tac-negative-toplevel-normalize nonempty-singleton-intersect-image-3
+(def-tac-negative-toplevel-normalize nonempty-singleton-intersect-setimage-3
   (implies (not-singleton-set-p s)
            (iff (pred-nonempty (setintersect (singleton e) (setpreimage r s)))
                 (pred-nonempty (setintersect (setimage (singleton e) r) s))))
-  :hints(("Goal" :in-theory (e/d (in-of-preimage-rw)))
+  :hints(("Goal" :in-theory (e/d (in-of-setpreimage-rw)))
          (and stable-under-simplificationp
-              '(:in-theory (e/d (in-of-preimage-rw)
+              '(:in-theory (e/d (in-of-setpreimage-rw)
                                 (emptyp-when-in
                                  set::never-in-empty))
                 :use ((:instance emptyp-when-in
                        (x (setintersect (setimage (singleton e) r) s))
-                       (e (preimage-witness e s r)))))))
+                       (e (setpreimage-witness e r s)))))))
   :otf-flg t)
 ;; ~.2,1R
-(def-tac-negative-toplevel-normalize nonempty-singleton-intersect-image-4
+(def-tac-negative-toplevel-normalize nonempty-singleton-intersect-setimage-4
   (implies (not-singleton-set-p s)
            (iff (pred-nonempty (setintersect (setpreimage r s) (singleton e)))
                 (pred-nonempty (setintersect s (setimage (singleton e) r)))))
-  :hints(("Goal" :in-theory (e/d (in-of-preimage-rw)))
+  :hints(("Goal" :in-theory (e/d (in-of-setpreimage-rw)))
          (and stable-under-simplificationp
-              '(:in-theory (e/d (in-of-preimage-rw)
+              '(:in-theory (e/d (in-of-setpreimage-rw)
                                 (emptyp-when-in
                                  set::never-in-empty))
                 :use ((:instance emptyp-when-in
                        (x (setintersect s (setimage (singleton e) r)))
-                       (e (preimage-witness e s r)))))))
+                       (e (setpreimage-witness e r s)))))))
   :otf-flg t)
 
 ;; ~\cap1L
@@ -530,10 +524,56 @@
 ;; ~0
 (def-tac-negative-toplevel-normalize pred-nonempty-of-singleton
   (iff (pred-nonempty (singleton e))
-       (pred-true)))
+       (pred-true))
+  :hints(("Goal" :in-theory (enable singleton))))
 
 ;; ~=
 (def-tac-negative-toplevel-normalize pred-equal-same
   (iff (pred-equal e e)
        (pred-true)))
+
+
+(acl2::def-ruleset! tac-positive-intro-rules nil)
+
+(defmacro def-tac-positive-intro (name &rest args)
+  `(progn (defthm ,name . ,args)
+          (acl2::add-to-ruleset tac-positive-intro-rules ,name)))
+
+(def-tac-positive-intro in-singleton-setimage-with-base-rel
+  (implies (base-rel-p a)
+           (iff (pred-in-set w (setimage (singleton e) a))
+                (pred-in-rel e w a))))
+
+
+;; (pred-nonempty (setimage (setpreimage b (setimage (singleton e) a)) c))
+;; =
+;; (pred-in-set w (setimage (setpreimage b (setimage (singleton e) a)) c)), w = (head (setimage (setpreimage b (setimage (singleton e) a)) c))
+;; =
+;; (pred-in-rel w1 w c), w1 = (setimage-witness w (setpreimage b (setimage (singleton e) a)) c)
+;; and (pred-in-set w1 (setpreimage b (setimage (singleton e) a)))
+;; =
+;; (pred-in-rel w1 w c), w1 = (setimage-witness w (setpreimage b (setimage (singleton e) a)) c)
+;; and (pred-in-rel w1 w2 b), w2 = (setpreimage-witness w1 (setimage (singleton e) a) b)
+;; and (pred-in-set w2 (setimage (singleton e) a))
+;; =
+;; (pred-in-rel w1 w c), w1 = (setimage-witness w (setpreimage b (setimage (singleton e) a)) c)
+;; and (pred-in-rel w1 w2 b), w2 = (setpreimage-witness w1 (setimage (singleton e) a) b)
+;; and (pred-in-rel e w2 a)
+;; = 
+
+;; <-->
+;; (pred-in-rel w1 w c) = (pred-in-set w (setimage (singleton w1) c))
+;; and (pred-in-rel w1 w2 b) = (pred-in-set w1 (setpreimage b (singleton w2)))
+;; and (pred-in-rel e w2 a)
+
+
+;; (pred-in-set w (setimage (singleton (setimage-witness w s c)) c))
+
+;; (defthm in-set-propagate-into-setimage-1
+;;   (iff (pred-in-set w (setimage s r))
+;;        (and (pred-in-set (setimage-witness w s r) s)
+;;             (pred-in-set w (setimage (singleton (setimage-witness w s r)) r))))
+;;   :hints (("goal" :in-theory (enable in-of-setimage-rw))))
+  
+
 

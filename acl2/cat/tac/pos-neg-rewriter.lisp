@@ -413,103 +413,206 @@
   (local (in-theory (enable set::union-symmetric set::union-commutative)))
 
   (local (include-book "theory-thms"))
+
+  (local (defthm event-set-fix-of-union
+           (equal (union (event-set-fix x)
+                         (event-set-fix y))
+                  (event-set-fix (union x y)))
+           :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
+                                              pick-a-point-subset-strategy
+                                              in-of-event-set-fix)))))
+
+  (local (defthm relation-fix-of-union
+           (equal (union (relation-fix x)
+                         (relation-fix y))
+                  (relation-fix (union x y)))
+           :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
+                                              pick-a-point-subset-strategy
+                                              in-of-relation-fix)))))
+
+  (local (defthm relcompose-of-union-1
+           (equal (relcompose (union x y) z)
+                  (union (relcompose x z)
+                         (relcompose y z)))
+           :hints (("goal" :use ((:instance relcompose-of-relunion-2
+                                  (r1 x) (r2 y) (r z)))
+                    :in-theory (enable relunion)))))
+
+  (local (defthm relcompose-of-union-2
+           (equal (relcompose z (union x y))
+                  (union (relcompose z x)
+                         (relcompose z y)))
+           :hints (("goal" :use ((:instance relcompose-of-relunion
+                                  (r z) (r1 x) (r2 y)))
+                    :in-theory (e/d (relunion))))))
   
   (local (defthm tac-typed-val-p-of-rel
            (implies (tac-typed-val-p x :rel)
                     (relation-p x))
            :hints(("Goal" :in-theory (enable tac-typed-val-p)))))
 
-  (local (defthm intersect-of-union-1
-           (equal (intersect (union x y) z)
-                  (union (intersect x z)
-                         (intersect y z)))
-           :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
-                                              pick-a-point-subset-strategy)))))
-
-  (local (defthm intersect-of-union-2
-           (equal (intersect x (union y z))
-                  (union (intersect x y)
-                         (intersect x z)))
-           :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
-                                              pick-a-point-subset-strategy)))))
-
-  (local (defthm cartesian-of-union-1
-           (equal (cartesian (union x y) z)
-                  (union (cartesian x z)
-                         (cartesian y z)))
+  (local (defthm setintersect-of-union-1
+           (equal (setintersect (union x y) z)
+                  (union (setintersect x z)
+                         (setintersect y z)))
            :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
                                               pick-a-point-subset-strategy
-                                              in-of-cartesian)))))
+                                              in-of-event-set-fix)))))
 
-  (local (defthm cartesian-of-union-2
-           (equal (cartesian x (union y z))
-                  (union (cartesian x y)
-                         (cartesian x z)))
+  (local (defthm setintersect-of-union-2
+           (equal (setintersect x (union y z))
+                  (union (setintersect x y)
+                         (setintersect x z)))
            :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
                                               pick-a-point-subset-strategy
-                                              in-of-cartesian)))))
-
-  (local (defthm preimage-of-union-1
-           (implies (relation-p z)
-                    (equal (preimage (union x y) z)
-                           (union (preimage x z)
-                                  (preimage y z))))
+                                              in-of-event-set-fix)))))
+  (local (defthm relintersect-of-union-1
+           (equal (relintersect (union x y) z)
+                  (union (relintersect x z)
+                         (relintersect y z)))
            :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
                                               pick-a-point-subset-strategy
-                                              in-of-preimage-rw)))))
+                                              in-of-relation-fix)))))
 
-  (local (defthm preimage-of-union-2
-           (implies (and (relation-p y)
-                         (relation-p z))
-                    (equal (preimage x (union y z))
-                           (union (preimage x y)
-                                  (preimage x z))))
+  (local (defthm relintersect-of-union-2
+           (equal (relintersect x (union y z))
+                  (union (relintersect x y)
+                         (relintersect x z)))
            :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
                                               pick-a-point-subset-strategy
-                                              in-of-preimage-rw)))))
+                                              in-of-relation-fix)))))
 
-  (local (defthm preimage-of-union-1
-           (implies (relation-p z)
-                    (equal (preimage (union x y) z)
-                           (union (preimage x z)
-                                  (preimage y z))))
+  (local (defthm relprod-of-union-1
+           (equal (relprod (union x y) z)
+                  (union (relprod x z)
+                         (relprod y z)))
            :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
                                               pick-a-point-subset-strategy
-                                              in-of-preimage-rw)))))
+                                              in-of-relprod
+                                              in-of-event-set-fix)))))
 
-  (local (defthm preimage-of-union-2
-           (implies (and (relation-p y)
-                         (relation-p z))
-                    (equal (preimage x (union y z))
-                           (union (preimage x y)
-                                  (preimage x z))))
+  (local (defthm relprod-of-union-2
+           (equal (relprod x (union y z))
+                  (union (relprod x y)
+                         (relprod x z)))
            :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
                                               pick-a-point-subset-strategy
-                                              in-of-preimage-rw)))))
+                                              in-of-relprod
+                                              in-of-event-set-fix)))))
+
+  (local (defthm setpreimage-of-union-1
+           (equal (setpreimage z (union x y))
+                  (union (setpreimage z x)
+                         (setpreimage z y)))
+           :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
+                                              pick-a-point-subset-strategy
+                                              in-of-setpreimage-rw
+                                              in-of-event-set-fix
+                                              ;; in-of-relation-fix
+                                              )))))
+
+  (local (defthm setpreimage-of-union-2
+           (equal (setpreimage (union y z) x)
+                  (union (setpreimage y x)
+                         (setpreimage z x)))
+           :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
+                                              pick-a-point-subset-strategy
+                                              in-of-setpreimage-rw
+                                              in-of-relation-fix)))))
+
+  
+  (local (defthm setimage-of-union-1
+           (equal (setimage (union x y) z)
+                  (union (setimage x z)
+                         (setimage y z)))
+           :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
+                                              pick-a-point-subset-strategy
+                                              in-of-setimage-rw
+                                              in-of-event-set-fix
+                                              ;; in-of-relation-fix
+                                              )))))
+
+  (local (defthm setimage-of-union-2
+           (equal (setimage x (union y z))
+                  (union (setimage x y)
+                         (setimage x z)))
+           :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
+                                              pick-a-point-subset-strategy
+                                              in-of-setimage-rw
+                                              in-of-relation-fix)))))
+
+  (local (defthm relinverse-of-?union
+           (equal (relinverse (union x y))
+                  (union (relinverse x) (relinverse y)))
+           :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
+                                              pick-a-point-subset-strategy
+                                              in-of-relation-fix)))))
+
+  (local (defthm relidentity-of-?union
+           (equal (relidentity (union x y))
+                  (union (relidentity x) (relidentity y)))
+           :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
+                                              pick-a-point-subset-strategy
+                                              in-of-relation-fix
+                                              in-of-event-set-fix)))))
+
+  ;; (local (defthm setpreimage-of-union-1
+  ;;          (implies (relation-p z)
+  ;;                   (equal (setpreimage (union x y) z)
+  ;;                          (union (setpreimage x z)
+  ;;                                 (setpreimage y z))))
+  ;;          :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
+  ;;                                             pick-a-point-subset-strategy
+  ;;                                             in-of-setpreimage-rw)))))
+
+  ;; (local (defthm setpreimage-of-union-2
+  ;;          (implies (and (relation-p y)
+  ;;                        (relation-p z))
+  ;;                   (equal (setpreimage x (union y z))
+  ;;                          (union (setpreimage x y)
+  ;;                                 (setpreimage x z))))
+  ;;          :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
+  ;;                                             pick-a-point-subset-strategy
+  ;;                                             in-of-setpreimage-rw)))))
 
   (local (defund empty-set () nil))
   (local (defthm setp-empty-set
            (setp (empty-set))))
-  (local (defthm preimage-of-nil-2
-           (equal (preimage x nil) (empty-set))
+  (local (defthm setpreimage-of-nil-2
+           (equal (setpreimage nil x) (empty-set))
            :hints (("goal" :in-theory (e/d (set::double-containment-no-backchain-limit
                                               pick-a-point-subset-strategy
-                                              in-of-preimage-rw)
+                                              in-of-setpreimage-rw)
                                            ((empty-set) (:t empty-set))))
                    (set::pick-a-point-subset-hint id clause world stable-under-simplificationp)
                    (and stable-under-simplificationp
                         '(:in-theory (enable empty-set))))))
 
   
-  (local (defthm image-of-nil-2
-           (equal (image x nil) (empty-set))
+  (local (defthm setimage-of-nil-2
+           (equal (setimage x nil) (empty-set))
            :hints (("goal" :in-theory (e/d (set::double-containment-no-backchain-limit
                                               pick-a-point-subset-strategy
-                                              in-of-image-rw)
+                                              in-of-setimage-rw)
                                            ((empty-set) (:t empty-set))))
                    (set::pick-a-point-subset-hint id clause world stable-under-simplificationp)
                    (and stable-under-simplificationp
                         '(:in-theory (enable empty-set))))))
+
+  (local (defthm setintersect-of-nil
+           (and (equal (setintersect x nil) nil)
+                (equal (setintersect nil x) nil))
+           :hints(("Goal" :in-theory (enable setintersect)))))
+
+  (local (defthm relintersect-of-nil
+           (and (equal (relintersect x nil) nil)
+                (equal (relintersect nil x) nil))
+           :hints(("Goal" :in-theory (enable relintersect)))))
+
+  ;; (local (defthm setpreimage-of-nil-3
+  ;;          ;; (and (equal (setpreimage x nil) nil)
+  ;;          (equal (setpreimage nil x) nil)
+  ;;          :hints(("Goal" :in-theory (enable setpreimage)))))
   
   (defthm tac-context-fn-apply-when-member-nil
     (implies (and (tac-context-fn-p fn)

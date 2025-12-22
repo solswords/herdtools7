@@ -476,7 +476,13 @@
                        (:free (ctx) (tac-termlist-types x ctx)))))
     :flag tac-termlist-types))
 
-
+(local
+ (defthm event-set-p-of-union-list
+   (implies (tac-1typed-vallist-p x :set)
+            (event-set-p (union-list x)))
+   :hints (("goal" :use ((:instance tac-typed-val-p-of-union-list
+                          (type :set)))
+            :in-theory (e/d (tac-typed-val-p))))))
 
 (define tac-rewrite-pred-apply-rule ((rule cmr::rewrite-p)
                                      (x pseudo-termp)
@@ -520,11 +526,12 @@
                   (equal (tac-term-type x ctx) :set)
                   (equal (cdr (hons-assoc-equal 'tac-w ctx)) :event)
                   (tac-pred-rewrite-parse-ok rule))
-             (iff (in (cdr (assoc 'tac-w env))
-                      (union-list
-                       (tac-eval-ruleres-branchlist result env)))
-                  (in (cdr (assoc 'tac-w env))
-                      (tac-ev x env))))
+             (iff (pred-in-set
+                   (cdr (assoc 'tac-w env))
+                   (union-list
+                    (tac-eval-ruleres-branchlist result env)))
+                  (pred-in-set (cdr (assoc 'tac-w env))
+                               (tac-ev x env))))
     :hints (("goal" :use ((:instance tac-parse-ruleres-correct
                            (x (cmr::rewrite->rhs rule))
                            (env
@@ -654,7 +661,8 @@
            (implies (and (tac-typed-val-p x :set)
                          (not (tac-typed-val-p e :event)))
                     (not (in e x)))
-           :hints(("Goal" :in-theory (enable tac-typed-val-p)))))
+           :hints(("Goal" :in-theory (enable tac-typed-val-p
+                                             event-set-p-implies-not-in-when-not-event)))))
   
   (defret <fn>-correct
     (implies (and ok
@@ -678,15 +686,18 @@
                      (tac-eval-ruleres-branchlist result env))
                     (tac-ev x env)))
     :hints (("goal" :in-theory (e/d (set::double-containment-no-backchain-limit
-                                     pick-a-point-subset-strategy)
+                                     pick-a-point-subset-strategy
+                                     event-set-p-implies-not-in-when-not-event)
                                     (<fn> <fn>-correct-lemma)))
             (set::pick-a-point-subset-hint id clause world stable-under-simplificationp)
             (and stable-under-simplificationp
                  '(:use ((:instance <fn>-correct-lemma
                           (env (cons (cons 'tac-w set::arbitrary-element) env))
-                          (ctx (cons (cons 'tac-w :event) ctx)))))))))
+                          (ctx (cons (cons 'tac-w :event) ctx))))
+                   :cases ((event-p set::arbitrary-element)))))))
 
 (fty::defmap rule-used-substs :key-type symbolp :val-type pseudo-term-substlist-p :true-listp t)
+
 
 (define tac-rewrite-pred-try-rules ((rules tac-rewritelist-p)
                                     (x pseudo-termp)
@@ -747,9 +758,6 @@
                   (tac-ev-cube assums2 env)
                   (subsetp-equal (tac-termlist-types assums1 ctx) '(:pred))
                   (subsetp-equal (tac-termlist-types assums2 ctx) '(:pred))
-                  ;; (equal (tac-termlist-types args ctx)
-                  ;;        (tac-function-argument-types fn))
-                  ;; (equal (tac-function-return-type fn) :pred)
                   (equal (tac-term-type x ctx) :set)
                   (tac-pred-rewrites-parse-ok rules)
                   (tac-pred-rewrites-rhs-typed rules)

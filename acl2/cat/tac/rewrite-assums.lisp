@@ -187,6 +187,18 @@
                                       cmr::term-vars
                                       tac-ruleres-branch-vars)))))
 
+(local (defthm event-set-fix-of-union
+           (equal (event-set-fix (union x y))
+                  (union (event-set-fix x)
+                         (event-set-fix y)))
+           :hints (("goal" :in-theory (enable set::double-containment-no-backchain-limit
+                                              pick-a-point-subset-strategy
+                                              in-of-event-set-fix)))))
+
+(local (defthm event-set-fix-of-sfix
+         (equal (event-set-fix (sfix x)) (event-set-fix x))
+         :hints(("Goal" :in-theory (enable event-set-fix)))))
+
 (define interpret-ruleres-branchlist-disjunction ((x tac-ruleres-branchlist-p))
   :returns (mv ok (new-x pseudo-term-listp))
   (b* (((when (atom x)) (mv t nil))

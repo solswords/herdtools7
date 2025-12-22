@@ -284,18 +284,6 @@
 
 
 
-(defthm tac-ev-theorem-rewritesp-of-tac-positive-normalize-rules
-  (tac-ev-theoremlist-p (tac-rewritelist-terms (tac-positive-normalize-rules)))
-  :hints(("Goal" :in-theory (acl2::e/d* ((tac-positive-normalize-rules)
-                                         tac-ev-theoremp*-expand
-                                         tac-ev-theoremlist-p)
-                                        ((:ruleset tac-negative-normalize-rules)
-                                         (tac-ev-theoremlist-p)
-                                         tac-functions
-                                         (emptyset)
-                                         (pred-false))
-                                        ((:ruleset tac-positive-normalize-rules)))
-          :expand ((:Free (a b) (tac-rewritelist-terms (cons a b)))))))
 
 (defsection tac-ev-theorem-rewritesp-of-tac-negative-normalize-rules
   (local (define tac-ev-theorem-rewrite-p ((name symbolp)
@@ -322,6 +310,26 @@
                                             (tac-ev-falsify ',term))))
                    (instance-subst (cdr vars) term)))))
 
+  (defthm tac-ev-theorem-rewritesp-of-tac-positive-normalize-rules
+    (tac-ev-theoremlist-p (tac-rewritelist-terms (tac-positive-normalize-rules)))
+    :hints(("Goal" :in-theory (acl2::e/d* ((tac-positive-normalize-rules)
+                                           tac-ev-theoremp*-expand)
+                                          ((:ruleset tac-negative-normalize-rules)
+                                           (:ruleset tac-positive-normalize-rules)
+                                           tac-functions
+                                           (tac-rewritelist-terms)
+                                           (emptyset)
+                                           (pred-false)))
+            :expand ((tac-rewritelist-terms nil)))
+           (and stable-under-simplificationp
+                (let ((lit (car (last clause))))
+                  (case-match lit
+                    (('tac-ev-theorem-rewrite-p ('quote name) ('quote rule))
+                     (let ((rule-term (cmr::rewrite-term rule)))
+                       `(:use ((:instance ,name
+                                . ,(instance-subst (cmr::term-vars rule-term) rule-term)))
+                         :expand (,lit)))))))))
+  
   (defthm tac-ev-theorem-rewritesp-of-tac-negative-normalize-rules
     (tac-ev-theoremlist-p (tac-rewritelist-terms (tac-negative-normalize-rules)))
     :hints(("Goal" :in-theory (acl2::e/d* ((tac-negative-normalize-rules)

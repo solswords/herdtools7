@@ -543,8 +543,8 @@
   ///
   (defret <fn>-correct
     (implies ok
-             (equal (in (cdr (hons-assoc-equal 'w env))
-                        (tac-ev ctx-res env))
+             (equal (pred-in-set (cdr (hons-assoc-equal 'w env))
+                                 (tac-ev ctx-res env))
                     (tac-ev x env))))
 
   ;; (defret <fn>-typed
@@ -557,6 +557,11 @@
 
                 
 (local (in-theory (disable acl2::pseudo-termp-opener)))
+
+(local (defthm pred-in-set-of-nil
+         (not (pred-in-set e nil))))
+
+(local (in-theory (disable pred-in-set)))
 
 
 (define tac-parse-ruleres-conj ((x pseudo-termp))
@@ -595,24 +600,24 @@
              (iff (tac-ev x env)
                   (and (tac-ev-cube assums env)
                        (or (not has-ctx)
-                           (in (cdr (assoc 'w env))
-                               (tac-ev ctx-result env))))))
-    :hints(("Goal" :in-theory (enable tac-ev-cube)
+                           (pred-in-set (cdr (assoc 'w env))
+                                        (tac-ev ctx-result env))))))
+    :hints(("Goal" :in-theory (e/d (tac-ev-cube))
             :induct <call>))
     :rule-classes nil)
 
   (defret <fn>-correct-rw
     (implies ok
              (and (implies has-ctx
-                           (iff (in (cdr (hons-assoc-equal 'w env))
-                                    (tac-eval-ruleres-branch
-                                     (tac-ruleres-branch assums ctx-result)
-                                     env))
+                           (iff (pred-in-set (cdr (hons-assoc-equal 'w env))
+                                             (tac-eval-ruleres-branch
+                                              (tac-ruleres-branch assums ctx-result)
+                                              env))
                                 (tac-ev x env)))
                   (implies (not has-ctx)
                            (iff (tac-ev-cube assums env)
                                 (tac-ev x env)))))
-    :hints(("Goal" :in-theory (enable tac-eval-ruleres-branch)
+    :hints(("Goal" :in-theory (e/d (tac-eval-ruleres-branch))
             :use <fn>-correct)))
 
   ;; (defret <fn>-typed
@@ -672,13 +677,25 @@
              (mv ok (list (tac-ruleres-branch assums ctx-result))))))
   ///
   (verify-guards tac-parse-ruleres)
+  (local (defthm pred-in-set-of-sfix
+           (equal (pred-in-set e (sfix x))
+                  (pred-in-set e x))
+           :hints(("Goal" :in-theory (enable pred-in-set
+                                             event-set-fix)))))
+  (local (defthm pred-in-set-of-union
+           (equal (pred-in-set e (union x y))
+                  (or (pred-in-set e x)
+                      (pred-in-set e y)))
+           :hints(("Goal" :in-theory (enable pred-in-set
+                                             in-of-event-set-fix)))))
+           
   (defret <fn>-correct
     (implies ok
-             (iff (in (cdr (hons-assoc-equal 'w env))
-                      (union-list
-                       (tac-eval-ruleres-branchlist results env)))
+             (iff (pred-in-set
+                   (cdr (hons-assoc-equal 'w env))
+                   (union-list
+                    (tac-eval-ruleres-branchlist results env)))
                   (tac-ev x env)))
     :hints(("Goal" :in-theory (enable tac-eval-ruleres-branchlist
-                                      union-list))))
-)
+                                      union-list)))))
  

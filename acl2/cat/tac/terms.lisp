@@ -47,20 +47,14 @@
    (pred-equal e1 e2)
    (pred-in-set e s)
    (pred-in-rel e1 e2 r)
-   (not-pred-nonempty s)
-   (not-pred-equal e1 e2)
-   (not-pred-in-set e s)
-   (not-pred-in-rel e1 e2 r)
    (base-set-p x)
    (base-rel-p x)
    (not-singleton-set-p x)
    (mentioned-event-p x)
    
    (event-p x)
-   (setp x)
    (event-set-p x)
    (relation-p x)
-   (event-rel-p x)
 
    (if a b c)
    (implies a b)
@@ -95,9 +89,9 @@
 (define tac-typed-val-p (val (type tac-type-p))
   (case (tac-type-fix type)
     (:event (event-p val))
-    (:set (and (setp val) (event-set-p val)))
+    (:set (event-set-p val))
     (:count (natp val))
-    (:rel   (and (relation-p val) (event-rel-p val)))
+    (:rel   (relation-p val))
     (:pred (booleanp val))
     (t t))
   ///
@@ -187,12 +181,11 @@
     :hints (("goal" :use tac-typed-env-p-implies-lookup
              :in-theory (e/d (tac-typed-val-p) (tac-typed-env-p-implies-lookup)))))
 
-  (defthm tac-typed-env-p-implies-lookup-event-rel-p
+  (defthm tac-typed-env-p-implies-lookup-relation-p
     (implies (and (tac-typed-env-p env ctx)
                   (equal (cdr (assoc-equal v (type-ctx-fix ctx))) :rel)
                   (pseudo-var-p v))
-             (and  (relation-p (cdr (assoc-eq v env)))
-                   (event-rel-p (cdr (assoc-eq v env)))))
+             (relation-p (cdr (assoc-eq v env))))
     :hints (("goal" :use tac-typed-env-p-implies-lookup
              :in-theory (e/d (tac-typed-val-p) (tac-typed-env-p-implies-lookup)))))
 
@@ -235,13 +228,9 @@
     (pred-false)
     (pred-true)
     (pred-nonempty :set)
-    (not-pred-nonempty :set)
     (pred-equal :event :event)
-    (not-pred-equal :event :event)
     (pred-in-set :event :set)
-    (not-pred-in-set :event :set)
     (pred-in-rel :event :event :rel)
-    (not-pred-in-rel :event :event :rel)
     (not :pred)))
 
 (defconst *tac-function-return-types*
@@ -264,13 +253,9 @@
     (pred-false . :pred)
     (pred-true . :pred)
     (pred-nonempty . :pred)
-    (not-pred-nonempty . :pred)
     (pred-equal . :pred)
-    (not-pred-equal . :pred)
     (pred-in-set . :pred)
-    (not-pred-in-set . :pred)
     (pred-in-rel . :pred)
-    (not-pred-in-rel . :pred)
     (not . :pred)))
 
 (define tac-function-return-type ((x pseudo-fnsym-p))
@@ -368,11 +353,9 @@
   (defret type-of-tac-ev-by-term-type
     (implies (tac-typed-env-p env ctx)
              (and (implies (equal type :set)
-                           (and (setp (tac-ev x env))
-                                (event-set-p (tac-ev x env))))
+                           (event-set-p (tac-ev x env)))
                   (implies (equal type :rel)
-                           (and (relation-p (tac-ev x env))
-                                (event-rel-p (tac-ev x env))))
+                           (relation-p (tac-ev x env)))
                   (implies (equal type :event)
                            (event-p (tac-ev x env)))))
     :hints (("Goal" :use tac-typed-val-p-when-term-type
