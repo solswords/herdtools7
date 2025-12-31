@@ -1427,6 +1427,19 @@
   :enabled t
   (not (emptyp (event-set-fix s))))
 
+
+
+(define pred-set-intersects ((w event-set-p) (s event-set-p))
+  :enabled t
+  (pred-nonempty (setintersect w s)))
+
+
+(define pred-rel-intersects ((w relation-p) (r relation-p))
+  :enabled t
+  (pred-nonempty (setimage (universe) (relintersect w r))))
+
+
+
 (define pred-equal ((e1 event-p) (e2 event-p))
   :enabled t
   (event-equiv e1 e2))
@@ -1434,6 +1447,21 @@
 (define pred-in-set ((e event-p) (s event-set-p))
   :enabled t
   (in (event-fix e) (event-set-fix s)))
+
+
+(define nonempty-witness ((x event-set-p))
+  :guard (not (emptyp x))
+  :returns (w event-p)
+  (event-fix (head (event-set-fix x)))
+  ///
+  (defretd <fn>-correct
+    (iff (pred-in-set w x)
+         (not (emptyp (event-set-fix x)))))
+  (defretd emptyp-in-terms-of-<fn>
+    (implies (and (acl2::rewriting-positive-literal `(emptyp ,x))
+                  (event-set-p x))
+             (iff (emptyp x)
+                  (not (pred-in-set w x))))))
 
 (define pred-in-rel ((e1 event-p) (e2 event-p) (r relation-p))
   :enabled t
@@ -1461,7 +1489,7 @@
   t)
 
 (acl2::def-ruleset! tac-functions
-  '(emptyset singleton setunion setintersect
+  '(emptyset singleton domain range setunion setintersect
              setimage setimage-witness
              setpreimage setpreimage-witness
              relidentity relunion relintersect
@@ -1469,5 +1497,6 @@
              relstar relstar-bounded relplus
              relinverse relprod
              pred-false pred-true pred-nonempty pred-equal pred-in-set pred-in-rel
+             pred-set-intersects pred-rel-intersects nonempty-witness
              base-set-p base-rel-p not-singleton-set-p mentioned-event-p))
 

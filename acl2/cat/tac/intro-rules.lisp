@@ -359,7 +359,20 @@
   ///
   (defthm tac-intersect-propagate-rules-wellformed-of-tac-intersect-propagate-rules
     (tac-intersect-propagate-rules-wellformed (tac-intersect-propagate-rules))
-    :hints(("Goal" :in-theory (enable (tac-intersect-propagate-rules))))))
+    :hints(("Goal" :in-theory (enable (tac-intersect-propagate-rules)))))
+
+  (defthmd tac-intersect-propagate-rules-wellformed-when-subsetp
+    (implies (and (subsetp-equal x y)
+                  (tac-intersect-propagate-rules-wellformed y))
+             (tac-intersect-propagate-rules-wellformed x))
+    :hints (("goal" :use ((:functional-instance acl2::element-list-p-when-subsetp-equal-non-true-list
+                           (acl2::element-p (lambda (x)
+                                              (or (not (consp x))
+                                                  (tac-intersect-propagate-rule-wellformed (cdr x)))))
+                           (acl2::element-list-p tac-intersect-propagate-rules-wellformed)
+                           (acl2::element-example (lambda () nil))
+                           (acl2::element-list-final-cdr-p (lambda (x) t))))
+             :do-not-induct t))))
 
                               
                             
@@ -396,7 +409,36 @@
     (tac-intersect-propagate-rules-typed (tac-intersect-propagate-rules))
     :hints(("Goal" :in-theory (e/d ((tac-intersect-propagate-rules)
                                     tac-intersect-propagate-rule-typed)
-                                   ((tac-intersect-propagate-rules-typed)))))))
+                                   ((tac-intersect-propagate-rules-typed))))))
+
+  (defthmd tac-intersect-propagate-rules-typed-when-subsetp
+    (implies (and (subsetp-equal x y)
+                  (tac-intersect-propagate-rules-typed y))
+             (tac-intersect-propagate-rules-typed x))
+    :hints (("goal" :use ((:functional-instance acl2::element-list-p-when-subsetp-equal-non-true-list
+                           (acl2::element-p (lambda (x)
+                                              (or (not (consp x))
+                                                  (tac-intersect-propagate-rule-typed (cdr x)))))
+                           (acl2::element-list-p tac-intersect-propagate-rules-typed)
+                           (acl2::element-example (lambda () nil))
+                           (acl2::element-list-final-cdr-p (lambda (x) t))))
+             :do-not-induct t))))
+
+(defthmd tac-ev-theoremlist-p-of-tac-rewritelist-terms-when-subsetp
+  (implies (and (subsetp-equal x y)
+                (tac-ev-theoremlist-p (tac-rewritelist-terms y)))
+           (tac-ev-theoremlist-p (tac-rewritelist-terms x)))
+  :hints (("goal" :use ((:functional-instance acl2::element-list-p-when-subsetp-equal-non-true-list
+                         (acl2::element-p (lambda (x)
+                                            (or (not (consp x))
+                                                (tac-ev-theoremp* (cmr::rewrite-term (cdr x))))))
+                         (acl2::element-list-p (lambda (x)
+                                                 (tac-ev-theoremlist-p (tac-rewritelist-terms x))))
+                         (acl2::element-example (lambda () nil))
+                         (acl2::element-list-final-cdr-p (lambda (x) t))))
+           :in-theory (enable tac-rewritelist-terms
+                              tac-ev-theoremlist-p)
+           :do-not-induct t)))
 
 
 (defsection tac-ev-theorem-rewritesp-of-tac-intersect-propagate-rules
@@ -453,10 +495,12 @@
    (b* (((when (atom rules)) nil)
         (rest (collect-intersect-propagate-table (cdr rules)))
         ((unless (mbt (consp (car rules)))) rest)
-        ((cons name rule) (car rules))
+        (pair (car rules))
+        (rule (cdr pair))
         (target (tac-intersect-propagate-rule->target-fn rule))
         (entry (cdr (assoc-equal target rest)))
-        (new-entry (update-nth (tac-intersect-propagate-rule->descent-pos rule) name entry)))
+        (new-entry (update-nth (tac-intersect-propagate-rule->descent-pos rule)
+                               pair entry)))
      (cons (cons target new-entry) rest))
    ///
    (local (defthm true-listp-assoc-equal
@@ -474,8 +518,59 @@
     ',(fast-alist-free
        (fast-alist-clean (collect-intersect-propagate-table (tac-intersect-propagate-rules))))))
 
-   
-         
+(define tac-intersect-propagate-table ()
+  :returns (table symbol-alistp)
+  *tac-intersect-propagate-table*
+  ///
+  (defret tac-rewritelist-p-of-<fn>
+    (tac-rewritelist-p (cdr (hons-assoc-equal fn table))))
+
+  (defretd <fn>-lookup-subset-of-tac-intersect-propagate-rules
+    (subsetp-equal (cdr (hons-assoc-equal fn table))
+                   (tac-intersect-propagate-rules))
+    :hints(("Goal" :in-theory (enable tac-intersect-propagate-rules))))
+
+  (local (defthm nth-open
+           (equal (nth n x)
+                  (if (zp n)
+                      (car x)
+                    (nth (1- n) (cdr x))))))
+
+  (defret <fn>-lookup-index-function-correct
+    (implies (and (< (nfix n) (len (tac-function-argument-types fn)))
+                  (hons-assoc-equal fn table))
+             (equal (tac-intersect-propagate-rule->target-fn
+                     (cdr (nth n (cdr (hons-assoc-equal fn table)))))
+                    fn)))
+
+  (defret <fn>-lookup-index-posn-correct
+    (implies (and (< (nfix n) (len (tac-function-argument-types fn)))
+                  (hons-assoc-equal fn table))
+             (equal (tac-intersect-propagate-rule->descent-pos
+                     (cdr (nth n (cdr (hons-assoc-equal fn table)))))
+                    (nfix n))))
+  
+  (in-theory (disable (tac-intersect-propagate-table)
+                      tac-intersect-propagate-table))
+
+  (defret <fn>-lookup-wellformed
+    (tac-intersect-propagate-rules-wellformed (cdr (hons-assoc-equal fn table)))
+    :hints(("Goal" :in-theory (enable tac-intersect-propagate-rules-wellformed-when-subsetp)
+            :use <fn>-lookup-subset-of-tac-intersect-propagate-rules)))
+
+  (defret <fn>-lookup-typed
+    (tac-intersect-propagate-rules-typed (cdr (hons-assoc-equal fn table)))
+    :hints(("Goal" :in-theory (enable tac-intersect-propagate-rules-typed-when-subsetp)
+            :use <fn>-lookup-subset-of-tac-intersect-propagate-rules)))
+
+  (defret <fn>-lookup-theorems
+    (tac-ev-theoremlist-p (tac-rewritelist-terms (cdr (hons-assoc-equal fn table))))
+    :hints(("Goal" :in-theory (enable tac-ev-theoremlist-p-of-tac-rewritelist-terms-when-subsetp)
+            :use <fn>-lookup-subset-of-tac-intersect-propagate-rules))))
+                  
+
+
+
 
 
 
@@ -506,7 +601,8 @@
                 (pseudo-term-case (first rule.lhs.args) :var)
                 (not (member-equal (pseudo-term-var->name (first rule.lhs.args))
                                    (cmr::term-vars (second rule.lhs.args))))
-                (subsetp-equal (cmr::termlist-vars rule.hyps) (cmr::term-vars rule.lhs))
+                (subsetp-equal (cmr::termlist-vars rule.hyps)
+                               (cmr::term-vars (second rule.lhs.args)))
                 (subsetp-equal (cmr::term-vars rule.rhs)
                                (cmr::term-vars rule.lhs)))))))
 

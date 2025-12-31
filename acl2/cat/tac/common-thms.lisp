@@ -36,3 +36,5 @@
                            (cmr::termlist-vars y)))
   :hints(("Goal" :in-theory (enable cmr::termlist-vars))))
 
+(in-theory (disable pseudo-termp
+                    pseudo-term-listp))
