@@ -919,6 +919,9 @@
                                                  (v_array->arr x)
                                                  ty.type))
                     :arraylength_enum
+                    ;; FIXME This doesn't preserve the association of keys to
+                    ;; values unless exactly the right keys are present.
+                    ;; Rather, it preserves the order of the keys.
                     (v_record (let ((keys (set::mergesort ty.index.elts)))
                                 (omap::from-lists
                                  keys
@@ -1246,3 +1249,426 @@
             (typed_identifierlist-remove-bitfields (cdr x)))))
   ///
   (Verify-guards ty-remove-bitfields))
+
+
+(define typed_identifierlist-lookup ((name identifier-p)
+                                     (x typed_identifierlist-p))
+  :returns (ty maybe-ty-p)
+  (if (atom x)
+      nil
+    (if (equal (typed_identifier->name (car x)) (identifier-fix name))
+        (typed_identifier->type (car x))
+      (typed_identifierlist-lookup name (cdr x))))
+  ///
+  (defret <fn>-member
+    (implies ty
+             (member-equal (typed_identifier name ty) (typed_identifierlist-fix x))))
+
+  (defret <fn>-under-iff
+    (iff ty
+         (member-equal (identifier-fix name) (typed_identifierlist->names x)))
+    :hints(("Goal" :in-theory (enable typed_identifierlist->names))))
+
+  (defret count-of-<fn>
+    (implies ty
+             (< (ty-count ty)
+                (typed_identifierlist-count x)))
+    :hints (("goal" :induct <call>
+             :expand (<call>
+                      (typed_identifierlist->names x)
+                      (typed_identifierlist-count x))))
+    :rule-classes :linear)
+
+  (defret ty-resolved-p-of-<fn>
+    (implies (and (typed_identifierlist-resolved-p x)
+                  ty)
+             (ty-resolved-p ty))
+    :hints(("Goal" :induct <call>
+            :expand (<call>
+                     (typed_identifierlist-resolved-p x))))))
+
+
+(defthmd record-type-satisfied-implies-lookup
+  (implies (and (record-type-satisfied x fields)
+                (identifier-p name)
+                (member-equal name (typed_identifierlist->names fields)))
+           (and (omap::assoc name (val-imap-fix x))
+                (ty-satisfied (cdr (omap::assoc name (val-imap-fix x)))
+                              (typed_identifierlist-lookup name fields))))
+  :hints(("Goal" :in-theory (enable (:i typed_identifierlist-lookup))
+          :induct (typed_identifierlist-lookup name fields)
+          :expand ((record-type-satisfied x fields)
+                   (typed_identifierlist->names fields)
+                   (typed_identifierlist-lookup name fields)))))
+
+(define record-type-satisfied-witness ((x val-imap-p)
+                                       (fields typed_identifierlist-p))
+  :returns (name identifier-p)
+  :guard (typed_identifierlist-resolved-p fields)
+  (b* (((when (atom fields)) "")
+       ((typed_identifier f1) (car fields))
+       (look (omap::assoc f1.name (val-imap-fix x)))
+       ((unless look) f1.name)
+       (val (cdr look)))
+    (if (ty-satisfied val f1.type)
+        (record-type-satisfied-witness x (cdr fields))
+      f1.name))
+  ///
+  (defretd <fn>-when-not-record-type-satisfied
+    (implies (and (not (record-type-satisfied x fields))
+                  (no-duplicatesp-equal (typed_identifierlist->names fields)))
+             (and (member-equal name (typed_identifierlist->names fields))
+                  (implies (omap::assoc name (val-imap-fix x))
+                           (not (ty-satisfied (cdr (omap::assoc name (val-imap-fix x)))
+                                              (typed_identifierlist-lookup name fields))))))
+  :hints(("Goal" 
+          :induct <call>
+          :expand ((record-type-satisfied x fields)
+                   (typed_identifierlist->names fields)
+                   (record-type-satisfied-witness x fields)
+                   (:free (name) (typed_identifierlist-lookup name fields))))))
+
+  (defretd record-type-satisfied-iff-<fn>
+    (implies (and (acl2::rewriting-positive-literal `(record-type-satisfied ,x ,fields))
+                  (no-duplicatesp-equal (typed_identifierlist->names fields)))
+             (iff (record-type-satisfied x fields)
+                  (not
+                   (and (member-equal name (typed_identifierlist->names fields))
+                        (implies (omap::assoc name (val-imap-fix x))
+                                 (not (ty-satisfied (cdr (omap::assoc name (val-imap-fix x)))
+                                                    (typed_identifierlist-lookup name fields))))))))
+    :hints (("goal" :in-theory (e/d (record-type-satisfied-implies-lookup)
+                                    (<fn>))
+             :use <fn>-when-not-record-type-satisfied))))
+    
+                  
+(defconst *fake-posn* (posn "" 0 0 0))
+
+(define int-literal-expr-normalize ((x expr-p))
+  :guard (int-literal-expr-p x)
+  :returns (new-x expr-p)
+  :prepwork ((local (in-theory (enable int-literal-expr-p
+                                       int-literal-expr->val))))
+  (if (mbt (int-literal-expr-p x))
+      (expr (e_literal (l_int (int-literal-expr->val x))) *fake-posn*)
+    (expr-fix x))
+  ///
+  (defret int-literal-expr-p-of-<fn>
+    (iff (int-literal-expr-p new-x)
+         (int-literal-expr-p x)))
+
+  (defret int-literal-expr->val-of-<fn>
+    (equal (int-literal-expr->val new-x)
+           (int-literal-expr->val x))))
+
+(define int_constraint-normalize ((x int_constraint-p))
+  :guard (int_constraint-resolved-p x)
+  :returns (new-x int_constraint-p)
+  :prepwork ((local (in-theory (enable int_constraint-resolved-p))))
+  (if (mbt (int_constraint-resolved-p x))
+      (int_constraint-case x
+        :constraint_exact (constraint_exact (int-literal-expr-normalize x.val))
+        :constraint_range (constraint_range (int-literal-expr-normalize x.from)
+                                            (int-literal-expr-normalize x.to)))
+    (int_constraint-fix x))
+  ///
+  (defret int_constraint-resolved-p-of-<fn>
+    (iff (int_constraint-resolved-p new-x)
+         (int_constraint-resolved-p x)))
+
+  (defret int_constraint-satisfied-of-<fn>
+    (iff (int_constraint-satisfied v new-x)
+         (int_constraint-satisfied v x))
+    :hints(("Goal" :in-theory (enable int_constraint-satisfied)))))
+
+(define int_constraintlist-normalize ((x int_constraintlist-p))
+  :guard (int_constraintlist-resolved-p x)
+  :returns (new-x int_constraintlist-p)
+  :prepwork ((local (in-theory (enable int_constraintlist-resolved-p))))
+  (if (atom x)
+      nil
+    (cons (int_constraint-normalize (car x))
+          (int_constraintlist-normalize (cdr x))))
+  ///
+  (defret int_constraintlist-resolved-p-of-<fn>
+    (iff (int_constraintlist-resolved-p new-x)
+         (int_constraintlist-resolved-p x)))
+  
+  (defret int_constraintlist-satisfied-of-<fn>
+    (iff (int_constraintlist-satisfied v new-x)
+         (int_constraintlist-satisfied v x))
+    :hints(("Goal" :in-theory (enable int_constraintlist-satisfied)))))
+
+(define constraint_kind-normalize ((x constraint_kind-p))
+  :guard (constraint_kind-resolved-p x)
+  :returns (new-x constraint_kind-p)
+  :prepwork ((local (in-theory (enable constraint_kind-resolved-p))))
+  (constraint_kind-case x
+    :unconstrained (unconstrained)
+    :wellconstrained (change-wellconstrained x :constraints (int_constraintlist-normalize x.constraints))
+    :otherwise (constraint_kind-fix x))
+  ///
+  (defret constraint_kind-resolved-p-of-<fn>
+    (iff (constraint_kind-resolved-p new-x)
+         (constraint_kind-resolved-p x)))
+
+  (defret constraint_kind-satisfied-of-<fn>
+    (iff (constraint_kind-satisfied v new-x)
+         (constraint_kind-satisfied v x))
+    :hints(("Goal" :in-theory (enable constraint_kind-satisfied)))))
+
+
+(defines ty-normalize
+  :flag-local nil
+  :ruler-extenders :all
+  :verify-guards nil
+  (define ty-normalize ((x ty-p))
+    :guard (ty-resolved-p x)
+    :measure (acl2::two-nats-measure (ty-count x) 0)
+    :returns (new-x ty-p)
+    (b* ((x (ty->desc x)))
+      (ty
+       (type_desc-case x
+         :t_int (t_int (constraint_kind-normalize x.constraint))
+         :t_bits (t_bits (int-literal-expr-normalize x.expr) nil)
+         :t_enum (t_enum (mergesort x.elts))
+         :t_tuple (t_tuple (tuple-type-normalize x.types))
+         :t_array (array_index-case x.index
+                    :arraylength_expr (t_array x.index (ty-normalize x.type))
+                    :arraylength_enum (t_array (arraylength_enum x.index.name
+                                                                 (mergesort x.index.elts))
+                                               (if (consp x.index.elts)
+                                                   (ty-normalize x.type)
+                                                 ;; unimportant what the type is
+                                                 (change-ty x.type
+                                                            :desc (t_bool)))))
+         :t_record
+         (t_record
+          (record-type-normalize (mergesort (typed_identifierlist->names x.fields))
+                                 x.fields))
+         :t_exception
+         (t_exception
+          (record-type-normalize (mergesort (typed_identifierlist->names x.fields))
+                                 x.fields))
+         :t_collection
+         (t_collection
+          (record-type-normalize (mergesort (typed_identifierlist->names x.fields))
+                                 x.fields))
+         :otherwise (type_desc-fix x))
+       *fake-posn*)))
+
+  (define tuple-type-normalize ((x tylist-p))
+    :guard (tylist-resolved-p x)
+    :measure (acl2::two-nats-measure (tylist-count x) 0)
+    :returns (new-x tylist-p)
+    (if (atom x)
+        nil
+      (cons (ty-normalize (car x))
+            (tuple-type-normalize (cdr x)))))
+
+  (define record-type-normalize ((keys identifierlist-p) (fields typed_identifierlist-p))
+    :measure (acl2::two-nats-measure (typed_identifierlist-count fields) (len keys))
+    :guard (and (subsetp-equal keys (typed_identifierlist->names fields))
+                (typed_identifierlist-resolved-p fields))
+    :returns (new-fields typed_identifierlist-p)
+    (b* (((when (atom keys))
+          nil)
+         (ty (typed_identifierlist-lookup (car keys) fields)))
+      (if (mbt (and ty t))
+          (cons (typed_identifier (car keys) (ty-normalize ty))
+                (record-type-normalize (cdr keys) fields))
+        (record-type-normalize (cdr keys) fields))))
+  ///
+  (verify-guards ty-normalize)
+
+  (local (defthm key-ord-values-whe-emptyp
+           (implies (omap::emptyp x)
+                    (equal (omap::key-ord-values x) nil))
+           :hints(("Goal" :in-theory (enable omap::key-ord-values)))))
+  
+  (local (defthmd not-record-type-satisfied-when-not-lookup
+           (implies (and (bind-free `((name . (TYPED_IDENTIFIER->NAME$INLINE (CAR FIELDS))))
+                                    (name))
+                         (not (omap::assoc name (val-imap-fix x)))
+                         (identifier-p name)
+                         (member-equal name (typed_identifierlist->names fields)))
+                    (not (record-type-satisfied x fields)))
+           :hints(("Goal" :in-theory (enable record-type-satisfied-implies-lookup)))))
+
+  (local (defthmd not-record-type-satisfied-when-not-satisfied
+           (implies (and (bind-free `((name . (TYPED_IDENTIFIER->NAME$INLINE (CAR FIELDS))))
+                                    (name))
+                         (not (ty-satisfied (cdr (omap::assoc name (val-imap-fix x)))
+                                            (typed_identifierlist-lookup name fields)))
+                         (identifier-p name)
+                         (member-equal name (typed_identifierlist->names fields)))
+                    (not (record-type-satisfied x fields)))
+           :hints(("Goal" :in-theory (enable record-type-satisfied-implies-lookup)))))
+
+  (defthm typed_identifierlist->names-of-record-type-normalize
+    (equal (typed_identifierlist->names (record-type-normalize keys fields))
+           (intersection-equal (identifierlist-fix keys)
+                               (typed_identifierlist->names fields)))
+    :hints(("Goal" :in-theory (enable typed_identifierlist->names)
+            :induct (len keys)
+            :expand ((record-type-normalize keys fields)))))
+  
+  (defthm typed_identifierlist-lookup-of-record-type-normalize
+    (equal (typed_identifierlist-lookup key (record-type-normalize keys fields))
+           (and (member-equal (identifier-fix key) (identifierlist-fix keys))
+                (member-equal (identifier-fix key) (typed_identifierlist->names fields))
+                (ty-normalize (typed_identifierlist-lookup key fields))))
+    :hints(("Goal" :in-theory (enable typed_identifierlist-lookup
+                                      typed_identifierlist->names)
+            :induct (len keys)
+            :expand ((typed_identifierlist-lookup key fields)
+                     (record-type-normalize keys fields)))))
+                     
+                                      
+  (local (defthm member-of-mergesort
+           (iff (member-equal k (mergesort x))
+                (member-equal k x))))
+
+  (local (defthm no-duplicates-of-intersection
+           (implies (no-duplicatesp-equal a)
+                    (no-duplicatesp-equal (intersection-equal a b)))
+           :hints(("Goal" :in-theory (enable no-duplicatesp-equal intersection-equal)))))
+
+  (local (defthm not-member-when-setp-<<
+           (implies (and (<< a (car b))
+                         (setp b))
+                    (not (member a b)))
+           :hints(("Goal" :in-theory (enable setp)))))
+
+  (local (defthm not-member-car-cdr-when-setp
+           (implies (setp b)
+                    (not (member (car b) (cdr b))))
+           :hints(("Goal" :expand ((setp b))))))
+
+  (local (defthm no-duplicatesp-when-setp
+           (implies (setp y)
+                    (no-duplicatesp y))
+           :hints(("Goal" :in-theory (enable setp)))))
+  
+  (local (defthm record-type-satisfied-of-normalize-mergesort-cons
+           (implies (and (identifier-p a)
+                         (identifierlist-p b))
+                    (iff (record-type-satisfied x (record-type-normalize
+                                                   (mergesort (cons a b)) fields))
+                  
+                         (and (or (not (typed_identifierlist-lookup a fields))
+                                  (and (omap::assoc (identifier-fix a) (val-imap-fix x))
+                                       (ty-satisfied (cdr (omap::assoc (identifier-fix a) (val-imap-fix x)))
+                                                     (ty-normalize (typed_identifierlist-lookup a fields)))))
+                              (record-type-satisfied x (record-type-normalize (mergesort b) fields)))))
+           :hints(("Goal" :in-theory (e/d ()
+                                          (identifier-p-when-assoc-val-imap-p-binds-free-x)))
+                  (and stable-under-simplificationp
+                       (b* ((lit (assoc 'record-type-satisfied clause))
+                            (arg (second (second (third lit))))
+                            (other (if (eq arg 'b) '(cons a b) 'b)))
+                         (if lit
+                             `(:in-theory (e/d (record-type-satisfied-iff-record-type-satisfied-witness)
+                                               (identifier-p-when-assoc-val-imap-p-binds-free-x))
+                               :use ((:instance record-type-satisfied-implies-lookup
+                                      (fields (record-type-normalize (mergesort ,other) fields))
+                                      (name (record-type-satisfied-witness
+                                             x (record-type-normalize (mergesort ,arg) fields))))))
+                           `(:use ((:instance record-type-satisfied-implies-lookup
+                                    (fields (record-type-normalize (mergesort (cons a b)) fields))
+                                    (name a))))))))))
+
+  (local (defthmd record-type-normalize-of-cons-non-member
+           (implies (not (member-equal (typed_identifier->name (car fields))
+                                       (identifierlist-fix keys)))
+                    (equal (record-type-normalize keys fields)
+                           (record-type-normalize keys (cdr fields))))
+           :hints (("goal" :induct (len keys)
+                    :expand ((:free (fields) (record-type-normalize keys fields))
+                             (typed_identifierlist->names fields)
+                             (:free (key) (typed_identifierlist-lookup key fields)))))))
+
+  (local (defthm intersection-equal-when-subsetp
+           (implies (subsetp x y)
+                    (equal (intersection-equal x y)
+                           (true-list-fix x)))))
+  
+  (local (defthm intersection-equal-self
+           (equal (intersection-equal x x)
+                  (true-list-fix x))
+           :hints(("Goal" :in-theory (enable intersection-equal)))))
+
+  (local (defthm intersection-identity
+           (implies (equal keys (mergesort names))
+                    (equal (mergesort (intersection-equal keys names)) keys))))
+  
+  (defthm-ty-satisfied-flag
+    (defthm ty-satisfied-of-ty-normalize
+      (implies (ty-satisfiable ty)
+               (iff (ty-satisfied x (ty-normalize ty))
+                    (ty-satisfied x ty)))
+      :hints ('(:expand ((ty-normalize ty)
+                         (ty-satisfiable ty)
+                         (:free (ty) (ty-satisfied x ty))
+                         (:free (ty) (array-type-satisfied nil ty)))))
+      :flag ty-satisfied)
+    (defthm tuple-type-satisfied-of-tuple-type-normalize
+      (implies (tylist-satisfiable types)
+               (iff (tuple-type-satisfied x (tuple-type-normalize types))
+                    (tuple-type-satisfied x types)))
+      :hints ('(:expand ((tuple-type-normalize types)
+                         (tylist-satisfiable types)
+                         (:free (ty) (tuple-type-satisfied x ty)))))
+      :flag tuple-type-satisfied)
+
+    (defthm array-type-satisfied-of-ty-normalize
+      (implies (ty-satisfiable ty)
+               (iff (array-type-satisfied x (ty-normalize ty))
+                    (array-type-satisfied x ty)))
+      :hints ('(:expand ((:free (ty) (array-type-satisfied x ty)))))
+      :flag array-type-satisfied)
+
+    (defthm record-type-satisfied-of-record-type-normalize
+      (implies (and (typed_identifierlist-satisfiable fields)
+                    (no-duplicatesp-equal (typed_identifierlist->names fields)))
+               (iff (record-type-satisfied x (record-type-normalize (mergesort
+                                                                     (typed_identifierlist->names fields))
+                                                                    fields))
+                    (record-type-satisfied x fields)))
+      :hints ('(:expand ((record-type-satisfied x fields)
+                         (record-type-satisfied x nil)
+                         (typed_identifierlist-satisfiable fields)
+                         (typed_identifierlist->names fields)
+                         (:free (key) (typed_identifierlist-lookup key fields)))
+                :in-theory (enable record-type-normalize-of-cons-non-member)
+                ;; :in-theory (enable not-record-type-satisfied-when-not-lookup
+                ;;                    not-record-type-satisfied-when-not-satisfied)
+                ))
+      :flag record-type-satisfied))
+
+  (defthm ty-satisfiable-of-ty-normalize
+    (implies (ty-satisfiable x)
+             (ty-satisfiable (ty-normalize x)))
+    :hints (("goal" :use ((:instance ty-satisfying-val-correct)
+                          (:instance ty-satisfying-val-sufficient
+                           (ty (ty-normalize x))
+                           (x (ty-satisfying-val x))))
+             :in-theory (disable ty-satisfying-val-correct
+                                 ty-satisfying-val-sufficient))))
+
+  (local (defthm ty-satisfiable-by-satisfied
+           (implies (ty-satisfied x ty)
+                    (ty-satisfiable ty))
+           :hints (("goal" :use ((:instance ty-satisfying-val-sufficient))
+                    :in-theory (disable ty-satisfying-val-sufficient)))))
+  
+  (defthm ty-fix-val-of-ty-normalize
+    (implies (ty-satisfied x ty)
+             (equal (ty-fix-val x (ty-normalize ty))
+                    (val-fix x)))
+    :hints (("goal" :use ((:instance ty-fix-val-when-satisfied
+                           (ty (ty-normalize ty))
+                           (x (ty-fix-val x ty)))
+                          (:instance ty-fix-val-when-satisfied))
+             :in-theory (disable ty-fix-val-when-satisfied)))))
+
