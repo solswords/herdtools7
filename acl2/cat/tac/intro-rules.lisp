@@ -24,7 +24,7 @@
 (include-book "centaur/meta/pseudo-term-var-list" :dir :system)
 (include-book "std/lists/index-of" :dir :system)
 (local (include-book "std/lists/sets" :dir :system))
-
+(local (std::add-default-post-define-hook :fix))
 (encapsulate nil
   (acl2::defconsts *tac-intersect-propagate-rules*
     (b* (((mv err rewrites)
@@ -78,6 +78,36 @@
                     (tac-ev-lst x (cons pair env))))
     :hints ('(:expand ((cmr::termlist-vars x))))
     :flag cmr::termlist-vars))
+
+
+
+;; (cmr::defthm-term-vars-flag
+;;   (defthm tac-term-type-of-cons-non-var
+;;     (implies (not (member-equal v (cmr::term-vars x)))
+;;              (equal (tac-term-type x (cons (cons v typ) ctx))
+;;                     (tac-term-type x ctx)))
+;;     :hints ('(:expand ((cmr::term-vars x))))
+;;     :flag cmr::term-vars)
+;;   (defthm tac-termlist-types-of-cons-non-var
+;;     (implies (not (member-equal v (cmr::termlist-vars x)))
+;;              (equal (tac-termlist-types x (cons (cons v typ) ctx))
+;;                     (tac-termlist-types x ctx)))
+;;     :hints ('(:expand ((cmr::termlist-vars x))))
+;;     :flag cmr::termlist-vars))
+
+;; (cmr::defthm-term-vars-flag
+;;   (defthm tac-term-type-of-second-cons-non-var
+;;     (implies (not (member-equal v (cmr::term-vars x)))
+;;              (equal (tac-term-type x (list* pair (cons v typ) ctx))
+;;                     (tac-term-type x (cons pair ctx))))
+;;     :hints ('(:expand ((cmr::term-vars x))))
+;;     :flag cmr::term-vars)
+;;   (defthm tac-termlist-types-of-second-cons-non-var
+;;     (implies (not (member-equal v (cmr::termlist-vars x)))
+;;              (equal (tac-termlist-types x (list* pair (cons v typ) ctx))
+;;                     (tac-termlist-types x (cons pair ctx))))
+;;     :hints ('(:expand ((cmr::termlist-vars x))))
+;;     :flag cmr::termlist-vars))
 
 
 (local
@@ -163,10 +193,22 @@
     :hints(("Goal" :in-theory (enable tac-intersect-propagate-rule->target-fn
                                       tac-intersect-propagate-rule-wellformed))))
 
-  (defret <fn>-vars-when-wellformed
+  (defret term-vars-of-<fn>
+    (implies (tac-intersect-propagate-rule-wellformed rule)
+             (acl2::set-equiv (cmr::term-vars pat)
+                              (cmr::pseudo-term-var-list->names
+                               (pseudo-term-call->args pat))))
+    :hints(("Goal" :in-theory (enable tac-intersect-propagate-rule-wellformed
+                                      cmr::term-vars
+                                      termlist-vars-when-pseudo-term-var-listp))))
+
+  
+
+  (defret <fn>-intersect-var
     (implies (tac-intersect-propagate-rule-wellformed rule)
              (not (member-equal (tac-intersect-propagate-rule->intersect-var rule)
-                                (cmr::term-vars pat))))
+                                (cmr::pseudo-term-var-list->names
+                                 (pseudo-term-call->args pat)))))
     :hints(("Goal" :in-theory (e/d (tac-intersect-propagate-rule->intersect-var
                                     tac-intersect-propagate-rule-wellformed
                                     cmr::term-vars)
@@ -211,7 +253,83 @@
     :hints(("Goal" :in-theory (e/d (tac-intersect-propagate-rule->intersect-var
                                       tac-intersect-propagate-rule->target-pattern
                                       tac-intersect-propagate-rule-wellformed)
-                                   (cmr::pseudo-term-var-list->names-when-pseudo-term-listp))))))
+                                   (cmr::pseudo-term-var-list->names-when-pseudo-term-listp)))))
+
+  (defret <fn>-element-is-var
+    (implies (tac-intersect-propagate-rule-wellformed rule)
+             (equal (pseudo-term-kind
+                     (nth pos (pseudo-term-call->args
+                               (tac-intersect-propagate-rule->target-pattern rule))))
+                    :var))
+    :hints(("Goal" :in-theory (e/d (tac-intersect-propagate-rule->intersect-var
+                                      tac-intersect-propagate-rule->target-pattern
+                                      tac-intersect-propagate-rule-wellformed)
+                                   (cmr::pseudo-term-var-list->names-when-pseudo-term-listp)))))
+
+  (defret <fn>-bound
+    (implies (tac-intersect-propagate-rule-wellformed rule)
+             (< pos (len (pseudo-term-call->args
+                          (tac-intersect-propagate-rule->target-pattern rule)))))
+    :hints(("Goal" :in-theory (enable tac-intersect-propagate-rule->target-pattern
+                                      tac-intersect-propagate-rule-wellformed)))))
+
+
+(local (defthm nth-of-tac-termlist-types
+         (equal (nth n (tac-termlist-types x ctx))
+                (tac-term-type (nth n x) ctx))
+         :hints(("Goal" :in-theory (enable tac-termlist-types)
+                 :induct (nth n x)))))
+
+(local (defthmd nth-when-prefix
+         (implies (and (acl2::prefixp x y)
+                       (nth n x))
+                  (equal (nth n y) (nth n x)))
+         :hints(("Goal" :in-theory (enable acl2::prefixp)))))
+
+(local (defthm nth-of-termlist-subst-strict
+         (equal (nth pos (cmr::termlist-subst-strict pat subst))
+                (cmr::term-subst-strict (nth pos pat) subst))
+         :hints(("Goal" :induct (nth pos pat)
+                 :in-theory (e/d (nth cmr::termlist-subst-strict))
+                 :expand ((cmr::term-subst-strict nil subst))))))
+
+(local (defthmd nth-of-equal-to-termlist-subst-strict
+         (implies (equal lst (cmr::termlist-subst-strict pat subst))
+                  (equal (nth pos lst)
+                         (cmr::term-subst-strict (nth pos pat) subst)))))
+                         
+
+(defthmd lookup-of-nth-var-in-pattern-in-subst
+  (b* (((mv ok subst) (cmr::term-unify-strict target-pattern arg nil)))
+    (implies (and ok
+                  (pseudo-term-case target-pattern :fncall)
+                  (pseudo-term-case (nth pos (pseudo-term-call->args target-pattern)) :var))
+             (equal (cdr (hons-assoc-equal (pseudo-term-var->name (nth pos (pseudo-term-call->args target-pattern)))
+                                           subst))
+                    (nth pos (pseudo-term-call->args arg)))))
+  :hints (("goal" :expand ((:free (subst) (cmr::term-subst-strict target-pattern subst)))
+           :in-theory (enable cmr::equal-of-pseudo-term-fncall
+                              nth-of-equal-to-termlist-subst-strict
+                              cmr::term-subst-strict))))
+
+
+(local (defthm lookup-of-tac-subst-ctx
+         (equal (hons-assoc-equal v (tac-subst-ctx subst ctx))
+                (let ((look (hons-assoc-equal v (cmr::pseudo-term-subst-fix subst))))
+                  (and look
+                       (cons v (tac-term-type (cdr look) ctx)))))
+         :hints(("Goal" :in-theory (enable tac-subst-ctx)))))
+
+(local (defthm tac-term-type-of-tac-subst-ctx-unify
+         (b* (((mv ok subst) (cmr::term-unify-strict pat target nil)))
+           (implies ok
+                    (equal (tac-term-type pat (tac-subst-ctx subst ctx))
+                           (tac-term-type target ctx))))
+         :hints (("goal" :use ((:instance tac-term-type-of-term-subst-strict
+                                (x pat)
+                                (subst (mv-nth 1 (cmr::term-unify-strict pat target nil)))))
+                  :in-theory (disable tac-term-type-of-term-subst-strict)))))
+
 
 (define tac-intersect-propagate-rule->result-type ((rule cmr::rewrite-p))
   :guard (tac-intersect-propagate-rule-wellformed rule)
@@ -221,7 +339,56 @@
   :returns (type tac-type-p)
   (tac-type-fix
    (nth (tac-intersect-propagate-rule->descent-pos rule)
-        (tac-function-argument-types (tac-intersect-propagate-rule->target-fn rule)))))
+        (tac-function-argument-types (tac-intersect-propagate-rule->target-fn rule))))
+  ///
+  (defret <fn>-when-wellformed
+    (implies (tac-intersect-propagate-rule-wellformed rule)
+             (or (equal type :set)
+                 (equal type :rel)))
+    :hints(("Goal" :in-theory (enable tac-intersect-propagate-rule-wellformed
+                                      tac-intersect-propagate-rule->descent-pos
+                                      tac-intersect-propagate-rule->target-fn)))
+    :rule-classes :forward-chaining)
+
+  (defret <fn>-is-desc-var-type
+    (implies (and (tac-intersect-propagate-rule-wellformed rule)
+                  (tac-term-type (tac-intersect-propagate-rule->target-pattern rule) ctx))
+             (tac-type-equiv
+              (cdr (hons-assoc-equal
+                    (pseudo-term-var->name
+                     (nth (tac-intersect-propagate-rule->descent-pos rule)
+                          (pseudo-term-call->args
+                           (tac-intersect-propagate-rule->target-pattern rule))))
+                    ctx))
+              type))
+    :hints(("Goal" :in-theory (e/d (tac-intersect-propagate-rule->target-pattern
+                                      tac-intersect-propagate-rule->target-fn
+                                      tac-intersect-propagate-rule->descent-pos
+                                      tac-intersect-propagate-rule-wellformed
+                                      nth-when-prefix)
+                                   (nth-of-tac-termlist-types
+                                    CMR::PSEUDO-TERM-VAR-LIST->NAMES-WHEN-PSEUDO-TERM-LISTP))
+            :use ((:instance nth-of-tac-termlist-types
+                   (n (tac-intersect-propagate-rule->descent-pos rule))
+                   (x (pseudo-term-call->args
+                       (tac-intersect-propagate-rule->target-pattern rule))))))))
+
+  (defret <fn>-is-desc-var-type-unify
+    (b* (((mv ok ?subst)
+          (cmr::term-unify-strict (tac-intersect-propagate-rule->target-pattern rule) target nil)))
+      (implies (and (tac-intersect-propagate-rule-wellformed rule)
+                    (tac-term-type target ctx)
+                    ok)
+               (equal
+                (tac-term-type
+                 (nth (tac-intersect-propagate-rule->descent-pos rule)
+                      (pseudo-term-call->args target))
+                 ctx)
+                type)))
+    :hints(("Goal" :use ((:instance <fn>-is-desc-var-type
+                          (ctx (tac-subst-ctx (mv-nth 1 (cmr::term-unify-strict (tac-intersect-propagate-rule->target-pattern rule) target nil)) ctx))))
+            :in-theory (e/d (lookup-of-nth-var-in-pattern-in-subst)
+                            (<fn> <fn>-is-desc-var-type))))))
 
 (define tac-intersect-propagate-rule->intersect-term ((rule cmr::rewrite-p))
   :guard (tac-intersect-propagate-rule-wellformed rule)
@@ -312,7 +479,6 @@
                             (cons (cons int-var w)
                                   (tac-ev-alist subst env))))
        (desc-val (tac-ev (cdr (hons-assoc-equal desc-var subst)) env))
-       (desc-new-val (tac-ev new-arg env))
        (target-val (tac-ev arg env))
        (target-new-val (tac-ev target-pattern (cons (cons desc-var desc-new-val)
                                                     (tac-ev-alist subst env)))))
@@ -323,31 +489,79 @@
                     
                   (if (eq desc-type :set)
                       (iff (pred-set-intersects new-int-val desc-val)
-                           (pred-set-intersects new-int-val desc-new-val))
+                           (and new-assum
+                                (pred-set-intersects new-int-val desc-new-val)))
                     (iff (pred-rel-intersects new-int-val desc-val)
-                         (pred-rel-intersects new-int-val desc-new-val))))
+                         (and new-assum
+                              (pred-rel-intersects new-int-val desc-new-val)))))
              (and (implies (eq target-type :set)
                            (iff (pred-set-intersects w target-val)
-                                (pred-set-intersects w target-new-val)))
+                                (and new-assum
+                                     (pred-set-intersects w target-new-val))))
                   (implies (not (eq target-type :set))
                            (iff (pred-rel-intersects w target-val)
-                                (pred-rel-intersects w target-new-val))))))
+                                (and new-assum
+                                     (pred-rel-intersects w target-new-val)))))))
   :hints (("goal" :in-theory (e/d (tac-ev-of-pattern-by-alist)
-                                  (tac-ev-when-pseudo-term-fncall)))
+                                  (tac-ev-when-pseudo-term-fncall
+                                   cmr::pseudo-term-var-list->names-when-pseudo-term-listp)))
           (acl2::use-termhint
            (b* ((target-pattern (tac-intersect-propagate-rule->target-pattern rule))
                 (desc-pos (tac-intersect-propagate-rule->descent-pos rule))
                 (desc-var (pseudo-term-var->name (nth desc-pos (pseudo-term-call->args target-pattern))))
                 (int-var (tac-intersect-propagate-rule->intersect-var rule))
-                ((mv ?ok subst) (cmr::term-unify-strict target-pattern arg nil))
-                (desc-new-val (tac-ev new-arg env)))
+                ((mv ?ok subst) (cmr::term-unify-strict target-pattern arg nil)))
              `(:use ((:instance tac-intersect-propagate-rule-wellformed-implies
                       (env ,(acl2::hq (cons (cons int-var w)
                                             (tac-ev-alist subst env)))))
                      (:instance tac-intersect-propagate-rule-wellformed-implies
-                      (env ,(acl2::hq (list* (cons desc-var desc-new-val)
+                      (env ,(acl2::hq (list* (cons desc-var (and new-assum desc-new-val))
                                              (cons int-var w)
                                              (tac-ev-alist subst env))))))))))
+  :rule-classes nil)
+
+
+
+(defthm tac-intersect-propagate-rule-wellformed-implies-can-rewrite-inner2
+  (b* ((target-fn (tac-intersect-propagate-rule->target-fn rule))
+       (target-pattern (tac-intersect-propagate-rule->target-pattern rule))
+       (target-type (tac-function-return-type target-fn))
+       (desc-type (tac-intersect-propagate-rule->result-type rule))
+       (desc-pos (tac-intersect-propagate-rule->descent-pos rule))
+       (desc-var (pseudo-term-var->name (nth desc-pos (pseudo-term-call->args target-pattern))))
+       (desc-term (nth desc-pos (pseudo-term-call->args arg)))
+       (int-var (tac-intersect-propagate-rule->intersect-var rule))
+       (int-term (tac-intersect-propagate-rule->intersect-term rule))
+       ((mv ok subst) (cmr::term-unify-strict target-pattern arg nil))
+       (new-int-val (tac-ev int-term
+                            (cons (cons int-var w)
+                                  (tac-ev-alist subst env))))
+       (desc-val (tac-ev desc-term env))
+       (target-val (tac-ev arg env))
+       (target-new-val (tac-ev target-pattern (cons (cons desc-var desc-new-val)
+                                                    (tac-ev-alist subst env)))))
+    (implies (and (tac-ev-theoremp* (cmr::rewrite-term rule))
+                  (tac-intersect-propagate-rule-wellformed rule)
+                  ok
+                  ;; (eq rule.rhs.fn 'pred-set-intersects)
+                    
+                  (if (eq desc-type :set)
+                      (iff (pred-set-intersects new-int-val desc-val)
+                           (and new-assum
+                                (pred-set-intersects new-int-val desc-new-val)))
+                    (iff (pred-rel-intersects new-int-val desc-val)
+                         (and new-assum
+                              (pred-rel-intersects new-int-val desc-new-val)))))
+             (and (implies (eq target-type :set)
+                           (iff (pred-set-intersects w target-val)
+                                (and new-assum
+                                     (pred-set-intersects w target-new-val))))
+                  (implies (not (eq target-type :set))
+                           (iff (pred-rel-intersects w target-val)
+                                (and new-assum
+                                     (pred-rel-intersects w target-new-val)))))))
+  :hints (("goal" :use ((:instance tac-intersect-propagate-rule-wellformed-implies-can-rewrite-inner))
+           :in-theory (enable lookup-of-nth-var-in-pattern-in-subst)))
   :rule-classes nil)
 
 (define tac-intersect-propagate-rules-wellformed ((rules tac-rewritelist-p))
@@ -372,7 +586,9 @@
                            (acl2::element-list-p tac-intersect-propagate-rules-wellformed)
                            (acl2::element-example (lambda () nil))
                            (acl2::element-list-final-cdr-p (lambda (x) t))))
-             :do-not-induct t))))
+             :do-not-induct t)))
+
+  (local (in-theory (enable tac-rewritelist-fix))))
 
                               
                             
@@ -388,6 +604,15 @@
                        (equal rhs-type :pred))))
     :rewrite :direct)
 
+  (fty::deffixcong cmr::rewrite-equiv iff (tac-intersect-propagate-rule-typed rule) rule
+    :hints (("goal" :use ((:instance tac-intersect-propagate-rule-typed-necc
+                           (rule (cmr::rewrite-fix rule))
+                           (ctx (tac-intersect-propagate-rule-typed-witness rule)))
+                          (:instance tac-intersect-propagate-rule-typed-necc
+                           (rule rule)
+                           (ctx (tac-intersect-propagate-rule-typed-witness (cmr::rewrite-fix rule)))))
+             :in-theory (disable tac-intersect-propagate-rule-typed-necc))))
+  
   (in-theory (disable tac-intersect-propagate-rule-typed)))
 
 (local (defthm prefixp-of-cons
@@ -396,6 +621,144 @@
                      (equal (car c) a)
                      (acl2::prefixp b (cdr c))))
          :hints(("Goal" :in-theory (enable acl2::prefixp)))))
+
+
+(defthm tac-intersect-propagate-rule-typed-and-wellformed-implies
+  (b* (((cmr::rewrite rule)))
+    (implies (and ;; (tac-intersect-propagate-rule-typed rule)
+              (tac-intersect-propagate-rule-wellformed rule)
+              (equal (tac-term-type rule.lhs ctx) :pred))
+             (equal (tac-type-fix
+                     (cdr (hons-assoc-equal (pseudo-term-var->name
+                                             (nth (tac-intersect-propagate-rule->descent-pos rule)
+                                                  (pseudo-term-call->args
+                                                   (tac-intersect-propagate-rule->target-pattern rule))))
+                                            ctx)))
+                    (tac-intersect-propagate-rule->result-type rule))))
+  :hints(("Goal" :in-theory (e/d (tac-intersect-propagate-rule->result-type
+                                    tac-intersect-propagate-rule->target-pattern
+                                    tac-intersect-propagate-rule->descent-pos
+                                    tac-intersect-propagate-rule-wellformed
+                                    tac-intersect-propagate-rule->target-fn
+                                    nth-when-prefix)
+                                 (CMR::PSEUDO-TERM-VAR-LIST->NAMES-WHEN-PSEUDO-TERM-LISTP
+                                  nth-of-tac-termlist-types))
+          :use ((:instance nth-of-tac-termlist-types
+                 (n (tac-intersect-propagate-rule->descent-pos rule))
+                 (x (pseudo-term-call->args
+                     (tac-intersect-propagate-rule->target-pattern rule))))))))
+
+(defthm tac-intersect-propagate-rule-typed-and-wellformed-implies2
+  (b* (((cmr::rewrite rule))
+       (pat (tac-intersect-propagate-rule->target-pattern rule))
+       ((mv ok ?subst) (cmr::term-unify-strict pat target nil)))
+    (implies (and ;; (tac-intersect-propagate-rule-typed rule)
+              ok
+              (tac-intersect-propagate-rule-wellformed rule)
+              (tac-term-type target ctx))
+             (equal (tac-term-type
+                     (nth (tac-intersect-propagate-rule->descent-pos rule)
+                          (pseudo-term-call->args target))
+                     ctx)
+                    (tac-intersect-propagate-rule->result-type rule))))
+  :hints(("Goal" :in-theory (e/d (tac-intersect-propagate-rule->result-type
+                                    tac-intersect-propagate-rule->target-pattern
+                                    tac-intersect-propagate-rule->descent-pos
+                                    tac-intersect-propagate-rule-wellformed
+                                    tac-intersect-propagate-rule->target-fn
+                                    nth-when-prefix)
+                                 (CMR::PSEUDO-TERM-VAR-LIST->NAMES-WHEN-PSEUDO-TERM-LISTP
+                                  nth-of-tac-termlist-types))
+          :expand ((tac-term-type target ctx)
+                   (:free (pat) (cmr::term-unify-strict pat target nil)))
+          :use ((:instance nth-of-tac-termlist-types
+                 (n (tac-intersect-propagate-rule->descent-pos rule))
+                 (x (pseudo-term-call->args target))
+                 (ctx ctx))))))
+
+(defthm tac-term-type-of-intersect-term-when-wellformed
+  (implies (and (tac-intersect-propagate-rule-wellformed rule)
+                (tac-intersect-propagate-rule-typed rule)
+                (tac-term-type (tac-intersect-propagate-rule->target-pattern rule) ctx)
+                (equal (tac-type-fix
+                        (cdr (hons-assoc-equal
+                              (tac-intersect-propagate-rule->intersect-var rule) ctx)))
+                       (tac-term-type (tac-intersect-propagate-rule->target-pattern rule) ctx)))
+           (equal (tac-term-type (tac-intersect-propagate-rule->intersect-term rule) ctx)
+                  (tac-intersect-propagate-rule->result-type rule)))
+  :hints(("Goal" :in-theory (e/d (tac-intersect-propagate-rule-wellformed
+                                  tac-intersect-propagate-rule->target-pattern
+                                  tac-intersect-propagate-rule->intersect-term
+                                  tac-intersect-propagate-rule->intersect-var
+                                  tac-intersect-propagate-rule->result-type
+                                  tac-intersect-propagate-rule->descent-pos
+                                  tac-intersect-propagate-rule->target-fn
+                                  acl2::prefixp)
+                                 (tac-intersect-propagate-rule-typed-necc
+                                  cmr::pseudo-term-var-list->names-when-pseudo-term-listp))
+          :use ((:instance tac-intersect-propagate-rule-typed-necc))
+          :do-not-induct t)))
+
+
+;; (encapsulate nil
+           
+;; (defthm tac-intersect-propagate-rule-typed-and-wellformed-implies3
+;;   (b* (((cmr::rewrite rule))
+;;        (pat (tac-intersect-propagate-rule->target-pattern rule))
+;;        ((mv ok ?subst) (cmr::term-unify-strict pat target nil)))
+;;     (implies (and ;; (tac-intersect-propagate-rule-typed rule)
+;;               ok
+;;               (tac-intersect-propagate-rule-wellformed rule)
+;;               (tac-term-type target ctx))
+;;              (equal (cdr (hons-assoc-equal
+;;                           (PSEUDO-TERM-VAR->NAME
+;;                            (NTH (TAC-INTERSECT-PROPAGATE-RULE->DESCENT-POS RULE)
+;;                                 (PSEUDO-TERM-CALL->ARGS
+;;                                  (TAC-INTERSECT-PROPAGATE-RULE->TARGET-PATTERN RULE))))
+;;                           ctx))
+;;                     (tac-intersect-propagate-rule->result-type rule))))
+;;   :hints(("Goal" :in-theory (e/d (tac-intersect-propagate-rule->result-type
+;;                                     tac-intersect-propagate-rule->target-pattern
+;;                                     tac-intersect-propagate-rule->descent-pos
+;;                                     tac-intersect-propagate-rule-wellformed
+;;                                     tac-intersect-propagate-rule->target-fn
+;;                                     nth-when-prefix
+;;                                     nth-of-equal-to-termlist-subst-strict)
+;;                                  (CMR::PSEUDO-TERM-VAR-LIST->NAMES-WHEN-PSEUDO-TERM-LISTP
+;;                                   nth-of-tac-termlist-types))
+;;           :expand ((tac-term-type target ctx)
+;;                    (:free (pat) (cmr::term-unify-strict pat target nil)))
+;;           :use ((:instance nth-of-tac-termlist-types
+;;                  (n (tac-intersect-propagate-rule->descent-pos rule))
+;;                  (x (pseudo-term-call->args target))
+;;                  (ctx ctx))))))
+
+
+;;          ("Goal" :use ((:instance tac-intersect-propagate-rule-typed-and-wellformed-implies
+;;                         (ctx
+;;                          (cons
+;;                           (cons (tac-intersect-propagate-rule->intersect-var rule)
+;;                                 (tac-intersect-propagate-rule->result-type rule))
+;;                           (tac-subst-ctx (mv-nth 1 (cmr::term-unify-strict
+;;                                                     (tac-intersect-propagate-rule->target-pattern rule)
+;;                                                     target nil))
+;;                                          ctx)))))
+;;           :expand ((cmr::term-unify-strict (tac-intersect-propagate-rule->target-pattern rule)
+;;                                           target nil)))
+;;          (and stable-under-simplificationp
+;;               '(:in-theory (enable tac-intersect-propagate-rule->target-pattern
+;;                                    tac-intersect-propagate-rule->target-fn
+;;                                    tac-intersect-propagate-rule->result-type
+;;                                    tac-intersect-propagate-rule->intersect-var
+;;                                    tac-intersect-propagate-rule->descent-pos
+;;                                    tac-intersect-propagate-rule-wellformed
+;;                                    acl2::prefixp)
+;;                 :expand ((tac-term-type target ctx))))))
+                                   
+                  
+
+
+
 
 (define tac-intersect-propagate-rules-typed ((rules tac-rewritelist-p))
   :verify-guards nil
@@ -422,7 +785,9 @@
                            (acl2::element-list-p tac-intersect-propagate-rules-typed)
                            (acl2::element-example (lambda () nil))
                            (acl2::element-list-final-cdr-p (lambda (x) t))))
-             :do-not-induct t))))
+             :do-not-induct t)))
+
+  (local (in-theory (enable tac-rewritelist-fix))))
 
 (defthmd tac-ev-theoremlist-p-of-tac-rewritelist-terms-when-subsetp
   (implies (and (subsetp-equal x y)
@@ -492,6 +857,7 @@
    :returns (table (and (true-list-listp table)
                         (alistp table)))
    :verify-guards nil
+   :hooks nil
    (b* (((when (atom rules)) nil)
         (rest (collect-intersect-propagate-table (cdr rules)))
         ((unless (mbt (consp (car rules)))) rest)
@@ -615,7 +981,9 @@
   ///
   (defthm tac-var-intro-rules-wellformed-of-tac-var-intro-rules
     (tac-var-intro-rules-wellformed (tac-var-intro-rules))
-    :hints(("Goal" :in-theory (enable (tac-var-intro-rules))))))
+    :hints(("Goal" :in-theory (enable (tac-var-intro-rules)))))
+
+  (local (in-theory (enable tac-rewritelist-fix))))
 
 
 (defsection tac-var-intro-rule-typed
@@ -628,7 +996,18 @@
               (implies (equal lhs-type :pred)
                        (and (equal rhs-type :pred)
                             (subsetp-equal hyp-types '(:pred))))))
-    :rewrite :direct))
+    :rewrite :direct)
+
+  (fty::deffixcong cmr::rewrite-equiv iff (tac-var-intro-rule-typed rule) rule
+    :hints (("goal" :use ((:instance tac-var-intro-rule-typed-necc
+                           (rule (cmr::rewrite-fix rule))
+                           (ctx (tac-var-intro-rule-typed-witness rule)))
+                          (:instance tac-var-intro-rule-typed-necc
+                           (rule rule)
+                           (ctx (tac-var-intro-rule-typed-witness (cmr::rewrite-fix rule)))))
+             :in-theory (disable tac-var-intro-rule-typed-necc))))
+
+  (in-theory (disable tac-var-intro-rule-typed)))
 
 
 (define tac-var-intro-rules-typed ((rules tac-rewritelist-p))
@@ -645,7 +1024,9 @@
                                     tac-var-intro-rule-typed
                                     acl2::prefixp
                                     tac-termlist-types)
-                                   ((tac-var-intro-rules-typed)))))))
+                                   ((tac-var-intro-rules-typed))))))
+
+  (local (in-theory (enable tac-rewritelist-fix))))
 
 
 
