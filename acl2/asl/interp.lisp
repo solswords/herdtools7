@@ -520,7 +520,7 @@ corresponding values in the topmost scope."
   (declare (ignorable env name recurse-limit))
   (if (and recurse-limit
            (< (lifix recurse-limit) (get_stack_size name env)))
-      (ev_error "Recursion limit ran out" (identifier-fix name) nil)
+      (ev_error "DE_LE: Recursion limit ran out" (identifier-fix name) nil)
     (ev_normal nil))
   ///
   (local (in-theory (enable acl2::maybe-integerp-fix))))
@@ -834,7 +834,7 @@ if either the LSB or width is negative."
         (ev_error "Bad slice" (intpair-fix s1) nil))
        ((when (and width
                    (< (lnfix width) (+ start len))))
-        (ev_error "Slice out of range of width" (list (intpair-fix s1)
+        (ev_error "DE_BI: Slice out of range of width" (list (intpair-fix s1)
                                                       (acl2::maybe-natp-fix width)) nil)))
     (check-bad-slices width (cdr slices)))
   ///
@@ -931,7 +931,7 @@ error if they do overlap."
        (yend-<=-xstart (<= yend xstart)))
     (if (or xend-<=-ystart yend-<=-xstart)
         (ev_normal nil)
-      (ev_error "Dynamic error: overlapping slice assignment"
+      (ev_error "DE_OSA: overlapping slice assignment"
                 (list (intpair-fix x)
                       (intpair-fix y)) nil))))
 
@@ -1336,7 +1336,7 @@ return an error."
   (if x
       (if (< 0 (lifix x))
           (ev_normal (1- (lifix x)))
-        (ev_error "Loop limit ran out" nil nil))
+        (ev_error "DE_LE: Loop limit ran out" nil nil))
     (ev_normal nil))
   ///
   (local (in-theory (enable acl2::maybe-integerp-fix))))
@@ -1545,9 +1545,10 @@ be updated since expressions can include function calls."
                     (env_result-case look ;; SemanticsRule.EVar
                       :lk_local (evo_normal (expr_result look.val env))
                       :lk_global (evo_normal (expr_result look.val env))
-                      :lk_notfound (evo_error "Variable not found" desc (list (list pos
-                                                                                    (local-env->storage (env->local env))
-                                                                                    (global-env->storage (env->global env)))))))
+                      :lk_notfound (evo_error "Variable not found"
+                                              desc (list (list pos
+                                                               (local-env->storage (env->local env))
+                                                               (global-env->storage (env->global env)))))))
            :e_pattern (b* (((evoo (expr_result v1)) (eval_expr env desc.expr))
                            ((evoo val) (eval_pattern v1.env v1.val desc.pattern)))
                         (evo_normal (expr_result val v1.env)))
@@ -1565,7 +1566,8 @@ be updated since expressions can include function calls."
                                          ((evob val) (eval_binop desc.op v1.val v2.val)))
                                       (evo_normal (expr_result val v2.env)))
                                   (evo_normal (expr_result (v_bool nil) v1.env)))
-                        :otherwise (evo_error "First argument of && evaluated to non-boolean" desc (list pos)))))
+                        :otherwise (evo_error "DE_BO: First argument of && evaluated to non-boolean"
+                                              desc (list pos)))))
              (:bor (b* (((evoo (expr_result v1)) (eval_expr env desc.arg1)))
                      (val-case v1.val
                        :v_bool (if v1.val.val
@@ -1573,7 +1575,8 @@ be updated since expressions can include function calls."
                                  (b* (((evoo (expr_result v2)) (eval_expr v1.env desc.arg2))
                                       ((evob val) (eval_binop desc.op v1.val v2.val)))
                                    (evo_normal (expr_result val v2.env))))
-                       :otherwise (evo_error "First argument of || evaluated to non-boolean" desc (list pos)))))
+                       :otherwise (evo_error "DE_BO: First argument of || evaluated to non-boolean"
+                                             desc (list pos)))))
              (:impl (b* (((evoo (expr_result v1)) (eval_expr env desc.arg1)))
                       (val-case v1.val
                         :v_bool (if v1.val.val
@@ -1581,7 +1584,8 @@ be updated since expressions can include function calls."
                                          ((evob val) (eval_binop desc.op v1.val v2.val)))
                                       (evo_normal (expr_result val v2.env)))
                                   (evo_normal (expr_result (v_bool t) v1.env)))
-                        :otherwise (evo_error "First argument of ==> evaluated to non-boolean" desc (list pos)))))
+                        :otherwise (evo_error "DE_BO: First argument of ==> evaluated to non-boolean"
+                                              desc (list pos)))))
              ;;all other ops
              (otherwise 
               (b* (((evoo (expr_result v1)) (eval_expr env desc.arg1))
@@ -1627,27 +1631,27 @@ be updated since expressions can include function calls."
                 ((evoo (expr_result idx)) (eval_expr arr.env desc.index))
                 ((evo idxv) (val-case idx.val
                               :v_int (ev_normal idx.val.val)
-                              :otherwise (ev_error "getarray non-integer index" desc (list pos))))
+                              :otherwise (ev_error "DE_BI: getarray non-integer index" desc (list pos))))
                 ((evo arrv) (val-case arr.val
                               :v_array (ev_normal arr.val.arr)
                               :otherwise (ev_error "getarray non-array value" desc (list pos)))))
              (if (and (<= 0 idxv)
                       (< idxv (len arrv)))
                  (evo_normal (expr_result (nth idxv arrv) idx.env))
-               (evo_error "getarray index out of range" desc (list pos))))
+               (evo_error "DE_BI: getarray index out of range" desc (list pos))))
            :e_getenumarray ;; sol
            (b* (((evoo (expr_result arr)) (eval_expr env desc.base))
                 ((evoo (expr_result idx)) (eval_expr arr.env desc.index))
                 ((evo idxv) (val-case idx.val
                               :v_label (ev_normal idx.val.val)
-                              :otherwise (ev_error "getenumarray non-label index" desc (list pos))))
+                              :otherwise (ev_error "DE_BI: getenumarray non-label index" desc (list pos))))
                 ((evo arrv) (val-case arr.val
                               :v_record (ev_normal arr.val.rec)
                               :otherwise (ev_error "getenumarray non-record value" desc (list pos))))
                 (look (omap::assoc idxv arrv)))
              (if look
                  (evo_normal (expr_result (cdr look) idx.env))
-               (evo_error "getenumarray index not found" desc (list pos))))
+               (evo_error "DE_BI: getenumarray index not found" desc (list pos))))
            :e_getfield ;; anna
            (b* (((evoo (expr_result recres)) (eval_expr env desc.base))
                 ((evob fieldval) (get_field desc.field recres.val)))
@@ -1666,9 +1670,10 @@ be updated since expressions can include function calls."
            (b* (((evoo (expr_result varr)) (eval_expr env desc.base)))
              (val-case varr.val
                :v_array (if (or (< desc.index 0) (<= (len varr.val.arr) desc.index))
-                            (evo_error "index out of bounds" desc (list pos))
+                            (evo_error "DE_BI: index out of bounds" desc (list pos))
                           (evo_normal (expr_result (nth desc.index varr.val.arr) varr.env)))
-               :otherwise (evo_error "evaluation of the base did not return v_array as expected" desc (list pos))))
+               :otherwise (evo_error "evaluation of the base did not return v_array as expected"
+                                     desc (list pos))))
            :e_record ;; sol
            (b* ((exprs (named_exprlist->exprs desc.fields))
                 (names (named_exprlist->names desc.fields))
@@ -1683,7 +1688,7 @@ be updated since expressions can include function calls."
                 ((evo lenv) (val-case len.val
                               :v_int (if (<= 0 len.val.val)
                                          (ev_normal len.val.val)
-                                       (ev_error "array negative length" desc (list pos)))
+                                       (ev_error "DE_NE: negative array length" desc (list pos)))
                               :otherwise (ev_error "array non-integer length" desc (list pos)))))
              (evo_normal (expr_result (v_array (make-list lenv :initial-element v.val)) len.env)))
            :e_enumarray ;; anna
@@ -1698,12 +1703,12 @@ be updated since expressions can include function calls."
            (b* (((evoo ty) (resolve-ty env desc.type))
                 ((mv val orac) (ty-oracle-val ty orac))
                 ((unless val)
-                 (evo_error "Unsatisfiable type in e_arbitrary" desc (list pos))))
+                 (evo_error "DE_AET: " desc (list pos))))
              (evo_normal (expr_result val env)))
            :e_atc ;;anna
            (b* (((evoo (expr_result v)) (eval_expr env desc.expr))
                 ((evoo b) (is_val_of_type v.env v.val desc.type)))
-             (if b (evo_normal v) (evo_error "DynError(DETAF" desc (list pos))))
+             (if b (evo_normal v) (evo_error "DE_TAF: " desc (list pos))))
            )))
 
      (define resolve-int_constraints ((env env-p)
@@ -1993,7 +1998,7 @@ local scope from the environment."
             ;; the measure will decrease provided that they haven't been exceeded
             (sub-env (env-push-stack name env))
             ((when (zp clk))
-             (evo_error "Recursion limit ran out" (identifier-fix name) (list (posn-fix pos))))
+             (evo_error "DE_LE: Recursion limit ran out" (identifier-fix name) (list (posn-fix pos))))
             ((evbind sub-res)
              (eval_subprogram sub-env name vparams.val vargs.val :clk (1- clk))))
          (eval_result-case sub-res
@@ -2002,9 +2007,10 @@ local scope from the environment."
                            (env (env-pop-stack name env subprog-eval.env)))
                         (evo_normal (exprlist_result subprog-eval.vals env)))
            :ev_throwing (b* ((env (env-pop-stack name env (env->global sub-res.env))))
-                          (evo_throwing sub-res.throwdata env (cons (list (posn-fix pos)
-                                                                             (local-env->storage (env->local vparams.env))
-                                                                             (global-env->storage (env->global vparams.env)))
+                          (evo_throwing sub-res.throwdata env
+                                        (cons (list (posn-fix pos)
+                                                    (local-env->storage (env->local vparams.env))
+                                                    (global-env->storage (env->global vparams.env)))
                                                                        sub-res.backtrace)))
            :ev_error (evo-return (change-ev_error sub-res :backtrace (cons (list (posn-fix pos)
                                                                          (local-env->storage (env->local env))
@@ -2042,7 +2048,7 @@ see the local environment in any returned object.</p>
             (vparams (vallist-fix vparams))
             (vargs (vallist-fix vargs))
             ((unless look)
-             (evo_error "Subprogam not found" (identifier-fix name) nil))
+             (evo_error "DE_NEP: No entry point. Subprogam not found" (identifier-fix name) nil))
             ((func f) (func-ses->fn (cdr look)))
             ;; ((unless (subprogram_body-case f.body :sb_asl))
             ;;  (evo_error "Primitive subfunctions not supported" name))
@@ -2263,15 +2269,17 @@ global) environment."
            :s_cond (b* (((evoo (expr_result test)) (eval_expr env s.test))
                         ((evo testval) (val-case test.val
                                          :v_bool (ev_normal test.val.val)
-                                         :otherwise (ev_error "Non-boolean test result" s.test (list pos))))
+                                         :otherwise (ev_error "Non-boolean test result in s_cond"
+                                                              s.test (list pos))))
                         (next (if testval s.then s.else)))
                      (evtailcall (eval_block test.env next)))
            :s_assert (b* (((evoo (expr_result assert)) (eval_expr env s.expr)))
                        (val-case assert.val
                          :v_bool (if assert.val.val
                                      (evo_normal (continuing assert.env))
-                                   (evo_error "Assertion failed" s.expr (list pos)))
-                         :otherwise (evo_error "Non-boolean assertion result" s.expr (list pos))))
+                                   (evo_error "DE_DAF" s.expr (list pos)))
+                         :otherwise (evo_error "Non-boolean assertion result. ~%This should never hapen if our ASL was type-checked"
+                                               s.expr (list pos))))
            :s_for (b* (((evoo (expr_result startr)) (eval_expr env s.start_e))
                        ((evoo (expr_result endr))   (eval_expr env s.end_e))
                        ((evoo limit)                (eval_limit env s.limit))
@@ -2313,7 +2321,7 @@ global) environment."
                          (str (vallist-to-string e.val))
                          (- (cw (if s.newline "~s0~%" "~s0") str)))
                       (evo_normal (continuing e.env)))
-           :s_unreachable (evo_error "unreachable" s (list pos))
+           :s_unreachable (evo_error "DE_UNR" s (list pos))
            :s_pragma (evo_error "unsupported statement" s (list pos)))))
 
      (define eval_catchers ((env env-p)
@@ -2467,7 +2475,7 @@ the body and then call the loop again."
             ((evob limit1) (tick_loop_limit limit))
             ((evs env2) (eval_block cres.env body))
             ((when (zp clk))
-             (evo_error "Loop limit ran out" (stmt-fix body) (list (stmt->pos_start body)))))
+             (evo_error "DE_LE: Loop limit ran out" (stmt-fix body) (list (stmt->pos_start body)))))
          (evtailcall (eval_loop env2 is_while limit1 e_cond body :clk (1- clk)))))
 
      (define eval_block ((env env-p)
