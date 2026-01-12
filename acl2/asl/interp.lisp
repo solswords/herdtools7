@@ -2131,7 +2131,7 @@ pattern for assigning @('<base>.<field>') is:</p>
                                 :v_array (if (and (<= 0 idxv)
                                                   (< idxv (len rbv.val.arr)))
                                              (ev_normal (v_array (update-nth idxv (val-fix v) rbv.val.arr)))
-                                           (ev_error "le_setarray index out of obunds" lx (list pos)))
+                                           (ev_error "DE_BI: le_setarray index out of obunds" lx (list pos)))
                                 :otherwise (ev_error "le_setarray non array base" lx (list pos)))))
                           (evtailcall (eval_lexpr idx.env lx.base newarray)))
            :le_setenumarray (b* ((rbase (expr_of_lexpr lx.base))
@@ -2142,7 +2142,8 @@ pattern for assigning @('<base>.<field>') is:</p>
                                   (val-case rbv.val
                                     :v_record (if (omap::assoc idxv rbv.val.rec)
                                                   (ev_normal (v_record (omap::update idxv (val-fix v) rbv.val.rec)))
-                                                (ev_error "le_setenumarray unrecognized index" lx (list pos)))
+                                                (ev_error "DE_BI: le_setenumarray unrecognized index"
+                                                          lx (list pos)))
                                     :otherwise (ev_error "le_setenumarray non record base" lx (list pos)))))
                               (evtailcall (eval_lexpr idx.env lx.base newarray)))
            :le_setfield (b* ((rbase (expr_of_lexpr lx.base))
