@@ -252,7 +252,9 @@
        ((unless (mbt (consp (car rules))))
         (tac-toplevel-rewrite-apply-rules (cdr rules) x))
        ((mv ok result) (tac-toplevel-rewrite-apply-rule (cdar rules) x))
-       ((when ok) (mv ok result)))
+       ((when ok) (mv (mbe :logic (acl2::symbol-fix (caar rules))
+                           :exec (caar rules))
+                      result)))
     (tac-toplevel-rewrite-apply-rules (cdr rules) x))
   ///
   (defret eval-of-<fn>

@@ -1488,6 +1488,10 @@
   :enabled t
   t)
 
+(define non-toplevel ()
+  :enabled t
+  t)
+
 (acl2::def-ruleset! tac-functions
   '(emptyset singleton domain range setunion setintersect
              setimage setimage-witness
@@ -1498,5 +1502,5 @@
              relinverse relprod
              pred-false pred-true pred-nonempty pred-equal pred-in-set pred-in-rel
              pred-set-intersects pred-rel-intersects nonempty-witness
-             base-set-p base-rel-p not-singleton-set-p mentioned-event-p))
+             base-set-p base-rel-p not-singleton-set-p mentioned-event-p non-toplevel))
 

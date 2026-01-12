@@ -367,15 +367,17 @@
                     (pred-in-set w (singleton e))))))
 ;; ~eL
 (def-tac-negative-normalize in-singleton-intersect-1
-  (iff (pred-in-set w (setintersect (singleton e) s))
-       (and (pred-in-set w (singleton e))
-            (pred-nonempty (setintersect (singleton e) s)))))
+  (implies (non-toplevel)
+           (iff (pred-in-set w (setintersect (singleton e) s))
+                (and (pred-in-set w (singleton e))
+                     (pred-nonempty (setintersect (singleton e) s))))))
 
 ;; ~eR
 (def-tac-negative-normalize in-singleton-intersect-2
-  (iff (pred-in-set w (setintersect s (singleton e)))
-       (and (pred-in-set w (singleton e))
-            (pred-nonempty (setintersect s (singleton e))))))
+  (implies (non-toplevel)
+           (iff (pred-in-set w (setintersect s (singleton e)))
+                (and (pred-in-set w (singleton e))
+                     (pred-nonempty (setintersect s (singleton e)))))))
 
 
 

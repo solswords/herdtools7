@@ -275,7 +275,8 @@
 (define apply-a-rewrite-to-negative-assum ((x pseudo-termp)
                                            (assums1 pseudo-term-listp)
                                            (assums2 pseudo-term-listp)
-                                           (substmap used-subst-map-p))
+                                           (substmap used-subst-map-p)
+                                           (eventvars cmr::pseudo-var-list-p))
   ;; We want to either rewrite x with toplevel rewrite rules, which can replace
   ;; x with a conjunction of terms (which will actually cause a case split
   ;; since x is negated), or rewrite with negative contextual rewrites -- which
@@ -292,12 +293,12 @@
       :fncall (if (eq x.fn 'pred-nonempty)
                   (b* ((set (first x.args))
                        (term-subst-db (cdr (hons-assoc-equal set (used-subst-map-fix substmap))))
-                       ((mv ok results new-subst-db subst-db-updated)
-                        (tac-apply-rule-in-context set assums1 assums2 (tac-negative-normalize-rules) term-subst-db))
-                       ((unless ok) (mv nil nil (used-subst-map-fix substmap)))
+                       ((mv rule-ok results new-subst-db subst-db-updated)
+                        (tac-apply-rule-in-context set assums1 assums2 (tac-negative-normalize-rules) term-subst-db eventvars t))
+                       ((unless rule-ok) (mv nil nil (used-subst-map-fix substmap)))
                        ((mv ok results) (interpret-ruleres-branchlist-negative results))
                        ((unless ok) (mv nil nil (used-subst-map-fix substmap))))
-                    (mv t results
+                    (mv rule-ok results
                         (if subst-db-updated
                             (cons (cons set new-subst-db) (used-subst-map-fix substmap))
                           (used-subst-map-fix substmap))))
@@ -310,7 +311,9 @@
                   (not (member-equal 'tac-w (cmr::term-vars x)))
                   (not (member-equal 'tac-w (cmr::termlist-vars assums1)))
                   (not (member-equal 'tac-w (cmr::termlist-vars assums2)))
+                  (not (member-equal 'tac-w (cmr::pseudo-var-list-fix eventvars)))
                   (equal (tac-term-type x ctx) :pred)
+                  (event-vars-p eventvars ctx)
                   (subsetp-equal (tac-termlist-types assums1 ctx) '(:pred))
                   (subsetp-equal (tac-termlist-types assums2 ctx) '(:pred))
                   (tac-ev-cube assums1 env)
@@ -328,9 +331,11 @@
                   (equal (tac-term-type x ctx) :pred)
                   (subsetp-equal (tac-termlist-types assums1 ctx) '(:pred))
                   (subsetp-equal (tac-termlist-types assums2 ctx) '(:pred))
+                  (event-vars-p eventvars ctx)
                   (not (member-equal 'tac-w (cmr::term-vars x)))
                   (not (member-equal 'tac-w (cmr::termlist-vars assums1)))
-                  (not (member-equal 'tac-w (cmr::termlist-vars assums2))))
+                  (not (member-equal 'tac-w (cmr::termlist-vars assums2)))
+                  (not (member-equal 'tac-w (cmr::pseudo-var-list-fix eventvars))))
              (tac-termlistlist-typed results :pred ctx))
     :hints(("Goal" :in-theory (enable acl2::prefixp)
             :expand ((tac-termlist-types (pseudo-term-call->args x) ctx)
@@ -340,7 +345,8 @@
   (defret vars-of-<fn>
     (implies (and (not (member-equal v (cmr::term-vars x)))
                   (not (member-equal v (cmr::termlist-vars assums1)))
-                  (not (member-equal v (cmr::termlist-vars assums2))))
+                  (not (member-equal v (cmr::termlist-vars assums2)))
+                  (not (member-equal v (cmr::pseudo-var-list-fix eventvars))))
              (not (member-equal v (termlistlist-vars results))))
     :hints(("Goal"
             :expand ((cmr::term-vars x)
@@ -463,6 +469,10 @@
                                       tac-ruleres-branch-vars
                                       tac-ruleres-branchlist-vars)))))
 
+(local (defthm event-vars-p-nil
+         (event-vars-p nil ctx)
+         :hints(("Goal" :in-theory (enable event-vars-p)))))
+
 (define apply-a-rewrite-to-positive-assum ((x pseudo-termp))
   ;; We want to either rewrite x with toplevel rewrite rules, which can replace
   ;; x with a conjunction of terms (which will actually cause a case split
@@ -477,9 +487,9 @@
     :fncall (if (eq x.fn 'pred-nonempty)
                 (b* ((set (first x.args))
                      ((mv ok results & &)
-                      (tac-apply-rule-in-context set nil nil (tac-positive-normalize-rules) nil))
+                      (tac-apply-rule-in-context set nil nil (tac-positive-normalize-rules) nil nil t))
                      ((unless ok) (mv nil nil)))
-                  (mv t (interpret-ruleres-branchlist-positive results)))
+                  (mv ok (interpret-ruleres-branchlist-positive results)))
               (mv nil nil))
     :otherwise (mv nil nil))
   ///
@@ -517,19 +527,20 @@
 (define apply-a-rewrite-to-assum ((x pseudo-termp)
                                   (assums1 pseudo-term-listp)
                                   (assums2 pseudo-term-listp)
-                                  (substmap used-subst-map-p))
+                                  (substmap used-subst-map-p)
+                                  (eventvars cmr::pseudo-var-list-p))
   :returns (mv ok
                (results pseudo-term-list-listp)
                (new-substmap used-subst-map-p))
   (b* ((is-neg (is-negated-lit x))
        (atm (unnegated-lit x)))
     (if is-neg
-        (b* (((mv ok results substmap) (apply-a-rewrite-to-negative-assum atm assums1 assums2 substmap))
+        (b* (((mv ok results substmap) (apply-a-rewrite-to-negative-assum atm assums1 assums2 substmap eventvars))
              ((unless ok) (mv nil nil substmap)))
-          (mv t (termlistlist-negate results) substmap))
+          (mv ok (termlistlist-negate results) substmap))
       (b* (((mv ok results) (apply-a-rewrite-to-positive-assum atm))
            ((unless ok) (mv nil nil (used-subst-map-fix substmap))))
-        (mv t results (used-subst-map-fix substmap)))))
+        (mv ok results (used-subst-map-fix substmap)))))
   ///
   (defret eval-of-<fn>
     (implies (and ok
@@ -537,7 +548,9 @@
                   (not (member-equal 'tac-w (cmr::term-vars x)))
                   (not (member-equal 'tac-w (cmr::termlist-vars assums1)))
                   (not (member-equal 'tac-w (cmr::termlist-vars assums2)))
+                  (not (member-equal 'tac-w (cmr::pseudo-var-list-fix eventvars)))
                   (equal (tac-term-type x ctx) :pred)
+                  (event-vars-p eventvars ctx)
                   (subsetp-equal (tac-termlist-types assums1 ctx) '(:pred))
                   (subsetp-equal (tac-termlist-types assums2 ctx) '(:pred))
                   (tac-ev-cube assums1 env)
@@ -554,9 +567,11 @@
                   (equal (tac-term-type x ctx) :pred)
                   (subsetp-equal (tac-termlist-types assums1 ctx) '(:pred))
                   (subsetp-equal (tac-termlist-types assums2 ctx) '(:pred))
+                  (event-vars-p eventvars ctx)
                   (not (member-equal 'tac-w (cmr::term-vars x)))
                   (not (member-equal 'tac-w (cmr::termlist-vars assums1)))
-                  (not (member-equal 'tac-w (cmr::termlist-vars assums2))))
+                  (not (member-equal 'tac-w (cmr::termlist-vars assums2)))
+                  (not (member-equal 'tac-w (cmr::pseudo-var-list-fix eventvars))))
              (tac-termlistlist-typed results :pred ctx))
     :hints(("Goal" :in-theory (enable acl2::prefixp)
             :expand ((tac-termlist-types (pseudo-term-call->args x) ctx)
@@ -566,7 +581,8 @@
   (defret vars-of-<fn>
     (implies (and (not (member-equal v (cmr::term-vars x)))
                   (not (member-equal v (cmr::termlist-vars assums1)))
-                  (not (member-equal v (cmr::termlist-vars assums2))))
+                  (not (member-equal v (cmr::termlist-vars assums2)))
+                  (not (member-equal v (cmr::pseudo-var-list-fix eventvars))))
              (not (member-equal v (termlistlist-vars results))))
     :hints(("Goal"
             :expand ((cmr::term-vars x)
@@ -603,46 +619,49 @@
          (equal (tac-termlist-types (acl2::rev x) ctx)
                 (acl2::rev (tac-termlist-types x ctx)))
          :hints(("Goal" :in-theory (enable acl2::rev tac-termlist-types)))))
+              
+
+
 
 (define add-assums-to-branches ((tail pseudo-term-listp)
-                                (rev-head pseudo-term-listp)
                                 (result pseudo-term-list-listp))
   :returns (new-res pseudo-term-list-listp
                     :hints(("Goal" :in-theory (enable pseudo-term-list-listp))))
   :guard-hints (("goal" :in-theory (enable pseudo-term-list-listp)))
   (if (atom result)
       nil
-    (cons (pseudo-term-list-fix (revappend rev-head (append (car result) tail)))
-          (add-assums-to-branches tail rev-head (cdr result))))
+    (b* (((mv contra conj) (add-assums (car result) tail)))
+      (if contra
+          (add-assums-to-branches tail (cdr result))
+        (cons conj
+              (add-assums-to-branches tail (cdr result))))))
   ///
   (defret eval-of-<fn>
     (iff (tac-ev-disj-of-conjunctions new-res env)
          (and (tac-ev-cube tail env)
-              (tac-ev-cube rev-head env)
               (tac-ev-disj-of-conjunctions result env)))
     :hints(("Goal" :in-theory (enable tac-ev-disj-of-conjunctions))))
 
   (defret vars-of-<fn>
     (implies (and (not (member-equal v (cmr::termlist-vars tail)))
-                  (not (member-equal v (cmr::termlist-vars rev-head)))
                   (not (member-equal v (termlistlist-vars result))))
              (not (member-equal v (termlistlist-vars new-res))))
     :hints(("Goal" :in-theory (enable termlistlist-vars))))
 
   (defret type-of-<fn>
     (implies (and (subsetp-equal (tac-termlist-types tail ctx) '(:pred))
-                  (subsetp-equal (tac-termlist-types rev-head ctx) '(:pred))
                   (tac-termlistlist-typed result :pred ctx))
              (tac-termlistlist-typed new-res :pred ctx))
     :hints(("Goal" :in-theory (enable tac-termlistlist-typed))))
-             
-
+  
   (local (in-theory (enable pseudo-term-list-fix))))
+
 
 
 (define apply-a-rewrite-to-assums1 ((tail pseudo-term-listp)
                                     (rev-head pseudo-term-listp)
-                                    (substmap used-subst-map-p))
+                                    (substmap used-subst-map-p)
+                                    (eventvars cmr::pseudo-var-list-p))
   :returns (mv ok
                (results pseudo-term-list-listp)
                (new-substmap used-subst-map-p))
@@ -652,20 +671,22 @@
        ((mv ok results substmap)
         (apply-a-rewrite-to-assum (car tail)
                                   (cdr tail) rev-head
-                                  substmap))
+                                  substmap eventvars))
        ((when ok)
-        (mv t (add-assums-to-branches (cdr tail) rev-head results) substmap)))
+        (mv ok (add-assums-to-branches (revappend rev-head (cdr tail)) results) substmap)))
     (apply-a-rewrite-to-assums1 (cdr tail)
                                 (cons (pseudo-term-fix (car tail))
                                       rev-head)
-                                substmap))
+                                substmap eventvars))
   ///
   (defret eval-of-<fn>
     (implies (and (tac-typed-env-p env ctx)
                   (not (member-equal 'tac-w (cmr::termlist-vars tail)))
                   (not (member-equal 'tac-w (cmr::termlist-vars rev-head)))
+                  (not (member-equal 'tac-w (cmr::pseudo-var-list-fix eventvars)))
                   (subsetp-equal (tac-termlist-types tail ctx) '(:pred))
-                  (subsetp-equal (tac-termlist-types rev-head ctx) '(:pred)))
+                  (subsetp-equal (tac-termlist-types rev-head ctx) '(:pred))
+                  (event-vars-p eventvars ctx))
              (iff (tac-ev-disj-of-conjunctions results env)
                   (and (tac-ev-cube tail env)
                        (tac-ev-cube rev-head env))))
@@ -678,8 +699,10 @@
     (implies (and ;; ok
                   (not (member-equal 'tac-w (cmr::termlist-vars tail)))
                   (not (member-equal 'tac-w (cmr::termlist-vars rev-head)))
+                  (not (member-equal 'tac-w (cmr::pseudo-var-list-fix eventvars)))
                   (subsetp-equal (tac-termlist-types tail ctx) '(:pred))
-                  (subsetp-equal (tac-termlist-types rev-head ctx) '(:pred)))
+                  (subsetp-equal (tac-termlist-types rev-head ctx) '(:pred))
+                  (event-vars-p eventvars ctx))
              (tac-termlistlist-typed results :pred ctx))
     :hints(("Goal" :in-theory (enable tac-termlist-types
                                       tac-termlistlist-typed
@@ -687,58 +710,156 @@
 
   (defret vars-of-<fn>
     (implies (and (not (member-equal v (cmr::termlist-vars tail)))
-                  (not (member-equal v (cmr::termlist-vars rev-head))))
+                  (not (member-equal v (cmr::termlist-vars rev-head)))
+                  (not (member-equal v (cmr::pseudo-var-list-fix eventvars))))
              (not (member-equal v (termlistlist-vars results))))
     :hints(("Goal" :in-theory (enable cmr::termlist-vars
-                                      termlistlist-vars)))))
+                                      termlistlist-vars))))
+
+  (local (fty::deffixcong pseudo-term-list-equiv pseudo-term-list-equiv (append a b) b))
+  (local (fty::deffixcong pseudo-term-list-equiv pseudo-term-list-equiv (append a b) a))
+  (local (fty::deffixcong pseudo-term-list-equiv pseudo-term-list-equiv (acl2::rev x) x)))
 
 (define apply-a-rewrite-to-assums ((assums pseudo-term-listp)
-                                   (substmap used-subst-map-p))
+                                   (substmap used-subst-map-p)
+                                   (eventvars cmr::pseudo-var-list-p))
   :returns (mv ok
                (results pseudo-term-list-listp)
                (new-substmap used-subst-map-p))
-  (apply-a-rewrite-to-assums1 assums nil substmap)
+  (apply-a-rewrite-to-assums1 assums nil substmap eventvars)
   ///
   (defret eval-of-<fn>
     (implies (and (tac-typed-env-p env ctx)
                   (not (member-equal 'tac-w (cmr::termlist-vars assums)))
-                  (subsetp-equal (tac-termlist-types assums ctx) '(:pred)))
+                  (not (member-equal 'tac-w (cmr::pseudo-var-list-fix eventvars)))
+                  (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
+                  (event-vars-p eventvars ctx))
              (iff (tac-ev-disj-of-conjunctions results env)
                   (tac-ev-cube assums env)))
     :hints(("Goal" :in-theory (enable tac-ev-cube))))
 
   (defret type-of-<fn>
     (implies (and (not (member-equal 'tac-w (cmr::termlist-vars assums)))
-                  (subsetp-equal (tac-termlist-types assums ctx) '(:pred)))
+                  (not (member-equal 'tac-w (cmr::pseudo-var-list-fix eventvars)))
+                  (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
+                  (event-vars-p eventvars ctx))
              (tac-termlistlist-typed results :pred ctx)))
 
   (defret vars-of-<fn>
-    (implies (and (not (member-equal v (cmr::termlist-vars assums))))
+    (implies (and (not (member-equal v (cmr::termlist-vars assums)))
+                  (not (member-equal v (cmr::pseudo-var-list-fix eventvars))))
              (not (member-equal v (termlistlist-vars results))))
     :hints(("Goal" :in-theory (enable cmr::termlist-vars
                                       termlistlist-vars)))))
 
+(fty::defprod tac-case
+  ((assums pseudo-term-listp)
+   (substmap used-subst-map-p))
+  :layout :fulltree)
+
+(fty::deflist tac-caselist :elt-type tac-case :true-listp t)
+
+
+
+(define tac-caselist-typed ((x tac-caselist-p)
+                            (ctx type-ctx-p))
+  (if (atom x)
+      t
+    (and (subsetp-equal (tac-termlist-types (tac-case->assums (car x)) ctx) '(:pred))
+         (tac-caselist-typed (cdr x) ctx)))
+  ///
+  (defthm tac-caselist-typed-of-append
+    (iff (tac-caselist-typed (append x y) ctx)
+         (and (tac-caselist-typed x ctx)
+              (tac-caselist-typed y ctx))))
+
+  (defthm tac-caselist-typed-of-nil
+    (equal (tac-caselist-typed nil ctx)
+           t)))
+
+(define tac-ev-caselist ((x tac-caselist-p) env)
+  :verify-guards nil
+  (if (atom x)
+      nil
+    (or (tac-ev-cube (tac-case->assums (car x)) env)
+        (tac-ev-caselist (cdr x) env)))
+  ///
+  (defthm tac-ev-caselist-of-append
+    (iff (tac-ev-caselist (append x y) env)
+         (or (tac-ev-caselist x env)
+             (tac-ev-caselist y env))))
+
+  (defthm tac-ev-caselist-of-nil
+    (not (tac-ev-caselist nil env))))
+
+(local (defthm pseudo-var-list-p-of-append
+         (implies (and (cmr::pseudo-var-list-p x)
+                       (cmr::pseudo-var-list-p y))
+                  (cmr::pseudo-var-list-p (append x y)))))
+
+(define tac-caselist-vars ((x tac-caselist-p))
+  :returns (vars cmr::pseudo-var-list-p)
+  (if (atom x)
+      nil
+    (append (cmr::termlist-vars (tac-case->assums (car x)))
+            (tac-caselist-vars (cdr x))))
+  ///
+  (defthm tac-caselist-vars-of-append
+    (equal (tac-caselist-vars (append x y))
+           (append (tac-caselist-vars x)
+                   (tac-caselist-vars y)))))
+
+(define tac-termlistlist-to-caselist ((x pseudo-term-list-listp)
+                                      (substmap used-subst-map-p))
+  :returns (cases tac-caselist-p)
+  (if (atom x)
+      nil
+    (cons (tac-case (car x) substmap)
+          (tac-termlistlist-to-caselist (cdr x) substmap)))
+  ///
+  (defret tac-ev-caselist-of-<fn>
+    (equal (tac-ev-caselist cases env)
+           (tac-ev-disj-of-conjunctions x env))
+    :hints(("Goal" :in-theory (enable tac-ev-disj-of-conjunctions
+                                      tac-ev-caselist))))
+
+  (defret tac-caselist-typed-of-<fn>
+    (equal (tac-caselist-typed cases ctx)
+           (tac-termlistlist-typed x :pred ctx))
+    :hints(("Goal" :in-theory (enable tac-caselist-typed
+                                      tac-termlistlist-typed))))
+
+  (defret tac-caselist-vars-of-<fn>
+    (acl2::set-equiv (tac-caselist-vars cases)
+                     (termlistlist-vars x))
+    :hints(("Goal" :in-theory (enable tac-caselist-vars
+                                      termlistlist-vars)))))
+
+                         
+
 (defines rewrite-assums
   (define rewrite-assums ((limit natp)
                           (assums pseudo-term-listp)
-                          (substmap used-subst-map-p))
-    :returns (results pseudo-term-list-listp)
+                          (substmap used-subst-map-p)
+                          (eventvars cmr::pseudo-var-list-p))
+    :returns (results tac-caselist-p)
     :measure (acl2::nat-list-measure (list limit 0))
     :verify-guards nil
     (b* (((mv ok results1 substmap)
-          (apply-a-rewrite-to-assums assums substmap))
-         ((when (or (not ok) (zp limit))) results1))
-      (rewrite-assums-cases (1- limit) results1 substmap)))
+          (apply-a-rewrite-to-assums assums substmap eventvars))
+         ((when (or (not ok) (zp limit))) (tac-termlistlist-to-caselist results1 substmap)))
+      (rewrite-assums-cases (1- limit) results1 substmap eventvars)))
 
   (define rewrite-assums-cases ((limit natp)
                                 (cases pseudo-term-list-listp)
-                                (substmap used-subst-map-p))
-    :returns (results pseudo-term-list-listp)
+                                (substmap used-subst-map-p)
+                                (eventvars cmr::pseudo-var-list-p))
+    :returns (results tac-caselist-p)
     :measure (acl2::nat-list-measure (list limit (len cases)))
     (if (atom cases)
         nil
-      (append (rewrite-assums limit (car cases) substmap)
-              (rewrite-assums-cases limit (cdr cases) substmap))))
+      (append (rewrite-assums limit (car cases) substmap eventvars)
+              (rewrite-assums-cases limit (cdr cases) substmap eventvars))))
   ///
   (verify-guards rewrite-assums)
 
@@ -757,16 +878,20 @@
     (defret eval-of-<fn>
       (implies (and (tac-typed-env-p env ctx)
                     (not (member-equal 'tac-w (cmr::termlist-vars assums)))
-                    (subsetp-equal (tac-termlist-types assums ctx) '(:pred)))
-               (iff (tac-ev-disj-of-conjunctions results env)
+                    (not (member-equal 'tac-w (cmr::pseudo-var-list-fix eventvars)))
+                    (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
+                    (event-vars-p eventvars ctx))
+               (iff (tac-ev-caselist results env)
                     (tac-ev-cube assums env)))
       :hints ('(:expand (<call>)))
       :fn rewrite-assums)
     (defret eval-of-<fn>
       (implies (and (tac-typed-env-p env ctx)
                     (not (member-equal 'tac-w (termlistlist-vars cases)))
-                    (tac-termlistlist-typed cases :pred ctx))
-               (iff (tac-ev-disj-of-conjunctions results env)
+                    (not (member-equal 'tac-w (cmr::pseudo-var-list-fix eventvars)))
+                    (tac-termlistlist-typed cases :pred ctx)
+                    (event-vars-p eventvars ctx))
+               (iff (tac-ev-caselist results env)
                     (tac-ev-disj-of-conjunctions cases env)))
       :hints ('(:expand (<call>
                          (termlistlist-vars cases)
@@ -788,14 +913,18 @@
   (std::defret-mutual type-of-<fn>
     (defret type-of-<fn>
       (implies (and (not (member-equal 'tac-w (cmr::termlist-vars assums)))
-                    (subsetp-equal (tac-termlist-types assums ctx) '(:pred)))
-               (tac-termlistlist-typed results :pred ctx))
+                    (not (member-equal 'tac-w (cmr::pseudo-var-list-fix eventvars)))
+                    (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
+                    (event-vars-p eventvars ctx))
+               (tac-caselist-typed results ctx))
       :hints ('(:expand (<call>)))
       :fn rewrite-assums)
     (defret type-of-<fn>
       (implies (and (not (member-equal 'tac-w (termlistlist-vars cases)))
-                    (tac-termlistlist-typed cases :pred ctx))
-               (tac-termlistlist-typed results :pred ctx))
+                    (not (member-equal 'tac-w (cmr::pseudo-var-list-fix eventvars)))
+                    (tac-termlistlist-typed cases :pred ctx)
+                    (event-vars-p eventvars ctx))
+               (tac-caselist-typed results ctx))
       :hints ('(:expand (<call>
                          (termlistlist-vars cases)
                          (tac-termlistlist-typed cases :pred ctx))))
@@ -809,17 +938,20 @@
   
   (std::defret-mutual vars-of-<fn>
     (defret vars-of-<fn>
-      (implies (and (not (member-equal v (cmr::termlist-vars assums))))
-               (not (member-equal v (termlistlist-vars results))))
+      (implies (and (not (member-equal v (cmr::termlist-vars assums)))
+                    (not (member-equal v (cmr::pseudo-var-list-fix eventvars))))
+               (not (member-equal v (tac-caselist-vars results))))
       :fn rewrite-assums)
     (defret vars-of-<fn>
-      (implies (not (member-equal v (termlistlist-vars cases)))
-               (not (member-equal v (termlistlist-vars results))))
+      (implies (And (not (member-equal v (termlistlist-vars cases)))
+                    (not (member-equal v (cmr::pseudo-var-list-fix eventvars))))
+               (not (member-equal v (tac-caselist-vars results))))
       :hints ('(:expand (<call>
                         (termlistlist-vars cases))))
       :fn rewrite-assums-cases))
 
   (fty::deffixequiv-mutual rewrite-assums))
+
       
     
 

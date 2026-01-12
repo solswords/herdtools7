@@ -21,6 +21,7 @@
 (include-book "logic")
 (include-book "centaur/meta/fixed-evaluator" :dir :system)
 (include-book "clause-processors/ev-theoremp" :dir :system)
+(include-book "std/basic/two-nats-measure" :dir :system)
 (local (include-book "std/lists/sets" :dir :System))
 (local (std::add-default-post-define-hook :fix))
 
@@ -59,6 +60,7 @@
    (base-rel-p x)
    (not-singleton-set-p x)
    (mentioned-event-p x)
+   (non-toplevel)
    
    (event-p x)
    (event-set-p x)
@@ -249,6 +251,8 @@
     (pred-in-rel :event :event :rel)
     (base-rel-p :rel)
     (base-set-p :set)
+    (mentioned-event-p :event)
+    (non-toplevel)
     (not :pred)))
 
 (defconst *tac-function-return-types*
@@ -284,6 +288,8 @@
     (pred-in-rel . :pred)
     (base-rel-p . :pred)
     (base-set-p . :pred)
+    (mentioned-event-p . :pred)
+    (non-toplevel . :pred)
     (not . :pred)))
 
 (define tac-function-return-type ((x pseudo-fnsym-p))
@@ -614,3 +620,251 @@
   :hints(("Goal" :in-theory (enable tac-ev-cube cmr::termlist-subst-strict))))
 
 
+(define event-vars-p ((x cmr::pseudo-var-list-p) (ctx type-ctx-p))
+  (if (atom x)
+      t
+    (and (equal (cdr (hons-assoc-equal (pseudo-var-fix (car x))
+                                       (type-ctx-fix ctx)))
+                :event)
+         (event-vars-p (cdr x) ctx))))
+
+
+
+
+(local (defthm event-vars-p-of-union-equal
+         (implies (and (event-vars-p x ctx)
+                       (event-vars-p y ctx))
+                  (event-vars-p (union-equal x y) ctx))
+         :hints(("Goal" :in-theory (enable event-vars-p union-equal)))))
+
+(local
+ (defthm assoc-equal-is-hons-assoc-equal
+   (implies k
+            (equal (assoc-equal k x)
+                   (hons-assoc-equal k x)))))
+
+(define tac-extract-event-var-args ((args pseudo-term-listp)
+                                    (types tac-typelist-p))
+  :returns (vars cmr::pseudo-var-list-p)
+  :measure (len types)
+  (if (atom types)
+      nil
+    (if (and (eq (tac-type-fix (car types)) :event)
+             (pseudo-term-case (car args) :var))
+        (cons (pseudo-term-var->name (car args))
+              (tac-extract-event-var-args (cdr args) (cdr types)))
+      (tac-extract-event-var-args (cdr args) (cdr types))))
+  ///
+  (defret member-of-<fn>
+    (implies (not (member v (cmr::termlist-vars args)))
+             (not (member v vars)))
+    :hints(("Goal" :in-theory (enable cmr::termlist-vars
+                                      cmr::term-vars))))
+  
+  (defret event-vars-p-of-tac-extract-event-var-args
+    (implies (acl2::prefixp types (tac-termlist-types args ctx))
+             (event-vars-p vars ctx))
+    :hints(("Goal" :in-theory (enable tac-termlist-types
+                                      tac-term-type
+                                      event-vars-p
+                                      acl2::prefixp)))))
+
+(local (defthm pseudo-var-list-p-of-union
+         (implies (and (cmr::pseudo-var-list-p x)
+                       (cmr::pseudo-var-list-p y))
+                  (cmr::pseudo-var-list-p (union-equal x y)))
+         :hints(("Goal" :in-theory (enable union-equal)))))
+
+(local (defthm symbol-listp-when-pseudo-var-list-p
+         (implies (cmr::pseudo-var-list-p x)
+                  (symbol-listp x))))
+
+
+
+(defines tac-term-event-vars
+  (define tac-term-event-vars ((x pseudo-termp))
+    :measure (acl2::two-nats-measure (pseudo-term-count x) 0)
+    :returns (vars cmr::pseudo-var-list-p)
+    :verify-guards nil
+    (pseudo-term-case x
+      :fncall
+      (b* ((argtypes (tac-function-argument-types x.fn)))
+        (union-eq (tac-extract-event-var-args x.args argtypes)
+                  (tac-termargs-event-vars x.args argtypes)))
+      :otherwise nil))
+  (define tac-termargs-event-vars ((x pseudo-term-listp)
+                                   (types tac-typelist-p))
+    :measure (acl2::two-nats-measure (pseudo-term-list-count x) (len types))
+    :returns (vars cmr::pseudo-var-list-p)
+    (if (atom types)
+        nil
+      (union-eq (and (tac-type-fix (car types))
+                     (tac-term-event-vars (car x)))
+                (tac-termargs-event-vars (cdr x) (cdr types)))))
+  ///
+  (verify-guards tac-termargs-event-vars)
+
+  (std::defret-mutual member-of-<fn>
+    (defret member-of-<fn>
+      (implies (not (member-equal v (cmr::term-vars x)))
+               (not (member-equal v vars)))
+      :hints ('(:expand (<call>
+                         (cmr::term-vars x))))
+      :fn tac-term-event-vars)
+    (defret member-of-<fn>
+      (implies (not (member-equal v (cmr::termlist-vars x)))
+               (not (member-equal v vars)))
+      :hints ('(:expand (<call>
+                         (cmr::termlist-vars x))))
+      :fn tac-termargs-event-vars))
+
+  (std::defret-mutual event-vars-p-of-<fn>
+    (defret event-vars-p-of-<fn>
+      (implies (tac-term-type x ctx)
+               (event-vars-p vars ctx))
+      :hints ('(:expand (<call>
+                         (tac-term-type x ctx)
+                         (event-vars-p nil ctx))))
+      :fn tac-term-event-vars)
+    (defret event-vars-p-of-<fn>
+      (implies (acl2::prefixp types (tac-termlist-types x ctx))
+               (event-vars-p vars ctx))
+      :hints ('(:expand (<call>
+                         (tac-termlist-types x ctx)
+                         (event-vars-p nil ctx))
+                :in-theory (enable acl2::prefixp)))
+      :fn tac-termargs-event-vars))
+
+  (fty::deffixequiv-mutual tac-term-event-vars))
+
+(define tac-termlist-event-vars ((x pseudo-term-listp))
+  :returns (vars cmr::pseudo-var-list-p)
+  (if (atom x)
+      nil
+    (union-eq (tac-term-event-vars (car x))
+              (tac-termlist-event-vars (cdr x))))
+  ///
+  (defret member-of-<fn>
+    (implies (not (member-equal v (cmr::termlist-vars x)))
+             (not (member-equal v vars)))
+    :hints(("Goal" :in-theory (enable cmr::termlist-vars))))
+
+  (defret subsetp-of-<fn>
+    (subsetp-equal vars (cmr::termlist-vars x))
+    :hints(("Goal" :in-theory (enable acl2::subsetp-witness-rw))))
+
+  (defret event-vars-p-of-<fn>
+    (implies (not (member-equal nil (tac-termlist-types x ctx)))
+             (event-vars-p vars ctx))
+    :hints(("Goal" :in-theory (enable tac-termlist-types
+                                      event-vars-p)))))
+  
+    
+
+
+
+(define add-assum ((x pseudo-termp)
+                   (assums pseudo-term-listp))
+  :returns (mv contra (new-assums pseudo-term-listp))
+  (b* ((x (pseudo-term-fix x))
+       (assums (pseudo-term-list-fix assums)))
+    (cond
+     ((equal x '(pred-true)) (mv nil assums))
+     ((equal x '(not (pred-true))) (mv t nil))
+     ((member-equal x assums) (mv nil assums))
+     (t (b* ((notp
+              (pseudo-term-case x
+                :fncall (eq x.fn 'not)
+                :otherwise nil))
+             (contra (if notp
+                         (first (pseudo-term-call->args x))
+                       (pseudo-term-call 'not (list x)))))
+          (if (member-equal contra assums)
+              (mv t nil)
+            (mv nil (cons x assums)))))))
+  ///
+  (defret vars-of-<fn>
+    (implies (and (not (member-equal v (cmr::term-vars x)))
+                  (not (member-equal v (cmr::termlist-vars assums))))
+             (not (member-equal v (cmr::termlist-vars new-assums))))
+    :hints(("Goal" :in-theory (enable cmr::termlist-vars))))
+
+  (defret type-of-<fn>
+    (implies (and (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
+                  (equal (tac-term-type x ctx) :pred))
+             (subsetp-equal (tac-termlist-types new-assums ctx) '(:pred)))
+    :hints(("Goal" :in-theory (enable tac-termlist-types))))
+
+  (local (defthm tac-ev-when-equiv-fncall
+           (implies (pseudo-term-equiv x (pseudo-term-fncall 'not (list y)))
+                    (equal (tac-ev x env)
+                           (not (tac-ev y env))))
+           :hints(("Goal" :use ((:instance TAC-EV-OF-PSEUDO-TERM-FIX-X
+                                 (x x) (a env)))
+                   :in-theory (disable tac-ev-of-pseudo-term-fix-x
+                                       tac-ev-pseudo-term-equiv-congruence-on-x)))))
+  
+  (local (defthm tac-ev-and-member-negation-implies-not-tac-ev-cube
+           (implies (and (tac-ev x env)
+                         (member-equal (pseudo-term-fncall 'not (list x))
+                                       (pseudo-term-list-fix assums)))
+                    (not (tac-ev-cube assums env)))
+           :hints(("Goal" :in-theory (enable tac-ev-cube)))))
+
+  (local (defthm not-tac-ev-member-implies-not-tac-ev-cube
+           (implies (and (not (tac-ev x env))
+                         (member-equal x
+                                       (pseudo-term-list-fix assums)))
+                    (not (tac-ev-cube assums env)))
+           :hints(("Goal" :in-theory (enable tac-ev-cube)))))
+
+  (defret <fn>-contra-correct
+    (implies (and (tac-ev-cube assums env)
+                  (tac-ev x env))
+             (not contra)))
+
+  (defret <fn>-contra-correct2
+    (implies (and (tac-ev x env)
+                  (tac-ev-cube assums env))
+             (not contra)))
+
+  (defret <fn>-correct
+    (implies (not contra)
+             (iff (tac-ev-cube new-assums env)
+                  (and (tac-ev x env)
+                       (tac-ev-cube assums env))))
+    :hints(("Goal" :in-theory (enable tac-ev-cube)))))
+
+(define add-assums ((assums1 pseudo-term-listp)
+                    (assums2 pseudo-term-listp))
+  :returns (mv contra (new-assums pseudo-term-listp))
+  (b* (((when (atom assums1))
+        (mv nil (pseudo-term-list-fix assums2)))
+       ((mv contra rest) (add-assums (cdr assums1) assums2))
+       ((when contra) (mv contra nil)))
+    (add-assum (car assums1) rest))
+  ///
+  (defret vars-of-<fn>
+    (implies (and (not (member-equal v (cmr::termlist-vars assums1)))
+                  (not (member-equal v (cmr::termlist-vars assums2))))
+             (not (member-equal v (cmr::termlist-vars new-assums))))
+    :hints(("Goal" :in-theory (enable cmr::termlist-vars))))
+
+  (defret type-of-<fn>
+    (implies (and (subsetp-equal (tac-termlist-types assums1 ctx) '(:pred))
+                  (subsetp-equal (tac-termlist-types assums2 ctx) '(:pred)))
+             (subsetp-equal (tac-termlist-types new-assums ctx) '(:pred)))
+    :hints(("Goal" :in-theory (enable tac-termlist-types))))
+
+  (defret <fn>-correct
+    (implies (not contra)
+             (iff (tac-ev-cube new-assums env)
+                  (and (tac-ev-cube assums1 env)
+                       (tac-ev-cube assums2 env))))
+    :hints(("Goal" :in-theory (enable tac-ev-cube))))
+
+  (defret <fn>-contra-correct
+    (implies (and (tac-ev-cube assums1 env)
+                  (tac-ev-cube assums2 env))
+             (not contra))
+    :hints(("Goal" :in-theory (enable tac-ev-cube)))))

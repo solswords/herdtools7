@@ -44,6 +44,9 @@
                   (acl2::hons-remove-assoc v (cmr::pseudo-term-subst-fix alist)))
            :hints(("Goal" :in-theory (enable acl2::hons-remove-assoc
                                              cmr::pseudo-term-subst-fix)))))
+
+  (fty::deffixcong cmr::pseudo-term-subst-equiv cmr::pseudo-term-subst-equiv
+    (acl2::hons-remove-assoc v alist) alist)
   #!cmr
   (cmr::defthm-flag-term-unify-strict
     (defthm term-unify-strict-of-hons-remove-assoc
@@ -170,6 +173,12 @@
 
 (fty::deflist pseudo-term-substlist :elt-type cmr::pseudo-term-subst :true-listp t)
 
+;; (define tac-rewrite-find-mentioned-event ((var cmr::pseudo-var-p)
+;;                                           (assums pseudo-term-listp)
+;;                                           (unify-subst cmr::pseudo-term-subst-p)
+;;                                           (used-unify-substs pseudo-term-substlis
+
+
 (define tac-rewrite-pred-find-subst ((assums pseudo-term-listp)
                                      (hyp pseudo-termp)
                                      (unify-subst cmr::pseudo-term-subst-p)
@@ -292,13 +301,223 @@
              :expand ((cmr::termlist-vars assums))))))
 
 
+(define tac-rewrite-find-event-subst-aux ((var pseudo-var-p)
+                                          (unify-subst cmr::pseudo-term-subst-p)
+                                          (used-unify-substs pseudo-term-substlist-p)
+                                          (eventvars cmr::pseudo-var-list-p))
+  :returns (new-subst cmr::pseudo-term-subst-p)
+  (b* (((When (atom eventvars))
+        nil)
+       (subst1 (cons (cons (pseudo-var-fix var) (pseudo-term-var (car eventvars)))
+                     (cmr::pseudo-term-subst-fix unify-subst)))
+       ((unless (member-equal subst1 (pseudo-term-substlist-fix used-unify-substs)))
+        subst1))
+    (tac-rewrite-find-event-subst-aux var unify-subst used-unify-substs (cdr eventvars)))
+  ///
+  (defret <fn>-preserves-bound-vars
+    (implies (and new-subst
+                  (hons-assoc-equal v unify-subst)
+                  (pseudo-var-p v)
+                  (not (hons-assoc-equal (pseudo-var-fix var) unify-subst)))
+             (and (equal (hons-assoc-equal v new-subst)
+                         (hons-assoc-equal v (cmr::pseudo-term-subst-fix unify-subst)))
+                  (hons-assoc-equal v new-subst))))
+
+  (defret sub-alistp-of-<fn>
+    (implies (and new-subst
+                  (not (hons-assoc-equal (pseudo-var-fix var) unify-subst)))
+             (acl2::sub-alistp (cmr::pseudo-term-subst-fix unify-subst) new-subst))
+    :hints(("Goal" :in-theory (enable acl2::sub-alistp-iff-witness))))
+
+  (defret type-of-<fn>
+    (implies (and new-subst
+                  (event-vars-p eventvars ctx)
+                  (pseudo-var-p var))
+             (equal (tac-term-type (cdr (hons-assoc-equal var new-subst)) ctx) :event))
+    :hints(("Goal" :in-theory (enable event-vars-p))))
+
+  (defret tac-ev-of-<fn>
+    (implies (and (subsetp-equal (cmr::term-vars x)
+                                 (acl2::alist-keys (cmr::pseudo-term-subst-fix unify-subst)))
+                  (not (hons-assoc-equal (pseudo-var-fix var) unify-subst))
+                  new-subst)
+             (equal (tac-ev x (tac-ev-alist new-subst env))
+                    (tac-ev x (tac-ev-alist unify-subst env))))
+    :hints(("Goal" :in-theory (e/d ()
+                                   (<fn>))
+            :use ((:instance tac-ev-when-sub-alistp
+                   (x x)
+                   (sub (tac-ev-alist unify-subst env))
+                   (super (tac-ev-alist
+                           (tac-rewrite-find-event-subst-aux
+                            var unify-subst used-unify-substs eventvars)
+                           env)))))))
+
+  (defret tac-ev-lst-of-<fn>
+    (implies (and (subsetp-equal (cmr::termlist-vars x)
+                                 (acl2::alist-keys (cmr::pseudo-term-subst-fix unify-subst)))
+                  (not (hons-assoc-equal (pseudo-var-fix var) unify-subst))
+                  new-subst)
+             (equal (tac-ev-lst x (tac-ev-alist new-subst env))
+                    (tac-ev-lst x (tac-ev-alist unify-subst env))))
+    :hints(("Goal" :in-theory (e/d ()
+                                   (<fn>))
+            :use ((:instance tac-ev-lst-when-sub-alistp
+                   (x x)
+                   (sub (tac-ev-alist unify-subst env))
+                   (super (tac-ev-alist
+                           (tac-rewrite-find-event-subst-aux
+                            var unify-subst used-unify-substs eventvars)
+                           env)))))))
+
+  (defret termlist-subst-strict-of-<fn>
+    (implies (and (subsetp-equal (cmr::termlist-vars x)
+                                 (acl2::alist-keys (cmr::pseudo-term-subst-fix unify-subst)))
+                  (not (hons-assoc-equal (pseudo-var-fix var) unify-subst))
+                  new-subst)
+             (equal (cmr::termlist-subst-strict x new-subst)
+                    (cmr::termlist-subst-strict x unify-subst)))
+    :hints(("Goal" :in-theory (e/d ()
+                                   (<fn>))
+            :use ((:instance termlist-subst-strict-when-sub-alistp
+                   (x x)
+                   (sub unify-subst)
+                   (super (tac-rewrite-find-event-subst-aux
+                            var unify-subst used-unify-substs eventvars)))))))
+  
+
+  (defret var-lookup-of-<fn>
+    (implies (and new-subst
+                  (pseudo-var-p var))
+             (hons-assoc-equal var new-subst)))
+
+  (defret vars-of-<fn>
+    (implies (and (not (member v (cmr::term-subst-vars unify-subst)))
+                  (not (member v (cmr::pseudo-var-list-fix eventvars))))
+             (not (member v (cmr::term-subst-vars new-subst))))
+    :hints (("goal" :induct <call>
+             :expand ((:free (a b) (cmr::term-subst-vars (cons a b)))
+                      (:Free (v) (cmr::term-vars (pseudo-term-var v)))))))
+
+  (defret tac-w-not-present-of-<fn>
+    (implies (and (not (member 'tac-w (cmr::term-subst-vars
+                                       (acl2::hons-remove-assoc 'w unify-subst))))
+                  (not (member 'tac-w (cmr::pseudo-var-list-fix eventvars)))
+                  (not (equal (pseudo-var-fix var) 'w)))
+             (not (member 'tac-w (cmr::term-subst-vars
+                                  (acl2::hons-remove-assoc 'w new-subst)))))
+    :hints (("goal" :induct <call>
+             :expand ((:free (a b) (cmr::term-subst-vars (cons a b)))
+                      (:Free (v) (cmr::term-vars (pseudo-term-var v))))))))
+
+
+(define tac-rewrite-find-event-subst ((hyp pseudo-termp)
+                                      (unify-subst cmr::pseudo-term-subst-p)
+                                      (used-unify-substs pseudo-term-substlist-p)
+                                      (eventvars cmr::pseudo-var-list-p))
+  :returns (new-subst cmr::pseudo-term-subst-p)
+  (pseudo-term-case hyp
+    :fncall
+    (and (eq hyp.fn 'mentioned-event-p)
+         (pseudo-term-case (car hyp.args) :var)
+         (let ((name (pseudo-term-var->name (car hyp.args))))
+           (and (not (hons-assoc-equal name unify-subst))
+                (tac-rewrite-find-event-subst-aux name unify-subst used-unify-substs eventvars))))
+    :otherwise nil)
+  ///
+  (defret <fn>-preserves-bound-vars
+    (implies (and new-subst
+                  (hons-assoc-equal var unify-subst)
+                  (pseudo-var-p var))
+             (and (equal (hons-assoc-equal var new-subst)
+                         (hons-assoc-equal var (cmr::pseudo-term-subst-fix unify-subst)))
+                  (hons-assoc-equal var new-subst))))
+
+  (defret sub-alistp-of-<fn>
+    (implies new-subst
+             (acl2::sub-alistp (cmr::pseudo-term-subst-fix unify-subst) new-subst)))
+
+  (defretd <fn>-correct
+    (implies new-subst
+             (tac-ev hyp env)))
+
+  (local (defthm lookup-of-tac-subst-ctx
+         (equal (hons-assoc-equal v (tac-subst-ctx subst ctx))
+                (let ((look (hons-assoc-equal v (cmr::pseudo-term-subst-fix subst))))
+                  (and look
+                       (cons v (tac-term-type (cdr look) ctx)))))
+         :hints(("Goal" :in-theory (enable tac-subst-ctx)))))
+  
+  (defret <fn>-type
+    (implies (and new-subst
+                  (event-vars-p eventvars ctx))
+             (equal (tac-term-type hyp (tac-subst-ctx new-subst ctx)) :pred))
+    :hints(("Goal" :in-theory (enable acl2::prefixp))))
+
+  (defret <fn>-type-subst
+    (implies (and new-subst
+                  (event-vars-p eventvars ctx))
+             (equal (tac-term-type (cmr::term-subst-strict hyp new-subst) ctx) :pred))
+    :hints (("goal" :use <fn>-type
+             :in-theory (disable <fn> <fn>-type))))
+
+  (defret tac-ev-of-<fn>
+    (implies (and (subsetp-equal (cmr::term-vars x)
+                                 (acl2::alist-keys (cmr::pseudo-term-subst-fix unify-subst)))
+                  new-subst)
+             (equal (tac-ev x (tac-ev-alist new-subst env))
+                    (tac-ev x (tac-ev-alist unify-subst env)))))
+
+  (defret tac-ev-lst-of-<fn>
+    (implies (and (subsetp-equal (cmr::termlist-vars x)
+                                 (acl2::alist-keys (cmr::pseudo-term-subst-fix unify-subst)))
+                  new-subst)
+             (equal (tac-ev-lst x (tac-ev-alist new-subst env))
+                    (tac-ev-lst x (tac-ev-alist unify-subst env)))))
+
+  (defret termlist-subst-strict-of-<fn>
+    (implies (and (subsetp-equal (cmr::termlist-vars x)
+                                 (acl2::alist-keys (cmr::pseudo-term-subst-fix unify-subst)))
+                  new-subst)
+             (equal (cmr::termlist-subst-strict x new-subst)
+                    (cmr::termlist-subst-strict x unify-subst))))
+
+  (defret vars-of-<fn>
+    (implies (and (not (member v (cmr::term-subst-vars unify-subst)))
+                  (not (member v (cmr::pseudo-var-list-fix eventvars))))
+             (not (member v (cmr::term-subst-vars new-subst)))))
+
+  (defret tac-w-not-present-of-<fn>
+    (implies (and (not (member 'tac-w (cmr::term-subst-vars
+                                       (acl2::hons-remove-assoc 'w unify-subst))))
+                  (not (member 'w (cmr::term-vars hyp)))
+                  (not (member 'tac-w (cmr::pseudo-var-list-fix eventvars))))
+             (not (member 'tac-w (cmr::term-subst-vars
+                                  (acl2::hons-remove-assoc 'w new-subst)))))
+    :hints (("goal" :expand ((cmr::term-vars hyp)
+                             (cmr::termlist-vars (pseudo-term-call->args hyp))
+                             (cmr::term-vars (car (pseudo-term-call->args hyp))))))))
+
+(define tac-rewrite-pred-check-hyps ((hyps pseudo-term-listp)
+                                     (subst cmr::pseudo-term-subst-p)
+                                     (toplevelp))
+  (declare (ignorable subst))
+  (if (atom hyps)
+      t
+    (and (equal (pseudo-term-fix (car hyps)) '(non-toplevel))
+         (not toplevelp)
+         (tac-rewrite-pred-check-hyps (cdr hyps) subst toplevelp))))
+                                     
+
 
 (define tac-rewrite-pred-subst ((rule cmr::rewrite-p)
                                 (fn pseudo-fnsym-p)
                                 (args pseudo-term-listp)
                                 (assums1 pseudo-term-listp)
                                 (assums2 pseudo-term-listp)
-                                (used-unify-substs pseudo-term-substlist-p))
+                                (used-unify-substs pseudo-term-substlist-p)
+                                (eventvars cmr::pseudo-var-list-p)
+                                (toplevelp))
   :returns (mv ok (subst cmr::pseudo-term-subst-p))
   (b* (((cmr::rewrite rule))
        ((unless (pseudo-term-case rule.lhs
@@ -309,9 +528,12 @@
                                                    args nil))
        ((unless ok) (mv nil nil))
        ((unless (is-special-instantiation-rule rule))
-        (mv t subst1))
+        (if (tac-rewrite-pred-check-hyps rule.hyps subst1 toplevelp)
+            (mv t subst1)
+          (mv nil nil)))
        (hyp (special-instantiation-rule-binding-hyp rule))
-       (new-subst (or (tac-rewrite-pred-find-subst assums1 hyp subst1 used-unify-substs)
+       (new-subst (or (tac-rewrite-find-event-subst hyp subst1 used-unify-substs eventvars)
+                      (tac-rewrite-pred-find-subst assums1 hyp subst1 used-unify-substs)
                       (tac-rewrite-pred-find-subst assums2 hyp subst1 used-unify-substs)))
        ((unless new-subst)
         (mv nil nil)))
@@ -331,7 +553,7 @@
                             (tac-ev-alist subst env))
                     (tac-ev (pseudo-term-fncall fn args) env)))
     :hints (("goal" :use ((:instance tac-ev-of-term-subst-strict
-                           (a (mv-nth 1 (tac-rewrite-pred-subst rule fn args assums1 assums2 used-unify-substs)))
+                           (a (mv-nth 1 (tac-rewrite-pred-subst rule fn args assums1 assums2 used-unify-substs eventvars toplevelp)))
                            (x (cmr::rewrite->lhs rule))))
              :in-theory (disable tac-ev-of-term-subst-strict
                                  <fn>))))
@@ -339,6 +561,12 @@
   (defret <fn>-hyp-member
     (implies (and (is-special-instantiation-rule rule)
                   ok
+                  (case-split
+                    (not (tac-rewrite-find-event-subst
+                          (special-instantiation-rule-binding-hyp rule)
+                          (mv-nth 1 (cmr::termlist-unify-strict
+                                     (pseudo-term-call->args (cmr::rewrite->lhs rule)) args nil))
+                          used-unify-substs eventvars)))
                   (case-split
                     (not (member-equal (cmr::term-subst-strict
                                         (special-instantiation-rule-binding-hyp rule) subst)
@@ -361,10 +589,13 @@
              (tac-ev (special-instantiation-rule-binding-hyp rule)
                      (tac-ev-alist subst env)))
     :hints (("goal" :use ((:instance tac-ev-of-term-subst-strict
-                           (a (mv-nth 1 (tac-rewrite-pred-subst rule fn args assums1 assums2 used-unify-substs)))
+                           (a (mv-nth 1 (tac-rewrite-pred-subst rule fn args assums1 assums2 used-unify-substs eventvars toplevelp)))
                            (x (special-instantiation-rule-binding-hyp rule))))
              :in-theory (disable tac-ev-of-term-subst-strict
-                                 <fn>))))
+                                 <fn>))
+            (and stable-under-simplificationp
+                 '(:in-theory (enable <fn>
+                                      TAC-REWRITE-FIND-EVENT-SUBST-correct)))))
 
   (local (defthm tac-term-type-of-term-subst-strict-inverse
            (equal (tac-term-type x (tac-subst-ctx y z))
@@ -389,13 +620,16 @@
                          (tac-function-return-type fn))
                   (implies (and (is-special-instantiation-rule rule)
                                 (subsetp-equal (tac-termlist-types assums1 ctx) '(:pred))
-                                (subsetp-equal (tac-termlist-types assums2 ctx) '(:pred)))
+                                (subsetp-equal (tac-termlist-types assums2 ctx) '(:pred))
+                                (event-vars-p eventvars ctx))
                            (equal (tac-term-type (special-instantiation-rule-binding-hyp rule)
                                                  (tac-subst-ctx subst ctx))
                                   :pred))))
     :hints(("Goal" :in-theory (e/d ()
                                    (<fn>))
-            :expand ((tac-term-type (pseudo-term-fncall fn args) ctx)))))
+            :expand ((tac-term-type (pseudo-term-fncall fn args) ctx)))
+           (and stable-under-simplificationp
+                '(:in-theory (enable <fn>)))))
 
   ;; (defret <fn>-implies-is-pred-in-set
   ;;   :pre-bind ((fn 'pred-in-set))
@@ -441,7 +675,8 @@
     (implies (and (tac-pred-rewrite-parse-ok rule)
                   (not (member 'tac-w (cmr::term-vars x)))
                   (not (member 'tac-w (cmr::termlist-vars assums1)))
-                  (not (member 'tac-w (cmr::termlist-vars assums2))))
+                  (not (member 'tac-w (cmr::termlist-vars assums2)))
+                  (not (member 'tac-w (cmr::pseudo-var-list-fix eventvars))))
              (not (member 'tac-w (cmr::term-subst-vars
                                   (acl2::hons-remove-assoc 'w subst)))))
     :hints (("goal" :in-theory (enable tac-pred-rewrite-parse-ok
@@ -454,7 +689,8 @@
   (defret vars-of-<fn>
     (implies (and (not (member v (cmr::termlist-vars args)))
                   (not (member v (cmr::termlist-vars assums1)))
-                  (not (member v (cmr::termlist-vars assums2))))
+                  (not (member v (cmr::termlist-vars assums2)))
+                  (not (member v (cmr::pseudo-var-list-fix eventvars))))
              (not (member v (cmr::term-subst-vars subst))))))
                
     
@@ -488,7 +724,9 @@
                                      (x pseudo-termp)
                                      (assums1 pseudo-term-listp)
                                      (assums2 pseudo-term-listp)
-                                     (used-unify-substs pseudo-term-substlist-p))
+                                     (used-unify-substs pseudo-term-substlist-p)
+                                     (eventvars cmr::pseudo-var-list-p)
+                                     (toplevelp))
   :returns (mv ok
                (result tac-ruleres-branchlist-p)
                (subst cmr::pseudo-term-subst-p))
@@ -497,7 +735,7 @@
                          (eq rule.equiv 'iff))))
         (mv nil nil nil))
        ((mv ok subst) (tac-rewrite-pred-subst rule 'pred-in-set (list 'tac-w x)
-                                              assums1 assums2 used-unify-substs))
+                                              assums1 assums2 used-unify-substs eventvars toplevelp))
        ((unless ok) (mv nil nil nil))
        ((mv ok res-pattern) (tac-parse-ruleres rule.rhs))
        ((unless ok) (mv nil nil nil))
@@ -525,7 +763,8 @@
                   ;; (equal (tac-function-return-type fn) :pred)
                   (equal (tac-term-type x ctx) :set)
                   (equal (cdr (hons-assoc-equal 'tac-w ctx)) :event)
-                  (tac-pred-rewrite-parse-ok rule))
+                  (tac-pred-rewrite-parse-ok rule)
+                  (event-vars-p eventvars ctx))
              (iff (pred-in-set
                    (cdr (assoc 'tac-w env))
                    (union-list
@@ -537,22 +776,22 @@
                            (env
                             (tac-ev-alist
                              (mv-nth 1 (tac-rewrite-pred-subst rule 'pred-in-set (list 'tac-w x)
-                                                               assums1 assums2 used-unify-substs))
+                                                               assums1 assums2 used-unify-substs eventvars toplevelp))
                              env)))
                           (:instance tac-ev-theoremp*-implies
                            (x (cmr::rewrite-term rule))
                            (a (tac-ev-alist
                                (mv-nth 1 (tac-rewrite-pred-subst rule 'pred-in-set (list 'tac-w x)
-                                                                 assums1 assums2 used-unify-substs))
+                                                                 assums1 assums2 used-unify-substs eventvars toplevelp))
                                env)))
                           (:instance tac-pred-rewrite-hyps-ok-necc
                            (env (tac-ev-alist
                                    (mv-nth 1 (tac-rewrite-pred-subst rule 'pred-in-set (list 'tac-w x)
-                                                                     assums1 assums2 used-unify-substs))
+                                                                     assums1 assums2 used-unify-substs eventvars toplevelp))
                                    env))
                            (ctx (tac-subst-ctx
                                  (mv-nth 1 (tac-rewrite-pred-subst rule 'pred-in-set (list 'tac-w x)
-                                                                   assums1 assums2 used-unify-substs))
+                                                                   assums1 assums2 used-unify-substs eventvars toplevelp))
                                  ctx)))
                           )
              :expand ((:free (a b) (tac-termlist-types (cons a b) ctx))
@@ -585,7 +824,8 @@
                   (subsetp-equal (tac-termlist-types assums1 ctx) '(:pred))
                   (subsetp-equal (tac-termlist-types assums2 ctx) '(:pred))
                   (equal (tac-term-type x ctx) :set)
-                  (equal (cdr (hons-assoc-equal 'tac-w ctx)) :event))
+                  (equal (cdr (hons-assoc-equal 'tac-w ctx)) :event)
+                  (event-vars-p eventvars ctx))
              (tac-ruleres-branchlist-typed result :set ctx))
     :hints (("goal" 
              :expand ((:free (a b) (tac-termlist-types (cons a b) ctx))
@@ -602,7 +842,8 @@
                   (tac-pred-rewrite-parse-ok rule)
                   (not (member-equal v (cmr::term-vars x)))
                   (not (member-equal v (cmr::termlist-vars assums1)))
-                  (not (member-equal v (cmr::termlist-vars assums2))))
+                  (not (member-equal v (cmr::termlist-vars assums2)))
+                  (not (member-equal v (cmr::pseudo-var-list-fix eventvars))))
              (not (member-equal v (tac-ruleres-branchlist-vars result))))
     :hints(("Goal" :in-theory (e/d (tac-pred-rewrite-parse-ok-implies)
                                    (;; tac-subst-ruleres-branchlist-of-remove-unused
@@ -615,9 +856,14 @@
                            'w
                            (mv-nth 1 (tac-rewrite-pred-subst
                                       rule 'pred-in-set (list 'tac-w x)
-                                      assums1 assums2 used-unify-substs)))))))))
+                                      assums1 assums2 used-unify-substs eventvars toplevelp)))))))))
     
-                  
+
+  (local (defthm event-vars-p-of-add-pair
+           (implies (event-vars-p eventvars ctx)
+                    (event-vars-p eventvars (cons (cons v :event) ctx)))
+           :hints(("Goal" :in-theory (enable event-vars-p)))))
+  
   
   (defret <fn>-type
     (implies (and ok
@@ -626,9 +872,11 @@
                   (subsetp-equal (tac-termlist-types assums1 ctx) '(:pred))
                   (subsetp-equal (tac-termlist-types assums2 ctx) '(:pred))
                   (equal (tac-term-type x ctx) :set)
+                  (event-vars-p eventvars ctx)
                   (not (member-equal 'tac-w (cmr::term-vars x)))
                   (not (member-equal 'tac-w (cmr::termlist-vars assums1)))
-                  (not (member-equal 'tac-w (cmr::termlist-vars assums2))))
+                  (not (member-equal 'tac-w (cmr::termlist-vars assums2)))
+                  (not (member-equal 'tac-w (cmr::pseudo-var-list-fix eventvars))))
              (tac-ruleres-branchlist-typed result :set ctx))
     :hints (("goal" :use ((:instance <fn>-type-lemma
                            (ctx (cons (cons 'tac-w :event) ctx))))
@@ -677,11 +925,13 @@
                   ;;        (tac-function-argument-types fn))
                   ;; (equal (tac-function-return-type fn) :pred)
                   (equal (tac-term-type x ctx) :set)
+                  (event-vars-p eventvars ctx)
                   (tac-pred-rewrite-parse-ok rule)
                   (tac-pred-rewrite-rhs-typed rule)
                   (not (member-equal 'tac-w (cmr::term-vars x)))
                   (not (member-equal 'tac-w (cmr::termlist-vars assums1)))
-                  (not (member-equal 'tac-w (cmr::termlist-vars assums2))))
+                  (not (member-equal 'tac-w (cmr::termlist-vars assums2)))
+                  (not (member-equal 'tac-w (cmr::pseudo-var-list-fix eventvars))))
              (equal (union-list
                      (tac-eval-ruleres-branchlist result env))
                     (tac-ev x env)))
@@ -703,23 +953,25 @@
                                     (x pseudo-termp)
                                     (assums1 pseudo-term-listp)
                                     (assums2 pseudo-term-listp)
-                                    (rule-used-substs rule-used-substs-p))
+                                    (rule-used-substs rule-used-substs-p)
+                                    (eventvars cmr::pseudo-var-list-p)
+                                    (toplevelp))
   :returns (mv ok
                (result tac-ruleres-branchlist-p)
                (new-rule-used-substs rule-used-substs-p)
                (rule-used-substs-updatedp))
   (b* (((when (atom rules)) (mv nil nil nil nil))
        ((unless (mbt (consp (car rules))))
-        (tac-rewrite-pred-try-rules (cdr rules) x assums1 assums2 rule-used-substs))
+        (tac-rewrite-pred-try-rules (cdr rules) x assums1 assums2 rule-used-substs eventvars toplevelp))
        ((cons name rule) (car rules))
        (name (mbe :logic (acl2::symbol-fix name) :exec name))
        (rule-used-substs (rule-used-substs-fix rule-used-substs))
        (used-substs (cdr (hons-assoc-equal name rule-used-substs)))
-       ((mv ok result subst) (tac-rewrite-pred-apply-rule rule x assums1 assums2 used-substs))
-       ((unless ok) (tac-rewrite-pred-try-rules (cdr rules) x assums1 assums2 rule-used-substs)))
+       ((mv ok result subst) (tac-rewrite-pred-apply-rule rule x assums1 assums2 used-substs eventvars toplevelp))
+       ((unless ok) (tac-rewrite-pred-try-rules (cdr rules) x assums1 assums2 rule-used-substs eventvars toplevelp)))
     (if (is-special-instantiation-rule rule)
-        (mv t result (cons (cons name (cons subst used-substs)) rule-used-substs) t)
-      (mv t result nil nil)))
+        (mv name result (cons (cons name (cons subst used-substs)) rule-used-substs) t)
+      (mv name result nil nil)))
   ///
 
   (defret <fn>-does-not-introduce-vars
@@ -727,7 +979,8 @@
                   (tac-pred-rewrites-parse-ok rules)
                   (not (member-equal v (cmr::term-vars x)))
                   (not (member-equal v (cmr::termlist-vars assums1)))
-                  (not (member-equal v (cmr::termlist-vars assums2))))
+                  (not (member-equal v (cmr::termlist-vars assums2)))
+                  (not (member-equal v (cmr::pseudo-var-list-fix eventvars))))
              (not (member-equal v (tac-ruleres-branchlist-vars result))))
     :hints(("Goal" :in-theory (enable tac-pred-rewrites-parse-ok))))
     
@@ -740,9 +993,11 @@
                   (subsetp-equal (tac-termlist-types assums1 ctx) '(:pred))
                   (subsetp-equal (tac-termlist-types assums2 ctx) '(:pred))
                   (equal (tac-term-type x ctx) :set)
+                  (event-vars-p eventvars ctx)
                   (not (member-equal 'tac-w (cmr::term-vars x)))
                   (not (member-equal 'tac-w (cmr::termlist-vars assums1)))
-                  (not (member-equal 'tac-w (cmr::termlist-vars assums2))))
+                  (not (member-equal 'tac-w (cmr::termlist-vars assums2)))
+                  (not (member-equal 'tac-w (cmr::pseudo-var-list-fix eventvars))))
              (tac-ruleres-branchlist-typed result :set ctx))
     :hints (("goal" :in-theory (enable tac-pred-rewrites-rhs-typed
                                        tac-pred-rewrites-parse-ok))))
@@ -759,11 +1014,13 @@
                   (subsetp-equal (tac-termlist-types assums1 ctx) '(:pred))
                   (subsetp-equal (tac-termlist-types assums2 ctx) '(:pred))
                   (equal (tac-term-type x ctx) :set)
+                  (event-vars-p eventvars ctx)
                   (tac-pred-rewrites-parse-ok rules)
                   (tac-pred-rewrites-rhs-typed rules)
                   (not (member-equal 'tac-w (cmr::term-vars x)))
                   (not (member-equal 'tac-w (cmr::termlist-vars assums1)))
-                  (not (member-equal 'tac-w (cmr::termlist-vars assums2))))
+                  (not (member-equal 'tac-w (cmr::termlist-vars assums2)))
+                  (not (member-equal 'tac-w (cmr::pseudo-var-list-fix eventvars))))
              (equal (union-list
                      (tac-eval-ruleres-branchlist result env))
                     (tac-ev x env)))

@@ -36,8 +36,14 @@
       t
     (and (b* ((hyp (car hyps)))
            (pseudo-term-case hyp
-             :fncall (or (eq hyp.fn 'base-rel-p)
-                         (eq hyp.fn 'base-set-p))
+             :fncall (b* (((unless (or (eq hyp.fn 'base-rel-p)
+                                       (eq hyp.fn 'base-set-p)))
+                           nil)
+                          ((unless (pseudo-term-case (first hyp.args) :var))
+                           nil)
+                          (var (pseudo-term-var->name (first hyp.args)))
+                          (term (cdr (hons-assoc-equal var (cmr::pseudo-term-subst-fix subst)))))
+                       (pseudo-term-case term :var))
              :otherwise nil))
          (tac-fvi-check-hyps subst (cdr hyps))))
   ///

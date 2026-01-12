@@ -73,17 +73,17 @@
          (emptyset))
   :hints(("Goal" :in-theory (enable setintersect))))
 
-(def-tac-rewrite setintersect-of-universe
-  (implies (event-set-p s)
-           (equal (setintersect (universe) s)
-                  s))
-  :hints(("Goal" :in-theory (enable setintersect))))
+;; (def-tac-rewrite setintersect-of-universe
+;;   (implies (event-set-p s)
+;;            (equal (setintersect (universe) s)
+;;                   s))
+;;   :hints(("Goal" :in-theory (enable setintersect))))
 
-(def-tac-rewrite setintersect-of-universe-2
-  (implies (event-set-p s)
-           (equal (setintersect s (universe))
-                  s))
-  :hints(("Goal" :in-theory (enable setintersect))))
+;; (def-tac-rewrite setintersect-of-universe-2
+;;   (implies (event-set-p s)
+;;            (equal (setintersect s (universe))
+;;                   s))
+;;   :hints(("Goal" :in-theory (enable setintersect))))
 
 (def-tac-rewrite setimage-of-emptyset
   (equal (setimage (emptyset) s) (emptyset)))

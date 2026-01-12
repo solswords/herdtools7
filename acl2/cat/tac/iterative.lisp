@@ -143,13 +143,6 @@
     (no-duplicatesp-equal vars)))
   
 
-(define event-vars-p ((x cmr::pseudo-var-list-p) (ctx type-ctx-p))
-  (if (atom x)
-      t
-    (and (equal (cdr (hons-assoc-equal (pseudo-var-fix (car x))
-                                       (type-ctx-fix ctx)))
-                :event)
-         (event-vars-p (cdr x) ctx))))
 
 (local (defthm tac-ev-disj-of-conjunctions-of-append
          (iff (tac-ev-disj-of-conjunctions (append x y) env)
@@ -171,34 +164,47 @@
          :fn tac-fvi-rewrite-assums))
 
 (local (defret intersectp-vars-of-rewrite-assums
-         (implies (not (intersectp-equal vars (cmr::termlist-vars assums)))
-                  (not (intersectp-equal vars (termlistlist-vars results))))
+         (implies (and (not (intersectp-equal vars (cmr::termlist-vars assums)))
+                       (not (intersectp-equal vars (cmr::pseudo-var-list-fix eventvars))))
+                  (not (intersectp-equal vars (tac-caselist-vars results))))
          :hints(("Goal" :in-theory (enable intersectp-equal)))
          :fn rewrite-assums))
 
 
+(local (defthm intersectp-equal-of-cons
+         (iff (intersectp-equal a (cons b c))
+              (or (member-equal b a)
+                  (intersectp-equal a c)))
+         :hints(("Goal" :in-theory (enable intersectp-equal)))))
+
 (defines iterative-rewrite-and-intro
   (define iterative-rewrite-and-intro ((assums pseudo-term-listp)
-                                       (freevars cmr::pseudo-var-list-p))
+                                       (substmap used-subst-map-p)
+                                       (freevars cmr::pseudo-var-list-p)
+                                       (eventvars cmr::pseudo-var-list-p))
     :measure (acl2::nat-list-measure (list (len freevars) 0))
-    :returns (results pseudo-term-list-listp)
+    :returns (results tac-caselist-p)
     :verify-guards nil
-    (b* ((cases (rewrite-assums 1000 assums nil))
+    (b* ((cases (rewrite-assums 1000 assums substmap eventvars))
          ((when (atom freevars)) cases))
-      (iterative-rewrite-and-intro-cases cases freevars)))
+      (iterative-rewrite-and-intro-cases cases freevars eventvars)))
 
-  (define iterative-rewrite-and-intro-cases ((cases pseudo-term-list-listp)
-                                             (freevars cmr::pseudo-var-list-p))
+  (define iterative-rewrite-and-intro-cases ((cases tac-caselist-p)
+                                             (freevars cmr::pseudo-var-list-p)
+                                             (eventvars cmr::pseudo-var-list-p))
     :guard (consp freevars)
     :measure (acl2::nat-list-measure (list (1- (len freevars)) (len cases)))
-    :returns (results pseudo-term-list-listp)
+    :returns (results tac-caselist-p)
     (b* (((when (atom cases)) nil)
-         ((mv ok new-case) (tac-fvi-rewrite-assums (car cases) (car freevars)))
+         ((tac-case case1) (car cases))
+         ((mv ok new-case) (tac-fvi-rewrite-assums case1.assums (car freevars)))
          ((when ok)
-          (append (iterative-rewrite-and-intro new-case (cdr freevars))
-                  (iterative-rewrite-and-intro-cases (cdr cases) freevars))))
-      (cons (pseudo-term-list-fix (car cases))
-            (iterative-rewrite-and-intro-cases (cdr cases) freevars))))
+          (append (iterative-rewrite-and-intro new-case case1.substmap (cdr freevars)
+                                               (cons (pseudo-var-fix (car freevars))
+                                                     eventvars))
+                  (iterative-rewrite-and-intro-cases (cdr cases) freevars eventvars))))
+      (cons (tac-case-fix (car cases))
+            (iterative-rewrite-and-intro-cases (cdr cases) freevars eventvars))))
   ///
   (verify-guards iterative-rewrite-and-intro)
 
@@ -211,96 +217,100 @@
   (std::defret-mutual vars-of-<fn>
     (defret vars-of-<fn>
       (implies (and (not (member-equal v (cmr::termlist-vars assums)))
-                    (not (member-equal v (cmr::pseudo-var-list-fix freevars))))
-               (not (member-equal v (termlistlist-vars results))))
+                    (not (member-equal v (cmr::pseudo-var-list-fix freevars)))
+                    (not (member-equal v (cmr::pseudo-var-list-fix eventvars))))
+               (not (member-equal v (tac-caselist-vars results))))
       :fn iterative-rewrite-and-intro)
     (defret vars-of-<fn>
-      (implies (and (not (member-equal v (termlistlist-vars cases)))
+      (implies (and (not (member-equal v (tac-caselist-vars cases)))
                     (not (member-equal v (cmr::pseudo-var-list-fix freevars)))
+                    (not (member-equal v (cmr::pseudo-var-list-fix eventvars)))
                     (consp freevars))
-               (not (member-equal v (termlistlist-vars results))))
+               (not (member-equal v (tac-caselist-vars results))))
       :hints ('(:expand (<call>
-                         (termlistlist-vars cases)
-                         (:free (x y) (termlistlist-vars (cons x y)))
+                         (tac-caselist-vars cases)
+                         (:free (x y) (tac-caselist-vars (cons x y)))
                          (cmr::pseudo-var-list-fix freevars))))
       :fn iterative-rewrite-and-intro-cases))
-  
-  (local (defthm tac-termlistlist-typed-of-append
-           (iff (tac-termlistlist-typed (append a b) type ctx)
-                (and (tac-termlistlist-typed a type ctx)
-                     (tac-termlistlist-typed b type ctx)))
-           :hints(("Goal" :in-theory (enable tac-termlistlist-typed)))))
-
-  (local (defthm tac-termlistlist-typed-of-nil
-           (iff (tac-termlistlist-typed nil type ctx)
-                t)
-           :hints(("Goal" :in-theory (enable tac-termlistlist-typed)))))
   
   (std::defret-mutual type-of-<fn>
     (defret type-of-<fn>
       (implies (and (not (member-equal 'tac-w (cmr::termlist-vars assums)))
                     (not (member-equal 'tac-w (cmr::pseudo-var-list-fix freevars)))
+                    (not (member-equal 'tac-w (cmr::pseudo-var-list-fix eventvars)))
                     (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
-                    (event-vars-p freevars ctx))
-               (tac-termlistlist-typed results :pred ctx))
+                    (event-vars-p freevars ctx)
+                    (event-vars-p eventvars ctx))
+               (tac-caselist-typed results ctx))
       :hints ('(:expand (<call>)))
       :fn iterative-rewrite-and-intro)
     (defret type-of-<fn>
-      (implies (and (not (member-equal 'tac-w (termlistlist-vars cases)))
+      (implies (and (not (member-equal 'tac-w (tac-caselist-vars cases)))
                     (not (member-equal 'tac-w (cmr::pseudo-var-list-fix freevars)))
-                    (tac-termlistlist-typed cases :pred ctx)
+                    (not (member-equal 'tac-w (cmr::pseudo-var-list-fix eventvars)))
+                    (tac-caselist-typed cases ctx)
                     (event-vars-p freevars ctx)
+                    (event-vars-p eventvars ctx)
                     (consp freevars))
-               (tac-termlistlist-typed results :pred ctx))
+               (tac-caselist-typed results ctx))
       :hints ('(:expand (<call>
                          (event-vars-p freevars ctx)
-                         (termlistlist-vars cases)
-                         (tac-termlistlist-typed cases :pred ctx)
-                         (:free (a b) (tac-termlistlist-typed (cons a b) :pred ctx)))))
+                         (:Free (a b) (event-vars-p (cons a b) ctx))
+                         (tac-caselist-vars cases)
+                         (tac-caselist-typed cases ctx)
+                         (:free (a b) (tac-caselist-typed (cons a b) ctx)))))
       :fn iterative-rewrite-and-intro-cases))
-
 
   (std::defret-mutual eval-implies-orig-of-<fn>
     (defret eval-implies-orig-of-<fn>
       (implies (and (tac-typed-env-p env ctx)
                     (not (member-equal 'tac-w (cmr::termlist-vars assums)))
                     (not (member-equal 'tac-w (cmr::pseudo-var-list-fix freevars)))
+                    (not (member-equal 'tac-w (cmr::pseudo-var-list-fix eventvars)))
                     (not (intersectp-equal (cmr::pseudo-var-list-fix freevars)
                                            (cmr::termlist-vars assums)))
+                    (not (intersectp-equal (cmr::pseudo-var-list-fix freevars)
+                                           (cmr::pseudo-var-list-fix eventvars)))
                     (no-duplicatesp-equal (cmr::pseudo-var-list-fix freevars))
                     (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
-                    (event-vars-p freevars ctx))
-               (implies (tac-ev-disj-of-conjunctions results env)
+                    (event-vars-p freevars ctx)
+                    (event-vars-p eventvars ctx))
+               (implies (tac-ev-caselist results env)
                         (tac-ev-cube assums env)))
       :hints ('(:expand (<call>)))
       :fn iterative-rewrite-and-intro
       :rule-classes nil)
     (defret eval-implies-orig-of-<fn>
       (implies (and (tac-typed-env-p env ctx)
-                    (not (member-equal 'tac-w (termlistlist-vars cases)))
+                    (not (member-equal 'tac-w (tac-caselist-vars cases)))
                     (not (member-equal 'tac-w (cmr::pseudo-var-list-fix freevars)))
+                    (not (member-equal 'tac-w (cmr::pseudo-var-list-fix eventvars)))
                     (not (intersectp-equal (cmr::pseudo-var-list-fix freevars)
-                                           (termlistlist-vars cases)))
+                                           (tac-caselist-vars cases)))
+                    (not (intersectp-equal (cmr::pseudo-var-list-fix freevars)
+                                           (cmr::pseudo-var-list-fix eventvars)))
                     (no-duplicatesp-equal (cmr::pseudo-var-list-fix freevars))
-                    (tac-termlistlist-typed cases :pred ctx)
+                    (tac-caselist-typed cases ctx)
                     (consp freevars)
-                    (event-vars-p freevars ctx))
-               (implies (tac-ev-disj-of-conjunctions results env)
-                        (tac-ev-disj-of-conjunctions cases env)))
+                    (event-vars-p freevars ctx)
+                    (event-vars-p eventvars ctx))
+               (implies (tac-ev-caselist results env)
+                        (tac-ev-caselist cases env)))
       :hints ('(:expand (<call>
                          ;; (tac-ev-cube nil env)
-                         (tac-ev-disj-of-conjunctions nil env)
+                         (tac-ev-caselist nil env)
                          (event-vars-p freevars ctx)
-                         (tac-ev-disj-of-conjunctions cases env)
-                         (:free (a b) (tac-ev-disj-of-conjunctions (cons a b) env))
+                         (:Free (a b) (event-vars-p (cons a b) ctx))
+                         (tac-ev-caselist cases env)
+                         (:free (a b) (tac-ev-caselist (cons a b) env))
                          (cmr::pseudo-var-list-fix freevars)
                          (:free (a b c) (intersectp-equal (cons a b) c))
-                         (termlistlist-vars cases)
-                         (tac-termlistlist-typed cases :pred ctx)
-                         (:free (a b) (tac-termlistlist-typed (cons a b) :pred ctx))))
+                         (tac-caselist-vars cases)
+                         (tac-caselist-typed cases ctx)
+                         (:free (a b) (tac-caselist-typed (cons a b) ctx))))
               (and stable-under-simplificationp
                    '(:use ((:instance eval-implies-orig-of-tac-fvi-rewrite-assums
-                            (assums (car cases))
+                            (assums (tac-case->assums (car cases)))
                             (freevar (car freevars)))))))
       :fn iterative-rewrite-and-intro-cases
       :rule-classes nil))
@@ -347,30 +357,35 @@
 
 (defines iterative-rewrite-and-intro-env
   (define iterative-rewrite-and-intro-env ((assums pseudo-term-listp)
+                                           (substmap used-subst-map-p)
                                            (freevars cmr::pseudo-var-list-p)
+                                           (eventvars cmr::pseudo-var-list-p)
                                            (env))
     :measure (acl2::nat-list-measure (list (len freevars) 0))
     :returns (new-env)
     :verify-guards nil
     (b* (((when (atom freevars)) env)
-         (cases (rewrite-assums 1000 assums nil)))
-      (iterative-rewrite-and-intro-cases-env cases freevars env)))
+         (cases (rewrite-assums 1000 assums substmap eventvars)))
+      (iterative-rewrite-and-intro-cases-env cases freevars eventvars env)))
 
-  (define iterative-rewrite-and-intro-cases-env ((cases pseudo-term-list-listp)
+  (define iterative-rewrite-and-intro-cases-env ((cases tac-caselist-p)
                                                  (freevars cmr::pseudo-var-list-p)
+                                                 (eventvars cmr::pseudo-var-list-p)
                                                  (env))
     :guard (consp freevars)
     :measure (acl2::nat-list-measure (list (1- (len freevars)) (len cases)))
     :returns (new-env)
     (b* (((when (atom cases)) env) ;; not reachable
-         ((unless (tac-ev-cube (car cases) env))
-          (iterative-rewrite-and-intro-cases-env (cdr cases) freevars env))
-         ((mv ok new-case) (tac-fvi-rewrite-assums (car cases) (car freevars)))
+         ((tac-case case1) (car cases))
+         ((unless (tac-ev-cube case1.assums  env))
+          (iterative-rewrite-and-intro-cases-env (cdr cases) freevars eventvars env))
+         ((mv ok new-case) (tac-fvi-rewrite-assums case1.assums (car freevars)))
          ((when ok)
           (iterative-rewrite-and-intro-env
-           new-case (cdr freevars)
+           new-case case1.substmap (cdr freevars)
+           (cons (pseudo-var-fix (car freevars)) eventvars)
            (cons (cons (pseudo-var-fix (car freevars))
-                       (tac-ev (tac-fvi-rewrite-assums-witness (car cases) (car freevars))
+                       (tac-ev (tac-fvi-rewrite-assums-witness case1.assums (car freevars))
                                env))
                  env))))
       env))
@@ -381,72 +396,86 @@
       (implies (and (tac-typed-env-p env ctx)
                     (not (member-equal 'tac-w (cmr::termlist-vars assums)))
                     (not (member-equal 'tac-w (cmr::pseudo-var-list-fix freevars)))
+                    (not (member-equal 'tac-w (cmr::pseudo-var-list-fix eventvars)))
                     (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
-                    (event-vars-p freevars ctx))
+                    (event-vars-p freevars ctx)
+                    (event-vars-p eventvars ctx))
                (tac-typed-env-p new-env ctx))
       :hints ('(:expand (<call>)))
       :fn iterative-rewrite-and-intro-env)
     (defret type-of-<fn>
       (implies (and (tac-typed-env-p env ctx)
-                    (not (member-equal 'tac-w (termlistlist-vars cases)))
+                    (not (member-equal 'tac-w (tac-caselist-vars cases)))
                     (not (member-equal 'tac-w (cmr::pseudo-var-list-fix freevars)))
-                    (tac-termlistlist-typed cases :pred ctx)
+                    (not (member-equal 'tac-w (cmr::pseudo-var-list-fix eventvars)))
+                    (tac-caselist-typed cases ctx)
                     (event-vars-p freevars ctx)
+                    (event-vars-p eventvars ctx)
                     (consp freevars))
                (tac-typed-env-p new-env ctx))
       :hints ('(:expand (<call>
                          (event-vars-p freevars ctx)
-                         (termlistlist-vars cases)
-                         (tac-termlistlist-typed cases :pred ctx)
-                         (:free (a b) (tac-termlistlist-typed (cons a b) :pred ctx)))))
+                         (:free (a b) (event-vars-p (cons a b) ctx))
+                         (tac-caselist-vars cases)
+                         (tac-caselist-typed cases ctx)
+                         (:free (a b) (tac-caselist-typed (cons a b) ctx)))))
       :fn iterative-rewrite-and-intro-cases-env))
   
   (std::defret-mutual <fn>-correct
     (defret <fn>-correct
-      (b* ((results (iterative-rewrite-and-intro assums freevars)))
+      (b* ((results (iterative-rewrite-and-intro assums substmap freevars eventvars)))
         (implies (and (tac-typed-env-p env ctx)
                       (not (member-equal 'tac-w (cmr::termlist-vars assums)))
                       (not (member-equal 'tac-w (cmr::pseudo-var-list-fix freevars)))
+                      (not (member-equal 'tac-w (cmr::pseudo-var-list-fix eventvars)))
                       (not (intersectp-equal (cmr::pseudo-var-list-fix freevars)
                                              (cmr::termlist-vars assums)))
+                      (not (intersectp-equal (cmr::pseudo-var-list-fix freevars)
+                                             (cmr::pseudo-var-list-fix eventvars)))
                       (no-duplicatesp-equal (cmr::pseudo-var-list-fix freevars))
                       (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
-                      (event-vars-p freevars ctx))
+                      (event-vars-p freevars ctx)
+                      (event-vars-p eventvars ctx))
                  (implies (tac-ev-cube assums env)
-                          (tac-ev-disj-of-conjunctions results new-env))))
+                          (tac-ev-caselist results new-env))))
       :hints ('(:expand (<call>
-                         (iterative-rewrite-and-intro assums freevars))))
+                         (iterative-rewrite-and-intro assums substmap freevars eventvars))))
       :fn iterative-rewrite-and-intro-env
       :rule-classes nil)
     (defret <fn>-correct
-      (b* ((results (iterative-rewrite-and-intro-cases cases freevars)))
+      (b* ((results (iterative-rewrite-and-intro-cases cases freevars eventvars)))
         (implies (and (tac-typed-env-p env ctx)
-                      (not (member-equal 'tac-w (termlistlist-vars cases)))
+                      (not (member-equal 'tac-w (tac-caselist-vars cases)))
                       (not (member-equal 'tac-w (cmr::pseudo-var-list-fix freevars)))
+                      (not (member-equal 'tac-w (cmr::pseudo-var-list-fix eventvars)))
                       (not (intersectp-equal (cmr::pseudo-var-list-fix freevars)
-                                             (termlistlist-vars cases)))
+                                             (tac-caselist-vars cases)))
+                      (not (intersectp-equal (cmr::pseudo-var-list-fix freevars)
+                                             (cmr::pseudo-var-list-fix eventvars)))
                       (no-duplicatesp-equal (cmr::pseudo-var-list-fix freevars))
-                      (tac-termlistlist-typed cases :pred ctx)
+                      (tac-caselist-typed cases ctx)
                       (consp freevars)
-                      (event-vars-p freevars ctx))
-                 (implies (tac-ev-disj-of-conjunctions cases env)
-                          (tac-ev-disj-of-conjunctions results new-env))))
+                      (event-vars-p freevars ctx)
+                      (event-vars-p eventvars ctx))
+                 (implies (tac-ev-caselist cases env)
+                          (tac-ev-caselist results new-env))))
       :hints ('(:expand (<call>
-                         (iterative-rewrite-and-intro-cases cases freevars)
+                         (iterative-rewrite-and-intro-cases cases freevars eventvars)
                          ;; (tac-ev-cube nil env)
-                         (tac-ev-disj-of-conjunctions nil env)
+                         (tac-ev-caselist nil env)
                          (event-vars-p freevars ctx)
-                         (tac-ev-disj-of-conjunctions cases env)
-                         (:free (a b env) (tac-ev-disj-of-conjunctions (cons a b) env))
+                         (:free (a b) (event-vars-p (cons a b) ctx))
+                         (tac-ev-caselist cases env)
+                         (:free (a b env) (tac-ev-caselist (cons a b) env))
                          (cmr::pseudo-var-list-fix freevars)
                          (:free (a b c) (intersectp-equal (cons a b) c))
-                         (termlistlist-vars cases)
-                         (tac-termlistlist-typed cases :pred ctx)
-                         (:free (a b) (tac-termlistlist-typed (cons a b) :pred ctx)))
+                         (tac-caselist-vars cases)
+                         (tac-caselist-typed cases ctx)
+                         (:free (a b) (tac-caselist-typed (cons a b) ctx)))
                 :do-not-induct t)
               (and stable-under-simplificationp
                    '(:use ((:instance tac-fvi-rewrite-assums-correct
-                            (assums (car cases))
+                            (assums (tac-case->assums (car cases)))
                             (freevar (car freevars)))))))
       :fn iterative-rewrite-and-intro-cases-env
       :rule-classes nil))
@@ -465,37 +494,37 @@
                 (tac-typed-env-p env ctx))
            (tac-cube-satisfiable x ctx)))
 
-(define tac-disj-of-conjunctions-satisfiable (x ctx)
+(define tac-caselist-satisfiable (x ctx)
   :verify-guards nil
   (if (atom x)
       nil
-    (or (tac-cube-satisfiable (car x) ctx)
-        (tac-disj-of-conjunctions-satisfiable (cdr x) ctx)))
+    (or (tac-cube-satisfiable (tac-case->assums (car x)) ctx)
+        (tac-caselist-satisfiable (cdr x) ctx)))
   ///
-  (defthm tac-disj-of-conjunctions-satisfiable-suff
-    (implies (and (tac-ev-disj-of-conjunctions x env)
+  (defthm tac-caselist-satisfiable-suff
+    (implies (and (tac-ev-caselist x env)
                   (tac-typed-env-p env ctx))
-             (tac-disj-of-conjunctions-satisfiable x ctx))
-    :hints(("Goal" :in-theory (enable tac-ev-disj-of-conjunctions)))))
+             (tac-caselist-satisfiable x ctx))
+    :hints(("Goal" :in-theory (enable tac-ev-caselist)))))
 
-(define tac-disj-of-conjunctions-satisfiable-witness (x ctx)
+(define tac-caselist-satisfiable-witness (x ctx)
   :verify-guards nil
   (if (atom x)
       nil
-    (if (tac-cube-satisfiable (car x) ctx)
-        (tac-cube-satisfiable-witness (car x) ctx)
-      (tac-disj-of-conjunctions-satisfiable-witness (cdr x) ctx)))
+    (if (tac-cube-satisfiable (tac-case->assums (car x)) ctx)
+        (tac-cube-satisfiable-witness (tac-case->assums (car x)) ctx)
+      (tac-caselist-satisfiable-witness (cdr x) ctx)))
   ///
-  (defthmd tac-disj-of-conjunctions-satisfiable-by-witness
-    (equal (tac-disj-of-conjunctions-satisfiable x ctx)
-           (and (tac-typed-env-p (tac-disj-of-conjunctions-satisfiable-witness x ctx) ctx)
-                (tac-ev-disj-of-conjunctions x (tac-disj-of-conjunctions-satisfiable-witness x ctx))))
-    :hints(("Goal" :in-theory (enable tac-disj-of-conjunctions-satisfiable
-                                      tac-ev-disj-of-conjunctions)
-            :induct (tac-disj-of-conjunctions-satisfiable x ctx)
-            :expand ((tac-disj-of-conjunctions-satisfiable x ctx)
-                     (tac-disj-of-conjunctions-satisfiable-witness x ctx)
-                     (:free (env) (tac-ev-disj-of-conjunctions x env))))
+  (defthmd tac-caselist-satisfiable-by-witness
+    (equal (tac-caselist-satisfiable x ctx)
+           (and (tac-typed-env-p (tac-caselist-satisfiable-witness x ctx) ctx)
+                (tac-ev-caselist x (tac-caselist-satisfiable-witness x ctx))))
+    :hints(("Goal" :in-theory (enable tac-caselist-satisfiable
+                                      tac-ev-caselist)
+            :induct (tac-caselist-satisfiable x ctx)
+            :expand ((tac-caselist-satisfiable x ctx)
+                     (tac-caselist-satisfiable-witness x ctx)
+                     (:free (env) (tac-ev-caselist x env))))
            (and stable-under-simplificationp
                 '(:in-theory (enable tac-cube-satisfiable))))
     :rule-classes :definition))
@@ -504,24 +533,28 @@
 (defret <fn>-equisatisfiable
   (implies (and (not (member-equal 'tac-w (cmr::termlist-vars assums)))
                 (not (member-equal 'tac-w (cmr::pseudo-var-list-fix freevars)))
+                (not (member-equal 'tac-w (cmr::pseudo-var-list-fix eventvars)))
                 (not (intersectp-equal (cmr::pseudo-var-list-fix freevars)
                                        (cmr::termlist-vars assums)))
+                (not (intersectp-equal (cmr::pseudo-var-list-fix freevars)
+                                       (cmr::pseudo-var-list-fix eventvars)))
                 (no-duplicatesp-equal (cmr::pseudo-var-list-fix freevars))
                 (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
-                (event-vars-p freevars ctx))
-           (iff (tac-disj-of-conjunctions-satisfiable results ctx)
+                (event-vars-p freevars ctx)
+                (event-vars-p eventvars ctx))
+           (iff (tac-caselist-satisfiable results ctx)
                 (tac-cube-satisfiable assums ctx)))
   :hints ((acl2::use-termhint
-           (b* ((results (iterative-rewrite-and-intro assums freevars)))
-             (if (tac-disj-of-conjunctions-satisfiable results ctx)
-                 `(:expand ((:with tac-disj-of-conjunctions-satisfiable-by-witness
-                             (tac-disj-of-conjunctions-satisfiable ,(acl2::hq results) ctx)))
+           (b* ((results (iterative-rewrite-and-intro assums substmap freevars eventvars)))
+             (if (tac-caselist-satisfiable results ctx)
+                 `(:expand ((:with tac-caselist-satisfiable-by-witness
+                             (tac-caselist-satisfiable ,(acl2::hq results) ctx)))
                    :use ((:instance eval-implies-orig-of-iterative-rewrite-and-intro
-                          (env (tac-disj-of-conjunctions-satisfiable-witness ,(acl2::hq results) ctx)))))
+                          (env (tac-caselist-satisfiable-witness ,(acl2::hq results) ctx)))))
                `(:expand ((tac-cube-satisfiable assums ctx))
                  :use ((:instance iterative-rewrite-and-intro-env-correct
                         (env (tac-cube-satisfiable-witness assums ctx)))))))))
-                 ;; :use ((:instance tac-disj-of-conjunctions-satisfiable-suff
+                 ;; :use ((:instance tac-caselist-satisfiable-suff
   :fn iterative-rewrite-and-intro)
 
 (define add-event-ctx-bindings ((vars cmr::pseudo-var-list-p)
@@ -697,50 +730,54 @@
 
 
 
-
-
 (define iterative-rewrite-top ((nvars natp)
                                (assums pseudo-term-listp))
-  :returns (results pseudo-term-list-listp)
-  (iterative-rewrite-and-intro assums (anonymous-vars nvars))
+  :returns (results tac-caselist-p)
+  (iterative-rewrite-and-intro assums nil
+                               (anonymous-vars nvars)
+                               (tac-termlist-event-vars assums))
   ///
   (defret vars-of-<fn>
     (implies (and (not (member-equal v (cmr::termlist-vars assums)))
                   (not (anonymous-var-p v)))
-             (not (member-equal v (termlistlist-vars results)))))
+             (not (member-equal v (tac-caselist-vars results)))))
 
   (defret type-of-<fn>
     (implies (and (not (member-equal 'tac-w (cmr::termlist-vars assums)))
                   (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
                   (not (has-anonymous-var (cmr::termlist-vars assums)))
                   (event-vars-p (anonymous-vars nvars) ctx))
-             (tac-termlistlist-typed results :pred ctx)))
+             (tac-caselist-typed results ctx)))
   
   (defret type-of-<fn>-add-vars
     (implies (and (not (member-equal 'tac-w (cmr::termlist-vars assums)))
                   (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
                   (not (has-anonymous-var (cmr::termlist-vars assums))))
-             (tac-termlistlist-typed results :pred (add-event-ctx-bindings (anonymous-vars nvars) ctx)))
+             (tac-caselist-typed results (add-event-ctx-bindings (anonymous-vars nvars) ctx)))
     :hints (("goal" :use ((:instance type-of-iterative-rewrite-and-intro
                            (ctx (add-event-ctx-bindings (anonymous-vars nvars) ctx))
-                           (freevars (anonymous-vars nvars))))
+                           (substmap nil)
+                           (freevars (anonymous-vars nvars))
+                           (eventvars (tac-termlist-event-vars assums))))
              :in-theory (disable type-of-iterative-rewrite-and-intro))))
+
+  (local (defthm intersectp-equal-of-tac-termlist-event-vars
+           (implies (not (intersectp-equal x (cmr::termlist-vars assums)))
+                    (not (intersectp-equal x (tac-termlist-event-vars assums))))
+           :hints(("Goal" :in-theory (enable acl2::intersectp-witness-rw)))))
 
   (defret <fn>-equisatisfiable
     (implies (and (not (member-equal 'tac-w (cmr::termlist-vars assums)))
                   (not (has-anonymous-var (cmr::termlist-vars assums)))
                   (subsetp-equal (tac-termlist-types assums ctx) '(:pred))
                   (event-vars-p (anonymous-vars nvars) ctx))
-             (iff (tac-disj-of-conjunctions-satisfiable results ctx)
+             (iff (tac-caselist-satisfiable results ctx)
                   (tac-cube-satisfiable assums ctx))))
 
   (defret <fn>-equisatisfiable-add-bindings
     (implies (and (not (member-equal 'tac-w (cmr::termlist-vars assums)))
                   (not (has-anonymous-var (cmr::termlist-vars assums)))
                   (subsetp-equal (tac-termlist-types assums ctx) '(:pred)))
-             (iff (tac-disj-of-conjunctions-satisfiable results
-                                                        (add-event-ctx-bindings
-                                                         (anonymous-vars nvars) ctx))
+             (iff (tac-caselist-satisfiable results (add-event-ctx-bindings
+                                                     (anonymous-vars nvars) ctx))
                   (tac-cube-satisfiable assums ctx)))))
-
-
