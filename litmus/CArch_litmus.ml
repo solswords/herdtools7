@@ -23,6 +23,7 @@ module Make(O:sig val memory : Memory.t val hexa : bool val mode : Mode.t end) =
 
     type reg = string
     type instruction = CBase.instruction
+    val nop : CBase.instruction option
     val dump_instruction : instruction -> string
 
   end
@@ -36,8 +37,8 @@ module Make(O:sig val memory : Memory.t val hexa : bool val mode : Mode.t end) =
     let open Constant in
     function
       | Concrete i -> "addr_" ^ V.Scalar.pp O.hexa i
-      | Symbolic (Virtual {name=s; tag=None; cap=0L;_ })-> s
-      | Label _|Symbolic _|Tag _|ConcreteVector _|ConcreteRecord _
+      | Symbolic (Virtual {name=Symbol.Data s; tag=None; cap=0L;_ })-> s
+      | Symbolic _|Tag _|ConcreteVector _|ConcreteRecord _
       | PteVal _|AddrReg _|Instruction _|Frozen _
         -> assert false
 
@@ -83,7 +84,8 @@ module Make(O:sig val memory : Memory.t val hexa : bool val mode : Mode.t end) =
     | Location_reg (proc,reg) -> Out.dump_out_reg proc reg
     | Location_global (G.Addr s) -> s
     | Location_global (G.Pte s) -> Printf.sprintf "pte_%s" s
-    | Location_global (G.Phy _)
+    | Location_global (G.Tag (s,_)) -> Printf.sprintf "tag_%s" s
+    | Location_global (G.Phy _) | Location_global (G.AddrT _)
       -> assert false
 
   let dump_rloc_tag =

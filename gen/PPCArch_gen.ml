@@ -43,8 +43,6 @@ module Make(C:Config)  =
           let fullmixed = C.moreedges
         end)
 
-    module PteVal = PteVal_gen.No(struct type arch_atom = atom end)
-
 (**********)
 (* Fences *)
 (**********)
@@ -96,10 +94,6 @@ module Make(C:Config)  =
       | DATA -> "Data"
       | CTRL -> "Ctrl"
       | CTRLISYNC -> "CtrlIsync"
-(*******)
-(* RWM *)
-(*******)
-    include Exch.LxSx(struct type arch_atom = atom end)
 
     include
         ArchExtra_gen.Make
@@ -111,6 +105,8 @@ module Make(C:Config)  =
           let pp_reg = pp_reg
           let pp_i _ = assert false
           let free_registers = allowed_for_symb
+          type arch_atom = atom
+          module Value = Value
           include NoSpecial
         end)
   end

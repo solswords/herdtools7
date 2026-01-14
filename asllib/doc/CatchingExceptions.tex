@@ -48,14 +48,14 @@ subprogram \verb|top| where the catcher proceeds to call \verb|handle_exception|
 \RenderType[remove_hypertargets]{catcher}
 
 \ASTRuleDef{Catcher}
-\MarkedIgnoredRelationDefinition{
+\NotImportedToASLSpecYet{
 \hypertarget{build-catcher}{}
 The function
 \[
 \buildcatcher(\overname{\parsenode{\Ncatcher}}{\vparsednode}) \;\aslto\; \overname{\catcher}{\vastnode}
 \]
 transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
-} % END_OF_IGNORED_RELATION
+} % END_OF_UNIMPORTED_RELATION
 
 
 \begin{mathpar}
@@ -85,25 +85,6 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \TypeRulesDef{Exception Catchers}
 \RenderRelation{annotate_catcher}
-\BackupOriginalRelation{
-The function
-\[
-\begin{array}{r}
-  \annotatecatcher(
-    \overname{\staticenvs}{\tenv} \aslsep
-    \overname{\TSideEffectSet}{\vsesin} \aslsep
-    \overname{\catcher}{\vc}
-  ) \aslto \\
-  (\overname{\TSideEffectSet}{\vsesin} \times (\overname{\catcher}{\newcatcher}, \overname{\TSideEffectSet}{\vses}))
-  \cup \overname{\typeerror}{\TypeErrorConfig}
-\end{array}
-\]
-annotates a catcher $\vc$ in the \staticenvironmentterm{} $\tenv$
-and \sideeffectsetterm\ $\vsesin$.
-The result is the \sideeffectsetterm\ $\vsesin$, the annotated catcher $\newcatcher$ and the
-\sideeffectsetterm\ $\vses$.
-\ProseOtherwiseTypeError
-} % END_OF_BACKUP_RELATION
 
 \TypingRuleDef{Catcher}
 \ExampleDef{Annotating Catch Clauses}
@@ -119,7 +100,7 @@ and a catch clause for the named exception value for the exception type \verb|Ex
   \begin{itemize}
     \item the catcher has no named identifier, that is, $\vc$ is $(\overname{\None}{\nameopt}, \tty, \vstmt)$;
     \item annotating the type $\tty$ in $\tenv$ yields $(\ttyp, \vsesty)$\ProseOrTypeError;
-    \item determining whether $\ttyp$ has the \structureterm\ of an exception type yields \\ $\True$\ProseOrTypeError;
+    \item determining whether $\ttyp$ has the \structureterm\ of an exception type yields $\True$\ProseOrTypeError;
     \item annotating the block $\vstmt$ in $\tenv$ yields $\newstmt$;
     \item \Proseeqdef{$\newcatcher$}{$(\overname{\None}{\nameopt}, \ttyp, \newstmt)$};
   \end{itemize}
@@ -128,10 +109,10 @@ and a catch clause for the named exception value for the exception type \verb|Ex
   \begin{itemize}
     \item the catcher has a named identifier, that is, $\vc$ is $(\some{\name}, \tty, \vstmt)$;
     \item annotating the type $\tty$ in $\tenv$ yields $(\ttyp, \vsesty)$\ProseOrTypeError;
-    \item determining whether $\ttyp$ has the \structureterm\ of an exception type yields \\ $\True$\ProseOrTypeError;
+    \item determining whether $\ttyp$ has the \structureterm\ of an exception type yields $\True$\ProseOrTypeError;
     \item the identifier $\name$ is not bound in $\tenv$;
     \item binding $\name$ in the local environment of $\tenv$ with the type $\ttyp$ as an immutable variable
-          (that is, with the local declaration keyword $\LDKLet$), yields the \staticenvironmentterm{} $\tenvp$;
+          (that is, with the local declaration keyword $\LDKLet$) yields the \staticenvironmentterm{} $\tenvp$;
     \item annotating the block $\vstmt$ in $\tenvp$ yields $(\newstmt, \vsesblock)$;
     \item \Proseeqdef{$\newcatcher$}{$(\overname{\some{\name}}{\nameopt}, \ttyp, \newstmt)$};
   \end{itemize}
@@ -180,32 +161,8 @@ The semantic relation for evaluating catchers employs an argument
 that is an output configuration. This argument corresponds to the result
 of evaluating a \trystatementterm{} and its type is defined as follows:
 \RenderType{TOutConfig}
-\BackupOriginalType{
-\[
-  \TOutConfig \triangleq \TNormal \cup  \TThrowing \cup \TContinuing \cup \TReturning \enspace.
-\]
-} % END_OF_BACKUP_TYPE
 
 \RenderRelation{eval_catchers}
-\BackupOriginalRelation{
-The relation
-\[
-  \evalcatchers(\overname{\envs}{\env} \aslsep \overname{\KleeneStar{\catcher}}{\catchers} \aslsep \overname{\Option{\stmt}}{\otherwiseopt}
-   \aslsep \overname{\TOutConfig}{\sm}) \;\aslrel\;
-  \left(
-    \begin{array}{cl}
-      \TReturning   & \cup\\
-      \TContinuing  & \cup\\
-      \TThrowing    & \cup \\
-      \TDynError       &
-    \end{array}
-  \right)
-\]
-evaluates a list of \texttt{catch} clauses $\catchers$, an optional \texttt{otherwise} clause,
-and a configuration $\sm$ resulting from the evaluation of the throwing expression,
-in the environment $\env$. The result --- $\smnew$ --- is either a continuation configuration,
-an early return configuration, or an abnormal configuration.
-} % END_OF_BACKUP_RELATION
 
 We refer to the block statement in a
 \trystatementterm{} as the \emph{try-block statement}.
@@ -220,17 +177,17 @@ We demonstrate this with the following example.
 
 \ExampleDef{Evaluating a Try Statement}
 In \listingref{semantics-evalcatchers}, the statement \verb|update_and_throw();|
-makes up the whole try-block.
+makes up the entire try-block.
 Evaluating the call to \verb|update_and_throw| employs an environment $\env$ where
 \texttt{g} is bound to $0$.
 Notice that the call to \verb|update_and_throw| binds \texttt{g} to $1$ before raising an exception.
 Therefore, evaluating the call to \verb|update_and_throw| returns a configuration
 of the form
 $\Throwing(\Ignore, \Ignore, \Ignore, \envthrow)$ where $\envthrow$ binds \texttt{g} to $1$.
-When the catch clause is evaluated the semantics takes the global environment from $\envthrow$
+When the catch clause is evaluated, the semantics takes the global environment from $\envthrow$
 to account for the update to \texttt{g} and the local environment from $\env$ to account for the
-updates to the local environment in \texttt{main}, which binds \texttt{x} to $2$, and use this
-environment to evaluate \texttt{print(x, g)}, resulting in the output \texttt{2 1}.
+updates to the local environment in \texttt{main}, which binds \texttt{x} to $2$.
+The evaluation uses this environment to evaluate \texttt{print(x, g)}, resulting in the output \texttt{2 1}.
 
 \ASLListing{Semantics of exception catching}{semantics-evalcatchers}{\semanticstests/EvalCatchers.asl}
 
@@ -245,7 +202,7 @@ That is, no \dynamicerrorterm{} occurs.
 \begin{itemize}
   \item $\sm$ is $\Throwing(\vv, \vvty, \sg, \envthrow)$;
   \item $\env$ consists of the \staticenvironmentterm{} $\tenv$ and dynamic environment $\denv$;
-  \item $\envthrow$ consists of the \staticenvironmentterm{} $\tenv$ and dynamic environment \\ $\denvthrow$;
+    \item $\envthrow$ consists of the \staticenvironmentterm{} $\tenv$ and dynamic environment $\denvthrow$;
   \item finding the first catcher with the \staticenvironmentterm{} $\tenv$, the exception type $\vvty$,
         and the list of catchers $\catchers$ gives a catcher that does not declare a name ($\None$) and gives a statement $\vs$;
   \item evaluating $\vs$ in $\envthrow$ as a block (\SemanticsRuleRef{Block}) yields a (non-error)
@@ -258,8 +215,8 @@ That is, no \dynamicerrorterm{} occurs.
 \begin{mathpar}
 \inferrule{
   \sm \eqname \Throwing(\vv, \vvty, \sg, \envthrow)\\
-  \env \eqname (\tenv, (G^\denv, L^\denv))\\
-  \envthrow \eqname (\tenv, (G^{\denvthrow}, L^{\denvthrow}))\\
+  \env \eqname (\tenv, \denv)\\
+  \envthrow \eqname (\tenv, \denvthrow)\\
   \findcatcher(\tenv, \vvty, \catchers) \eqname \some{ (\None, \Ignore, \vs) }\\
   \evalblock(\envthrow, \vs) \evalarrow C \OrDynErrorDiverging\\\\
   \newg \eqdef \ordered{\sg}{\aslpo}{\graphof{C}}
@@ -271,7 +228,12 @@ That is, no \dynamicerrorterm{} occurs.
 
 \SemanticsRuleDef{CatchNamed}
 \ExampleDef{Catching a Named Exception}
-The specification in \listingref{semantics-catchnamed}, prints \texttt{My exception with my message}.
+The specification in \listingref{semantics-catchnamed} prints the following:
+% CONSOLE_BEGIN aslref \semanticstests/SemanticsRule.CatchNamed.asl
+\begin{Verbatim}[fontsize=\footnotesize, frame=single]
+caught MyExceptionType with msg=42
+\end{Verbatim}
+% CONSOLE_END
 \ASLListing{Catching a named exception}{semantics-catchnamed}{\semanticstests/SemanticsRule.CatchNamed.asl}
 
 \ProseParagraph
@@ -279,7 +241,7 @@ The specification in \listingref{semantics-catchnamed}, prints \texttt{My except
 \begin{itemize}
   \item $\sm$ is $\Throwing(\vv, \vvty, \sg, \envthrow)$;
   \item $\env$ consists of the \staticenvironmentterm{} $\tenv$ and dynamic environment $\denv$;
-  \item $\envthrow$ consists of the \staticenvironmentterm{} $\tenv$ and dynamic environment \\ $\denvthrow$;
+    \item $\envthrow$ consists of the \staticenvironmentterm{} $\tenv$ and dynamic environment $\denvthrow$;
   \item finding the first catcher with the \staticenvironmentterm{} $\tenv$, the exception type $\vvty$,
   and the list of catchers $\catchers$ gives a catcher that declares the name $\name$ and gives a statement $\vs$;
   \item applying $\readvaluefrom$ to $\vv$ yields $(\vv, \vgone)$;
@@ -298,8 +260,8 @@ The specification in \listingref{semantics-catchnamed}, prints \texttt{My except
 \begin{mathpar}
 \inferrule{
   \sm \eqname \Throwing(\vv, \vvty, \sg, \envthrow)\\
-  \env \eqname (\tenv, (G^\denv, L^\denv))\\
-  \envthrow \eqname (\tenv, (G^{\denvthrow}, L^{\denvthrow}))\\
+  \env \eqname (\tenv, \denv)\\
+  \envthrow \eqname (\tenv, \denvthrow)\\
   \findcatcher(\tenv, \vvty, \catchers) \eqname \some{ (\some{\name}, \Ignore, \vs) }\\
   \readvaluefrom(\vv) \evalarrow (\vv, \vgone)\\
   \declarelocalidentifierm(\envthrow, \name, (\vv, \vgone)) \evalarrow (\envtwo, \vgtwo)\\
@@ -316,7 +278,12 @@ The specification in \listingref{semantics-catchnamed}, prints \texttt{My except
 
 \SemanticsRuleDef{CatchOtherwise}
 \ExampleDef{Evaluation of a Catch with an Otherwise}
-The specification in \listingref{semantics-catchotherwise} prints \texttt{Otherwise}.
+The specification in \listingref{semantics-catchotherwise} prints the following:
+% CONSOLE_BEGIN aslref \semanticstests/SemanticsRule.CatchOtherwise.asl
+\begin{Verbatim}[fontsize=\footnotesize, frame=single]
+Otherwise
+\end{Verbatim}
+% CONSOLE_END
 \ASLListing{Catching an exception with \texttt{otherwise}}{semantics-catchotherwise}{\semanticstests/SemanticsRule.CatchOtherwise.asl}
 
 \ProseParagraph
@@ -324,12 +291,12 @@ The specification in \listingref{semantics-catchotherwise} prints \texttt{Otherw
 \begin{itemize}
   \item $\sm$ is $\Throwing(\vv, \vvty, \sg, \envthrow)$;
   \item $\env$ consists of the \staticenvironmentterm{} $\tenv$ and dynamic environment $\denv$;
-  \item $\envthrow$ consists of the \staticenvironmentterm{} $\tenv$ and dynamic environment \\ $\denvthrow$;
+    \item $\envthrow$ consists of the \staticenvironmentterm{} $\tenv$ and dynamic environment $\denvthrow$;
   \item finding the first catcher with the \staticenvironmentterm{} $\tenv$, the exception type $\vvty$,
         and the list of catchers $\catchers$ gives a catcher that declares the name $\name$ and gives $\None$
         (that is, neither of the \texttt{catch} clauses matches the raised exception);
   \item evaluating the \texttt{otherwise} statement $\vs$ in $\envtwo$ as a block (\SemanticsRuleRef{Block})
-        is not an error configuration $C$\ProseOrDynErrorDiverging;
+        does not yield an error configuration $C$\ProseOrDynErrorDiverging;
   \item $\newg$ is the ordered composition of $\sg$ and the graph of $C$,
         with the $\aslpo$ edge;
   \item the result of the entire evaluation is $C$ with its graph substituted with $\newg$.
@@ -339,8 +306,8 @@ The specification in \listingref{semantics-catchotherwise} prints \texttt{Otherw
 \begin{mathpar}
 \inferrule{
   \sm \eqname \Throwing(\vv, \vvty, \sg, \envthrow)\\
-  \env \eqname (\tenv, (G^\denv, L^\denv))\\
-  \envthrow \eqname (\tenv, (G^{\denvthrow}, L^{\denvthrow}))\\
+  \env \eqname (\tenv, \denv)\\
+  \envthrow \eqname (\tenv, \denvthrow)\\
   \findcatcher(\tenv, \vvty, \catchers) = \None\\
   \evalblock(\envthrow, \vs) \evalarrow C \OrDynErrorDiverging\\\\
   \vg \eqdef \ordered{\sg}{\aslpo}{\graphof{C}}
@@ -362,11 +329,11 @@ that matches the exception type (\texttt{MyExceptionType1}).
 \begin{itemize}
   \item $\sm$ is $\Throwing(\vv, \vvty, \sg, \envthrow)$;
   \item $\env$ consists of the \staticenvironmentterm{} $\tenv$ and dynamic environment $\denv$;
-  \item $\envthrow$ consists of the \staticenvironmentterm{} $\tenv$ and dynamic environment \\ $\denvthrow$;
+  \item $\envthrow$ consists of the \staticenvironmentterm{} $\tenv$ and dynamic environment $\denvthrow$;
   \item finding the first catcher with the \staticenvironmentterm{} $\tenv$, the exception type $\vvty$,
   and the list of catchers $\catchers$ gives a catcher that declares the name $\name$ and gives $\None$
   (that is, neither of the \texttt{catch} clauses matches the raised exception);
-  \item since there no \texttt{otherwise} clause, the result is $\sm$.
+  \item since there is no \texttt{otherwise} clause, the result is $\sm$.
 \end{itemize}
 \FormallyParagraph
 \begin{mathpar}
@@ -382,7 +349,12 @@ that matches the exception type (\texttt{MyExceptionType1}).
 
 \SemanticsRuleDef{CatchNoThrow}
 \ExampleDef{Evaluation of a Try Statement that Does Not Raise an Exception}
-The specification in \listingref{semantics-nothrow} prints \texttt{No exception raised}.
+The specification in \listingref{semantics-nothrow} prints the following:
+% CONSOLE_BEGIN aslref \semanticstests/SemanticsRule.CatchNoThrow.asl
+\begin{Verbatim}[fontsize=\footnotesize, frame=single]
+No exception raised
+\end{Verbatim}
+% CONSOLE_END
 \ASLListing{A \texttt{try} statement that does not raise an exception}{semantics-nothrow}{\semanticstests/SemanticsRule.CatchNoThrow.asl}
 
 \ProseParagraph
@@ -403,20 +375,13 @@ The specification in \listingref{semantics-nothrow} prints \texttt{No exception 
 \CodeSubsection{\EvalCatchNoThrowBegin}{\EvalCatchNoThrowEnd}{../Interpreter.ml}
 
 \SemanticsRuleDef{FindCatcher}
-\hypertarget{relation-findcatcher}{}
-The (recursively-defined) helper relation
-\[
-  \findcatcher(\overname{\staticenvs}{\tenv} \aslsep \overname{\ty}{\vvty}, \overname{\KleeneStar{\catcher}}{\catchers})
-  \;\aslrel\; \Option{\catcher} \enspace,
-\]
-returns the first catcher clause in $\catchers$ that matches the type $\vvty$ (as a singleton set), or an empty set ($\None$),
-by invoking $\typesatisfies$ with the \staticenvironmentterm{} $\tenv$.
+\RenderRelation{find_catcher}
 
 \ExampleDef{Finding a Catch Clause}
 In \listingref{annotate-catcher}, the second catch clause --- for the exception type ExceptionType2
 is matched for the type of the exception value thrown by \verb|update_and_throw|.
 
-In \listingref{annotate-catcher}, no catch clause is matched for the type of the exception value thrown by \verb|update_and_throw|,
+In \listingref{catcher-not-found}, no catch clause is matched for the type of the exception value thrown by \verb|update_and_throw|,
 resulting in a \dynamicerrorterm{}.
 \ASLListing{Looking for a catch clause and failing to find one}{catcher-not-found}{\typingtests/TypingRule.FindCatcher.None.asl}
 

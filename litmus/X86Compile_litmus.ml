@@ -22,14 +22,8 @@ module Make(V:Constant.S)(O:Arch_litmus.Config) =
     open Printf
 
     let is_ret _ = false
-    let is_nop = function
-      | A.I_NOP -> true
-      | _ -> false
 
     let branch lbl = I_JMP lbl
-
-(* Not so nice..., the price of code sharing of
-   symbConst.ml with memevents *)
 
 (***************************************************)
 (* Extract explicit [symbolic] addresses from code *)
@@ -38,7 +32,7 @@ module Make(V:Constant.S)(O:Arch_litmus.Config) =
 
     let internal_addr name = match name with
     | G.Addr n -> Misc.string_eq n sig_cell
-    | G.Pte _|G.Phy _ -> false
+    | G.Pte _|G.Phy _  | G.AddrT _ | G.Tag _-> false
 
     let extract_rm32 r = match r with
     |  Rm32_reg _

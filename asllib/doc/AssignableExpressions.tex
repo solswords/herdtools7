@@ -1,12 +1,16 @@
 \chapter{Assignable Expressions\label{chap:AssignableExpressions}}
 
 \hypertarget{def-assignableexpression}{}
-We refer to expressions that may appear on the left hand side of assignments as \assignableexpressions.
+We refer to expressions that may appear on the left-hand side of assignments as \assignableexpressions.
 These refer to storage that needs to be updated.
 
 \ExampleDef{Assignable Expressions}
 \listingref{AssignableExpressions} shows examples of some assignable expressions.
 \ASLListing{Examples of assignable expressions}{AssignableExpressions}{\definitiontests/AssignableExpressions.asl}
+
+Recall that when the \assignableexpression{} is a call to a setter
+followed by a slice or field access, it is desugared via \ASTRuleRef{DesugarSetter}
+to satisfy \\ \SyntacticSugarRef{SetterFieldAssignment}.
 
 \ChapterOutline
 \begin{itemize}
@@ -35,49 +39,17 @@ These refer to storage that needs to be updated.
 
 \paragraph{Typing:} Assignable expressions are annotated by $\annotatelexpr$.
 \RenderRelation{annotate_lexpr}
-\BackupOriginalRelation{
-The function
-\[
-  \annotatelexpr(
-    \overname{\staticenvs}{\tenv} \aslsep
-    \overname{\lexpr}{\vle} \aslsep
-    \overname{\ty}{\vte}) \aslto
-    (\overname{\lexpr}{\newle} \times \overname{\TSideEffectSet}{\vses}) \cup \typeerror
-\]
-annotates a left-hand side expression $\vle$ in an environment $\tenv$, assuming $\vte$
-to be the type of the corresponding \rhsexpression{},
-resulting in an annotated expression $\newle$ and inferred \sideeffectsetterm\ $\vses$.
-\ProseOtherwiseTypeError
-} % END_OF_BACKUP_RELATION
 \paragraph{Semantics:} Assignable expressions are evaluated by $\evallexpr$.
 \RenderRelation{eval_lexpr}
-\BackupOriginalRelation{
-The relation
-\[
-  \evallexpr(\overname{\envs}{\env} \aslsep \overname{\lexpr}{\vle} \aslsep (\overname{\nativevalue}{\vv} \times \overname{\XGraphs}{\vg})) \;\aslrel\;
-  \left(
-    \begin{array}{cl}
-    \ResultLexpr(\overname{\XGraphs}{\newg},\overname{\envs}{\newenv}) & \cup\\
-    \overname{\TThrowing}{\ThrowingConfig} & \cup\\
-    \overname{\TDynError}{\DynErrorConfig} & \cup\\
-    \overname{\TDiverging}{\DivergingConfig} &
-    \end{array}
-  \right)
-\]
-evaluates the assignment of a value $\vv$
-to the left-hand-side expression $\vle$ in an environment $\env$,
-resulting a configuration $\ResultLexpr(\newg, \env)$.
-\ProseOtherwiseAbnormal
-} % END_OF_BACKUP_RELATION
 \paragraph{A Convention for Assignable Expressions Semantics Rules:}
-In this chapter, variables containing $\vm$ range over $\nativevalue\times\XGraphs$
-while variables where the $\vm$ is replaced with $\vv$ correspond to their value component.
+In this chapter, variables containing $\vm$ range over $\nativevalue\cartimes\XGraphs$
+while variables in which $\vm$ is replaced with $\vv$ correspond to their value component.
 For example, $\rmarray\eqname(\rvarray,\vgtwo)$ and $\mindex\eqname(\vindex, \vgone)$.
 
 \paragraph{Viewing Assignable Expressions as Right-hand-side Expressions:}
 Some of the typing rules and semantics rules require viewing \assignableexpressions\
 as \rhsexpressions.
-The correspondence is given by the function $\torexpr : \lexpr \rightarrow \expr$., defined in \secref{LeftToRight}.
+The correspondence is given by the function $\torexpr : \lexpr \rightarrow \expr$, defined in \secref{LeftToRight}.
 %
 For example, \SemanticsRuleRef{LESetField}
 needs to evaluate the record subexpression $\rerecord$, which is an \assignableexpression.
@@ -117,7 +89,7 @@ using $\texttt{eval\_expr}$ to evaluate it.
 \end{flalign*}
 
 \SyntacticSugarDef{MultiFieldAssignment}
-The syntax \\
+The syntax
 \texttt{x.(f1, ..., fk) = (v1, ..., vk);} is
 \syntacticsugar{} for \texttt{x.f1=v1; ... x.fk=vk;},
 modulo assignments to \discardvarstr{}.
@@ -347,8 +319,7 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 This section defines three desugaring relations which produce assignable expression abstract syntax, that is, $\lexpr$.
 They are used to build $\lexpr$ abstract syntax.
 \begin{itemize}
-  \item $\desugarlhsaccess$, which desugars a pair consisting of an $\Identifier$ and an \\
-        $\lhsaccess$ into an $\lexpr$.
+  \item $\desugarlhsaccess$, which desugars a pair consisting of an $\Identifier$ and an $\lhsaccess$ into an $\lexpr$.
   \item $\desugarlhstuple$, which desugars a tuple of optional $\lhsaccess$ elements into an $\lexpr$.
         This represents a multi-assignment of a tuple value, where $\None$ means that element of the tuple is discarded.
   \item $\desugarlhsfieldstuple$, which desugars a multi-assignment of a tuple value to multiple fields of an identifier.
@@ -400,7 +371,7 @@ The function
 \[
   \desugarlhstuple(\overname{\KleeneStar{\Option{\lhsaccess}}}{\vlhsaccessopts}) \;\aslto\; \overname{\lexpr}{\vlexpr}
 \]
-transforms a list of \optionalterm{} $\lhsaccess$ elements into an AST node $\vlexpr$. \\
+transforms a list of \optionalterm{} $\lhsaccess$ elements into an AST node $\vlexpr$.
 
 \ExampleDef{Desugaring a left-hand side tuple}
 \listingref{DesugarLHSTuple} shows an example of desugaring a left-hand side tuple.
@@ -444,7 +415,7 @@ The function
 \[
   \desugarlhsfieldstuple(\overname{\Identifier}{\id} \aslsep \overname{\KleeneStar{\Option{\Identifier}}}{\fieldopts}) \;\aslto\; \overname{\lexpr}{\vlexpr}
 \]
-transforms an assignment to a tuple of fields $\fields$ of variable $\id$ into an AST node $\vlexpr$. \\
+transforms an assignment to a tuple of fields $\fields$ of variable $\id$ into an AST node $\vlexpr$.
 
 \ExampleDef{Desugaring a left-hand side fields tuple}
 \listingref{DesugarLHSFieldsTuple} shows an example of desugaring a left-hand side fields tuple.
@@ -474,7 +445,7 @@ In \listingref{DesugarLHSFieldsTuple},
 the \assignableexpression{} \verb|x.(fld1, -, fld2)|
 requires desugaring into a list of \assignableexpressions{} via \ASTRuleRef{DesugarLHSFieldsTuple}.
 The list of fields is represented in the \untypedast{} as $[\some{\fldone}, \None, \some{\fldtwo}]$.
-Before checking the list \verb|fld1, -, fld2| for absence of duplicates, it is filtered as follows:\\
+Before checking the list \verb|fld1, -, fld2| for absence of duplicates, it is filtered as follows:
 $\filteroptionlist([\some{\fldone}, \None, \some{\fldtwo}]) \aslto [\fldone, \fldtwo]$.
 
 \ProseParagraph
@@ -548,11 +519,7 @@ is defined via the following rules:
 \section{Discarding Assignment Expressions\label{sec:DiscardingAssignmentExpressions}}
 \subsection{Abstract Syntax}
 \RenderTypes[remove_hypertargets]{lexpr_discard}
-\BackupOriginalAST{
-\begin{flalign*}
-\lexpr \derives\ & \overtext{\LEDiscard}{\texttt{"-"}} &
-\end{flalign*}
-}
+
 
 \subsection{Typing}
 \TypingRuleDef{LEDiscard}
@@ -603,11 +570,7 @@ In \listingref{semantics-lediscard}, the assignment \texttt{- = 42;} does not af
 \section{Variable Assignment Expressions\label{sec:VariableAssignmentExpressions}}
 \subsection{Abstract Syntax}
 \RenderTypes[remove_hypertargets]{lexpr_var}
-\BackupOriginalAST{
-\begin{flalign*}
-\lexpr \derives\ & \LEVar(\Identifier) &
-\end{flalign*}
-}
+
 
 \subsection{Typing}
 \TypingRuleDef{LEVar}
@@ -629,7 +592,7 @@ since \verb|x| is not defined as either a local storage element or as a global s
     \item checking that $k$ corresponds to a mutable variable, that is, $\LDKVar$, yields $\True$\ProseTerminateAs{\AssignmentToImmutable};
     \item determining whether $\tty$ \typesatisfiesterm\ $\vte$ in $\tenv$ yields $\True$\ProseOrTypeError;
     \item $\newle$ is $\vle$;
-    \item \Proseeqdef{$\vses$}{the set containing a \LocalEffectTerm{} with \purity{} $\SEImpure$, and a \ImmutabilityTerm{} with immutability $\False$}.
+    \item \Proseeqdef{$\vses$}{the set containing a \LocalEffectTerm{} with \purity{} $\SEImpure$, and an \ImmutabilityTerm{} with immutability $\False$}.
   \end{itemize}
 
   \item \AllApplyCase{global}
@@ -651,30 +614,32 @@ since \verb|x| is not defined as either a local storage element or as a global s
 \FormallyParagraph
 \begin{mathpar}
 \inferrule[local]{
-  L^\tenv.\localstoragetypes(\vx) = (\tty, k)\\
+  \tenv.\staticenvsL.\localstoragetypes(\vx) = (\tty, k)\\
   \techeck(k = \LDKVar, \AssignmentToImmutable) \typearrow \True \OrTypeError\\\\
-  \checktypesat(\tenv, \vte, \tty) \typearrow \True \OrTypeError
+  \checktypesatisfies(\tenv, \vte, \tty) \typearrow \True \OrTypeError\\\\
+  \vses \eqdef \{\LocalEffect(\SEImpure), \Immutability(\False)\}
 }{
   \annotatelexpr(\tenv, \overname{\LEVar(\vx)}{\vle}, \vte) \typearrow
-  (\overname{\vle}{\newle}, \{\LocalEffect(\SEImpure), \Immutability(\False)\})
+  (\overname{\vle}{\newle}, \vses)
 }
 \end{mathpar}
 
 \begin{mathpar}
 \inferrule[global]{
-  L^\tenv.\globalstoragetypes(\vx) = (\tty, k)\\
+  \tenv.\staticenvsL.\globalstoragetypes(\vx) = (\tty, k)\\
   \techeck(k = \GDKVar, \AssignmentToImmutable) \typearrow \True \OrTypeError\\\\
-  \checktypesat(\tenv, \vte, \tty) \typearrow \True \OrTypeError
+  \checktypesatisfies(\tenv, \vte, \tty) \typearrow \True \OrTypeError\\\\
+  \vses \eqdef \{\GlobalEffect(\SEImpure), \Immutability(\False)\}
 }{
   \annotatelexpr(\tenv, \overname{\LEVar(\vx)}{\vle}, \vte) \typearrow
-  (\overname{\vle}{\newle}, \{\GlobalEffect(\SEImpure), \Immutability(\False)\})
+  (\overname{\vle}{\newle}, \vses)
 }
 \end{mathpar}
 
 \begin{mathpar}
 \inferrule[error\_undefined]{
-  L^\tenv.\localstoragetypes(\vx) = \bot\\
-  L^\tenv.\globalstoragetypes(\vx) = \bot
+  \tenv.\staticenvsL.\localstoragetypes(\vx) = \bot\\
+  \tenv.\staticenvsL.\globalstoragetypes(\vx) = \bot
 }{
   \annotatelexpr(\tenv, \overname{\LEVar(\vx)}{\vle}, \vte) \typearrow \TypeErrorVal{\UndefinedIdentifier}
 }
@@ -707,14 +672,14 @@ In \listingref{semantics-leglobalvar},
     \begin{itemize}
         \item \AllApplyCase{local}
         \begin{itemize}
-            \item $\vx$ is in the local dynamic environment ($L^\denv$);
-            \item $\newenv$ is $\env$ where $\vx$ is bound to $\vv$ in the local dynamic environment ($L^\denv$).
+            \item $\vx$ is in the local dynamic environment ($\denv.\dynamicenvsL$);
+            \item $\newenv$ is $\env$ where $\vx$ is bound to $\vv$ in the local dynamic environment ($\denv.\dynamicenvsL$).
         \end{itemize}
 
         \item \AllApplyCase{global}
         \begin{itemize}
-            \item $\vx$ is bound in the global dynamic environment ($G^\denv.\storage$);
-            \item $\newenv$ is $\env$ where $\vx$ is bound to $\vv$ in the $\storage$ map of the global dynamic environment $G^\denv$.
+            \item $\vx$ is bound in the global dynamic environment ($\denv.\dynamicenvsG.\storage$);
+            \item $\newenv$ is $\env$ where $\vx$ is bound to $\vv$ in the $\storage$ map of the global dynamic environment $\denv.\dynamicenvsG$.
         \end{itemize}
     \end{itemize}
     \item $\newg$ is the ordered composition of $\vg$ and a Write Effect for $\vx$ with the $\asldata$ edge;
@@ -724,8 +689,8 @@ In \listingref{semantics-leglobalvar},
 \begin{mathpar}
 \inferrule[local]{
   \env \eqname (\tenv, \denv)\\
-  \vx \in \dom(L^\denv)\\
-  \newenv \eqdef (\tenv, (G^\denv, L^\denv[\vx \mapsto \vv]))\\
+  \vx \in \dom(\denv.\dynamicenvsL)\\
+  \newenv \eqdef (\tenv, \{\dynamicenvsG: \denv.\dynamicenvsG, \dynamicenvsL: \denv.\dynamicenvsL[\vx \mapsto \vv]\})\\
   \newg \eqdef \ordered{\vg}{\asldata}{\WriteEffect(\vx)}
 }{
   \evallexpr(\env, \LEVar(\vx), (\vv, \vg)) \evalarrow \ResultLexpr(\newg,\newenv)
@@ -735,8 +700,8 @@ In \listingref{semantics-leglobalvar},
 \begin{mathpar}
 \inferrule[global]{
   \env \eqname (\tenv, \denv)\\
-  \vx \in \dom(G^\denv.\storage)\\
-  \newenv \eqdef(\tenv, (G^\denv.\storage[\vx \mapsto \vv], L^\denv))\\
+  \vx \in \dom(\denv.\dynamicenvsG.\storage)\\
+  \newenv \eqdef(\tenv, \{\dynamicenvsG: \denv.\dynamicenvsG.\storage[\vx \mapsto \vv], \dynamicenvsL: \denv.\dynamicenvsL\})\\
   \newg \eqdef \ordered{\vg}{\asldata}{\WriteEffect(\vx)}
 }{
   \evallexpr(\env, \LEVar(\vx), (\vv, \vg)) \evalarrow \ResultLexpr(\newg,\newenv)
@@ -750,11 +715,7 @@ In \listingref{semantics-leglobalvar},
 
 \subsection{Abstract Syntax}
 \RenderTypes[remove_hypertargets]{lexpr_destructuring}
-\BackupOriginalAST{
-\begin{flalign*}
-\lexpr \derives\ & \LEDestructuring(\KleeneStar{\lexpr}) &
-\end{flalign*}
-}
+
 
 \subsection{Typing}
 \TypingRuleDef{LEDestructuring}
@@ -765,20 +726,21 @@ In \listingref{semantics-ledestructuring}, the multi-assignment
 \ProseParagraph
 \AllApply
 \begin{itemize}
-  \item $\vle$ denotes a tuple of left-hand-side expressions $\les$, that is, $\LEDestructuring(\les)$;
+  \item $\vle$ denotes a tuple of left-hand-side expressions $\les$ ($\LEDestructuring(\les)$);
   \item $\les$ is a list $\ve_{1..k}$;
   \item checking whether $\vte$ is a \tupletypeterm{} yields $\True$\ProseTerminateAs{\UnexpectedType};
   \item $\vte$ is a \tupletypeterm{} over the list of types $\tys$, that is, $\TTuple(\tys)$;
-  \item determining whether $\les$ and $\subtys$ have the same length yields $\True$\ProseTerminateAs{\UnexpectedType};
-  \item $\subtys$ is the list of types $\vt_{1..k}$;
+  \item determining whether $\les$ and $\tys$ have the same length yields $\True$\ProseTerminateAs{\UnexpectedType};
+  \item $\tys$ is the list of types $\vt_{1..k}$;
   \item annotating the left-hand-side expression $\ve_i$ with the type $\vt_i$, for $i=1..k$, yields $(\vep_i, \vxs_i)$\ProseOrTypeError;
   \item the list of expressions $\lesp$ is $\vep_i$, for $i=1..k$;
-  \item $\newle$ is the list of left-hand-side expressions $\lesp$, that is, $\LEDestructuring(\lesp)$;
+  \item $\newle$ is the list of left-hand-side expressions $\lesp$ ($\LEDestructuring(\lesp)$);
   \item define $\vses$ as the union of all sets $\vxs_i$, for $i=1..k$.
 \end{itemize}
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
+  \vle = \LEDestructuring(\les)\\
   \les \eqname [\ve_{1..k}]\\
   \techeck(\astlabel(\vte) = \TTuple, \UnexpectedType) \typearrow \True \OrTypeError\\\\
   \vte \eqname \TTuple(\tys)\\
@@ -789,7 +751,7 @@ In \listingref{semantics-ledestructuring}, the multi-assignment
   \lesp \eqname [i=1..k: \vep_i]\\
   \vses \eqdef \bigcup_{i=1..k}  \vxs_i
 }{
-  \annotatelexpr(\tenv, \overname{\LEDestructuring(\les)}{\vle}, \vte) \typearrow
+  \annotatelexpr(\tenv, \vle, \vte) \typearrow
   (\overname{\LEDestructuring(\lesp)}{\newle}, \vses)
 }
 \end{mathpar}
@@ -830,18 +792,6 @@ $\nvint(42)$ in the environment where \texttt{x} is bound to $\nvint(42)$ and
 
 \SemanticsRuleDef{LEMultiAssign}
 \RenderRelation{eval_multi_assignment}
-\BackupOriginalRelation{
-The relation
-\[
-  \evalmultiassignment(\overname{\envs}{\env} \aslsep \overname{\KleeneStar{\expr}}{\vlelist} \aslsep \overname{\KleeneStar{(\nativevalue \times \XGraphs)}}{\vmlist}) \;\aslrel\;
-  \ResultLexpr(\overname{\XGraphs}{\newg} \aslsep \overname{\envs}{\newenv}) \cup
-  \overname{\TThrowing}{\ThrowingConfig} \cup \overname{\TDynError}{\DynErrorConfig}
-\]
-evaluates multi-assignments.
-That is, the simultaneous assignment of the list of value-execution graph pairs $\vmlist$
-to the corresponding list of left-hand side expressions $\vlelist$, in the environment $\env$.
-The result is either the execution graph $\vg$ and new environment $\newenv$ or an abnormal configuration.
-} % END_OF_BACKUP_RELATION
 See \ExampleRef{Multi-assignments}.
 
 \ProseParagraph
@@ -859,7 +809,7 @@ See \ExampleRef{Multi-assignments}.
     \item $\vmlist$ is a \Proselist{$\vm$}{$\vmlistone$};
     \item \Proseevallexpr{$\env$}{$\vle$}{$\vm$}{$\ResultLexpr(\vgone, \envone)$}\ProseOrAbnormal;
     \item applying $\evalmultiassignment$ to $\envone$, $\vlelistone$, and $\vmlistone$
-          yields \\
+          yields\\
           $\ResultLexpr(\vgtwo, \newenv)$\ProseOrAbnormal;
     \item \Proseeqdef{$\newg$}{the ordered composition of $\vgone$ and $\vgtwo$
           with the edge $\aslpo$}.
@@ -888,7 +838,7 @@ See \ExampleRef{Multi-assignments}.
 \end{mathpar}
 Notice that this rule is only defined when the lists $\vlelist$ and $\vmlist$ have the same length.
 To see this, notice that
-to form a derivation tree, we must employ the \textsc{nonempty} case, which ensures both lists
+to form a derivation tree, we must employ the \textsc{non\_empty} case, which ensures both lists
 have at least one element and shortens the lengths of both lists by one,
 until both lists become empty
 which is when the \textsc{empty} axiom case is used.
@@ -905,12 +855,7 @@ The semantics utilizes a rule matching the corresponding type of array ---
 
 \subsection{Abstract Syntax}
 \RenderTypes[remove_hypertargets]{lexpr_setarray_and_typed}
-\BackupOriginalAST{
-\begin{flalign*}
-\lexpr \derives\ & \LESetArray(\lexpr, \expr) &\\
-|\ & \LESetEnumArray(\overtext{\lexpr}{base}, \overtext{\expr}{index}) &\\
-\end{flalign*}
-}
+
 
 \subsection{Typing}
 \TypingRuleDef{LESetArray}
@@ -922,13 +867,12 @@ are well-typed.
 \AllApply
 \begin{itemize}
   \item $\vle$ denotes the array access of a left-hand-side expression $\ebase$ by the index $\eindex$, that is, $\LESetArray(\ebase, \eindex)$;
-  \item annotating the \rhsexpression{} corresponding to $\ebase$ in $\tenv$ yields \\ $(\tbase, \Ignore, \Ignore)$\ProseOrTypeError;
+  \item annotating the \rhsexpression{} corresponding to $\ebase$ in $\tenv$ yields $(\tbase, \Ignore, \Ignore)$\ProseOrTypeError;
   \item obtaining the \underlyingtypeterm\ of $\tbase$ in $\tenv$ yields $\tanonbase$\ProseOrTypeError;
   \item checking that $\tanonbase$ is an array type yields $\True$\ProseOrTypeError;
   \item view $\tanonbase$ as an array type of size $\size$ and element type $\telem$, that is, $\TArray(\size, \telem)$;
   \item annotating the left-hand-side expression $\ebase$ with type $\tbase$ in $\tenv$ yields $(\ebasep, \vsesbase)$\ProseOrTypeError;
-  \item applying $\annotatesetarray$ to $(\size, \telem)$, $\vte$, and \\
-        $(\ebasep, \vsesbase, \eindex)$ in $\tenv$ yields $(\newle, \vses)$\ProseOrTypeError.
+  \item applying $\annotatesetarray$ to $(\size, \telem)$, $\vte$, and\\ $(\ebasep, \vsesbase, \eindex)$ in $\tenv$ yields $(\newle, \vses)$\ProseOrTypeError.
 \end{itemize}
 
 \FormallyParagraph
@@ -953,31 +897,6 @@ are well-typed.
 
 \TypingRuleDef{AnnotateSetArray}
 \RenderRelation{annotate_set_array}
-\BackupOriginalRelation{
-The function
-\[
-\annotatesetarray\left(
-  \begin{array}{c}
-    \overname{\staticenvs}{\tenv} \aslsep \\
-  (\overname{\arrayindex}{\size} \times \overname{\ty}{\telem}) \aslsep \\
-  \overname{\ty}{\rhsty} \aslsep \\
-  (\overname{\expr}{\ebase} \times \overname{\TSideEffectSet}{\vsesbase} \times \overname{\expr}{\eindex})
-\end{array}
-\right)
-\aslto
-(\overname{\lexpr}{\newle} \times \overname{\TSideEffectSet}{\vses})
-\]
-annotates an array update in the \staticenvironmentterm{} $\tenv$
-where $\size$ is the array index,
-$\telem$ is the type of array elements,
-$\rhsty$ is the type of the \rhsexpression{},
-$\ebase$ is the annotated expression for the array base,
-$\vsesbase$ is the \sideeffectsetterm\ inferred for $\ebase$,
-and $\eindex$ is the index expression.
-The result is the annotated assignable expression $\newle$ and
-\sideeffectsetterm\ for the annotated expression $\vses$.
-\ProseOrTypeError
-} % END_OF_BACKUP_RELATION
 See \listingref{semantics-lesetarray} and \listingref{semantics-lesetenumarray}
 for examples of well-typed assignable array expressions.
 
@@ -985,17 +904,14 @@ for examples of well-typed assignable array expressions.
 \AllApply
 \begin{itemize}
   \item determining that $\telem$ \typesatisfiesterm\ $\vt$ in $\tenv$ yields $\True$\ProseOrTypeError;
-  \item annotating the index expression $\eindex$ in $\tenv$ yields \\
-        $(\tindexp, \eindexp, \vsesindex)$\ProseOrTypeError;
-  \item determining the array length type of $\size$ (via $\typeofarraylength$) yields \\
-        $\wantedtindex$;
-  \item determining whether $\tindexp$ \typesatisfiesterm\ $\wantedtindex$ in $\tenv$ yields \\
-        $\True$\ProseOrTypeError;
+    \item annotating the index expression $\eindex$ in $\tenv$ yields\\ $(\tindexp, \eindexp, \vsesindex)$\ProseOrTypeError;
+    \item determining the array length type of $\size$ (via $\typeofarraylength$) yields $\wantedtindex$;
+    \item determining whether $\tindexp$ \typesatisfiesterm\ $\wantedtindex$ in $\tenv$ yields $\True$\ProseOrTypeError;
   \item define $\vses$ as the union of $\vsesbase$ and $\vsesindex$;
   \item \Proseeqdef{$\newle$}{
     an integer-based array update for $\ebasep$ at index $\eindexp$, that is, $\LESetArray(\ebasep, \eindexp)$,
     if $\size$ is an integer-typed array index, and
-    an enumeration-based array update for $\ebasep$ at index $\eindexp$, that is, \\ $\LESetEnumArray(\ebasep, \eindexp)$,
+    an enumeration-based array update for $\ebasep$ at index $\eindexp$, that is, $\LESetEnumArray(\ebasep, \eindexp)$,
     if $\size$ is an enumeration-typed array index.
     }
 \end{itemize}
@@ -1003,10 +919,12 @@ for examples of well-typed assignable array expressions.
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
-  \checktypesat(\tenv, \rhsty, \telem) \typearrow \True \OrTypeError\\\\
+  \sizeelem = (\size, \telem)\\
+  \basesesindex = (\ebasep, \vsesbase, \eindex)\\\\
+  \checktypesatisfies(\tenv, \rhsty, \telem) \typearrow \True \OrTypeError\\\\
   \annotateexpr(\tenv, \eindex) \typearrow (\tindexp, \eindexp, \vsesindex) \OrTypeError\\\\
   \typeofarraylength(\tenv, \size) \typearrow \wantedtindex\\
-  \checktypesat(\tenv, \tindexp, \wantedtindex) \typearrow \True \OrTypeError\\\\
+  \checktypesatisfies(\tenv, \tindexp, \wantedtindex) \typearrow \True \OrTypeError\\\\
   \vses \eqdef \vsesbase \cup \vsesindex \\
   \newleint \eqdef \LESetArray(\ebasep, \eindexp)\\
   \newleenum \eqdef \LESetEnumArray(\ebasep, \eindexp)\\
@@ -1019,7 +937,7 @@ for examples of well-typed assignable array expressions.
 }{
   {
   \begin{array}{r}
-    \annotatesetarray(\tenv, (\size, \telem), \rhsty, (\ebase, \vsesbase, \eindex)) \typearrow \\
+    \annotatesetarray(\tenv, \sizeelem, \rhsty, \basesesindex) \typearrow \\
     (\newle, \vses)
   \end{array}
   }
@@ -1030,8 +948,7 @@ for examples of well-typed assignable array expressions.
 \SemanticsRuleDef{LESetArray}
 \ExampleDef{Integer-indexed Array Update Assignments}
 In \listingref{semantics-lesetarray}, the assignment \verb|my_array[[3]] = 53;| binds the third element
-of \\
-\texttt{my\_array} to the value \texttt{53}.
+of \texttt{my\_array} to the value \texttt{53}.
 \ASLListing{Assignment to an integer-indexed array cell}{semantics-lesetarray}{\semanticstests/SemanticsRule.LESetArray.asl}
 
 \ProseParagraph
@@ -1070,21 +987,10 @@ of \\
 \CodeSubsection{\EvalLESetArrayBegin}{\EvalLESetArrayEnd}{../Interpreter.ml}
 
 \subsubsection{Comments}
-\identr{WHRS}
-If the declared type of the \rhsexpression\ of a setter has the structure of a
-bitvector or a type with fields, then if a bitslice or field selection is
-applied to a setter invocation, then the assignment to that bitslice is
-implemented using the following Read-Modify-Write (RMW) behavior:
-\begin{itemize}
-\item invoking the getter of the same name as the setter, with the same actual
-arguments as the setter invocation
-\item performing the assignment to the bitslice or field of the result of the
-getter invocation
-\item invoking the setter to assign the resulting value
-\end{itemize}
-
 We note that the index is guaranteed by the typechecker to be within the array bounds
 via \TypingRuleRef{LESetArray}.
+
+See \SyntacticSugarRef{SetterFieldAssignment}.
 
 \SemanticsRuleDef{LESetEnumArray}
 \ExampleDef{Enumeration-indexed Array Update Assignments}
@@ -1134,11 +1040,7 @@ cell of
 
 \subsection{Abstract Syntax}
 \RenderTypes[remove_hypertargets]{lexpr_slice}
-\BackupOriginalAST{
-\begin{flalign*}
-\lexpr \derives\ & \LESlice(\lexpr, \KleeneStar{\slice}) &
-\end{flalign*}
-}
+
 
 \subsection{Typing}
 \TypingRuleDef{LESlice}
@@ -1154,18 +1056,17 @@ The specification is ill-typed, even though both slices assign \verb|0| to the b
 \AllApply
 \begin{itemize}
   \item $\vle$ denotes the slicing of a left-hand-side expression $\vleone$ by the slices $\slices$, that is, $\LESlice(\vleone, \slices)$;
-  \item annotating the \rhsexpression{} corresponding to $\vleone$ in $\tenv$ yields \\
-        $(\vtleone, \Ignore, \Ignore)$\ProseOrTypeError;
+  \item annotating the \rhsexpression{} corresponding to $\vleone$ in $\tenv$ yields $(\vtleone, \Ignore, \Ignore)$\ProseOrTypeError;
   \item obtaining the \underlyingtypeterm\ of $\vtleone$ in $\tenv$ yields $\tleoneanon$\ProseOrTypeError;
   \item checking that $\tleoneanon$ is a bitvector type yields $\True$\ProseTerminateAs{\UnexpectedType};
   \item annotating the left-hand-side expression $\vleone$ in $\tenv$ yields $(\vletwo, \vsesone)$\ProseOrTypeError;
   \item annotating $\slices$ in $\tenv$ yields $(\slicesannotated, \sesslices)$\ProseOrTypeError;
   \item obtaining the width of the slices $\slicesannotated$ in $\tenv$ and simplifying them yields $\vwidth$;
-  \item $\vt$ is the bitvector type of width $\width$ and empty list of bitfields;
+  \item $\vt$ is the bitvector type of width $\vwidth$ and empty list of bitfields;
   \item checking whether $\vte$ \typesatisfiesterm\ $\vt$ yields $\True$\ProseOrTypeError;
   \item checking that the slices $\slicesannotated$ are all disjoint yields $\True$\ProseOrTypeError;
   \item checking that $\slicesannotated$ is not empty yields $\True$\ProseTerminateAs{\BadSlices};
-  \item $\newle$ is the slicing of $\vletwo$ by $\slicesannotated$, that is, $\LESlice(\vletwo, \slicesannotated)$;
+  \item $\newle$ is the slicing of $\vletwo$ by $\slicesannotated$\\ ($\LESlice(\vletwo, \slicesannotated)$);
   \item define $\vses$ as the union of $\vsesone$ and $\sesslices$.
 \end{itemize}
 \FormallyParagraph
@@ -1179,7 +1080,7 @@ The specification is ill-typed, even though both slices assign \verb|0| to the b
   \sliceswidth(\tenv, \slicesannotated) \typearrow \widthp\\
   \normalize(\tenv, \widthp) \typearrow \vwidth\\
   \vt \eqdef \TBits(\vwidth, \emptylist)\\
-  \checktypesat(\tenv, \vte, \vt) \typearrow \True \OrTypeError\\\\
+  \checktypesatisfies(\tenv, \vte, \vt) \typearrow \True \OrTypeError\\\\
   \checkdisjointslices(\tenv, \slicesannotated) \typearrow \True \OrTypeError\\\\
   \techeck(\slicesannotated \neq \emptylist, \BadSlices) \typearrow \True \OrTypeError\\\\
   \newle \eqdef \LESlice(\vletwo, \slicesannotated)\\
@@ -1192,15 +1093,6 @@ The specification is ill-typed, even though both slices assign \verb|0| to the b
 
 \TypingRuleDef{CheckDisjointSlices}
 \RenderRelation{check_disjoint_slices}
-\BackupOriginalRelation{
-The function
-\[
-\checkdisjointslices(\overname{\staticenvs}{\tenv} \aslsep \overname{\KleeneStar{\slice}}{\slices})
-\aslto \True \cup \overname{\typeerror}{\TypeErrorConfig}
-\]
-tests whether the list of slices $\slices$ do not overlap in $\tenv$, yielding $\True$.
-\ProseOtherwiseTypeError
-} % END_OF_BACKUP_RELATION
 See \ExampleRef{Typing Assignable Slice Expression}.
 
 \ProseParagraph
@@ -1224,8 +1116,8 @@ See \ExampleRef{Typing Assignable Slice Expression}.
 \subsection{Semantics}
 \SemanticsRuleDef{LESlice}
 \ExampleDef{Slice Assignments}
-In \listingref{semantics-leslice}, the assignment \texttt{x[3:0, 7:6] = '000000';} binds
-\texttt{x} to \\ $\nvbitvector(00110000)$
+In \listingref{semantics-leslice}, the assignment\\ \texttt{x[3:0, 7:6] = '000000';} binds
+\texttt{x} to $\nvbitvector(00110000)$
 via the rule \SemanticsRuleRef{LESlice}
 in the environment where \texttt{x} is bound to $\nvbitvector(11111111)$.
 
@@ -1237,8 +1129,7 @@ in the environment where \texttt{x} is bound to $\nvbitvector(11111111)$.
         (given by applying $\torexpr$ to $\ebv$) in $\env$
         is $\ResultExpr(\mbv,\envone)$\ProseOrAbnormal;
   \item evaluating $\slices$ in $\envone$ is $\ResultSlices(\msliceranges, \envtwo)$\ProseOrAbnormal;
-  \item $\msliceranges$ consists of the execution graph $\vgone$ and the list of indices\\
-        $\sliceranges$;
+    \item $\msliceranges$ consists of the execution graph $\vgone$ and the list of indices $\sliceranges$;
   \item applying $\checknonoverlappingslices$ to $\sliceranges$ yields $\True$\ProseOrError;
   \item $\mbv$ consists of the native bitvector $\vbv$ and the execution graph $\vgtwo$;
   \item writing to the bitvector $\vbv$ at indices $\sliceranges$ using the values from $\vv$
@@ -1248,7 +1139,7 @@ in the environment where \texttt{x} is bound to $\nvbitvector(11111111)$.
   \item the steps so far computed the updated bitvector, but have not assigned it to the
   variable bound to the bitvector given by $\ebv$, which is achieved next.
   Evaluating the left-hand-side expression $\ebv$ with
-  $\newmbv$ in an environment $\envtwo$ is the output configuration $C$,
+  $\newmbv$ in an environment $\envtwo$ is the output configuration $C$.
 \end{itemize}
 
 \FormallyParagraph
@@ -1269,37 +1160,13 @@ in the environment where \texttt{x} is bound to $\nvbitvector(11111111)$.
 \end{mathpar}
 \CodeSubsection{\EvalLESliceBegin}{\EvalLESliceEnd}{../Interpreter.ml}
 \subsubsection{Comments}
-\identr{WHRS}
-
-If the declared type of the \rhsexpression\ of a setter has the structure of a
-bitvector or a type with fields, then if a bitslice or field selection is
-applied to a setter invocation, then the assignment to that bitslice is
-implemented using the following Read-Modify-Write (RMW) behavior:
-\begin{itemize}
-\item invoking the getter of the same name as the setter, with the same actual
-arguments as the setter invocation
-\item performing the assignment to the bitslice or field of the result of the
-getter invocation
-\item invoking the setter to assign the resulting value
-\end{itemize}
+See \SyntacticSugarRef{SetterFieldAssignment}.
 
 \SemanticsRuleDef{CheckNonOverlappingSlices}
 \RenderRelation{check_non_overlapping_slices}
-\BackupOriginalRelation{
-The function
-\[
-  \checknonoverlappingslices(
-    \overname{\KleeneStar{(\tint\times\tint)}}{\valueranges}
-  ) \aslto \{\True\} \cup \overname{\TDynError}{\DynErrorConfig}
-\]
-checks whether the sets of integers represented by the list of ranges $\valueranges$
-overlap, yielding $\True$.
-\ProseOtherwiseDynamicErrorOrDiverging
-} % END_OF_BACKUP_RELATION
 \ExampleDef{Checking Slices for Overlaps}
 In \listingref{semantics-checknonoverlappingslices},
-the slices \verb|N-1:N-2| and \verb|0| do not overlap, and $\checknonoverlappingslices$
-yields $\True$.
+the slices \verb|N-1:N-2| and \verb|0| do not overlap, and\\ $\checknonoverlappingslices$ yields $\True$.
 \ASLListing{Non-overlapping slices}{semantics-checknonoverlappingslices}{\semanticstests/SemanticsRule.CheckNonOverlappingSlices.asl}
 
 In \listingref{semantics-checknonoverlappingslices-bad},
@@ -1313,8 +1180,7 @@ writes \verb|1| to the common position $0$.
 \begin{itemize}
   \item view $\valueranges$ as the list $\vrange_{1..k}$;
   \item for every pair of indices $\vi$ and $\vj$ such that $1 \leq \vi < \vj \leq k$,
-        applying \\
-        $\checktworangesnonoverlapping$ to $\vrange_\vi$ and $\vrange_\vj$
+      applying $\checktworangesnonoverlapping$ to $\vrange_\vi$ and $\vrange_\vj$
         yields $\True$\ProseOrError;
   \item the result is $\True$.
 \end{itemize}
@@ -1335,21 +1201,6 @@ writes \verb|1| to the common position $0$.
 
 \SemanticsRuleDef{CheckTwoRangesNonOverlapping}
 \RenderRelation{check_two_ranges_non_overlapping}
-\BackupOriginalRelation{
-The function
-\[
-\begin{array}{r}
-  \checktworangesnonoverlapping(
-    (\overname{\tint}{\vsone}\times\overname{\tint}{\vlone}) \aslsep
-    (\overname{\tint}{\vstwo}\times\overname{\tint}{\vltwo})
-  ) \aslto \\
-  \{\True\} \cup \overname{\TDynError}{\DynErrorConfig}
-\end{array}
-\]
-checks whether two sets of integers represented by the
-ranges $(\vsone, \vlone)$ and $(\vstwo, \vltwo)$ do not intersect, yielding $\True$.
-\ProseOtherwiseDynamicErrorOrDiverging
-} % END_OF_BACKUP_RELATION
 See \ExampleRef{Checking Slices for Overlaps}.
 
 \ProseParagraph
@@ -1382,13 +1233,93 @@ See \ExampleRef{Checking Slices for Overlaps}.
 \section{Structured Type Field Assignment Expressions\label{sec:StructuredTypeFieldAssignmentExpressions}}
 \subsection{Abstract Syntax}
 \RenderTypes[remove_hypertargets]{lexpr_setfield}
-\BackupOriginalAST{
-\begin{flalign*}
-\lexpr \derives\ & \LESetField(\lexpr, \Identifier) &
-\end{flalign*}
-}
 
 \subsection{Typing}
+
+\TypingRuleDef{LESetStructuredField}
+\ExampleDef{Typing a Structured Type Field Assignment}
+In \listingref{typing-lestructuredfield}, all field assignment statements
+are well-typed.
+\ASLListing{Typing a structured type field assignment}{typing-lestructuredfield}{\typingtests/TypingRule.LESetStructuredField.asl}
+
+\ProseParagraph
+\AllApply
+\begin{itemize}
+  \item $\vle$ denotes the access to the field named \texttt{field} in $\vleone$;
+  \item annotating the \rhsexpression{} corresponding to $\vleone$ in $\tenv$ yields $(\vtleone, \Ignore, \Ignore)$\ProseOrTypeError;
+  \item annotating the left-hand-side expression  $\vleone$ with type $\vtleone$ in $\tenv$ yields $(\vletwo, \vses)$\ProseOrTypeError;
+  \item obtaining the \underlyingtypeterm\ of $\vtleone$ in $\tenv$ yields a record
+    or exception type with fields $\fields$\ProseOrTypeError;
+  \item checking that there exists a type associated with the field $\vfield$ in $\fields$ $\True$ \ProseTerminateAs{\BadField};
+  \item the type associated with the field $\vfield$ in $\fields$ is $\vt$;
+  \item determining whether $\vte$ \typesatisfiesterm\ $\vt$ yields $\True$\ProseOrTypeError;
+  \item $\newle$ is the access to the field $\vfield$ in $\vletwo$, that is, $\LESetField(\vletwo, \vfield)$.
+\end{itemize}
+
+\FormallyParagraph
+\begin{mathpar}
+\inferrule{
+  \annotateexpr(\tenv, \torexpr(\vleone)) \typearrow (\vtleone, \Ignore, \Ignore) \OrTypeError\\\\
+  \annotatelexpr(\tenv, \vleone, \vtleone) \typearrow (\vletwo, \vses) \OrTypeError\\\\
+  \makeanonymous(\tenv, \vtleone) \typearrow L(\fields) \OrTypeError\\\\
+  L \in \{\TException, \TRecord\}\\
+  \assocopt{\fields}{\vfield} \typearrow \tyopt\\
+  \techeck(\tyopt \neq \None, \BadField) \typearrow \True \OrTypeError\\\\
+  \tyopt \eqname \some{\vt}\\
+  \checktypesatisfies(\tenv, \vte, \vt) \typearrow \True \OrTypeError\\\\
+  \newle \eqdef \LESetField(\vletwo, \vfield)
+}{
+  \annotatelexpr(\tenv, \overname{\LESetField(\vleone, \vfield)}{\vle}, \vte) \typearrow (\newle, \vses)
+}
+\end{mathpar}
+
+\CodeSubsection{\LESetStructuredFieldBegin}{\LESetStructuredFieldEnd}{../Typing.ml}
+
+\TypingRuleDef{LESetCollectionField}
+
+\ExampleDef{Typing Collection Field Assignable Expressions}
+All of the collection field assignable expressions in
+\listingref{typing-lesetcollectionfields} are well-typed.
+
+\ProseParagraph
+\AllApply
+\begin{itemize}
+  \item $\vle$ denotes the access to the field named \texttt{field} in
+    $\vleone$;
+  \item annotating the \rhsexpression{} corresponding to $\vleone$
+    in $\tenv$ yields $(\vtleone, \Ignore, \Ignore)$\ProseOrTypeError;
+  \item annotating the left-hand-side expression  $\vleone$ with type
+    $\vtleone$ in $\tenv$ yields $(\vletwo, \vses)$\ProseOrTypeError;
+  \item obtaining the \underlyingtypeterm\ of $\vtleone$ in $\tenv$ yields a
+    collection type with fields $\fields$\ProseOrTypeError;
+  \item $\vletwo$ denotes a left-hand-side variable expression for $\vbase$,
+    that is, $\LEVar(\vbase)$;
+  \item checking that there exists a type associated with the field $\vfield$
+    in $\fields$ $\True$ \ProseTerminateAs{\BadField};
+  \item the type associated with the field $\vfield$ in $\fields$ is $\vt$;
+  \item determining whether $\vte$ \typesatisfiesterm\ $\vt$ yields
+    $\True$\ProseOrTypeError;
+  \item $\newle$ is the access to the field $\vfield$ in $\vletwo$\\ ($\LESetCollectionFields(\vbase, [\vfield])$).
+\end{itemize}
+
+\FormallyParagraph
+\begin{mathpar}
+\inferrule{
+  \annotateexpr(\tenv, \torexpr(\vleone)) \typearrow (\vtleone, \Ignore, \Ignore) \OrTypeError\\\\
+  \annotatelexpr(\tenv, \vleone, \vtleone) \typearrow (\vletwo, \vses) \OrTypeError\\\\
+  \makeanonymous(\tenv, \vtleone) \typearrow \TCollection(\fields) \OrTypeError\\\\
+  \assocopt{\fields}{\vfield} \typearrow \tyopt\\
+  \techeck(\tyopt \neq \None, \BadField) \typearrow \True \OrTypeError\\\\
+  \tyopt \eqname \some{\vt}\\
+  \checktypesatisfies(\tenv, \vte, \vt) \typearrow \True \OrTypeError\\\\
+  \newle \eqdef \LESetCollectionFields(\vbase, [\vfield])
+}{
+  \annotatelexpr(\tenv, \overname{\LESetField(\vleone, \vfield)}{\vle}, \vte) \typearrow (\newle, \vses)
+}
+\end{mathpar}
+
+\CodeSubsection{\LESetStructuredFieldBegin}{\LESetStructuredFieldEnd}{../Typing.ml}
+
 \TypingRuleDef{LESetBadField}
 \ExampleDef{Assigning a Field in an Inappropriate Type}
 In \listingref{typing-lesetbadfield}, the statement \verb|x.RED = 42;| is ill-typed,
@@ -1400,8 +1331,8 @@ See \RequirementRef{TupleImmutability} for an example of assigning to a tuple ty
 \ProseParagraph
 \AllApply
 \begin{itemize}
-  \item $\vle$ denotes the access to the field named $\vfield$ in $\vleone$, that is, \\ $\LESetField(\vleone, \vfield)$;
-  \item annotating the \rhsexpression{} corresponding to $\vleone$ in $\tenv$ yields \\ $(\vtleone, \Ignore, \Ignore)$\ProseOrTypeError;
+  \item $\vle$ denotes the access to the field named $\vfield$ in $\vleone$, that is,\\ $\LESetField(\vleone, \vfield)$;
+  \item annotating the \rhsexpression{} corresponding to $\vleone$ in $\tenv$ yields $(\vtleone, \Ignore, \Ignore)$\ProseOrTypeError;
   \item annotating the left-hand-side expression $\vleone$ in $\tenv$ yields $(\vletwo, \vses)$\ProseOrTypeError;
   \item obtaining the \underlyingtypeterm\ of $\vtleone$ in $\tenv$ yields a type $\tleoneanon$\ProseOrTypeError;
   \item \OneApplies
@@ -1440,97 +1371,69 @@ See \RequirementRef{TupleImmutability} for an example of assigning to a tuple ty
   \annotatelexpr(\tenv, \vleone, \vtleone) \typearrow (\vletwo, \vses) \OrTypeError\\\\
   \makeanonymous(\tenv, \vtleone) \typearrow \tleoneanon \OrTypeError\\\\
   \commonprefixline\\\\
-  \astlabel(\tleoneanon) \not\in \{\TTuple, \TException, \TRecord, \TCollection, \TBits\}
+  {
+  \astlabel(\tleoneanon) \not\in
+  \left\{\begin{array}{l}
+    \TTuple, \\
+    \TException,\\
+    \TRecord,\\
+    \TCollection, \\
+    \TBits
+  \end{array}\right\}
+  }
 }{
   \annotatelexpr(\tenv, \overname{\LESetField(\vleone, \vfield)}{\vle}, \vte) \typearrow \TypeErrorVal{\UnexpectedType}
 }
 \end{mathpar}
 \CodeSubsection{\LESetBadFieldBegin}{\LESetBadFieldEnd}{../Typing.ml}
 
-\TypingRuleDef{LESetStructuredField}
-\ExampleDef{Typing a Structured Type Field Assignment}
-In \listingref{typing-lestructuredfield}, all field assignment statements
-are well-typed.
-\ASLListing{Typing a structured type field assignment}{typing-lestructuredfield}{\typingtests/TypingRule.LESetStructuredField.asl}
+\SemanticsRuleDef{LESetField}
+
+\ExampleDef{Field Assignment}
+In \listingref{semantics-lesetfield}, the assignment
+\verb|my_record.a = 42;| binds \\ \verb|my_record| to \verb|{a: 42, b: 100}|
+in the environment where \verb|my_record| is bound to \\
+\verb|{a: 3, b: 100}|.
+
+\ASLListing{Assignment to a field}{semantics-lesetfield}{\semanticstests/SemanticsRule.LESetField.asl}
 
 \ProseParagraph
 \AllApply
 \begin{itemize}
-  \item $\vle$ denotes the access to the field named \texttt{field} in $\vleone$;
-  \item annotating the \rhsexpression{} corresponding to $\vleone$ in $\tenv$ yields \\ $(\vtleone, \Ignore, \Ignore)$\ProseOrTypeError;
-  \item annotating the left-hand-side expression  $\vleone$ with type $\vtleone$ in $\tenv$ yields \\ $(\vletwo, \vses)$\ProseOrTypeError;
-  \item obtaining the \underlyingtypeterm\ of $\vtleone$ in $\tenv$ yields a record
-    or exception type with fields $\fields$\ProseOrTypeError;
-  \item checking that there exists a type associated with the field $\vfield$ in $\fields$ $\True$ \ProseTerminateAs{\BadField};
-  \item the type associated with the field $\vfield$ in $\fields$ is $\vt$;
-  \item determining whether $\vte$ \typesatisfiesterm\ $\vt$ yields $\True$\ProseOrTypeError;
-  \item $\newle$ is the access to the field $\vfield$ in $\vletwo$, that is, $\LESetField(\vletwo, \vfield)$.
+  \item $\vle$ denotes a field update expression, $\LESetField(\rerecord, \fieldname)$;
+  \item evaluating the \rhsexpression{} corresponding to $\rerecord$
+  in $\env$ is $\ResultExpr(\rmrecord, \envone)$\ProseOrAbnormal;
+  \item $\rmrecord$ is a pair consisting of the native record $\rvrecord$ and
+  the execution graph $\vgone$;
+  \item setting the field $\fieldname$ in the native record $\rvrecord$ to $\vv$
+  is the updated native record $\vvone$;
+  \item $\vmone$ is the pair consisting of the native vector $\vvone$ and the
+  execution graph that is, the parallel composition of $\vg$ and $\vgone$;
+  \item the steps so far computed the updated record, but have not assigned it to
+  the variable holding the record given by $\record$, which is achieved next.
+  Evaluating the left-hand-side expression $\rerecord$ in an environment $\envone$ with $\vmone$
+  is the output configuration $C$.
 \end{itemize}
 
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
-  \annotateexpr(\tenv, \torexpr(\vleone)) \typearrow (\vtleone, \Ignore, \Ignore) \OrTypeError\\\\
-  \annotatelexpr(\tenv, \vleone, \vtleone) \typearrow (\vletwo, \vses) \OrTypeError\\\\
-  \makeanonymous(\tenv, \vtleone) \typearrow L(\fields) \OrTypeError\\\\
-  L \in \{\TException, \TRecord\}\\
-  \assocopt(\fields, \vfield) \typearrow \tyopt\\
-  \techeck(\tyopt \neq \None, \BadField) \typearrow \True \OrTypeError\\\\
-  \tyopt \eqname \some{\vt}\\
-  \checktypesat(\tenv, \vte, \vt) \typearrow \True \OrTypeError\\\\
-  \newle \eqdef \LESetField(\vletwo, \vfield)
+    \evalexpr(\env, \torexpr(\rerecord)) \evalarrow \ResultExpr(\rmrecord, \envone) \OrAbnormal\\
+    \rmrecord \eqname (\rvrecord, \vgone)\\
+    \setfield(\fieldname, \vv, \rvrecord) \evalarrow \vvone\\
+    \vmone \eqdef (\vvone, \vg \parallelcomp \vgone)\\
+    \evallexpr(\env1, \rerecord, \vmone) \evalarrow C
 }{
-  \annotatelexpr(\tenv, \overname{\LESetField(\vleone, \vfield)}{\vle}, \vte) \typearrow (\newle, \vses)
+    \evallexpr(\env, \LESetField(\rerecord, \fieldname), (\vv, \vg)) \evalarrow C
 }
 \end{mathpar}
+\CodeSubsection{\EvalLESetFieldBegin}{\EvalLESetFieldEnd}{../Interpreter.ml}
 
-\CodeSubsection{\LESetStructuredFieldBegin}{\LESetStructuredFieldEnd}{../Typing.ml}
+\subsubsection{Comments}
+We note that the typechecker guarantees that $\fieldname$ exists in the record given by $\record$
+via \TypingRuleRef{LESetStructuredField}.
 
-\TypingRuleDef{LESetCollectionField}
-
-\ExampleDef{Typing Collection Field Assignable Expressions}
-All of the collection field assignable expressions in
-\listingref{typing-lesetcollectionfields} are well-typed.
-
-\ProseParagraph
-\AllApply
-\begin{itemize}
-  \item $\vle$ denotes the access to the field named \texttt{field} in
-    $\vleone$;
-  \item annotating the \rhsexpression{} corresponding to $\vleone$
-    in $\tenv$ yields \\ $(\vtleone, \Ignore, \Ignore)$\ProseOrTypeError;
-  \item annotating the left-hand-side expression  $\vleone$ with type
-    $\vtleone$ in $\tenv$ yields \\ $(\vletwo, \vses)$\ProseOrTypeError;
-  \item obtaining the \underlyingtypeterm\ of $\vtleone$ in $\tenv$ yields a
-    collection type with fields $\fields$\ProseOrTypeError;
-  \item $\vletwo$ denotes a left-hand-side variable expression for $\vbase$,
-    that is, $\LEVar(\vbase)$;
-  \item checking that there exists a type associated with the field $\vfield$
-    in $\fields$ $\True$ \ProseTerminateAs{\BadField};
-  \item the type associated with the field $\vfield$ in $\fields$ is $\vt$;
-  \item determining whether $\vte$ \typesatisfiesterm\ $\vt$ yields
-    $\True$\ProseOrTypeError;
-  \item $\newle$ is the access to the field $\vfield$ in $\vletwo$, that is,
-    $\LESetCollectionFields(\vbase, [\vfield])$.
-\end{itemize}
-
-\FormallyParagraph
-\begin{mathpar}
-\inferrule{
-  \annotateexpr(\tenv, \torexpr(\vleone)) \typearrow (\vtleone, \Ignore, \Ignore) \OrTypeError\\\\
-  \annotatelexpr(\tenv, \vleone, \vtleone) \typearrow (\vletwo, \vses) \OrTypeError\\\\
-  \makeanonymous(\tenv, \vtleone) \typearrow \TCollection(\fields) \OrTypeError\\\\
-  \assocopt(\fields, \vfield) \typearrow \tyopt\\
-  \techeck(\tyopt \neq \None, \BadField) \typearrow \True \OrTypeError\\\\
-  \tyopt \eqname \some{\vt}\\
-  \checktypesat(\tenv, \vte, \vt) \typearrow \True \OrTypeError\\\\
-  \newle \eqdef \LESetCollectionFields(\vbase, [\vfield])
-}{
-  \annotatelexpr(\tenv, \overname{\LESetField(\vleone, \vfield)}{\vle}, \vte) \typearrow (\newle, \vses)
-}
-\end{mathpar}
-
-\CodeSubsection{\LESetStructuredFieldBegin}{\LESetStructuredFieldEnd}{../Typing.ml}
+See \SyntacticSugarRef{SetterFieldAssignment}.
 
 \section{Structured Type Multi-field Assignment Expressions\label{sec:StructuredTypeMultiFieldAssignmentExpressions}}
 
@@ -1538,11 +1441,6 @@ All of the collection field assignable expressions in
 
 \subsection{Abstract Syntax}
 \RenderTypes[remove_hypertargets]{lexpr_setfields}
-\BackupOriginalAST{
-\begin{flalign*}
-\lexpr \derives\ & \LESetFields(\lexpr, \KleeneStar{\Identifier}) &
-\end{flalign*}
-}
 
 \subsection{Typing}
 \TypingRuleDef{LESetFields}
@@ -1573,8 +1471,8 @@ All multi-field assignment expressions in \listingref{lesetfields} are well-type
       \item applying $\foldbitvectorfields$ to $\vlefields$ and $\vbasefields$ in $\tenv$ yields $(\vlength, \vslices)$ \ProseOrTypeError;
       \item \Proseeqdef{$\vtlhs$}{the bitvector type of length $\vlength$ and no bitfields, that is, $\TBits(\ELInt{\vlength}, \emptylist)$};
       \item checking that $\vte$ \typesatisfiesterm\ $\vtlhs$ in $\tenv$ yields $\True$\ProseOrTypeError;
-      \item define $\newle$ as the assignable expression of the list of fields $\vlefields$ to the base expression $\lebase$, that is,
-            $\LESetFields(\lebase, \vlefields)$;
+      \item define $\newle$ as the assignable expression of the list of fields $\vlefields$ to the base expression $\lebase$
+            ($\LESetFields(\lebase, \vlefields)$);
       \item \Proseeqdef{$\vses$}{$\vsesbase$}.
     \end{itemize}
 
@@ -1630,7 +1528,7 @@ All multi-field assignment expressions in \listingref{lesetfields} are well-type
   \tbaseanon = \TRecord(\vbasefields)\\
   \foldbitvectorfields(\tenv, \vbasefields, \vlefields) \typearrow (\vlength, \vslices) \OrTypeError\\\\
   \vtlhs \eqdef \TBits(\ELInt{\vlength}, \emptylist)\\
-  \checktypesat(\tenv, \vte, \vtlhs) \typearrow \True \OrTypeError
+  \checktypesatisfies(\tenv, \vte, \vtlhs) \typearrow \True \OrTypeError
 }{
   {
    \begin{array}{r}
@@ -1651,7 +1549,7 @@ All multi-field assignment expressions in \listingref{lesetfields} are well-type
   \lebase = \LEVar(\vbase) \\
   \foldbitvectorfields(\tenv, \vbasefields, \vlefields) \typearrow (\vlength, \vslices) \OrTypeError\\\\
   \vtlhs \eqdef \TBits(\ELInt{\vlength}, \emptylist)\\
-  \checktypesat(\tenv, \vte, \vtlhs) \typearrow \True \OrTypeError
+  \checktypesatisfies(\tenv, \vte, \vtlhs) \typearrow \True \OrTypeError
 }{
   {
    \begin{array}{r}
@@ -1668,7 +1566,11 @@ All multi-field assignment expressions in \listingref{lesetfields} are well-type
   \annotatelexpr(\tenv, \lebase, \tbase) \typearrow (\lebaseannot, \vsesbase) \OrTypeError\\\\
   \makeanonymous(\tenv, \tbase) \typearrow \tbaseanon \OrTypeError\\\\
   \commonprefixline\\\\
-  \techeck(\astlabel(\tbaseanon) \not\in \{\TBits, \TRecord, \TCollection\}, \UnexpectedType) \typearrow \True \OrTypeError
+  {
+  \techeck\left(\astlabel(\tbaseanon) \not\in
+  \left\{\begin{array}{l}\TBits,\\ \TRecord,\\ \TCollection\end{array}\right\},
+  \UnexpectedType\right) \typearrow \True \OrTypeError
+  }
 }{
   \annotatelexpr(\tenv, \overname{\LESetFields(\lebase, \vlefields)}{\vle}, \vte) \typearrow (\newle, \vses)
 }
@@ -1677,23 +1579,13 @@ All multi-field assignment expressions in \listingref{lesetfields} are well-type
 
 \TypingRuleDef{FoldBitvectorFields}
 \RenderRelation{fold_bitvector_fields}
-\BackupOriginalRelation{
-The function
-\[
-\foldbitvectorfields(\overname{\staticenvs}{\tenv} \aslsep \overname{\KleeneStar{\field}}{\vbasefields} \aslsep \overname{\KleeneStar{\bitfield}}{\vlefields})
-\aslto (\overname{\N}\vlength \times \overname{\KleeneStar{(\N \times N)}}{\vslices})
-\]
-accepts a \staticenvironmentterm{} $\tenv$, the list of all fields $\vbasefields$ for a \recordtypeterm{},
-and a list of fields $\vlefields$ that are the subset of $\vbasefields$ about to be assigned to,
-and yields the total width across $\vlefields$ and the ranges corresponding to $\vlefields$
-in terms of pairs where the first component is the start position and the second component is
-the width of the field.
-} % END_OF_BACKUP_RELATION
 \ExampleDef{Obtaining the Total Width and Ranges of Bitvector-typed Fields}
 In \listingref{lesetfields}, applying $\foldbitvectorfields$ to the list of fields
 [\verb|data, time, status|] in the statement \verb|x.[status, time, data] = '1' :: Zeros{16} :: Ones{8};|,
 yields the total width $25$ and ranges
-$(17, 8)$ for \verb|data|, $(1, 16)$ for \verb|time|, and $(0, 1)$ for \verb|status|.
+$(\overtext{17}{\start}, \overtext{8}{\vwidth})$ for \verb|data|,
+$(\overtext{1}{\start}, \overtext{16}{\vwidth})$ for \verb|time|,
+and $(\overtext{0}{\start}, \overtext{1}{\vwidth})$ for \verb|status|.
 
 \ProseParagraph
 \OneApplies
@@ -1709,10 +1601,10 @@ $(17, 8)$ for \verb|data|, $(1, 16)$ for \verb|time|, and $(0, 1)$ for \verb|sta
   \begin{itemize}
     \item $\vlefields$ is the list with prefix $\vlefieldsone$ (the elements excluding the last one) and last element $\vfield$;
     \item applying $\foldbitvectorfields$ to $\vbasefields$ and $\vlefieldsone$ in $\tenv$ yields $(\vstart, \vslicesone)$\ProseOrTypeError;
-    \item applying $\assocopt$ to $\vbasefields$ and $\vfield$ yields $\tyopt$;
+    \item applying $\assocoptname$ to $\vbasefields$ and $\vfield$ yields $\tyopt$;
     \item checking that $\tyopt$ is different to $\None$ yields $\True$\ProseTerminateAs{\BadField};
     \item view $\tyopt$ as $\some{\vtfield}$;
-    \item applying $\getbitvectorconstwidth$ to $\vtfield$ in $\tenv$ yields $\vfieldwidth$\ProseOrTypeError;
+    \item applying $\getbitvectorconstwidth$ to $\vtfield$ in $\tenv$ yields \\$\vfieldwidth$\ProseOrTypeError;
     \item \Proseeqdef{$\vlength$}{$\vstart + \vfieldwidth$};
     \item \Proseeqdef{$\vslices$}{the list with \head\ $(\vstart, \vfieldwidth)$ and \tail\ $\vslicesone$}.
   \end{itemize}
@@ -1728,7 +1620,7 @@ $(17, 8)$ for \verb|data|, $(1, 16)$ for \verb|time|, and $(0, 1)$ for \verb|sta
 \begin{mathpar}
 \inferrule[non\_empty]{
   \foldbitvectorfields(\tenv, \vbasefields, \vlefieldsone) \typearrow (\vstart, \vslicesone)\OrTypeError\\\\
-  \assocopt(\vbasefields, \vfield) \typearrow \tyopt\\
+  \assocopt{\vbasefields}{\vfield} \typearrow \tyopt\\
   \techeck(\tyopt \neq \None, \BadField) \typearrow \True \OrTypeError\\\\
   \tyoptp \eqname \some{\vtfield}\\
   \getbitvectorconstwidth(\tenv, \vtfield) \typearrow \vfieldwidth \OrTypeError\\\\
@@ -1762,14 +1654,19 @@ The multi-field assignments in \listingref{lesetfields} evaluate without yieldin
     $\vvtwo$\ProseOrError;
   \item \Proseeqdef{\vmtwo}{%
     the pair consisting of $\vvtwo$ and the parallel composition of $\vg$ and
-    $\vgone$}
+    $\vgone$};
   \item \Proseevallexpr{$\envone$}{$\vlerecord$}{$\vmtwo$}{$C$}.
 \end{itemize}
 
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
-  \evalexpr(\env, \torexpr(\vlerecord), \vrmrecordnew) \evalarrow ((\vrecord, \vgone), \envone) \OrAbnormal\\\\
+  {
+    \begin{array}{r}
+  \evalexpr(\env, \torexpr(\vlerecord), \vrmrecordnew) \evalarrow \\
+  ((\vrecord, \vgone), \envone) \OrAbnormal
+    \end{array}
+  }\\\\
   \assignbitvectorfields(\vv, \vrecord, \fields, \vslices) \evalarrow \vvtwo \OrDynError\\\\
   \vmtwo \eqdef (\vvtwo, \vg \parallelcomp \vgone) \\
   \evallexpr(\envone, \vlerecord, \vmtwo) \evalarrow C
@@ -1780,19 +1677,6 @@ The multi-field assignments in \listingref{lesetfields} evaluate without yieldin
 
 \SemanticsRuleDef{AssignBitvectorFields}
 \RenderRelation{assign_bitvector_fields}
-\BackupOriginalRelation{
-The function
-\[
-  \assignbitvectorfields(
-    \overname{\tbitvector}{\vbitvector} \aslsep
-    \overname{\trecord}{\record} \aslsep
-    \overname{\KleeneStar{\Identifier}}{\fields} \aslsep
-    \overname{{\KleeneStar{(\N\times\N)}}}{\vslices}) \aslto
-    \overname{\trecord}{\vres}
-\]
-updates the list of fields $\fields$ of $\record$ with the slices given by
-$\vslices$ of $\vbitvector$, yielding the \nativevalueterm{} $\vres$.
-} % END_OF_BACKUP_RELATION
 \ExampleDef{Assignment Bitvector-typed Fields}
 The statement \verb|y.[data, time, status] = Ones{8} :: Zeros{16} :: '1';|
 in \listingref{lesetfields}
@@ -1814,9 +1698,9 @@ $\nvbitvector('11111111 0000000000000000 1')$.
     \item $\fields$ is a list with \head\ $\fieldname$ and \tail\ $\fieldsone$;
     \item $\vslices$ is a list with \head\ $(\vione, \vitwo)$ and \tail\ $\vslicesone$;
     \item \Proseeqdef{$\vslice$}{the singleton list comprised of the pair of native integer values for $\vione$ and $\vitwo$};
-    \item applying $\readfrombitvector$ to $\vbitvector$ and $\vslice$ yields $\recordslices$\ProseOrError;
+    \item applying $\readfrombitvector$ to $\vbitvector$ and $\vslice$ yields\\ $\recordslices$\ProseOrError;
     \item applying $\setfield$ to $\fieldname$, $\recordslices$, and $\record$ yields \\ $\recordone$;
-    \item applying $\assignbitvectorfields$ to $\vbitvector$, $\recordone$, $\fieldsone$, and $\vslicesone$, yields $\vres$\ProseOrError.
+    \item applying $\assignbitvectorfields$ to $\vbitvector$, $\recordone$, $\fieldsone$, \\ and $\vslicesone$, yields $\vres$\ProseOrError.
   \end{itemize}
 \end{itemize}
 
@@ -1830,6 +1714,8 @@ $\nvbitvector('11111111 0000000000000000 1')$.
 
 \begin{mathpar}
 \inferrule[non\_empty]{
+  \fields = [\fieldname]\concat\fieldsone\\
+  \vslices = [(\vione, \vitwo)]\concat\vslicesone\\
   \vslice \eqdef [(\nvint(\vione), \nvint(\vitwo))]\\
   \readfrombitvector(\vbitvector, \vslice) \evalarrow \recordslices \OrDynError\\\\
   \setfield(\fieldname, \recordslices, \record) \evalarrow \recordone\\
@@ -1840,8 +1726,8 @@ $\nvbitvector('11111111 0000000000000000 1')$.
   \assignbitvectorfields(
     \vbitvector,
     \record,
-    \overname{[\fieldname]\concat\fieldsone}{\fields},
-    \overname{[(\vione, \vitwo)]\concat\vslicesone}{\vslices}) \evalarrow \\
+    \fields,
+    \vslices) \evalarrow \\
     \vres
     \end{array}
   }
@@ -1858,48 +1744,45 @@ All of the collection field assignable expressions in
 \ProseParagraph
 \AllApply
 \begin{itemize}
-  \item $\vle$ is an expression for assigning each of the fields in $\fields$
+  \item $\vle$ is an expression for assigning each of the fields in $\fieldnames$
     of the collection global storage element $\vbase$ with the corresponding
     slices given in $\vslices$ from the bitvector value $\vv$ (the rule
-    \TypingRuleRef{LESetFields} ensures that the length of $\fields$ and
+    \TypingRuleRef{LESetFields} ensures that the length of $\fieldnames$ and
     $\vslices$ is the same);
   \item view $\env$ as an environment where $\tenv$ is the \staticenvironmentterm{}
     and $\denv$ is the dynamic environment;
-  \item $\vbase$ is bound in the global dynamic environment ($G^\denv.\storage$);
+  \item $\vbase$ is bound in the global dynamic environment ($\denv.\dynamicenvsG.\storage$);
   \item $\record$ is the value of $\vbase$ in the global component of $\env$ ;
   \item applying $\assignbitvectorfields$ to $\vv$, $\record$,
-    $\fields$, and $\vslices$, yields $\recordone$\ProseOrError;
+    $\fieldnames$, and $\vslices$, yields\\ $\recordone$\ProseOrError;
   \item \Proseeqdef{$\vgzero$}{the graph containing a Write Effect for each
-    $\fieldname$ in $\fields$};
+    $\fieldname$ in $\fieldnames$};
   \item $\newenv$ is $\env$ where $\vbase$ is bound to $\recordone$ in the $\storage$ map
-    of the global dynamic environment $G^\denv$.
+    of the global dynamic environment $\denv.\dynamicenvsG$.
   \item $\newg$ is the ordered composition with the $\asldata$ edge of $\vg$
-    and $\vgzero$;
+    and $\vgzero$.
 \end{itemize}
 
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
+  \vle = \LESetCollectionFields(\vbase, \fieldnames, \vslices)\\
   \env \eqname (\tenv, \denv)\\
-  \vbase \in \dom(G^\denv)\\
-  \record \eqdef G^\denv[\vbase]\\
-  \assignbitvectorfields(\vv, \record, \fields, \vslices) \evalarrow \recordone \OrDynError\\\\
+  \vbase \in \dom(\denv.\dynamicenvsG)\\
+  \record \eqdef \denv.\dynamicenvsG[\vbase]\\
+  \assignbitvectorfields(\vv, \record, \fieldnames, \vslices) \evalarrow \recordone \OrDynError\\\\
   \vgzero \eqdef \{\fieldname \in \fieldnames: \WriteEffect(\vbase + \ttdotstr + \fieldname)\}\\
-  \newenv \eqdef (\tenv, (G^\denv[\vx \mapsto \recordone], L^\denv))\\
+  \newenv \eqdef (\tenv, \{\dynamicenvsG: \denv.\dynamicenvsG[\vx \mapsto \recordone], \dynamicenvsL: \denv.\dynamicenvsL\})\\
   \newg \eqdef \ordered{\vg}{\asldata}{\vgzero} \\
 }{
-  \evallexpr(\env, \overname{\LESetCollectionFields(\vbase, \fields, \vslices)}{\vle}, (\vv,\vg)) \evalarrow \ResultLexpr(\newg,\newenv)
+  \evallexpr(\env, \vle, (\vv,\vg)) \evalarrow \ResultLexpr(\newg,\newenv)
 }
 \end{mathpar}
 
 \section{Bitfield Assignable Expressions\label{sec:BitfieldAssignableExpressions}}
 \subsection{Abstract Syntax}
 \RenderTypes[remove_hypertargets]{lexpr_slice}
-\BackupOriginalAST{
-\begin{flalign*}
-\lexpr \derives\ & \LESlice(\lexpr, \KleeneStar{\slice}) &
-\end{flalign*}
-}
+
 
 \subsection{Typing}
 \TypingRuleDef{LESetBitField}
@@ -1984,7 +1867,7 @@ are well-typed.
   \sliceswidth(\tenv, \vslices) \typearrow \vw\\
   \vt \eqdef \TBits(\vw, \emptylist)\\\\
   \commonsuffixline\\\\
-  \checktypesat(\tenv, \vte, \vt) \typearrow \True \OrTypeError\\\\
+  \checktypesatisfies(\tenv, \vte, \vt) \typearrow \True \OrTypeError\\\\
   \vletwo \eqdef \LESlice(\vleone, \slices)\\
   \annotatelexpr(\tenv, \vletwo, \vte) \typearrow (\newle, \vses) \OrTypeError
 }{
@@ -1998,11 +1881,16 @@ are well-typed.
   \annotatelexpr(\tenv, \vleone, \vtleone) \typearrow (\vletwo, \vses) \OrTypeError\\\\
   \tstruct(\tenv, \vtleone) \typearrow \TBits(\Ignore, \bitfields) \OrTypeError\\\\
   \commonprefixline\\\\
-  \findbitfieldopt(\bitfields, \vfield) \typearrow \some{ \BitFieldNested(\Ignore, \slices, \bitfieldsp) }\\
+  {
+    \begin{array}{r}
+  \findbitfieldopt(\bitfields, \vfield) \typearrow \\
+  \some{ \BitFieldNested(\Ignore, \slices, \bitfieldsp) }
+    \end{array}
+  }\\
   \sliceswidth(\tenv, \vslices) \typearrow \vw\\
   \vt \eqdef \TBits(\vw, \bitfieldsp)\\\\
   \commonsuffixline\\\\
-  \checktypesat(\tenv, \vte, \vt) \typearrow \True \OrTypeError\\\\
+  \checktypesatisfies(\tenv, \vte, \vt) \typearrow \True \OrTypeError\\\\
   \vletwo \eqdef \LESlice(\vleone, \slices)\\
   \annotatelexpr(\tenv, \vletwo, \vte) \typearrow (\newle, \vses) \OrTypeError
 }{
@@ -2019,9 +1907,9 @@ are well-typed.
   \findbitfieldopt(\bitfields, \vfield) \typearrow \some{ \BitFieldType(\Ignore, \vslices, \vt) }\\
   \sliceswidth(\tenv, \vslices) \typearrow \vw\\
   \vtp \eqdef \TBits(\vw , \emptylist)\\
-  \checktypesat(\tenv, \vtp, \vt) \typearrow \True \OrTypeError\\\\
+  \checktypesatisfies(\tenv, \vtp, \vt) \typearrow \True \OrTypeError\\\\
   \commonsuffixline\\\\
-  \checktypesat(\tenv, \vte, \vt) \typearrow \True \OrTypeError\\\\
+  \checktypesatisfies(\tenv, \vte, \vt) \typearrow \True \OrTypeError\\\\
   \vletwo \eqdef \LESlice(\vleone, \slices)\\
   \annotatelexpr(\tenv, \vletwo, \vte) \typearrow (\newle, \vses) \OrTypeError
 }{
@@ -2032,61 +1920,3 @@ are well-typed.
 \subsection{Semantics}
 The semantics for assigning to individual bitvector bitfields is covered by \SemanticsRuleRef{LESlice}
 as the type system transforms the \untypedast\ for assigning to an individual bitfield into an $\LESlice$ \typedast.
-
-\SemanticsRuleDef{LESetField}
-
-\ExampleDef{Field Assignment}
-In \listingref{semantics-lesetfield}, the assignment
-\verb|my_record.a = 42;| binds \verb|my_record| to \verb|{a: 42, b: 100}|
-in the environment where \verb|my_record| is bound to \verb|{a: 3, b: 100}|.
-
-\ASLListing{Assignment to a field}{semantics-lesetfield}{\semanticstests/SemanticsRule.LESetField.asl}
-
-\ProseParagraph
-\AllApply
-\begin{itemize}
-  \item $\vle$ denotes a field update expression, $\LESetField(\rerecord, \fieldname)$;
-  \item evaluating the \rhsexpression{} corresponding to $\rerecord$
-  in $\env$ is $\ResultExpr(\rmrecord, \envone)$\ProseOrAbnormal;
-  \item $\rmrecord$ is a pair consisting of the native record $\rvrecord$ and
-  the execution graph $\vgone$;
-  \item setting the field $\fieldname$ in the native record $\rvrecord$ to $\vv$
-  is the updated native record $\vvone$;
-  \item $\vmone$ is the pair consisting of the native vector $\vvone$ and the
-  execution graph that is, the parallel composition of $\vg$ and $\vgone$;
-  \item the steps so far computed the updated record, but have not assigned it to
-  the variable holding the record given by $\record$, which is achieved next.
-  Evaluating the left-hand-side expression $\rerecord$ in an environment $\envone$ with $\vmone$
-  is the output configuration $C$.
-\end{itemize}
-
-\FormallyParagraph
-\begin{mathpar}
-\inferrule{
-    \evalexpr(\env, \torexpr(\rerecord)) \evalarrow \ResultExpr(\rmrecord, \envone) \OrAbnormal\\
-    \rmrecord \eqname (\rvrecord, \vgone)\\
-    \setfield(\fieldname, \vv, \rvrecord) \evalarrow \vvone\\
-    \vmone \eqdef (\vvone, \vg \parallelcomp \vgone)\\
-    \evallexpr(\env1, \rerecord, \vmone) \evalarrow C
-}{
-    \evallexpr(\env, \LESetField(\rerecord, \fieldname), (\vv, \vg)) \evalarrow C
-}
-\end{mathpar}
-\CodeSubsection{\EvalLESetFieldBegin}{\EvalLESetFieldEnd}{../Interpreter.ml}
-
-\subsubsection{Comments}
-We note that the typechecker guarantees that $\fieldname$ exists in the record given by $\record$
-via \TypingRuleRef{LESetStructuredField}.
-
-\identr{WHRS}
-If the declared type of the \rhsexpression\ of a setter has the structure of a
-bitvector or a type with fields, then if a bitslice or field selection is
-applied to a setter invocation, then the assignment to that bitslice is
-implemented using the following Read-Modify-Write (RMW) behavior:
-\begin{itemize}
-    \item invoking the getter of the same name as the setter, with the same actual
-    arguments as the setter invocation
-    \item performing the assignment to the bitslice or field of the result of the
-    getter invocation
-    \item invoking the setter to assign the resulting value
-\end{itemize}

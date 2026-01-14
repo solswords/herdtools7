@@ -36,6 +36,21 @@ let catch_silent_exit body =
   let catcher = (None,exit_type,return_0) in
   add_dummy_annotation (S_Try (body,[catcher],None))
 
+let setup_registers is_vmsa =
+  let open Asllib.AST in
+  let open Asllib.ASTUtils in
+  add_dummy_annotation
+    (S_Call
+       {
+         name = "_SetUpRegisters";
+         args = [
+           expr_of_bool is_vmsa;
+         ];
+         params = [];
+         call_type = ST_Procedure;
+       })
+    [@@warning "-42"]
+
 let end_profile t0 msg : unit =
   let t1 = Sys.time () in
   if t1 -. t0 > 1. (* We log only executions that took more than 1 second *)
@@ -438,7 +453,7 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64ASL) :
                let s = UInt(imms);\n\
                var wmask : bits(datasize);\n\
                var tmask : bits(datasize) ;\n\
-               (wmask,tmask) = DecodeBitMasks{datasize}(N, imms, immr, FALSE, datasize);"
+               (wmask,tmask) = DecodeBitMasks{datasize}(N, imms, immr, FALSE);"
           in
           let fname =
             "dpimm/bitfield/" ^
@@ -1014,8 +1029,7 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64ASL) :
           None
 
     let tr_cst tr =
-      Constant.map tr Misc.identity Misc.identity
-        (fun _ -> Warn.fatal "Cannot translate instruction")
+      Constant.map tr Misc.identity Misc.identity Misc.identity
 
     let aarch64_to_asl_bv_cst sz = function
       | V.Var _ as v ->
@@ -1043,36 +1057,27 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64ASL) :
     let pstate_default_fields =
       let open Asllib.AST in
       lazy
-        (let proc_state_decl =
-           C.libfind "asl-pseudocode/patches.asl"
-           |> ASLBase.build_ast_from_file ~ast_type:`Ast `ASLv1
-           |> List.find (fun d ->
-                  match d.desc with
-                  | D_GlobalStorage { keyword = GDK_Var; name = "PSTATE"; ty = Some _ ; _ } -> true
-                  | _ -> false)
-         in
-         let proc_state_fields =
-           match proc_state_decl.desc with
-           | D_GlobalStorage { keyword = GDK_Var; name = "PSTATE"; ty = Some ty; _ } -> (
-               match ty.desc with
-               | T_Collection fields -> fields
-               | _ -> assert false)
-           | _ -> assert false
-         in
-         List.map
-           (fun (name, ty) ->
-             match ty.desc with
-             | T_Bits (e_length, []) -> (
-                 match e_length.desc with
-                 | E_Literal (L_Int z) ->
-                     ( name,
-                       Constant.Concrete
-                         (ASLScalar.S_BitVector
-                            (Asllib.Bitvector.zeros (Z.to_int z))) )
-                 | _ -> assert false)
-             | _ -> assert false)
-           proc_state_fields
-         |> StringMap.from_bindings)
+        (Lazy.force ASLS.built_shared_pseudocode
+        |> Misc.find_map (fun d ->
+            match d.desc with
+            | D_GlobalStorage
+                { keyword = GDK_Var; name = "PSTATE"; ty = Some ty; _ } -> (
+                match ty.desc with
+                | T_Collection fields -> Some fields
+                | _ -> None)
+            | _ -> None)
+        |> Option.get
+        |> List.map (fun (name, ty) ->
+            let e_length =
+              match ty.desc with T_Bits (e, []) -> e | _ -> assert false
+            in
+            let length =
+              match e_length.desc with
+              | E_Literal (L_Int z) -> Z.to_int z
+              | _ -> assert false
+            in
+            (name, Constant.Concrete (ASLScalar.zeros length)))
+        |> StringMap.from_bindings)
 
     let build_pstate_val is_el0 ii =
       let fields_to_update =
@@ -1126,7 +1131,7 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64ASL) :
         |> state_add (global_loc "PSTATE") pstate_val
         |> List.fold_right add_arch_reg_if_present ASLBase.gregs
         |> add_reg_if_present AArch64Base.ResAddr (global_loc "RESADDR")
-        |> add_reg_if_present AArch64Base.SP (global_loc "SP_EL0")
+        |> add_reg_if_present AArch64Base.SP (global_loc "_SP_EL0")
         |> (if is_vmsa then
               state_add (global_loc "D128")
                 (ASLS.A.V.scalarToV (ASLScalar.of_bool is_d128))
@@ -1148,29 +1153,18 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64ASL) :
       profile "build fake test" @@ fun () ->
       let init = [] in
       let prog =
-        let version =
-          if TopConf.C.variant (Variant.ASLVersion `ASLv0) then `ASLv0
-          else if TopConf.C.variant (Variant.ASLVersion `ASLv1) then `ASLv1
-          else `Any
-        in
-        let () =
-          if _dbg then
-            Format.eprintf "Trying with ASL parser for version %a.@."
-              Asllib.PP.pp_version version
-        in
         let main =
           let execute =
             Filename.concat "asl-pseudocode/aarch64" fname
             |> TopConf.C.libfind
-            |> ASLBase.build_ast_from_file ~ast_type:`Opn version
+            |> ASLBase.build_ast_from_file ~ast_type:`Opn `ASLv1
           in
           let open Asllib.AST in
           let open Asllib.ASTUtils in
           match execute with
           | [ ({ desc = D_Func ({ body = SB_ASL s; _ } as f); _ } as d) ] ->
-              let s = stmt_from_list [ decode; s; return_0 ] in
-              let s =
-                if is_vmsa then  catch_silent_exit s else s in
+              let s = stmt_from_list [ setup_registers is_vmsa; decode; s; return_0 ] in
+              let s = if is_vmsa then catch_silent_exit s else s in
               D_Func { f with body = SB_ASL s } |> add_pos_from_st d
           | _ -> assert false
         in
@@ -1380,6 +1374,11 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64ASL) :
       let tr_cnstrnt acc = function
         | ASLVC.Warn s -> M.VC.Warn s :: acc
         | ASLVC.Failed e -> M.VC.Failed e :: acc
+        | ASLVC.(Assign (la, Unop (Op.ArchOp1 ASLOp.BoolNot, la'))) ->
+            let bnot = Op.ArchOp1 (AArch64Op.Extra1 ASLOp.BoolNot) in
+            let assign v1 v2 = M.VC.Assign (v1, M.VC.Unop (bnot, v2)) in
+            let la = tr_v la and la' = tr_v la' in
+            assign la la' :: assign la' la :: acc
         | ASLVC.Assign (la, ex) ->
             let expr, acc = tr_expr acc ex in
             M.VC.Assign (tr_v la, expr) :: acc
@@ -1771,10 +1770,15 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64ASL) :
 
     let build_semantics test ii =
       let open AArch64Base in
+      (* Check instruction that will be executed by AArch64Sem code *)
       match ii.A.inst with
-      | I_OP3 (V64,LSR,_,_,OpExt.Imm (12,0)) (* Specific -> get TLBI key *)
-      | I_OP3 (V64,SUBS,ZR,_,
-               OpExt.(Imm (0,0)|Reg(_,LSL 0))) (* Register or zero comparison *)
+       (* Specific -> get TLBI key *)
+      | I_OP3 (V64,LSR,_,_,OpExt.Imm (12,0))
+      (* Register or zero comparison, 64 is for addresses and pteval,
+         32 is for instructions *)
+      | I_OP3 ((V64|V32),SUBS,ZR,_,
+               OpExt.(Imm (0,0)|Reg(_,LSL 0)))
+      (* Those do little more then issuing an effect *)
       | I_DC _|I_IC _ | I_TLBI _ ->
           AArch64Mixed.build_semantics test ii
       | _ -> asl_build_semantics test ii

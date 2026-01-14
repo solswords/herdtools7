@@ -31,33 +31,48 @@ rule token = parse
                                }
 
     (* Keywords *)
-    | "ast"               { AST }
-    | "constant"          { CONSTANT }
-    | "constants_set"     { CONSTANTS_SET }
-    | "function"          { FUNCTION }
-    | "list0"             { LIST0 }
-    | "list1"             { LIST1 }
-    | "math_macro"        { MATH_MACRO }
-    | "math_layout"       { MATH_LAYOUT }
-    | "option"            { OPTION }
-    | "fun"               { FUN }
-    | "partial"           { PARTIAL }
-    | "powerset"          { POWERSET }
-    | "powerset_finite"   { POWERSET_FINITE }
-    | "prose_application" { PROSE_APPLICATION }
-    | "prose_description" { PROSE_DESCRIPTION }
-    | "relation"          { RELATION }
-    | "render"            { RENDER }
-    | "semantics"         { SEMANTICS }
-    | "typedef"           { TYPEDEF }
-    | "typing"            { TYPING }
+    | "associative"         { ASSOCIATIVE }
+    | "ast"                 { AST }
+    | "case"                { CASE }
+    | "constant"            { CONSTANT }
+    | "constants_set"       { CONSTANTS_SET }
+    | "custom"              { CUSTOM }
+    | "function"            { FUNCTION }
+    | "if"                  { IF }
+    | "in"                  { IN }
+    | "INDEX"               { INDEX }
+    | "else"                { ELSE }
+    | "latex"               { LATEX }
+    | "lhs_hypertargets"    { LHS_HYPERTARGETS }
+    | "list0"               { LIST0 }
+    | "list1"               { LIST1 }
+    | "math_macro"          { MATH_MACRO }
+    | "math_layout"         { MATH_LAYOUT }
+    | "not_in"              { NOT_IN }
+    | "option"              { OPTION }
+    | "operator"            { OPERATOR }
+    | "fun"                 { FUN }
+    | "auto_name"           { AUTO_NAME }
+    | "partial"             { PARTIAL }
+    | "powerset"            { POWERSET }
+    | "powerset_finite"     { POWERSET_FINITE }
+    | "prose_application"   { PROSE_APPLICATION }
+    | "prose_description"   { PROSE_DESCRIPTION }
+    | "relation"            { RELATION }
+    | "render"              { RENDER }
+    | "rule"                { RULE }
+    | "semantics"           { SEMANTICS }
+    | "short_circuit_macro" { SHORT_CIRCUIT_MACRO }
+    | "then"                { THEN }
+    | "typedef"             { TYPEDEF }
+    | "typing"              { TYPING }
 
     (* Punctuation and operators *)
+    | '.'            { DOT }
     | ','            { COMMA }
     | ':'            { COLON }
     | ';'            { SEMI }
     | '|'            { VDASH }
-    | '='            { EQ }
     | '('            { LPAR }
     | ')'            { RPAR }
     | '['            { LBRACKET }
@@ -66,6 +81,23 @@ rule token = parse
     | '}'            { RBRACE }
     | '-'            { MINUS }
     | "->"           { ARROW }
+    | "--"           { MINUS_MINUS }
+    (* Operator tokens *)
+    | ":="           { COLON_EQ }
+    | "=:"           { EQ_COLON }
+    | '='            { EQ }
+    | '+'            { PLUS }
+    | '*'            { TIMES }
+    | '/'            { DIVIDE }
+    | '^'            { EXPONENT }
+    | "&&"           { AND }
+    | "||"           { OR }
+    | "<=>"          { IFF }
+    | "<="           { LE }
+    | "<"            { LT }
+    | ">="           { GE }
+    | ">"            { GT }
+    | "!="           { NEQ }
 
     | identifier as lxm { IDENTIFIER(lxm) }
     | latex_macro as lxm { LATEX_MACRO(lxm) }

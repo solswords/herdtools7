@@ -32,6 +32,7 @@ type args = {
   print_ast : bool;
   print_lisp : bool;
   print_serialized : bool;
+  print_serialized_typed : bool;
   print_typed : bool;
   show_rules : bool;
   strictness : strictness;
@@ -42,6 +43,7 @@ type args = {
   override_mode : override_mode;
   no_primitives : bool;
   no_stdlib : bool;
+  no_stdlib0 : bool;
   v0_use_split_chunks : bool;
 }
 
@@ -58,6 +60,7 @@ let parse_args () =
   let exec = ref true in
   let print_ast = ref false in
   let print_serialized = ref false in
+  let print_serialized_typed = ref false in
   let print_typed = ref false in
   let print_lisp = ref false in
   let opn = ref "" in
@@ -71,6 +74,7 @@ let parse_args () =
   let set_override_mode m () = override_mode := m in
   let no_primitives = ref false in
   let no_stdlib = ref false in
+  let no_stdlib0 = ref false in
   let use_fine_grained_side_effects = ref false in
   let use_conflincting_side_effects_extension = ref false in
   let v0_use_split_chunks = ref false in
@@ -85,6 +89,10 @@ let parse_args () =
       ( "--serialize",
         Arg.Set print_serialized,
         " Print the parsed AST to stdout in the serialized format." );
+      ( "--serialize-typed",
+        Arg.Set print_serialized_typed,
+        " Print the parsed AST after typing to stdout in the serialized format."
+      );
       ( "--print-typed",
         Arg.Set print_typed,
         " Print the parsed AST after typing and before executing it." );
@@ -159,6 +167,10 @@ let parse_args () =
       ( "--no-stdlib",
         Arg.Set no_stdlib,
         " Do not use ASL's standard library. Implies `--no-primitives`." );
+      ( "--no-stdlib0",
+        Arg.Set no_stdlib0,
+        " Do not use the ASL0 compatibility standard library. Default if there \
+         is no ASLv0 file passed as argument." );
       ( "--v0-use-chunks",
         Arg.Set v0_use_split_chunks,
         " While lexing v0 files, split the files along separator comment \
@@ -186,6 +198,7 @@ let parse_args () =
       opn = (match !opn with "" -> None | s -> Some s);
       print_ast = !print_ast;
       print_serialized = !print_serialized;
+      print_serialized_typed = !print_serialized_typed;
       print_typed = !print_typed;
       print_lisp = !print_lisp;
       strictness = !strictness;
@@ -198,9 +211,18 @@ let parse_args () =
       override_mode = !override_mode;
       no_primitives = !no_primitives || !no_stdlib;
       no_stdlib = !no_stdlib;
+      no_stdlib0 = !no_stdlib0;
       v0_use_split_chunks = !v0_use_split_chunks;
     }
   in
+
+  let all_v1 =
+    List.for_all
+      (function
+        | (NormalV1 | PatchV1), _ -> true | (NormalV0 | PatchV0), _ -> false)
+      args.files
+  in
+  let args = { args with no_stdlib0 = args.no_stdlib0 || all_v1 } in
 
   let () =
     let ensure_exists s =
@@ -281,13 +303,14 @@ let run_with (args : args) : unit =
 
   let () = if args.print_ast then Format.printf "%a@." PP.pp_t ast in
 
-  let () =
-    if args.print_serialized then print_string (Serialize.t_to_string ast)
-  in
+  let () = if args.print_serialized then Serialize.output_to_chan stdout ast in
 
   let ast =
     let open Builder in
-    let added_stdlib = if args.no_stdlib then ast else with_stdlib ast in
+    let added_stdlib =
+      if args.no_stdlib then ast
+      else with_stdlib ast ~no_stdlib0:args.no_stdlib0
+    in
     if args.no_primitives then added_stdlib
     else with_primitives Native.DeterministicBackend.primitives added_stdlib
   in
@@ -306,7 +329,10 @@ let run_with (args : args) : unit =
   let module C = struct
     let output_format = args.output_format
     let check = args.strictness
-    let print_typed = args.print_typed || args.print_lisp
+
+    let print_typed =
+      args.print_typed || args.print_lisp || args.print_serialized_typed
+
     let use_field_getter_extension = args.use_field_getter_extension
     let override_mode = args.override_mode
 
@@ -319,6 +345,11 @@ let run_with (args : args) : unit =
   end in
   let module T = Annotate (C) in
   let typed_ast, static_env = or_exit @@ fun () -> T.type_check_ast ast in
+
+  let () =
+    if args.print_serialized_typed then
+      Serialize.output_to_chan ?newline:(Some true) stdout typed_ast
+  in
 
   let () =
     if args.print_typed then

@@ -378,7 +378,7 @@ and slice_equal eq slice1 slice2 =
   | Slice_Range (e11, e21), Slice_Range (e12, e22)
   | Slice_Star (e11, e21), Slice_Star (e12, e22) ->
       expr_equal eq e11 e12 && expr_equal eq e21 e22
-  | _ -> assert false
+  | _ -> false
 
 and constraint_equal eq c1 c2 =
   c1 == c2
@@ -464,6 +464,9 @@ let unop op = map_desc (fun e -> E_Unop (op, e))
 let literal v = E_Literal v |> add_dummy_annotation
 let expr_of_int i = literal (L_Int (Z.of_int i))
 let expr_of_z z = literal (L_Int z)
+let e_true = literal (L_Bool true)
+let e_false = literal (L_Bool false)
+let expr_of_bool b = if b then e_true else e_false
 let zero_expr = expr_of_z Z.zero
 let one_expr = expr_of_z Z.one
 let minus_one_expr = expr_of_z Z.minus_one
@@ -577,15 +580,29 @@ let patch ~src ~patches =
   (* Size considerations:
      - [src] is BIG.
      - [patches] is not that little. *)
-  let to_remove =
-    patches |> List.to_seq |> Seq.map identifier_of_decl |> ISet.of_seq
-  in
+  let to_remove = patches |> List.map identifier_of_decl |> ISet.of_list in
   let filter d =
     match d.desc with
     | D_Pragma _ -> true
     | _ -> not (ISet.mem (identifier_of_decl d) to_remove)
   in
   src |> List.filter filter |> List.rev_append patches
+
+let set_decl_name name d =
+  map_annotated d @@ function
+  | D_Func f -> D_Func { f with name }
+  | D_GlobalStorage f -> D_GlobalStorage { f with name }
+  | D_TypeDecl (_name, e, ty) -> D_TypeDecl (name, e, ty)
+  | D_Pragma _ as d -> d
+
+let patch_with_backup ~src ~patches =
+  let to_remove = patches |> List.map identifier_of_decl |> ISet.of_list in
+  let map d =
+    let name = identifier_of_decl d in
+    if not (ISet.mem name to_remove) then d
+    else set_decl_name ("_patched_" ^ name) d
+  in
+  src |> List.map map |> List.rev_append patches
 
 let list_cross f li1 li2 =
   List.fold_left
@@ -909,3 +926,25 @@ let get_cycle m =
     let _ = IMap.fold (fun x _ -> dfs path0 above0 x) m seen0 in
     None
   with Cycle e -> Some (List.rev e)
+
+let func_to_primitive f =
+  let side_effecting =
+    match f.qualifier with Some (Pure | Readonly) -> false | _ -> true
+  in
+  { f with body = SB_Primitive side_effecting }
+
+let plug_primitives ast =
+  let signatures =
+    ast
+    |> List.map (fun f ->
+        match f.desc with
+        | D_Func f -> (f.name, func_to_primitive f)
+        | _ -> raise (Invalid_argument "plug_primitives: non function argument"))
+    |> IMap.of_list
+  in
+  let plug_one (f, name) =
+    try (IMap.find name signatures, f)
+    with Not_found ->
+      raise (Invalid_argument "plug_primitives: badly referenced primitive")
+  in
+  List.map plug_one

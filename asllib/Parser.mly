@@ -184,7 +184,7 @@ let clist0(x) := { [] } | clist1(x)
 (* A comma separated list with at least 2 elements. *)
 let clist2(x) := ~=x; COMMA; li=clist1(x); { x :: li }
 
-(* A comma-separated trailing list. *)
+(* A possibly-empty comma-separated trailing list. *)
 let tclist0(x) := { [] } | tclist1(x)
 
 (* A comma-separated non-empty trailing list. *)
@@ -522,8 +522,6 @@ let global_keyword ==
   | global_keyword_non_config
   | CONFIG; { GDK_Config }
 
-let pass == { S_Pass }
-let assign(x, y) == ~=x ; EQ ; ~=y ; < S_Assign >
 let direction := | TO; { AST.Up } | DOWNTO; { AST.Down }
 
 let case_alt :=
@@ -562,8 +560,8 @@ let stmt :=
       | TRY; s=stmt_list; CATCH; c=list1(catcher); o=otherwise_opt; < S_Try >
     )
     | terminated_by(SEMI_COLON,
-      | PASS; pass
-      | RETURN; ~=option(expr);                             < S_Return >
+      | PASS;                                                { S_Pass }
+      | RETURN; ~=option(expr);                              < S_Return >
       | ~=call;                                              < s_call >
       | ASSERT; e=expr;                                      < S_Assert >
       | ~=local_decl_keyword; ~=decl_item; ~=ty_opt; EQ; ~=some(expr); < S_Decl   >
@@ -593,7 +591,7 @@ let stmt_list := ~ = list1(stmt) ; <stmt_from_list>
 let s_else :=
   annotated (
     | ELSIF; e=expr; THEN; s1=stmt_list; s2=s_else; <S_Cond>
-    | pass
+    | { S_Pass }
   )
   | ELSE; stmt_list
 
@@ -736,7 +734,8 @@ let accessor_body == BEGIN; ~=accessors; end_semicolon;
 let spec := ~=terminated(list(decl), EOF); < List.concat >
 (* End *)
 
-let opn [@internal true] := body=stmt; EOF;
+let stmt_list0 == stmt_list | annotated({ S_Pass })
+let opn [@internal true] := body=stmt_list0; EOF;
     {
       [
         D_Func

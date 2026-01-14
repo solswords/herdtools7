@@ -58,10 +58,12 @@ let varatom_dir _d f = f None
 
 let atom_to_bank _ = Code.Ord
 
+let get_machine_feature _ = StringSet.empty
+
 include NoMixed
 include NoWide
 
-module PteVal = PteVal_gen.No(struct type arch_atom = atom end)
+module Value = Value_gen.NoPte(struct type arch_atom = atom end)
 
 (**********)
 (* Fences *)
@@ -108,12 +110,13 @@ let is_ctrlr _ = assert false
 let is_addr _ = assert false
 let fst_dp _ = assert false
 let sequence_dp _ _ = assert false
+let expand_dp_dir _ = assert false
 
 (*******)
 (* RWM *)
 (*******)
 
-include Exch.Exch(struct type arch_atom = atom end)
+module RMW = Rmw.Exch(struct type nonrec atom = atom end)
 
 include
     ArchExtra_gen.Make
@@ -125,5 +128,7 @@ include
       let pp_reg = pp_reg
       let pp_i _ = assert false
       let free_registers = allowed_for_symb
+      type arch_atom = atom
+      module Value = Value
       include NoSpecial
     end)

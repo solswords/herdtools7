@@ -45,6 +45,7 @@ let run_asl code version exec =
       print_ast = false;
       print_lisp = false;
       print_serialized = false;
+      print_serialized_typed = false;
       print_typed = false;
       show_rules = false;
       strictness = (if String.equal _version "v0" then Silence else TypeCheck);
@@ -55,6 +56,7 @@ let run_asl code version exec =
       override_mode = Permissive;
       no_primitives = false;
       no_stdlib = false;
+      no_stdlib0 = false;
       v0_use_split_chunks = false;
     }
   in

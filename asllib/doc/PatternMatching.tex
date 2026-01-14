@@ -39,38 +39,8 @@ transforms a pattern parse node $\vparsednode$ into a pattern AST node $\vastnod
 
 \paragraph{Typing:} Patterns are annotated by $\annotatepattern$.
 \RenderRelation{annotate_pattern}
-\BackupOriginalRelation{
-The function
-\[
-  \annotatepattern(
-    \overname{\staticenvs}{\tenv} \aslsep
-    \overname{\ty}{\vt} \aslsep
-    \overname{\pattern}{\vp}) \aslto
-    (\overname{\pattern}{\newp} \times \overname{\TSideEffectSet}{\vses}) \cup \overname{\typeerror}{\TypeErrorConfig}
-\]
-annotates a pattern $\vp$ in a \staticenvironmentterm{} $\tenv$ given a type $\vt$,
-resulting in $\newp$, which is the typed AST node for $\vp$
-and the inferred \sideeffectsetterm\ $\vses$.
-\ProseOtherwiseTypeError.
-} % END_OF_BACKUP_RELATION
 \paragraph{Semantics:} Patterns are evaluated by $\evalpattern$.
 \RenderRelation{eval_pattern}
-\BackupOriginalRelation{
-The relation
-\[
-  \evalpattern(\overname{\envs}{\env} \aslsep \overname{\nativevalue}{\vv} \aslsep \overname{\pattern}{\vp}) \;\aslrel\;
-  \left(
-  \begin{array}{ll}
-  \ResultPattern(\overname{\tbool}{\vb}, \overname{\XGraphs}{\newg}) & \cup\\
-  \overname{\TDynError}{\DynErrorConfig} & \cup\\
-  \overname{\TDiverging}{\DivergingConfig} &
-  \end{array}
-  \right)
-\]
-determines whether a value $\vv$ matches the pattern $\vp$ in an environment $\env$
-resulting in either $\ResultPattern(\vb, \newg)$ or an abnormal configuration.
-} % END_OF_BACKUP_RELATION
-
 
 \section{Matching All Values\label{sec:MatchingAllValues}}
 \ASLListing{Matching any value}{semantics-pall}{\semanticstests/SemanticsRule.PAll.asl}
@@ -82,11 +52,6 @@ resulting in either $\ResultPattern(\vb, \newg)$ or an abnormal configuration.
 
 \subsection{Abstract Syntax}
 \RenderTypes[remove_hypertargets]{pattern_all}
-\BackupOriginalAST{
-\begin{flalign*}
-\pattern \derives\ & \PatternAll &
-\end{flalign*}
-}
 
 \ASTRuleDef{PAll}
 \begin{mathpar}
@@ -125,7 +90,7 @@ since \texttt{-} matches any value and \texttt{42} in particular.
 \ProseParagraph
 \AllApply
 \begin{itemize}
-  \item $\vp$ is the pattern which matches everything, $\PatternAll$, and therefore
+  \item $\vp$ is the pattern that matches everything, $\PatternAll$, and therefore
     matches $\vv$;
   \item $\vb$ is the native Boolean value \True;
   \item $\newg$ is the empty graph.
@@ -147,11 +112,6 @@ since \texttt{-} matches any value and \texttt{42} in particular.
 
 \subsection{Abstract Syntax}
 \RenderTypes[remove_hypertargets]{pattern_single}
-\BackupOriginalAST{
-\begin{flalign*}
-\pattern \derives\ & \PatternSingle(\expr) &
-\end{flalign*}
-}
 
 \ASTRuleDef{PSingle}
 \begin{mathpar}
@@ -177,32 +137,32 @@ since \texttt{-} matches any value and \texttt{42} in particular.
   \item annotating the expression $\ve$ in $\tenv$ yields $(\vte, \vep, \vses)$\ProseOrTypeError;
   \item \Prosechecksymbolicallyevaluable{$\vses$};
   \item obtaining the \underlyingtypeterm\ of $\vt$ yields $\vtstruct$\ProseOrTypeError;
-  \item obtaining the \underlyingtypeterm\ of $\vte$ yields $\testruct$\ProseOrTypeError;
+  \item obtaining the \underlyingtypeterm\ of $\vte$ yields $\vtestruct$\ProseOrTypeError;
   \item \OneApplies
   \begin{itemize}
     \item \AllApplyCase{t\_bool, t\_real, t\_int, t\_string}
     \begin{itemize}
       \item the AST label of $\vtstruct$ is one of $\TBool$, $\TReal$, $\TInt$, or $\TString$;
-      \item checking that the labels of $\vtstruct$ and $\testruct$ are equal yields $\True$\ProseOrTypeError;
+      \item checking that the labels of $\vtstruct$ and $\vtestruct$ are equal yields $\True$\ProseOrTypeError;
     \end{itemize}
 
     \item \AllApplyCase{t\_bits}
     \begin{itemize}
       \item the AST label of $\vtstruct$ is $\TBits$;
-      \item checking that the labels of $\vtstruct$ and $\testruct$ are equal yields $\True$\ProseOrTypeError;
-      \item determining whether the bitwidths of $\vtstruct$ and $\testruct$ are equal yields $\True$\ProseOrTypeError;
+      \item checking that the labels of $\vtstruct$ and $\vtestruct$ are equal yields $\True$\ProseOrTypeError;
+      \item determining whether the bitwidths of $\vtstruct$ and $\vtestruct$ are equal yields $\True$\ProseOrTypeError;
     \end{itemize}
 
     \item \AllApplyCase{t\_enum}
     \begin{itemize}
       \item the AST label of $\vtstruct$ is $\TEnum$;
-      \item checking that the labels of $\vtstruct$ and $\testruct$ are equal yields $\True$\ProseOrTypeError;
-      \item determining whether the lists of enumeration literals of $\vtstruct$ and $\testruct$ are equal yields $\True$\ProseOrTypeError;
+      \item checking that the labels of $\vtstruct$ and $\vtestruct$ are equal yields $\True$\ProseOrTypeError;
+      \item determining whether the lists of enumeration literals of $\vtstruct$ and $\vtestruct$ are equal yields $\True$\ProseOrTypeError;
     \end{itemize}
 
     \item \AllApplyCase{error}
     \begin{itemize}
-      \item determining whether the labels of $\vtstruct$ and $\testruct$ are the same yields $\True$\ProseOrTypeError;
+      \item determining whether the labels of $\vtstruct$ and $\vtestruct$ are the same yields $\True$\ProseOrTypeError;
       \item the label of $\vtstruct$ is not one of $\TBool$, $\TReal$, $\TInt$, $\TBits$, or $\TEnum$;
       \item the result is a \typingerrorterm{} indicating that the types $\vt$ and $\vte$ are inappropriate for this pattern.
     \end{itemize}
@@ -215,10 +175,10 @@ since \texttt{-} matches any value and \texttt{42} in particular.
   \annotateexpr(\tenv, \ve) \typearrow (\vte, \vep, \vses) \OrTypeError\\\\
   \checksymbolicallyevaluable(\vses) \typearrow \True \OrTypeError\\\\
   \makeanonymous(\tenv, \vt) \typearrow \vtstruct \OrTypeError\\\\
-  \makeanonymous(\tenv, \vte) \typearrow \testruct \OrTypeError\\\\
+  \makeanonymous(\tenv, \vte) \typearrow \vtestruct \OrTypeError\\\\
   \commonprefixline\\\\
   \astlabel(\vtstruct) \in \{\TBool, \TReal, \TInt, \TString\}\\
-  \techeck(\astlabel(\vtstruct) = \astlabel(\testruct), \BadOperands) \typearrow \True \OrTypeError
+  \techeck(\astlabel(\vtstruct) = \astlabel(\vtestruct), \BadOperands) \typearrow \True \OrTypeError
 }{
   \annotatepattern(\tenv, \vt, \overname{\PatternSingle(\ve)}{\vp}) \typearrow (\overname{\PatternSingle(\vep)}{\newp}, \vses)
 }
@@ -232,8 +192,8 @@ since \texttt{-} matches any value and \texttt{42} in particular.
   \makeanonymous(\tenv, \vte) \typearrow \vtestruct \OrTypeError\\\\
   \commonprefixline\\\\
   \astlabel(\vtstruct) = \TBits\\
-  \techeck(\astlabel(\vtstruct) = \astlabel(\testruct), \BadOperands) \typearrow \True \OrTypeError\\
-  \bitwidthequal(\tenv, \vtstruct, \testruct) \typearrow \vb\\
+  \techeck(\astlabel(\vtstruct) = \astlabel(\vtestruct), \BadOperands) \typearrow \True \OrTypeError\\
+  \bitwidthequal(\tenv, \vtstruct, \vtestruct) \typearrow \vb\\
   \techeck(\vb, \BadOperands) \typearrow \True \OrTypeError
 }{
   \annotatepattern(\tenv, \vt, \overname{\PatternSingle(\ve)}{\vp}) \typearrow (\overname{\PatternSingle(\vep)}{\newp}, \vses)
@@ -248,7 +208,7 @@ since \texttt{-} matches any value and \texttt{42} in particular.
   \makeanonymous(\tenv, \vte) \typearrow \vtestruct \OrTypeError\\\\
   \commonprefixline\\\\
   \astlabel(\vtstruct) = \TEnum\\
-  \techeck(\astlabel(\vtstruct) = \astlabel(\testruct), \BadOperands) \typearrow \True \OrTypeError\\
+  \techeck(\astlabel(\vtstruct) = \astlabel(\vtestruct), \BadOperands) \typearrow \True \OrTypeError\\
   \vtstruct \eqname \TEnum(\vlione)\\
   \vtestruct \eqname \TEnum(\vlitwo)\\
   \techeck(\vlione = \vlitwo, \BadOperands) \typearrow \True \OrTypeError\\
@@ -262,9 +222,9 @@ since \texttt{-} matches any value and \texttt{42} in particular.
   \annotateexpr(\tenv, \ve) \typearrow (\vte, \vep, \vses) \OrTypeError\\\\
   \checksymbolicallyevaluable(\vses) \typearrow \True \OrTypeError\\\\
   \makeanonymous(\tenv, \vt) \typearrow \vtstruct \OrTypeError\\\\
-  \makeanonymous(\tenv, \vte) \typearrow \testruct \OrTypeError\\\\
+  \makeanonymous(\tenv, \vte) \typearrow \vtestruct \OrTypeError\\\\
   \commonprefixline\\\\
-  \techeck(\astlabel(\vtstruct) = \astlabel(\testruct), \BadOperands) \typearrow \True \OrTypeError\\
+  \techeck(\astlabel(\vtstruct) = \astlabel(\vtestruct), \BadOperands) \typearrow \True \OrTypeError\\
   \astlabel(\vtstruct) \not\in \{\TBool, \TReal, \TInt, \TBits, \TEnum\}
 }{
   \annotatepattern(\tenv, \vt, \overname{\PatternSingle(\ve)}{\vp}) \typearrow \TypeErrorVal{\UnexpectedType}
@@ -276,9 +236,7 @@ since \texttt{-} matches any value and \texttt{42} in particular.
 \SemanticsRuleDef{PSingle}
 \ExampleDef{Evaluation of a Single-expression Pattern}
 In \listingref{semantics-psingle},
-\texttt{match\_true} evaluates to \True, since \texttt{42} matches \verb|{42}|,
-whereas \\
-\texttt{match\_false} evaluates to \False, since \texttt{42} does no match \verb|{3}|.
+\texttt{match\_true} evaluates to \True, since \texttt{42} matches \verb|{42}|, whereas \texttt{match\_false} evaluates to \False, since \texttt{42} does not match \verb|{3}|.
 \ASLListing{Matching against a single value}{semantics-psingle}{\semanticstests/SemanticsRule.PSingle.asl}
 
 \ProseParagraph
@@ -310,11 +268,6 @@ whereas \\
 
 \subsection{Abstract Syntax}
 \RenderTypes[remove_hypertargets]{pattern_range}
-\BackupOriginalAST{
-\begin{flalign*}
-\pattern \derives\ & \PatternRange(\overtext{\expr}{lower}, \overtext{\expr}{upper}) &
-\end{flalign*}
-}
 
 \ASTRuleDef{PRange}
 \begin{mathpar}
@@ -340,7 +293,7 @@ whereas \\
 \ProseParagraph
 \AllApply
 \begin{itemize}
-  \item $\vp$ is the pattern which matches anything within the range given by
+  \item $\vp$ is the pattern that matches anything within the range given by
   expressions $\veone$ and $\vetwo$, that is, $\PatternRange(\veone, \vetwo)$;
   \item \Proseannotatesymbolicallyevaluableexpr{$\tenv$}{$\veone$}{$(\vteone, \veonep, \vsesone)$}\ProseOrTypeError;
   \item \Proseannotatesymbolicallyevaluableexpr{$\tenv$}{$\vetwo$}{$(\vtetwo, \vetwop, \vsestwo)$}\ProseOrTypeError;
@@ -348,15 +301,16 @@ whereas \\
   \item determining whether both $\veonep$ and $\vetwop$ are compile-time constant expressions yields $\True$\ProseOrTypeError;
   \item obtaining the \underlyingtypeterm\ for $\vt$, $\vteone$, and $\vtetwo$ yields
         $\vtstruct$, $\vteonestruct$, and $\vtetwostruct$, respectively\ProseOrTypeError;
-  \item a check the AST labels of $\vtstruct$, $\vteonestruct$, and $\vtetwostruct$ are all the same and are either
+  \item checking that the AST labels of $\vtstruct$, $\vteonestruct$, and $\vtetwostruct$ are all the same and are either
         $\TInt$ or $\TReal$ yields $\True$. Otherwise, the result is a \typingerrorterm{}, which short-circuits the entire rule.
         The \typingerrorterm{} indicates that the types of
         $\veone$, $\vetwo$ and the type $\vt$ must be either of integer type or of \realtypeterm{}.
-  \item $\newp$ is a range pattern with bounds $\veonep$ and $\vetwop$, that is, $\PatternRange(\veonep, \vetwop)$.
+  \item $\newp$ is a range pattern with bounds $\veonep$ and $\vetwop$ ($\PatternRange(\veonep, \vetwop)$).
 \end{itemize}
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
+  \vp = \PatternRange(\veone, \vetwo)\\
   \annotatesymbolicallyevaluableexpr(\tenv, \veone) \typearrow (\vteone, \veonep, \vsesone) \OrTypeError\\\\
   \annotatesymbolicallyevaluableexpr(\tenv, \vetwo) \typearrow (\vtetwo, \vetwop, \vsestwo) \OrTypeError\\\\
   \vses \eqdef \vsesone \cup \vsestwo\\
@@ -371,7 +325,7 @@ whereas \\
   }\\
   \techeck(\vb, \BadOperands) \typearrow \True \OrTypeError
 }{
-  \annotatepattern(\tenv, \vt, \overname{\PatternRange(\veone, \vetwo)}{\vp}) \typearrow (\overname{\PatternRange(\veonep, \vetwop)}{\newp}, \vses)
+  \annotatepattern(\tenv, \vt, \vp) \typearrow (\overname{\PatternRange(\veonep, \vetwop)}{\newp}, \vses)
 }
 \end{mathpar}
 \CodeSubsection{\PRangeBegin}{\PRangeEnd}{../Typing.ml}
@@ -390,7 +344,7 @@ range given by \texttt{3..42}.
 \AllApply
 \begin{itemize}
   \item $\vp$ is the condition corresponding to being greater than or equal
-    to $\veone$, and lesser or equal to $\vetwo$, that is, $\PatternRange(\veone, \vetwo)$;
+    to $\veone$, and less than or equal to $\vetwo$, that is, $\PatternRange(\veone, \vetwo)$;
   \item $\veone$ and $\vetwo$ are side-effect-free expressions;
   \item the side-effect-free evaluation of $\veone$ in $\env$ is $\ResultExprSEF(\vvone, \vgone)$\ProseOrDynErrorDiverging;
   \item the side-effect-free evaluation of $\vetwo$ in $\env$ is $\ResultExprSEF(\vvtwo, \vgtwo)$\ProseOrDynErrorDiverging;
@@ -407,7 +361,7 @@ range given by \texttt{3..42}.
 \inferrule{
   \evalexprsef(\env, \veone) \evalarrow \ResultExprSEF(\vvone, \vgone) \OrDynErrorDiverging\\\\
   \evalbinop(\GE, \vv, \vvone) \evalarrow \vbone\\
-  \evalexprsef(\env, \veone) \evalarrow \ResultExprSEF(\vvtwo, \vgtwo) \OrDynErrorDiverging\\\\
+  \evalexprsef(\env, \vetwo) \evalarrow \ResultExprSEF(\vvtwo, \vgtwo) \OrDynErrorDiverging\\\\
   \evalbinop(\LE, \vv, \vvtwo) \evalarrow \vbtwo\\
   \evalbinop(\BAND, \vbone, \vbtwo) \evalarrow \vb\\
   \newg \eqdef \vgone \parallelcomp \vgtwo
@@ -425,11 +379,6 @@ range given by \texttt{3..42}.
 
 \subsection{Abstract Syntax}
 \RenderTypes[remove_hypertargets]{pattern_leq}
-\BackupOriginalAST{
-\begin{flalign*}
-\pattern \derives\ & \PatternLeq(\expr) &
-\end{flalign*}
-}
 
 \ASTRuleDef{PLeq}
 \begin{mathpar}
@@ -451,17 +400,17 @@ range given by \texttt{3..42}.
 \ProseParagraph
 \AllApply
 \begin{itemize}
-\item $\vp$ is the pattern which matches anything less than or equal to an expression $\ve$,
+\item $\vp$ is the pattern that matches anything less than or equal to an expression $\ve$,
 that is, $\PatternLeq(\ve)$;
 \item annotating the expression $\ve$ in $\tenv$ yields $(\vte, \vep, \vses)$\ProseOrTypeError;
 \item \Prosechecksymbolicallyevaluable{$\vses$};
 \item obtaining the \underlyingtypeterm\ of $\vt$ in $\tenv$ yields $\vtstruct$\ProseOrTypeError;
-\item obtaining the \underlyingtypeterm\ of $\vte$ in $\tenv$ yields $\testruct$\ProseOrTypeError;
-\item $\vb$ is true if and only if $\vtstruct$ and $\testruct$ are both integer types or both the \realtypeterm{};
+\item obtaining the \underlyingtypeterm\ of $\vte$ in $\tenv$ yields $\vtestruct$\ProseOrTypeError;
+\item $\vb$ is true if and only if $\vtstruct$ and $\vtestruct$ are both integer types or both the \realtypeterm{};
 \item if $\vb$ is $\False$ a \typingerrorterm{} (\BadOperands) is returned (indicating that the types of $\vt$ and $\vte$
       are inappropriate for the $\LE$ operator),
       which short-circuits the entire rule;
-\item $\newp$ is the pattern which matches anything less than or equal to $\vep$.
+\item $\newp$ is the pattern that matches anything less than or equal to $\vep$.
 \end{itemize}
 
 \FormallyParagraph
@@ -470,10 +419,10 @@ that is, $\PatternLeq(\ve)$;
   \annotateexpr(\tenv, \ve) \typearrow (\vte, \vep, \vses) \OrTypeError\\\\
   \checksymbolicallyevaluable(\vses) \typearrow \True \OrTypeError\\\\
   \makeanonymous(\tenv, \vt) \typearrow \vtstruct \OrTypeError\\\\
-  \makeanonymous(\tenv, \vte) \typearrow \testruct \OrTypeError\\\\
+  \makeanonymous(\tenv, \vte) \typearrow \vtestruct \OrTypeError\\\\
   {
     \begin{array}{rl}
-      \vb \eqdef& \astlabel(\vtstruct) = \astlabel(\testruct)\ \land\\
+      \vb \eqdef& \astlabel(\vtstruct) = \astlabel(\vtestruct)\ \land\\
                 & \astlabel(\vtstruct) \in \{\TInt, \TReal\}
     \end{array}
   }\\
@@ -522,11 +471,6 @@ whereas \texttt{match\_false} evaluates to \False, since \texttt{42} is not less
 
 \subsection{Abstract Syntax}
 \RenderTypes[remove_hypertargets]{pattern_geq}
-\BackupOriginalAST{
-\begin{flalign*}
-\pattern \derives\ & \PatternGeq(\expr) &
-\end{flalign*}
-}
 
 \ASTRuleDef{PGeq}
 \begin{mathpar}
@@ -548,17 +492,17 @@ whereas \texttt{match\_false} evaluates to \False, since \texttt{42} is not less
 \ProseParagraph
 \AllApply
 \begin{itemize}
-\item $\vp$ is the pattern which matches anything greater than or equal to an expression $\ve$,
+\item $\vp$ is the pattern that matches anything greater than or equal to an expression $\ve$,
       that is, $\PatternGeq(\ve)$;
 \item annotating the expression $\ve$ in $\tenv$ yields $(\vte, \vep, \vses)$\ProseOrTypeError;
 \item \Prosechecksymbolicallyevaluable{$\vses$};
 \item obtaining the \underlyingtypeterm\ of $\vt$ in $\tenv$ yields $\vtstruct$\ProseOrTypeError;
-\item obtaining the \underlyingtypeterm\ of $\vte$ in $\tenv$ yields $\testruct$\ProseOrTypeError;
-\item $\vb$ is true if and only if $\vtstruct$ and $\testruct$ are both integer types or both the \realtypeterm{};
+\item obtaining the \underlyingtypeterm\ of $\vte$ in $\tenv$ yields $\vtestruct$\ProseOrTypeError;
+\item $\vb$ is true if and only if $\vtstruct$ and $\vtestruct$ are both integer types or both the \realtypeterm{};
 \item if $\vb$ is $\False$ a \typingerrorterm{} is returned (indicating that the types of $\vt$ and $\vte$
       are inappropriate for the $\GE$ operator),
       which short-circuits the entire rule;
-\item $\newp$ is the pattern which matches anything greater than or equal to $\vep$.
+\item $\newp$ is the pattern that matches anything greater than or equal to $\vep$.
 \end{itemize}
 \FormallyParagraph
 \begin{mathpar}
@@ -566,10 +510,10 @@ whereas \texttt{match\_false} evaluates to \False, since \texttt{42} is not less
   \annotateexpr(\tenv, \ve) \typearrow (\vte, \vep, \vses) \OrTypeError\\\\
   \checksymbolicallyevaluable(\vses) \typearrow \True \OrTypeError\\\\
   \makeanonymous(\tenv, \vt) \typearrow \vtstruct \OrTypeError\\\\
-  \makeanonymous(\tenv, \vte) \typearrow \testruct \OrTypeError\\\\
+  \makeanonymous(\tenv, \vte) \typearrow \vtestruct \OrTypeError\\\\
   {
     \begin{array}{rl}
-      \vb \eqdef& \astlabel(\vtstruct) = \astlabel(\testruct)\ \land\\
+      \vb \eqdef& \astlabel(\vtstruct) = \astlabel(\vtestruct)\ \land\\
                 & \astlabel(\vtstruct) \in \{\TInt, \TReal\}
     \end{array}
   }\\
@@ -584,8 +528,8 @@ whereas \texttt{match\_false} evaluates to \False, since \texttt{42} is not less
 \SemanticsRuleDef{PGeq}
 \ExampleDef{Evaluation of a Greater-or-equal Pattern}
 In \listingref{semantics-pgeq},
-\texttt{match\_true} evaluates to \True, since \texttt{42} is greater or equal to \texttt{3},
-whereas \texttt{match\_false} evaluates to \False, since \texttt{3} is not greater or equal to \texttt{42}.
+\texttt{match\_true} evaluates to \True, since \texttt{42} is greater than or equal to \texttt{3},
+whereas \texttt{match\_false} evaluates to \False, since \texttt{3} is not greater than or equal to \texttt{42}.
 \ASLListing{Matching against a lower bound}{semantics-pgeq}{\semanticstests/SemanticsRule.PGeq.asl}
 
 \ProseParagraph
@@ -593,7 +537,7 @@ whereas \texttt{match\_false} evaluates to \False, since \texttt{3} is not great
 \begin{itemize}
 \item $\vp$ is the condition corresponding to being greater than or equal
       than the side-effect-free expression $\ve$, $\PatternGeq(\ve)$;
-\item the side-effect-free evaluation of $\ve$ is either
+\item the side-effect-free evaluation of $\ve$ is
       $\ResultExprSEF(\vvone, \newg)$\ProseOrDynErrorDiverging;
 \item $\vb$ is the Boolean value corresponding to whether $\vv$
       is greater than or equal to $\vvone$.
@@ -611,6 +555,9 @@ whereas \texttt{match\_false} evaluates to \False, since \texttt{3} is not great
 \CodeSubsection{\EvalPGeqBegin}{\EvalPGeqEnd}{../Interpreter.ml}
 
 \section{Matching a Bitmask\label{sec:MatchingABitmask}}
+Bitmasks are used to match sets of bitvectors where occurrences of $\xbit$,
+and bit sequences in parentheses represent, don't-care values.
+
 \subsection{Syntax}
 \begin{flalign*}
 \Npattern \derives\ & \Tmasklit &
@@ -618,11 +565,6 @@ whereas \texttt{match\_false} evaluates to \False, since \texttt{3} is not great
 
 \subsection{Abstract Syntax}
 \RenderTypes[remove_hypertargets]{pattern_mask}
-\BackupOriginalAST{
-\begin{flalign*}
-\pattern \derives\ & \PatternMask(\overtext{\KleeneStar{\{\texttt{0},\texttt{1},\texttt{x}\}}}{mask constant}) &
-\end{flalign*}
-}
 
 \ASTRuleDef{PMask}
 \begin{mathpar}
@@ -644,11 +586,11 @@ whereas \texttt{match\_false} evaluates to \False, since \texttt{3} is not great
 \ProseParagraph
 \AllApply
   \begin{itemize}
-  \item $\vp$ is the pattern which matches a mask $\vm$, that is, $\PatternMask(\vm)$;
+  \item $\vp$ is the pattern that matches a mask $\vm$, that is, $\PatternMask(\vm)$;
   \item determining whether $\vt$ has the structure of a bitvector type yields $\True$\ProseOrTypeError;
   \item $\vn$ is the length of mask $\vm$;
   \item determining whether $\vt$ \typesatisfiesterm\ the bitvector type of length $\vn$ \\
-        (that is, $\TBits(\vn, \emptylist)$), yields $\True$\ProseOrTypeError;
+        (that is, $\TBits(\vn, \emptylist)$) yields $\True$\ProseOrTypeError;
   \item $\newp$ is $\vp$;
   \item define $\vses$ as the empty set.
 \end{itemize}
@@ -657,7 +599,7 @@ whereas \texttt{match\_false} evaluates to \False, since \texttt{3} is not great
 \inferrule{
   \checkstructurelabel(\tenv, \vt, \TBits) \typearrow \True \OrTypeError\\\\
   \vn \eqdef \listlen{\vm}\\
-  \checktypesat(\tenv, \vt, \TBits(\vn, \emptylist)) \typearrow \True \OrTypeError
+  \checktypesatisfies(\tenv, \vt, \TBits(\vn, \emptylist)) \typearrow \True \OrTypeError
 }{
   \annotatepattern(\tenv, \vt, \overname{\PatternMask(\vm)}{\vp}) \typearrow (\overname{\PatternMask(\vm)}{\newp}, \overname{\emptyset}{\vses})
 }
@@ -671,7 +613,7 @@ whereas \texttt{match\_false} evaluates to \False, since \texttt{3} is not great
 In \listingref{semantics-pmask}, \texttt{match\_true} evaluates to \True, since
 \texttt{101010} matches the bitmask \texttt{xx1010},
 whereas \texttt{match\_false} evaluates to \False, since
-\texttt{101010} does not match the bitmask \texttt{0x1010}
+\texttt{101010} does not match the bitmask \texttt{0x1010}.
 \ASLListing{Matching against a bitmask}{semantics-pmask}{\semanticstests/SemanticsRule.PMask.asl}
 
 \ProseParagraph
@@ -697,14 +639,12 @@ whereas \texttt{match\_false} evaluates to \False, since
 \end{itemize}
 
 \FormallyParagraph
-\hypertarget{relation-maskmatch}{}
-The function $\maskmatch : \{0, 1, \vx\} \times \{0,1\} \rightarrow \Bool$,
-checks whether a bit value (second operand) matches a mask value (first operand),
-is defined by the following table:
+\RenderRelation{mask_match}
+It is defined by the following table:
 \[
 \begin{array}{|c|c|c|c|}
   \hline
-  \textbf{$\maskmatch$} & 0 & 1 & \vx\\
+  \maskmatch & 0 & 1 & \vx\\
   \hline
   0 & \True & \False & \True\\
   \hline
@@ -738,19 +678,19 @@ is defined by the following table:
 
 \subsection{Abstract Syntax}
 \RenderTypes[remove_hypertargets]{pattern_tuple}
-\BackupOriginalAST{
-\begin{flalign*}
-\pattern \derives\ & \PatternTuple(\pattern^{*}) &
-\end{flalign*}
-}
+
 
 \ASTRuleDef{PTuple}
 \begin{mathpar}
 \inferrule{
   \buildplist[\buildpattern](\vpatterns) \astarrow \vpatternasts
 }{
-  \buildpattern(\Npattern(\namednode{\vpatterns}{\Plisttwo{\Npattern}})) \astarrow
+  {
+    \begin{array}{r}
+  \buildpattern(\Npattern(\namednode{\vpatterns}{\Plisttwo{\Npattern}})) \astarrow \\
   \overname{\PatternTuple(\vpatternasts)}{\vastnode}
+    \end{array}
+  }
 }
 \end{mathpar}
 
@@ -758,28 +698,30 @@ is defined by the following table:
 \TypingRuleDef{PTuple}
 \ExampleDef{Typing Tuple Patterns}
 The tuple patterns in \listingref{semantics-ptuple} are well-typed.
-
-The tuple patterns in \listingref{typing-ptuple-bad} are ill-typed.
-\ASLListing{Ill-typed tuple patterns}{typing-ptuple-bad}{\typingtests/TypingRule.PTuple.bad.asl}
+%
+In contrast, the tuple patterns in \listingref{typing-ptuple-bad} and \listingref{typing-ptuple-bad} are ill-typed.
+\ASLListing{Ill-typed tuple pattern due to order of elements}{typing-ptuple-bad}{\typingtests/TypingRule.PTuple.bad.asl}
+\ASLListing{Ill-typed tuple pattern due to number of elements}{typing-ptuple-bad2}{\typingtests/TypingRule.PTuple.bad2.asl}
 
 \ProseParagraph
 \AllApply
 \begin{itemize}
-  \item $\vp$ is the pattern which matches a tuple $\vli$, that is, $\PatternTuple(\vli)$;
+  \item $\vp$ is the pattern that matches a tuple $\vli$, that is, $\PatternTuple(\vli)$;
   \item obtaining the \structureterm\ of $\vt$ yields $\vtstruct$\ProseOrTypeError;
   \item determining whether $\vtstruct$ is a \tupletypeterm{} yields $\True$\ProseTerminateAs{\UnexpectedType};
-  \item $\vtstruct$ is a \tupletypeterm{} with list of tuple $\vts$;
+  \item $\vtstruct$ is a \tupletypeterm{} with list of tuple types $\vts$;
   \item determining whether $\vts$ is a list of the same size as $\vli$ yields $\True$\ProseTerminateAs{\UnexpectedType};
   \item annotating each pattern in $\vli$ with the corresponding type in $\vts$ for each \Proselistrange{$i$}{$\vli$},
         yields $(\vlip[i], \vxs_i)$\ProseOrTypeError;
   \item $\newli$ is the list of annotated patterns $\vlip[\vi]$ at the same positions those of $\vli$;
-  \item $\newp$ is the pattern which matches the tuple $\newli$, that is, $\PatternTuple(\newli)$;
+  \item $\newp$ is the pattern that matches the tuple $\newli$ ($\PatternTuple(\newli)$);
   \item define $\vses$ as the union of all $\vxs_i$, for each \Proselistrange{$i$}{$\vli$}.
 \end{itemize}
 
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
+  \vp = \PatternTuple(\vli)\\
   \tstruct(\tenv, \vt) \typearrow \vtstruct \OrTypeError\\\\
   \techeck(\astlabel(\vtstruct) = \TTuple, \UnexpectedType) \typearrow \True \OrTypeError\\\\
   \vtstruct \eqname \TTuple(\vts)\\
@@ -788,7 +730,7 @@ The tuple patterns in \listingref{typing-ptuple-bad} are ill-typed.
   \newli \eqdef i\in\listrange(\vli): \vlip[i]\\
   \vses \eqdef \bigcup_{i\in\listrange(\vli)} \vxs_i
 }{
-  \annotatepattern(\tenv, \vt, \overname{\PatternTuple(\vli)}{\vp}) \typearrow (\overname{\PatternTuple(\newli)}{\newp}, \vses)
+  \annotatepattern(\tenv, \vt, \vp) \typearrow (\overname{\PatternTuple(\newli)}{\newp}, \vses)
 }
 \end{mathpar}
 \CodeSubsection{\PTupleBegin}{\PTupleEnd}{../Typing.ml}
@@ -808,25 +750,23 @@ the tuple of expression \texttt{(3, '1101010')} does not match the tuple of patt
 \ProseParagraph
 \AllApply
 \begin{itemize}
-  \item $\vp$ gives a list of patterns $\vps$ of length $k$, $\PatternTuple(\vps)$;
-  \item $\vv$ gives a tuple of values $\vvs$ of length $k$;
-  \item for all $1 \leq i \leq n$, $\vb_i$ is the evaluation result
-        of $\vp_i$ with respect to the value $\vv_i$ in
-        environment $\env$\ProseOrDynErrorDiverging;
-  \item $\vbs$ is the list of all $\vb_i$ for $1 \leq i \leq k$;
-  \item $\vb$ is the conjunction of the Boolean values of $\vbs$.
+  \item $\vp$ is a list of patterns $\vps$ of length $k$, $\PatternTuple(\vps)$;
+  \item obtaining the value at index $\vi$ from $\vv$, for each $\vi=1..k$, yields $\vvs[i]$\ProseOrError;
+  \item evaluating the value $\vvs[i]$ against the pattern $\vp_i$ in environment $\env$,
+        for each $\vi=1..k$, yields the Boolean $\vb[i]$ and \executiongraphterm{} $\vg[i]$\ProseOrDynErrorDiverging;
+  \item $\vb$ is the conjunction of all Boolean values in $\vbs$;
+  \item $\vg$ is the parallel composition of all \executiongraphsterm{} in $\vg$.
 \end{itemize}
 
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
-  \vps \eqname \vp_{1..k}\\
-  i=1..k: \getindex(i, \vv) \evalarrow \vvs_i\\
-  i=1..k: \evalpattern(\env, \vvs_i, \vp_i) \evalarrow \ResultPattern(\nvbool(\vbs_i), \vg_i) \OrDynErrorDiverging\\\\
-  \vres \eqdef \nvbool(\bigwedge_{i=1..k} \vbs_i)\\
-  \vg \eqdef \vg_1 \parallelcomp \ldots \parallelcomp \vg_k
+  i=1..k: \getindex(i, \vv) \evalarrow \vvs[i]\OrDynError\\
+  i=1..k: \evalpattern(\env, \vvs[i], \vps[i]) \evalarrow \ResultPattern(\nvbool(\vbs[i]), \vg[i]) \OrDynErrorDiverging\\\\
+  \vb \eqdef \nvbool(\bigwedge_{i=1..k} \vbs[i])\\
+  \vg \eqdef \vg[1] \parallelcomp \ldots \parallelcomp \vg[k]
 }{
-  \evalpattern(\env, \vv, \PatternTuple(\vps)) \evalarrow \ResultPattern(\vres, \emptygraph)
+  \evalpattern(\env, \vv, \overname{\PatternTuple(\vps)}{\vp}) \evalarrow \ResultPattern(\vb, \overname{\emptygraph}{\newg})
 }
 \end{mathpar}
 \CodeSubsection{\EvalPTupleBegin}{\EvalPTupleEnd}{../Interpreter.ml}
@@ -842,21 +782,17 @@ the tuple of expression \texttt{(3, '1101010')} does not match the tuple of patt
 
 \subsection{Abstract Syntax}
 \RenderTypes[remove_hypertargets]{pattern_any}
-\BackupOriginalAST{
-\begin{flalign*}
-\pattern \derives\ & \PatternAny(\pattern^{*}) &
-\end{flalign*}
-}
+
 
 \ASTRuleDef{PatternSet}
-\MarkedIgnoredRelationDefinition{
+\NotImportedToASLSpecYet{
 \hypertarget{build-patternset}{}
 The function
 \[
   \buildpatternset(\overname{\parsenode{\Npatternset}}{\vparsednode}) \;\aslto\; \overname{\pattern}{\vastnode}
 \]
 transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
-} % END_OF_IGNORED_RELATION
+} % END_OF_UNIMPORTED_RELATION
 
 
 \begin{mathpar}
@@ -878,14 +814,14 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 \end{mathpar}
 
 \ASTRuleDef{PatternList}
-\MarkedIgnoredRelationDefinition{
+\NotImportedToASLSpecYet{
 \hypertarget{build-patternlist}{}
 The function
 \[
   \buildpatternlist(\overname{\parsenode{\Npatternlist}}{\vparsednode}) \;\aslto\; \overname{\pattern}{\vastnode}
 \]
 transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
-} % END_OF_IGNORED_RELATION
+} % END_OF_UNIMPORTED_RELATION
 
 
 \begin{mathpar}
@@ -913,10 +849,10 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 \ProseParagraph
 \AllApply
 \begin{itemize}
-\item $\vp$ is the pattern which matches anything in a list $\vli$, that is, $\PatternAny(\vli)$;
+\item $\vp$ is the pattern that matches anything in a list $\vli$, that is, $\PatternAny(\vli)$;
 \item annotating each pattern $\vl$ in $\vli$ yields $(\newl_\vl, \vxs_\vl)$\ProseOrTypeError;
 \item define $\newli$ as the list of patterns $\newl_\vl$, for each $\vl$ in $\vli$;
-\item $\newp$ is the pattern which matches anything in $\newli$, that is, \\ $\PatternAny(\newli)$;
+\item $\newp$ is the pattern that matches anything in $\newli$, that is, \\ $\PatternAny(\newli)$;
 \item define $\vses$ as the union of all $\vxs_\vl$, for each $\vl$ in $\vli$.
 \end{itemize}
 
@@ -973,11 +909,7 @@ any pattern in \verb|{3, 4}|.
 
 \subsection{Abstract Syntax}
 \RenderTypes[remove_hypertargets]{pattern_not}
-\BackupOriginalAST{
-\begin{flalign*}
-\pattern \derives\ & \PatternNot(\pattern) &
-\end{flalign*}
-}
+
 
 The AST building rule is \ASTRuleRef{PatternSet} (the \textsc{NOT} case).
 
@@ -988,9 +920,9 @@ The AST building rule is \ASTRuleRef{PatternSet} (the \textsc{NOT} case).
 \ProseParagraph
 \AllApply
 \begin{itemize}
-  \item $\vp$ is the pattern which matches the negation of a pattern $\vq$, that is, $\PatternNot(\vq)$;
+  \item $\vp$ is the pattern that matches the negation of a pattern $\vq$ ($\PatternNot(\vq)$);
   \item annotating $\vq$ in $\tenv$ yields $(\newq, \vses)$\ProseOrTypeError;
-  \item $\newp$ is pattern which matches the negation of $\newq$, that is, $\PatternNot(\newq)$.
+  \item $\newp$ is pattern which matches the negation of $\newq$ ($\PatternNot(\newq)$).
 \end{itemize}
 \FormallyParagraph
 \begin{mathpar}
@@ -1052,14 +984,14 @@ $\checksymbolicallyevaluable$, and thus in the dynamic semantics
 they are evaluated via $\evalexprsef$.
 
 \subsection{ASTRule.ExprPattern\label{sec:ASTRule.ExprPattern}}
-\MarkedIgnoredRelationDefinition{
+\NotImportedToASLSpecYet{
 \hypertarget{build-exprpattern}{}
 The function
 \[
   \buildexprpattern(\overname{\parsenode{\Nexprpattern}}{\vparsednode}) \;\aslto\; \overname{\expr}{\vastnode}
 \]
 transforms a pattern expression parse node $\vparsednode$ into a pattern AST node $\vastnode$.
-} % END_OF_IGNORED_RELATION
+} % END_OF_UNIMPORTED_RELATION
 
 
 \begin{mathpar}
@@ -1105,7 +1037,8 @@ transforms a pattern expression parse node $\vparsednode$ into a pattern AST nod
   \buildexprpattern\left(\Nexprpattern\left(
     \begin{array}{l}
     \Tif, \namednode{\vcondexpr}{\Nexpr}, \Tthen, \\
-    \wrappedline\ \namednode{\vthenexpr}{\Nexpr}, \Telse, \namednode{\velseexpr}{\Nexpr}
+    \wrappedline\ \namednode{\vthenexpr}{\Nexpr}, \Telse, \\
+    \wrappedline\ \namednode{\velseexpr}{\Nexpr}
     \end{array}
     \right)\right) \astarrow\\
   \overname{\ECond(\astversion{\vcondexpr}, \astversion{\vthenexpr}, \astversion{\velseexpr})}{\vastnode}
@@ -1147,21 +1080,22 @@ transforms a pattern expression parse node $\vparsednode$ into a pattern AST nod
 
 \begin{mathpar}
   \inferrule[get\_field]{}{
-  \buildexprpattern(\Nexprpattern(\Nexprpattern, \Tdot, \Tidentifier(\id))) \astarrow
+  {
+    \begin{array}{r}
+  \buildexprpattern(\Nexprpattern(\Nexprpattern, \Tdot, \Tidentifier(\id))) \astarrow \\
   \overname{\EGetField(\astof{\vexpr}, \id)}{\vastnode}
+    \end{array}
+  }
 }
 \end{mathpar}
 
 \begin{mathpar}
   \inferrule[get\_fields]{
-    \buildclist[\buildidentity](\vids) \astarrow \vidasts
+    \vparsednode = \Nexprpattern(\punnode{\Nexprpattern}, \Tdot, \Tlbracket, \namednode{\vids}{\ClistOne{\Tidentifier}}, \Trbracket)\\
+    \buildclist[\buildidentity](\vids) \astarrow \vidasts\\
+    \vastnode \eqdef \EGetFields(\astof{\vexprpattern}, \vidasts)
   }{
-    {
-      \begin{array}{r}
-  \buildexprpattern(\Nexprpattern(\punnode{\Nexprpattern}, \Tdot, \Tlbracket, \namednode{\vids}{\ClistOne{\Tidentifier}}, \Trbracket)) \astarrow\\
-  \overname{\EGetFields(\astof{\vexprpattern}, \vidasts)}{\vastnode}
-      \end{array}
-    }
+  \buildexprpattern(\vparsednode) \astarrow \vastnode
 }
 \end{mathpar}
 
@@ -1244,17 +1178,20 @@ transforms a pattern expression parse node $\vparsednode$ into a pattern AST nod
 
 \begin{mathpar}
   \inferrule[record\_non\_empty]{
-    \buildclist[\buildfieldassign](\vfieldassigns) \astarrow \vfieldassignasts
-  }{
     {
-    \begin{array}{r}
-      \buildexprpattern\left(\Nexprpattern\left(
+    \vparsednode = \Nexprpattern\left(
       \begin{array}{l}
       \Tidentifier(\vt), \Tlbrace, \\
       \wrappedline\ \namednode{\vfieldassigns}{\ClistZero{\Nfieldassign}}, \\
       \wrappedline\ \Trbrace
       \end{array}
-      \right)\right) \\
+      \right)
+  }\\
+    \buildclist[\buildfieldassign](\vfieldassigns) \astarrow \vfieldassignasts
+  }{
+    {
+    \begin{array}{r}
+      \buildexprpattern(\vparsednode) \\
       \astarrow\ \overname{\ERecord(\TNamed(\vt), \vfieldassignasts)}{\vastnode}
   \end{array}
   }

@@ -56,6 +56,8 @@ let fold_atom = fold_non_mixed
 
 let worth_final _ = false
 
+let get_machine_feature _ = StringSet.empty
+
 let varatom_dir _d f = f None
 
 let merge_atoms a1 a2 = if a1=a2 then Some a1 else None
@@ -67,7 +69,7 @@ let atom_to_bank _ = Code.Ord
 include NoMixed
 include NoWide
 
-module PteVal = PteVal_gen.No(struct type arch_atom = atom end)
+module Value = Value_gen.NoPte(struct type arch_atom = atom end)
 
 (* Fences, to be completed *)
 
@@ -153,11 +155,11 @@ let dump_typ = function
 type exp =
   | Load of location
   | AtomicLoad of MemOrder.t * exp
-  | AtomicExch of MemOrder.t * exp * Code.v
-  | AtomicFetchOp of MemOrder.t * exp * Code.v
+  | AtomicExch of MemOrder.t * exp * Value.v
+  | AtomicFetchOp of MemOrder.t * exp * Value.v
   | Deref of exp
-  | Const of Code.v
-  | AssertVal of exp * Code.v
+  | Const of Value.v
+  | AssertVal of exp * Value.v
   | AddZero of exp * location
 
 let addrs_of_location = function
@@ -231,11 +233,13 @@ let pp_dp = function
 
 
 (* Read-Modify-Write *)
+module RMW = struct
 type rmw =
   | Exch
   | Add
 
-type rmw_atom = atom
+type nonrec atom = atom
+type value = Value.v
 
 let pp_rmw compat = function
   | Exch -> if compat then "Rmw" else "Exch"
@@ -243,9 +247,11 @@ let pp_rmw compat = function
 
 let is_one_instruction _ = true
 
-let fold_rmw f r = let r = f Add r in  f Exch r
+let fold_rmw _b f r = let r = f Add r in  f Exch r
 
 let fold_rmw_compat f r = f Exch r
+
+let expand_rmw rmw = [rmw]
 
 let tr_atom_rmw omo_r omo_w = match omo_r,omo_w with
 | (None,_)|(_, None) -> None
@@ -269,11 +275,8 @@ let applies_atom_rmw _ ar aw = match ar,aw with
 
 let show_rmw_reg _ = true
 
-let compute_rmw rmw old co =
-  let old = Code.value_to_int old in
-  let co = Code.value_to_int co in
-  let new_value = match rmw with
-  | Exch -> co
-  | Add -> old+co in
-  Code.value_of_int new_value
-
+let compute_rmw rmw ~old ~operand =
+  match rmw with
+  | Exch -> operand
+  | Add -> old + operand
+end

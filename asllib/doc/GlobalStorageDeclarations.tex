@@ -20,22 +20,22 @@ Global storage declarations introduce storage elements into the \globalstaticenv
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Configurable Global Storage Declarations\label{sec:ConfigurableGlobalStorageDeclarations}}
-Global storage declarations with keyword \texttt{config} aim to assist implementation-specific support for ``configuration'' of an ASL specification.
+Global storage declarations with the keyword \texttt{config} aim to assist implementation-specific support for ``configuration'' of an ASL specification.
 In particular, implementations may provide mechanisms to override \texttt{config} values, such as:
 \begin{itemize}
-  \item Preprocessing source code before typechecking of a specification to rewrite initialisation expressions.
-  \item Internally modifying \texttt{config} values after typechecking but before evaluation of a specification.
+  \item Preprocessing source code before typechecking a specification to rewrite initialisation expressions.
+  \item Internally modifying \texttt{config} values after typechecking but before evaluating a specification.
 \end{itemize}
 Note that if modifying values after typechecking, care must be taken to ensure that the modified values remain compatible with the expected types of the original values.
 For example, a \texttt{config} value declared with type \verb|integer{0..10}| can be modified to \texttt{5} but should not be modified to \texttt{11}.
-This is because as \texttt{5} is compatible with \verb|integer{0..10}|, but \texttt{11} is not.
+This is because \texttt{5} is compatible with \verb|integer{0..10}|, but \texttt{11} is not.
 
 The language supports such overriding mechanisms (and in particular, simplifies tracking of types for \texttt{config} storage elements) as follows:
 \begin{itemize}
   \item The \texttt{config} keyword syntactically identifies configurable storage elements.
   \item Types of \texttt{config} storage elements must be \emph{both} explicitly declared \emph{and} singular (\TypingRuleRef{SingularType}).
   \item The \purity{} of \texttt{config} storage elements is $\SEReadonly$, so their values are not relied upon by typechecking.
-  \item Values of \texttt{config} storage elements must have \purity{} of $\SEPure$, so they can depend only on constant values (and not other \texttt{config} storage elements for example).
+  \item Values of \texttt{config} storage elements must have \purity{} of $\SEPure$, so they can depend only on constant values (and not other \texttt{config} storage elements, for example).
 \end{itemize}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -51,15 +51,15 @@ The language supports such overriding mechanisms (and in particular, simplifies 
 
 \paragraph{Semantics:} The semantics of a list of global storage declarations is defined in \SemanticsRuleRef{EvalGlobals},
   where the list is ordered via \SemanticsRuleRef{BuildGlobalEnv}.
-  The semantics of a single global storage declarations is defined in \SemanticsRuleRef{DeclareGlobal}.
+  The semantics of a single global storage declaration is defined in \SemanticsRuleRef{DeclareGlobal}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \SyntaxDef{Global Storage Declarations}
 
 \RequirementDef{DiscardingGlobalStorageDeclarations}
-Global storage declarations must bind a name.
+Global storage declarations must\\ bind a name.
 This is ensured by the ASL grammar.
-All the global storage declarations in \listingref{local-storage-discards} are illegal,
+All the global storage declarations in \listingref{global-storage-discards} are illegal,
 as they discard their declared storage elements.
 \ASLListing{Illegal global storage declarations that discard storage elements}{global-storage-discards}{\syntaxtests/GuideRule.DiscardingGlobalStorageDeclarations.asl}
 
@@ -83,22 +83,7 @@ as they discard their declared storage elements.
 \AbstractSyntaxDef{Global Storage Declarations}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \RenderTypes[remove_hypertargets]{decl_global_storage}
-\BackupOriginalAST{
-\begin{flalign*}
-\decl \derives\ & \DGlobalStorage(\globaldecl) &\\
-\globaldecl \derives\ &
-{\left\{
-  \begin{array}{rcl}
-  \GDkeyword &:& \globaldeclkeyword, \\
-  \GDname &:& \identifier,\\
-  \GDty &:& \ty?,\\
-  \GDinitialvalue &:& \expr?
-  \end{array}
-  \right\}
- } &\\
- \globaldeclkeyword \derives\ & \GDKConstant \;|\; \GDKConfig \;|\; \GDKLet \;|\; \GDKVar &
-\end{flalign*}
-}
+
 
 \ASTRuleDef{GlobalStorageDecl}
 This rule defines the cases for $\builddecl$ for global storage declarations.
@@ -156,8 +141,9 @@ This rule defines the cases for $\builddecl$ for global storage declarations.
 \inferrule[global\_uninit\_multiple\_vars]{
   \buildclist[\buildidentity](\vids) \astarrow \vidasts \\
   {
-  i \in \listrange(\vidasts): \vdecl_i \eqdef
-    \DGlobalStorage\left(
+    \begin{array}{l}
+  i \in \listrange(\vidasts): \\
+    \vdecl[i] \eqdef \DGlobalStorage\left(
       \left\{
       \begin{array}{rcl}
         \GDkeyword&:& \GDKVar,\\
@@ -166,21 +152,32 @@ This rule defines the cases for $\builddecl$ for global storage declarations.
         \GDinitialvalue&:& \None
       \end{array}
       \right\}\right)
+    \end{array}
   } \\
-  \vastnode \eqdef [i \in \listrange(\vidasts): \vdecl_i]
+  \vastnode \eqdef [i \in \listrange(\vidasts): \vdecl[i]]
 }{
   \builddecl(\overname{\Ndecl(\Tvar, \namednode{\vids}{\Clisttwo{\Tidentifier}}, \punnode{\Nasty}, \Tsemicolon)}{\vparsednode}) \astarrow \vastnode
 }
 \end{mathpar}
 
 \begin{mathpar}
-\inferrule[global\_storage\_config]{}{
+\inferrule[global\_storage\_config]{
+  \vparsednode = \Ndecl(\Tconfig, \Tidentifier(\name), \Tcolon, \punnode{\Nty}, \Teq, \punnode{\Nexpr}, \Tsemicolon)\\
   {
-    \begin{array}{r}
-      \builddecl(\overname{\Ndecl(\Tconfig, \Tidentifier(\name), \Tcolon, \punnode{\Nty}, \Teq, \punnode{\Nexpr}, \Tsemicolon)}{\vparsednode}) \astarrow
-    \end{array}
-  } \\
-  \overname{\DGlobalStorage(\{ \GDkeyword: \GDKConfig, \GDname: \name, \GDty: \some{\astof{\vt}}, \GDinitialvalue: \some{\astof{\vexpr}}\})}{\vastnode}
+  \vastnode \eqdef \DGlobalStorage\left(
+    \left\{
+      \begin{array}{rcl}
+      \GDkeyword&:& \GDKConfig,\\
+      \GDname&:& \name,\\
+      \GDty&:& \some{\astof{\vt}},\\
+      \GDinitialvalue&:& \some{\astof{\vexpr}}
+      \end{array}
+    \right\}
+    \right)
+  }
+}{
+\builddecl(\vparsednode) \astarrow
+  \vastnode
 }
 \end{mathpar}
 
@@ -215,20 +212,33 @@ This rule defines the cases for $\builddecl$ for global storage declarations.
 
 \begin{mathpar}
 \inferrule[global\_storage\_config\_elided\_parameter]{
-  \buildelidedparamcall (\vcall) \astarrow \astversion{\vcall} \\
-  \desugarelidedparameter(\astof{\tty}, \astversion{\vcall}) \astarrow \vexpr
-}{
   {
+  \vparsednode = \Ndecl\left(
     \begin{array}{r}
-      \builddecl(\overname{\Ndecl(\Tconfig, \Tidentifier(\name), \Tcolon, \punnode{\Nty}, \Teq, \namednode{\vcall}{\Nelidedparamcall}, \Tsemicolon)}{\vparsednode}) \astarrow
+    \Tconfig, \Tidentifier(\name), \Tcolon, \punnode{\Nty}, \Teq, \\
+    \wrappedline\ \namednode{\vcall}{\Nelidedparamcall}, \Tsemicolon
     \end{array}
-  } \\
-  \overname{\DGlobalStorage(\{ \GDkeyword: \GDKConfig, \GDname: \name, \GDty: \some{\astof{\tty}}, \GDinitialvalue: \vexpr\})}{\vastnode}
+  \right)
+  }\\
+  \buildelidedparamcall (\vcall) \astarrow \astversion{\vcall} \\
+  \desugarelidedparameter(\astof{\tty}, \astversion{\vcall}) \astarrow \vexpr\\
+  {
+  \vastnode \eqdef \DGlobalStorage\left(\left\{
+    \begin{array}{rcl}
+    \GDkeyword&:& \GDKConfig,\\
+    \GDname&:& \name,\\
+    \GDty&:& \some{\astof{\tty}},\\
+    \GDinitialvalue&:& \vexpr
+    \end{array}
+    \right\}\right)
+  }
+}{
+  \builddecl(\vparsednode) \astarrow \vastnode
 }
 \end{mathpar}
 
 \ASTRuleDef{GlobalDeclKeywordNonConfig}
-\MarkedIgnoredRelationDefinition{
+\NotImportedToASLSpecYet{
 \hypertarget{build-globaldeclkeywordnonconfig}{}
 The function
 \[
@@ -238,12 +248,14 @@ The function
 \end{array}
 \]
 transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
-} % END_OF_IGNORED_RELATION
+} % END_OF_UNIMPORTED_RELATION
 
 
 \begin{mathpar}
-\inferrule[let]{}{
-  \buildglobaldeclkeywordnonconfig(\overname{\Nglobaldeclkeywordnonconfig(\Tlet)}{\vparsednode}) \astarrow \overname{\GDKLet}{\vastnode}
+\inferrule[let]{
+  \vparsednode = \Nglobaldeclkeywordnonconfig(\Tlet)
+}{
+  \buildglobaldeclkeywordnonconfig(\vparsednode) \astarrow \overname{\GDKLet}{\vastnode}
 }
 \end{mathpar}
 
@@ -270,7 +282,7 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 \end{mathpar}
 
 \ASTRuleDef{GlobalDeclKeyword}
-\MarkedIgnoredRelationDefinition{
+\NotImportedToASLSpecYet{
 \hypertarget{build-globaldeclkeyword}{}
 The function
 \[
@@ -280,12 +292,15 @@ The function
 \end{array}
 \]
 transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
-} % END_OF_IGNORED_RELATION
+} % END_OF_UNIMPORTED_RELATION
 
 
 \begin{mathpar}
-\inferrule[non\_config]{}{
-  \buildglobaldeclkeyword(\overname{\Nglobaldeclkeyword(\punnode{\Nglobaldeclkeywordnonconfig})}{\vparsednode}) \astarrow \overname{\astof{\vglobalkeywordnonconfig}}{\vastnode}
+\inferrule[non\_config]{
+  \vparsednode = \Nglobaldeclkeyword(\punnode{\Nglobaldeclkeywordnonconfig})\\
+  \vastnode \eqdef \astof{\vglobalkeywordnonconfig}
+}{
+  \buildglobaldeclkeyword(\vparsednode) \astarrow \vastnode
 }
 \end{mathpar}
 
@@ -305,7 +320,7 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \RequirementDef{GlobalStorageCycles} \identr{TTMQ}
-The declarations, and any associated initialization expressions, for global storage elements must not include cycles.
+The declarations, and any associated initialization expressions, for global storage elements, must not include cycles.
 
 The specifications in \listingref{GlobalStorageCycles-bad1} and \listingref{GlobalStorageCycles-bad2}
 are illegal, since they contain cycles.
@@ -350,33 +365,23 @@ See \ExampleRef{Declaring Global Storage}.
 
 \TypingRuleDef{DeclareGlobalStorage}
 \RenderRelation{declare_global_storage}
-\BackupOriginalRelation{
-The function
-\[
-  \declareglobalstorage(\overname{\globalstaticenvs}{\tenv} \aslsep \overname{\globaldecl}{\gsd})
-  \aslto
-  (\overname{\globalstaticenvs}{\newgenv} \aslsep \overname{\globaldecl}{\newgsd})
-  \cup
-  \overname{\typeerror}{\TypeErrorConfig}
-\]
-annotates the global storage declaration $\gsd$ in the \globalstaticenvironmentterm{} $\genv$,
-yielding a modified \globalstaticenvironmentterm{} $\newgenv$ and annotated global storage declaration $\newgsd$.
-\ProseOtherwiseTypeError
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Declaring Global Storage}
 \listingref{DeclareGlobalStorage} shows examples of well-typed global storage declarations.
 \ASLListing{Global storage elements}{DeclareGlobalStorage}{\typingtests/TypingRule.DeclareGlobalStorage.asl}
 
-\listingref{DeclareGlobalStorage-config} shows examples of well-typed global storage declarations
-and ill-typed global storage declarations in comments,
-focused on \verb|config| storage elements.
-\ASLListing{Configuration storage elements}{DeclareGlobalStorage-config}{\typingtests/TypingRule.DeclareGlobalStorage.config.asl}
+\listingref{DeclareGlobalStorage-config} shows examples of well-typed global storage configuration declarations.
+\ASLListing{Well-typed configuration storage elements}{DeclareGlobalStorage-config}{\typingtests/TypingRule.DeclareGlobalStorage.config.asl}
+
+\listingref{DeclareGlobalStorage-config-bad} shows an example of an ill-typed global storage configuration declaration.
+\ASLListing{Ill-typed configuration storage elements}{DeclareGlobalStorage-config-bad}{\typingtests/TypingRule.DeclareGlobalStorage.config.bad.asl}
 
 \listingref{DeclareGlobalStorage-non-config} shows examples of well-typed global storage declarations,
-and ill-typed global storage declarations in comments,
-focused on storage elements that are not \verb|config|.
-\ASLListing{Well-typed non-config storage elements}{DeclareGlobalStorage-non-config}{\typingtests/TypingRule.DeclareGlobalStorage.non_config.asl}
+focused on storage elements that are not configurations.
+\ASLListing{Well-typed non-configuration storage elements}{DeclareGlobalStorage-non-config}{\typingtests/TypingRule.DeclareGlobalStorage.non_config.asl}
+
+\listingref{DeclareGlobalStorage-non-config} shows an example of an ill-typed global storage declaration.
+\ASLListing{Ill-typed non-configuration storage element}{DeclareGlobalStorage-non-config-bad}{\typingtests/TypingRule.DeclareGlobalStorage.non_config.bad.asl}
 
 The specification in \listingref{DeclareGlobalStorage-bad3} is illegal since
 \texttt{config} storage elements must have an initializing expression.
@@ -435,8 +440,22 @@ of an ill-typed global storage declaration due to precision loss.
 }\\
 {
   \begin{array}{r}
-    \annotatetyoptinitialvalue(\tenv, \keyword, \vmustbepure, \tyopt, \initialvalue) \\ \typearrow
-    (\typedinitialvalue, \tyoptp, \declaredt) \OrTypeError
+    \annotatetyoptinitialvalue\left(
+      \begin{array}{c}
+      \tenv, \\
+      \keyword,\\
+      \vmustbepure,\\
+      \tyopt,\\
+      \initialvalue
+      \end{array}
+    \right) \\ \typearrow
+    \left(
+      \begin{array}{c}
+      \typedinitialvalue,\\
+      \tyoptp,\\
+      \declaredt
+      \end{array}
+      \right) \OrTypeError
   \end{array}
 }\\
 \addglobalstorage(\genv, \name, \keyword, \declaredt) \typearrow \genvone \OrTypeError\\\\
@@ -465,7 +484,7 @@ of an ill-typed global storage declaration due to precision loss.
 \right\}
 }
 }{
-  \declareglobalstorage(\genv, \gsd) \typearrow (\overname{G^\tenvtwo}{\newgenv}, \newgsd)
+  \declareglobalstorage(\genv, \gsd) \typearrow (\overname{\tenvtwo.\staticenvsG}{\newgenv}, \newgsd)
 }
 \end{mathpar}
 \CodeSubsection{\DeclareGlobalStorageBegin}{\DeclareGlobalStorageEnd}{../Typing.ml}
@@ -473,29 +492,6 @@ of an ill-typed global storage declaration due to precision loss.
 
 \TypingRuleDef{AnnotateTyOptInitialValue}
 \RenderRelation{annotate_ty_opt_initial_value}
-\BackupOriginalRelation{
-The function
-\[
-\begin{array}{r}
-\annotatetyoptinitialvalue(
-  \overname{\staticenvs}{\tenv} \aslsep
-  \overname{\globaldeclkeyword}{\gdk} \aslsep
-  \overname{\Bool}{\vmustbepure} \aslsep
-  \overname{\Option{\ty}}{\tyoptp} \aslsep
-  \overname{\Option{\expr}}{\initialvalue}
-  ) \\ \aslto
-  (\overname{(\expr\times \ty \times \TSideEffectSet)}{\typedinitialvalue}
-  \times \overname{\Option{\ty}}{\tyoptp} \times \overname{\ty}{\declaredt})
-  \cup \overname{\typeerror}{\TypeErrorConfig}
-\end{array}
-\]
-is used in the context of a declaration of a global storage element with optional type annotation $\tyoptp$
-and optional initializing expression $\initialvalue$, in the \staticenvironmentterm{} $\tenv$.
-It determines $\typedinitialvalue$, which consists
-of an expression, a type, and a \sideeffectsetterm,
-the annotation of the type in $\tyoptp$ (in case there is a type), and the type
-that should be associated with the storage element $\declaredt$.
-} % END_OF_BACKUP_RELATION
 
 See \ExampleRef{Declaring Global Storage}.
 
@@ -524,7 +520,7 @@ See \ExampleRef{Declaring Global Storage}.
     \item $\gdk$ is not $\GDKConfig$;
     \item annotating the expression $\ve$ in $\tenv$ yields $(\vte, \vep, \vsese)$\ProseOrTypeError;
     \item determining the \structureterm{} of $\vte$ in $\tenv$ yields $\vtep$\ProseOrTypeError;
-    \item propagating integer constraints from $\vtep$ to $\vt$ using $\inheritintegerconstraints$ yields $\vtpp$\ProseOrTypeError;
+    \item propagating integer constraints from $\vtep$ to $\vt$ using \\$\inheritintegerconstraints$ yields $\vtpp$\ProseOrTypeError;
     \item annotating the type $\vtpp$ in $\tenv$ yields $(\vtp, \vsest)$\ProseOrTypeError;
     \item define $\typede$ as $(\vte, \vep, \vsese)$;
     \item checking that $\vte$ \typesatisfiesterm\ $\vtp$ in $\tenv$ yields $\True$\ProseOrTypeError;
@@ -567,15 +563,27 @@ The case where both $\tyopt$ and $\initialvalue$ are $\None$ is considered a syn
   \annotateexpr(\tenv, \ve) \typearrow (\vte, \vep, \vsese) \OrTypeError\\\\
   \annotatetype(\tenv, \vt) \typearrow (\vtp, \vsest) \OrTypeError\\\\
   \typede \eqdef (\vte, \vep, \vsese)\\
-  \checktypesat(\tenv, \vte, \vtp) \typearrow \True \OrTypeError\\\\
+  \checktypesatisfies(\tenv, \vte, \vtp) \typearrow \True \OrTypeError\\\\
   \techeck(\lnot\vmustbepure \lor \sesispure(\vsest \cup \vsese), \SideEffectViolation) \typearrow \True \OrTypeError
 }{
   {
-    \begin{array}{r}
-  \annotatetyoptinitialvalue(\tenv, \overname{\GDKConfig}{\gdk}, \vmustbepure, \overname{\some{\vt}}{\tyoptp}, \overname{\some{\ve}}{\initialvalue})
-  \\ \typearrow
-  (\overname{\typede}{\typedinitialvalue}, \overname{\some{\vtp}}{\tyoptp}, \overname{\vtp}{\declaredt})
+  \annotatetyoptinitialvalue\left(
+    \begin{array}{c}
+    \tenv,\\
+    \overname{\GDKConfig}{\gdk},\\
+    \vmustbepure,\\
+    \overname{\some{\vt}}{\tyoptp},\\
+    \overname{\some{\ve}}{\initialvalue}
     \end{array}
+    \right)
+   \typearrow
+  \left(
+    \begin{array}{c}
+    \overname{\typede}{\typedinitialvalue},\\
+    \overname{\some{\vtp}}{\tyoptp},\\
+    \overname{\vtp}{\declaredt}
+    \end{array}
+    \right)
   }
 }
 \end{mathpar}
@@ -588,7 +596,7 @@ The case where both $\tyopt$ and $\initialvalue$ are $\None$ is considered a syn
   \inheritintegerconstraints(\vt, \vtep) \typearrow \vtpp \OrTypeError \\\\
   \annotatetype(\tenv, \vtpp) \typearrow (\vtp, \vsest) \OrTypeError\\\\
   \typede \eqdef (\vte, \vep, \vsese)\\
-  \checktypesat(\tenv, \vte, \vtp) \typearrow \True \OrTypeError\\\\
+  \checktypesatisfies(\tenv, \vte, \vtp) \typearrow \True \OrTypeError\\\\
   \techeck(\lnot\vmustbepure \lor \sesispure(\vsest \cup \vsese), \SideEffectViolation) \typearrow \True \OrTypeError
 }{
   {
@@ -640,30 +648,6 @@ The case where both $\tyopt$ and $\initialvalue$ are $\None$ is considered a syn
 This helper function is applied following
 $\addglobalstorage(\tenv, \name, \gdk, \vt)$ where $\vt$ is the type associated with
 $\name$.
-\BackupOriginalRelation{
-The function
-\[
-\updateglobalstorage
-\left(
-\begin{array}{c}
-  \overname{\staticenvs}{\tenv} \aslsep\\
-    \overname{\Identifier}{\name} \aslsep\\
-    \overname{\globaldeclkeyword}{\gdk} \aslsep\\
-    \overname{(\ty\times\expr\times\TSideEffectSet)}{\typedinitialvalue}
-\end{array}
-\right) \aslto \overname{\staticenvs}{\newtenv}
-\]
-updates the \staticenvironmentterm{} $\tenv$ for the global storage element
-named $\name$ with global declaration keyword $\gdk$,
-and a tuple (obtained via \\
-\TypingRuleRef{AnnotateTyOptInitialValue})
-$\typedinitialvalue$, which consists a type for the initializing value,
-the annotated initializing expression, and the inferred \sideeffectsetterm\ for the initializing value.
-The result is the updated \staticenvironmentterm{} $\newtenv$.
-\ProseOtherwiseTypeError
-This helper function is applied following $\addglobalstorage(\tenv, \name, \gdk, \vt)$ where $\vt$
-is the type associated with $\name$.
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Updating the Global Storage for a Constant}
 The specification in \listingref{UpdateGlobalStorage-constant}
@@ -687,7 +671,7 @@ is ill-typed, since only a \singulartypeterm{} can be used for \texttt{config} s
     \item $\gdk$ is $\GDKConstant$;
     \item view $\typedinitialvalue$ as $(\Ignore, \initialvaluep, \vsesinitialvalue)$;
     \item \Prosestaticeval{$\tenv$}{$\initialvaluep$}{$\vv$};
-    \item applying $\addglobalconstant$ to $G^\tenv$, $\name$ and $\vv$ yields $G'$;
+    \item applying $\addglobalconstant$ to $\tenv.\staticenvsG$, $\name$ and $\vv$ yields $G'$;
     \item \Proseeqdef{$\newtenv$}{the \staticenvironmentterm{} whose global component is $G'$ and local component is
     the local component of $\tenv$}.
   \end{itemize}
@@ -726,8 +710,8 @@ is ill-typed, since only a \singulartypeterm{} can be used for \texttt{config} s
 \inferrule[constant]{
   \typedinitialvalue \eqname (\Ignore, \initialvaluep, \vsesinitialvalue)\\
   \staticeval(\tenv, \initialvaluep) \typearrow \vv\\
-  \addglobalconstant(G^\tenv, \name, \vv) \typearrow G'\\
-  \newtenv \eqdef (G', L^\tenv)
+  \addglobalconstant(\tenv.\staticenvsG, \name, \vv) \typearrow G'\\
+  \newtenv \eqdef \{\staticenvsG: G', \staticenvsL: \tenv.\staticenvsL\}
 }{
   {
     \begin{array}{r}
@@ -779,7 +763,15 @@ is ill-typed, since only a \singulartypeterm{} can be used for \texttt{config} s
 
 \begin{mathpar}
 \inferrule[config]{
-  \typedinitialvalue \eqname (\initialvaluetype, \initialvaluep, \vsesinitialvalue)\\
+  {
+  \typedinitialvalue \eqname \left(
+    \begin{array}{r}
+    \initialvaluetype,\\
+    \initialvaluep,\\
+   \vsesinitialvalue
+    \end{array}
+    \right)
+  }\\
   \issingular(\tenv, \initialvaluetype) \typearrow \True \OrTypeError
 }{
   {
@@ -812,33 +804,23 @@ is ill-typed, since only a \singulartypeterm{} can be used for \texttt{config} s
 
 \TypingRuleDef{AddGlobalStorage}
 \RenderRelation{add_global_storage}
-\BackupOriginalRelation{
-The function
-\[
-  \addglobalstorage(
-    \overname{\globalstaticenvs}{\genv} \aslsep
-    \overname{\Identifier}{\name} \aslsep
-    \overname{\globaldeclkeyword}{\keyword} \aslsep
-    \overname{\ty}{\declaredt}
-  )
-  \aslto
-    \overname{\globalstaticenvs}{\newgenv} \cup \overname{\typeerror}{\TypeErrorConfig}
-\]
-returns a \globalstaticenvironmentterm{} $\newgenv$ which is identical to the \globalstaticenvironmentterm{} $\genv$,
-except that the identifier $\name$, which is assumed to name a global storage element,
-is bound to the global storage keyword $\keyword$ and type $\declaredt$.
-\ProseOtherwiseTypeError
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Adding Global Storage Elements to the Static Environment}
-Adding the global storage elements in \listingref{EvalGlobals},
+Declaring the global storage elements in \listingref{EvalGlobals},
 adds the following bindings to the $\globalstoragetypes$ map of a given
-static environments:
+static environment:
 \[
 \begin{array}{rcl}
-  \PI &\mapsto& (\TReal, \GDKConstant)\\
-  \vx &\mapsto& (\unconstrainedinteger, \GDKVar)\\
-  \vc &\mapsto& (\TInt(\WellConstrained(\AbbrevConstraintExact{\LInt(42)})), \GDKConfig)
+  \PI           &\mapsto& (\TReal, \GDKConstant)\\
+  \verb|PC|     &\mapsto& (\TBits(\ELInt{32}, \emptylist), \GDKVar)\\
+  \verb|MaxIrq| &\mapsto& (\unconstrainedinteger, \GDKConfig)\\
+  \verb|Regs|   &\mapsto& \left(
+                          \TArray\left(\begin{array}{l}
+                              \ArrayLengthExpr(\ELInt{16}),\\
+                              \TBits(\ELInt{32}, \emptylist)
+                            \end{array}\right),
+                          \GDKVar
+                          \right)
 \end{array}
 \]
 
@@ -872,27 +854,10 @@ This section defines the following relations:
 
 \SemanticsRuleDef{EvalGlobals}
 \RenderRelation{eval_globals}
-\BackupOriginalRelation{
-The relation
-\[
-  \evalglobals(\overname{\KleeneStar{\decl}}{\vdecls}, (\overname{\overname{\envs}{\env} \times \overname{\XGraphs}{\vgone}}{\envm}))
-  \;\aslrel\;
-  \left(
-  \begin{array}{cl}
-  \overname{(\envs \times \XGraphs)}{C} & \cup\\
-  \overname{\TThrowing}{\ThrowingConfig} & \cup\\
-  \overname{\TDynError}{\DynErrorConfig} & \cup\\
-  \overname{\TDiverging}{\DivergingConfig} &
-  \end{array}
-  \right)
-\]
-updates the input environment and execution graph by initializing the global storage declarations.
-\ProseOtherwiseAbnormal
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Evaluating a List of Global Declarations}
 Evaluating the global storage declarations in \listingref{EvalGlobals}
-results in updating the $\storage$ map of global dynamic environment by binding
+results in updating the $\storage$ map of the global dynamic environment by binding
 \verb|PI| to $\nvreal(157/50)$,
 \verb|PC| to \\
 $\nvbitvector(\overbrace{0 \ldots 0}^{32})$,
@@ -925,7 +890,7 @@ before having the chance to evaluate \verb|main|.
     \item $d$ is the AST node for declaring a global storage element with initial value $\ve$,
           name $\name$, and type $\vt$;
     \item $\envm$ is the environment-execution graph pair $(\env, \vgone)$;
-    \item the evaluation of the expression $\ve$ in $\env$ yields $\ResultExpr((\vv, \vgtwo), \envtwo)$\ProseOrAbnormal;
+    \item the evaluation of the expression $\ve$ in $\env$ yields\\$\ResultExpr((\vv, \vgtwo), \envtwo)$\ProseOrAbnormal;
     \item declaring the global $\name$ with value $\vv$ in $\envtwo$ gives $\envthree$;
     \item evaluating the remaining global declarations $\vdecls'$ with the environment $\envthree$ and the execution graph
           that is the ordered composition of $\vgone$ and $\vgtwo$ with the $\aslpo$ label gives $C$;
@@ -954,26 +919,27 @@ before having the chance to evaluate \verb|main|.
 \CodeSubsection{\EvalGlobalsBegin}{\EvalGlobalsEnd}{../Interpreter.ml}
 
 \SemanticsRuleDef{DeclareGlobal}
-\ProseParagraph
 \RenderRelation{declare_global}
-\BackupOriginalRelation{
-The relation
-\[
-  \declareglobal(\overname{\Identifier}{\name} \aslsep \overname{\nativevalue}{\vv} \aslsep \overname{\envs}{\env}) \;\aslrel\; \overname{\envs}{\newenv}
-\]
-updates the environment $\env$ by mapping $\name$ to $\vv$ in the $\storage$ map of the global dynamic environment $G^\denv$.
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Declaring a Global Storage Element}
-Evaluating the specification in \listingref{DeclareGlobal}, results in updating the $\storage$ map
+Evaluating the specification in \listingref{DeclareGlobal} results in updating the $\storage$ map
 of the global dynamic environment by binding $\vx$ to $\nvint(5)$.
 \ASLListing{Declaring a global storage element}{DeclareGlobal}{\semanticstests/SemanticsRule.DeclareGlobal.asl}
+
+\ProseParagraph
+\AllApply
+\begin{itemize}
+  \item $\env$ is the environment-execution graph pair $(\tenv, \denv)$;
+  \item \Proseeqdef{$\newenv$}{the environment consisting of $\tenv$ and the dynamic environment
+        that is the same as $\denv$ except that in its $\dynamicenvsG.\storage$ map,
+        $\name$ is bound to $\vv$}.
+\end{itemize}
 
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
-  \env \eqname (\tenv, (G^\denv, L^\denv))\\
-  \newenv \eqdef (\tenv, (G^\denv.\storage[\name\mapsto \vv], L^\denv))
+  \env \eqname (\tenv, \denv)\\
+  \newenv \eqdef (\tenv, \{\dynamicenvsG: \denv.\dynamicenvsG.\storage[\name\mapsto \vv], \dynamicenvsL: \denv.\dynamicenvsL\})
 }{
   \declareglobal(\name, \vv, \env) \evalarrow \newenv
 }

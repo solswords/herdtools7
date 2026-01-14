@@ -30,13 +30,17 @@ module Make
 (* No Scope *)
    module ScopeGen = ScopeGen.NoGen
 
+   type atom = MO of mo | Atomic of mo * mo | Mixed of MachMixed.t
+
+   module Value = Value_gen.NoPte(struct type arch_atom = atom end)
+
 (* Mixed size *)
    module Mixed =
      MachMixed.Make
        (struct
          let naturalsize = Some C.naturalsize
          let fullmixed = C.moreedges
-       end)
+       end)(Value)
 
    include NoWide
 
@@ -47,8 +51,6 @@ module Make
    let bellatom = false
 
    module SIMD = NoSIMD
-
-   type atom = MO of mo | Atomic of mo * mo | Mixed of MachMixed.t
 
    let default_atom = Atomic (Rlx,Rlx)
    let instr_atom = None
@@ -104,7 +106,7 @@ module Make
      let k = f AcqRel k in
      k
 
-   let fold_rmw f k =
+   let fold_rmw _b f k =
      let fold1 f k = fold_mo f (f Rlx k) in
      fold1
        (fun m1 k -> fold1 (fun m2 k -> f (Atomic (m1,m2)) k) k)
@@ -112,7 +114,7 @@ module Make
 
    let fold_non_mixed f k =
      let k = fold_mo (fun mo k -> f (MO mo) k) k in
-     fold_rmw f k
+     fold_rmw false f k
 
    let fold_atom f k =
      let k = fold_mixed f k in
@@ -142,7 +144,7 @@ module Make
        (struct
          let naturalsize () = C.naturalsize
          let endian = endian
-       end)
+       end)(Value)
 
    let overwrite_value v ao w = match ao with
    | None| Some (MO _|Atomic _) -> w (* total overwrite *)
@@ -154,8 +156,7 @@ module Make
    | Some (Mixed (sz,o)) ->
        ValsMixed.extract_value v sz o
 
-   module PteVal = PteVal_gen.No(struct type arch_atom = atom end)
-
+   let get_machine_feature _ = StringSet.empty
 (* End of atoms *)
 
    type fence = barrier
@@ -175,7 +176,7 @@ module Make
 
    let do_fold_fence f = add_iorw do_fold_fence f
    and fold_barrier f = add_iorw fold_barrier f
-   
+
    let fold_cumul_fences f k = do_fold_fence f k
    let fold_all_fences f k = fold_barrier f k
    let fold_some_fences = fold_all_fences
@@ -211,7 +212,7 @@ let pp_dp = function
   | CTRL -> "Ctrl"
   | CTRLISYNC -> "CtrlFenceI"
 
-include Exch.Exch(struct type arch_atom = atom end)
+module RMW = Rmw.Exch(struct type nonrec atom = atom end)
 
 include
     ArchExtra_gen.Make
@@ -226,6 +227,8 @@ include
       let pp_i _ = assert false
 
       let free_registers = allowed_for_symb
+      type arch_atom = atom
+      module Value = Value
       include NoSpecial
     end)
 

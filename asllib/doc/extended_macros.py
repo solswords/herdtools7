@@ -11,16 +11,6 @@ ASLREF_EXE: str = "aslref"
 debug = False
 
 
-def read_file_lines(filename: str) -> List[str]:
-    with open(filename, "r", encoding="utf-8") as file:
-        return file.readlines()
-
-
-def read_file_str(filename: str) -> List[str]:
-    with open(filename, "r", encoding="utf-8") as file:
-        return file.read()
-
-
 def yellow_error_message(msg: str) -> str:
     YELLOW = "\033[43m"
     COLOR_RESET = "\033[m"
@@ -38,8 +28,6 @@ def get_latex_sources(exclude) -> list[str]:
         excluded_files = [
             "ASLReference.tex",
             "ASLmacros.tex",
-            "ASLRefALP2.1ChangeLog.tex",
-            "ASLRefALP2ChangeLog.tex",
             "generated_macros.tex",
             "rendering_macros.tex",
             "variable_name_macros.tex",
@@ -305,6 +293,7 @@ def apply_console_macros(aslref_path: str):
         print(f"Using aslref path {ASLREF_EXE}")
     print("Extended macros: applying console macros... ")
     pruned_latex_sources = get_latex_sources(True)
+    ConsoleMacro.apply_to_files(pruned_latex_sources)
     transform_by_line(
         pruned_latex_sources,
         r"\\AllApplyCase{(.*?)}:",

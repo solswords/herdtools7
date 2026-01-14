@@ -25,7 +25,7 @@ declared in \listingref{subtype}:\\
 \hline
   \texttt{subInt}     & \texttt{subInt}   & yes             & subtyping is reflexive for \namedtypesterm{}\\
   \texttt{subInt}     & \texttt{superInt} & yes             & declared as a \subtypeterm{}\\
-  \texttt{superInt}   & \texttt{subInt}   & no              & subtyping is anti-symmetric\\
+  \texttt{superInt}   & \texttt{subInt}   & no              & subtyping is antisymmetric\\
   \texttt{subsubInt}  & \texttt{superInt} & yes             & subtyping is transitive\\
   \texttt{otherInt}   & \texttt{superInt} & no              & no chain of subtyping between the types\\
   \texttt{superInt}   & \texttt{integer}  & no              & \texttt{integer} is not a \namedtypeterm{}\\
@@ -35,15 +35,6 @@ declared in \listingref{subtype}:\\
 \ASLListing{Subtypes and Supertypes}{subtype}{\typingtests/TypingRule.Subtype.asl}
 
 \RenderRelation{is_subtype}
-\BackupOriginalRelation{
-The predicate
-\[
-  \issubtype(\overname{\staticenvs}{\tenv} \aslsep \overname{\ty}{\vtone} \aslsep \overname{\ty}{\vttwo})
-  \aslto \overname{\Bool}{\vb}
-\]
-defines whether the type $\vtone$ subtypes the type $\vttwo$ in the \staticenvironmentterm{} $\tenv$,
-yielding the result in $\vb$.
-} % END_OF_BACKUP_RELATION
 
 \ProseParagraph
 \OneApplies
@@ -67,7 +58,7 @@ yielding the result in $\vb$.
   \begin{itemize}
     \item $\vtone$ is a named type with name $\idone$, that is $\TNamed(\idone)$;
     \item $\vttwo$ is a named type with name $\idtwo$, that is $\TNamed(\idtwo)$, such that $\idone$ is different from $\idtwo$;
-    \item the \globalstaticenvironmentterm{} maintains that $\idone$ does subtype any named type;
+    \item the \globalstaticenvironmentterm{} maintains that $\idone$ does not subtype any named type;
     \item $\vb$ is $\False$.
   \end{itemize}
 
@@ -86,7 +77,7 @@ yielding the result in $\vb$.
 \and
 \inferrule[transitive]{
   \idone \neq \idtwo\\
-  G^\tenv.\subtypes(\idone) = \idthree\\
+  \tenv.\staticenvsG.\subtypes(\idone) = \idthree\\
   \issubtype(\tenv, \TNamed(\idthree), \vttwo) \typearrow \vb
 }{
   \issubtype(\tenv, \overname{\TNamed(\idone)}{\vtone}, \overname{\TNamed(\idtwo)}{\vttwo}) \typearrow \vb
@@ -94,7 +85,7 @@ yielding the result in $\vb$.
 \and
 \inferrule[no\_supertype]{
   \idone \neq \idtwo\\
-  G^\tenv.\subtypes(\idone) = \bot
+  \tenv.\staticenvsG.\subtypes(\idone) = \bot
 }{
   \issubtype(\tenv, \overname{\TNamed(\idone)}{\vtone}, \overname{\TNamed(\idtwo)}{\vttwo}) \typearrow \False
 }
@@ -111,16 +102,6 @@ yielding the result in $\vb$.
 
 \TypingRuleDef{SubtypeSatisfaction}
 \RenderRelation{subtype_satisfies}
-\BackupOriginalRelation{
-The predicate
-\[
-  \subtypesatisfies(\overname{\staticenvs}{\tenv} \aslsep \overname{\ty}{\vt} \aslsep \overname{\ty}{\vs})
-  \aslto \overname{\Bool}{\vb} \cup \overname{\typeerror}{\TypeErrorConfig}
-\]
-determines whether a type $\vt$ \emph{subtype-satisfies} a type $\vs$ in environment $\tenv$,
-returning the result in $\vb$.
-\ProseOtherwiseTypeError
-} % END_OF_BACKUP_RELATION
 
 This function assumes that both $\vt$ and $\vs$ are well-typed according to \chapref{Types}.
 
@@ -226,8 +207,8 @@ subtyping.
 
 \item \AllApplyCase{t\_tuple}
   \begin{itemize}
-  \item $\vs$ has the \underlyingtypeterm\ of a tuple with type list $\vlis$, that is $\TTuple(\vlis)$;
-  \item $\vt$ has the \underlyingtypeterm\ of a tuple with type list $\vlit$, that is $\TTuple(\vlit)$;
+  \item $\vs$ has the \underlyingtypeterm\ of a tuple with type list $\vlis$ ($\TTuple(\vlis)$);
+  \item $\vt$ has the \underlyingtypeterm\ of a tuple with type list $\vlit$ ($\TTuple(\vlit)$);
   \item equating the lengths of $\vlis$ and $\vlit$ is either $\True$ or $\False$, which short-circuits
   the entire rule with $\vb=\False$;
   \item checking at each index $\vi$ of the list $\vlis$ whether the type $\vlit[\vi]$ \typesatisfiesterm\ the type $\vlis[\vi]$
@@ -361,19 +342,13 @@ subtyping.
 }
 \end{mathpar}
 
-\hypertarget{relation-fieldnames}{}
-For a list of typed fields $\fields$, we define the set of its field identifiers as:
-\[
-  \fieldnames(\fields) \triangleq \{ \id \;|\; (\id, \vt) \in \fields\}
-\]
-\hypertarget{relation-fieldtype}{}
-We define the type associated with the field name $\id$ in a list of typed fields $\fields$,
-if there is a unique one, as follows:
+\RenderRelation{field_type}
+It is defined as follows:
 \[
   \fieldtype(\fields, \id) \triangleq
   \begin{cases}
-  \vt  & \text{ if }\{ \vtp \;|\; (\id,\vtp) \in \fields\} = \{\vt\}\\
-  \bot & \text{ otherwise}
+  \some{\vt}  & \text{ if }\{ \vtp \;|\; (\id,\vtp) \in \fields\} = \{\vt\}\\
+  \None & \text{ otherwise}
   \end{cases}
 \]
 
@@ -397,16 +372,6 @@ if there is a unique one, as follows:
 \TypingRuleDef{TypeSatisfaction}
 \identr{FMXK}
 \RenderRelation{type_satisfies}
-\BackupOriginalRelation{
-The predicate
-\[
-  \typesatisfies(\overname{\staticenvs}{\tenv} \aslsep \overname{\ty}{\vt} \aslsep \overname{\ty}{\vs})
-  \aslto \overname{\Bool}{\vb} \cup \overname{\typeerror}{\TypeErrorConfig}
-\]
-determines whether a type $\vt$ \emph{\typesatisfiesterm} a type $\vs$ in environment $\tenv$,
-returning the result $\vb$.
-\ProseOtherwiseTypeError
-} % END_OF_BACKUP_RELATION
 
 The function assumes that both $\vt$ and $\vs$ are well-typed according to \secref{Types}.
 
@@ -556,15 +521,7 @@ since \verb|integer{0..N}| does not \typesatisfyterm{} \verb|integer{0..M}|.
 \CodeSubsection{\TypeSatisfactionBegin}{\TypeSatisfactionEnd}{../types.ml}
 
 \TypingRuleDef{CheckTypeSatisfaction}
-\RenderRelation{checked_typesat}
-\BackupOriginalRelation{
-We also define
-\[
-  \checktypesat(\overname{\staticenvs}{\tenv} \aslsep \overname{\ty}{\vt} \aslsep \overname{\ty}{\vs})
-  \aslto \{\True\} \cup \overname{\typeerror}{\TypeErrorConfig}
-\]
-which is the same as $\typesatisfies$, but yields a \typingerrorterm{} when \\ $\typesatisfies(\tenv, \vt, \vs)$ is $\False$.
-} % END_OF_BACKUP_RELATION
+\RenderRelation{check_type_satisfies}
 
 The function assumes that both $\vt$ and $\vs$ are well-typed according to \secref{Types}.
 
@@ -598,7 +555,7 @@ yields a \typingerrorterm.
 \inferrule[okay]{
   \typesatisfies(\tenv, \vt, \vs) \typearrow \True
 }{
-  \checktypesat(\tenv, \vt, \vs) \typearrow \True
+  \checktypesatisfies(\tenv, \vt, \vs) \typearrow \True
 }
 \end{mathpar}
 
@@ -606,7 +563,7 @@ yields a \typingerrorterm.
 \inferrule[error]{
   \typesatisfies(\tenv, \vt, \vs) \typearrow \False
 }{
-  \checktypesat(\tenv, \vt, \vs) \typearrow \TypeErrorVal{\TypeSatisfactionFailure}
+  \checktypesatisfies(\tenv, \vt, \vs) \typearrow \TypeErrorVal{\TypeSatisfactionFailure}
 }
 \end{mathpar}
 
@@ -616,15 +573,6 @@ requires finding a single type that can be used to annotate the results of both 
 We refer to such a type as a \emph{\Proselca}, or LCA, for short, and define it next.
 
 \RenderRelation{lowest_common_ancestor}
-\BackupOriginalRelation{
-The function
-\[
-  \lca(\overname{\staticenvs}{\tenv} \aslsep \overname{\ty}{\vt} \aslsep \overname{\ty}{\vs})
-  \aslto \overname{\ty}{\tty} \cup \overname{\typeerror}{\TypeErrorConfig}
-\]
-returns the \Proselca{} of types $\vt$ and $\vs$ in $\tenv$ --- $\tty$.
-The result is a \typingerrorterm{} if a \Proselca{} does not exist or a \typingerrorterm{} is detected.
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Lowest Common Ancestor Examples}
 \listingref{example-lca} shows examples of conditional expressions and the resulting
@@ -696,11 +644,11 @@ of different widths.
 
       \item \AllApplyCase{t\_int\_parameterized}
       \begin{itemize}
-        \item neither $\vt$ nor $\vs$ are the unconstrained integer type;
+        \item neither $\vt$ nor $\vs$ is an unconstrained integer type;
         \item one of $\vt$ and $\vs$ is a \parameterizedintegertypeterm;
         \item the \wellconstrainedversionterm\ of $\vt$ is $\vtone$;
         \item the \wellconstrainedversionterm\ of $\vs$ is $\vsone$;
-        \item $\tty$ the lowest common ancestor of $\vtone$ and $\vsone$ in $\tenv$ is $\tty$\ProseOrTypeError.
+        \item $\tty$ is the lowest common ancestor of $\vtone$ and $\vsone$ in $\tenv$\ProseOrTypeError.
       \end{itemize}
 
       \item \AllApplyCase{t\_int\_wellconstrained}
@@ -713,8 +661,8 @@ of different widths.
 
       \item \AllApplyCase{t\_bits}
       \begin{itemize}
-        \item $\vt$ is a bitvector type with length expression $\vet$, that is, $\TBits(\vet, \Ignore)$;
-        \item $\vs$ is a bitvector type with length expression $\ves$, that is, $\TBits(\ves, \Ignore)$;
+        \item $\vt$ is a bitvector type with length expression $\vet$ ($\TBits(\vet, \Ignore)$);
+        \item $\vs$ is a bitvector type with length expression $\ves$ ($\TBits(\ves, \Ignore)$);
         \item applying $\typeequal$ to $\vt$ and $\vs$ in $\tenv$ yields $\False$;
         \item applying $\exprequal$ to $\vet$ and $\ves$ in $\tenv$ yields $\vbequal$;
         \item checking whether $\vbequal$ is $\True$ yields $\True$\ProseTerminateAs{\NoLCA};
@@ -725,7 +673,7 @@ of different widths.
       \begin{itemize}
         \item $\vt$ is an array type with width expression $\widtht$ and element type $\vtyt$;
         \item $\vs$ is an array type with width expression $\widths$ and element type $\vtys$;
-        \item applying $\arraylengthequal$ to $\widtht$ and $\widths$ in $\tenv$ to equate the array lengths,
+        \item applying $\arraylengthequal$ to $\widtht$ and $\widths$ in $\tenv$ to\\ equate the array lengths,
               yields $\vbequallength$\ProseOrTypeError;
         \item checking that $\vbequallength$ is $\True$ yields $\True$\ProseTerminateAs{\NoLCA};
         \item the lowest common ancestor of $\vtyt$ and $\vtys$ is $\vtone$\ProseOrTypeError;
@@ -829,7 +777,9 @@ We define $\lca(\tenv, \vt, \vs)$ to be any type $\vtp$ that is \typeequivalentt
 }{
   \lca(\tenv, \vt, \vs) \typearrow \overname{\unconstrainedinteger}{\tty}
 }
-\and
+\end{mathpar}
+
+\begin{mathpar}
 \inferrule[t\_int\_parameterized]{
   \typeequal(\tenv, \vt, \vs) \typearrow \False\\
   \astlabel(\vt) = \astlabel(\vs) = \TInt\\
@@ -842,46 +792,50 @@ We define $\lca(\tenv, \vt, \vs)$ to be any type $\vtp$ that is \typeequivalentt
 }{
   \lca(\tenv, \vt, \vs) \typearrow \tty
 }
-\and
+\end{mathpar}
+
+\begin{mathpar}
 \inferrule[t\_int\_wellconstrained]
 {
   \typeequal(\tenv, \vt, \vs) \typearrow \False\\
   \vt = \TInt(\WellConstrained(\cst, \vpone))\\
   \vs = \TInt(\WellConstrained(\css, \vptwo))\\
-  \vp \eqdef \precisionjoin(\vpone, \vptwo)
+  \vp \eqdef \precisionjoin(\vpone, \vptwo)\\
+  \tty \eqdef \TInt(\WellConstrained(\cst \concat \css, \vp))
 }{
-  \lca(\tenv, \vt, \vs) \typearrow \overname{\TInt(\WellConstrained(\cst \concat \css, \vp))}{\tty}
+  \lca(\tenv, \vt, \vs) \typearrow \tty
 }
 \end{mathpar}
 
 \begin{mathpar}
 \inferrule[t\_bits]{
+  \vt = \TBits(\vet, \Ignore)\\
+  \vs = \TBits(\ves, \Ignore)\\
   \typeequal(\tenv, \vt, \vs) \typearrow \False\\
   \exprequal(\tenv, \vet, \ves) \typearrow \vbequal\\
   \techeck(\vbequal, \NoLCA) \typearrow \True \OrTypeError
 }{
-  \lca(\tenv, \overname{\TBits(\vet, \Ignore)}{\vt}, \overname{\TBits(\ves, \Ignore)}{\vs}) \typearrow \overname{\TBits(\vet, \emptylist)}{\tty}
+  \lca(\tenv, \vt, \vs) \typearrow \overname{\TBits(\vet, \emptylist)}{\tty}
 }
 \end{mathpar}
 
 \begin{mathpar}
 \inferrule[t\_array]{
+  \vt = \TArray(\widtht, \vtyt)\\
+  \vs = \TArray(\widths, \vtys)\\
   \typeequal(\tenv, \vt, \vs) \typearrow \False\\
   \arraylengthequal(\tenv, \widtht, \widths) \typearrow \vbequallength \OrTypeError\\\\
   \techeck(\vbequallength, \NoLCA) \typearrow \True \OrTypeError\\\\
   \lca(\tenv, \vtyt, \vtys) \typearrow \vtone \OrTypeError
 }{
-  {
-  \begin{array}{r}
-  \lca(\tenv, \overname{\TArray(\widtht, \vtyt)}{\vt}, \overname{\TArray(\widths, \vtys)}{\vs}) \typearrow \\
-  \overname{\TArray(\widtht, \vtone)}{\tty}
-  \end{array}
-  }
+  \lca(\tenv, \vt, \vs) \typearrow \overname{\TArray(\widtht, \vtone)}{\tty}
 }
 \end{mathpar}
 
 \begin{mathpar}
 \inferrule[t\_tuple]{
+  \vt = \TTuple(\vlit)\\
+  \vs = \TTuple(\vlis)\\
   \typeequal(\tenv, \vt, \vs) \typearrow \False\\
   \equallength(\vlit, \vlis) \typearrow \vb\\
   \techeck(\vb, \NoLCA) \typearrow \True \OrTypeError\\\\
@@ -893,15 +847,19 @@ We define $\lca(\tenv, \vt, \vs)$ to be any type $\vtp$ that is \typeequivalentt
   }\\
   \vli \eqdef [\vi\in\listrange(\vlit): \vt_\vi]
 }{
-  \lca(\tenv, \overname{\TTuple(\vlit)}{\vt}, \overname{\TTuple(\vlis)}{\vs}) \typearrow \overname{\TTuple(\vli)}{\tty}
+  \lca(\tenv, \vt, \vs) \typearrow \overname{\TTuple(\vli)}{\tty}
 }
 \end{mathpar}
 
 \begin{mathpar}
 \inferrule[error]{
   \typeequal(\tenv, \vt, \vs) \typearrow \False\\
-  (\astlabel(\vt) \neq \astlabel(\vs)) \lor
-  \astlabel(\vt) \in \{\TEnum, \TRecord, \TException, \TCollection\}
+  {
+    \left(\begin{array}{cl}
+  \astlabel(\vt) \neq \astlabel(\vs) & \lor\\
+  \astlabel(\vt) \in \{\TEnum, \TRecord, \TException, \TCollection\} &
+    \end{array}\right)
+  }
 }{
   \lca(\tenv, \vt, \vs) \typearrow \TypeErrorVal{\NoLCA}
 }
@@ -911,16 +869,6 @@ We define $\lca(\tenv, \vt, \vs)$ to be any type $\vtp$ that is \typeequivalentt
 
 \TypingRuleDef{ApplyUnopType}
 \RenderRelation{apply_unop_type}
-\BackupOriginalRelation{
-The function
-\[
-  \applyunoptype(\overname{\staticenvs}{\tenv} \aslsep \overname{\unop}{\op} \aslsep \overname{\ty}{\vt})
-  \aslto \overname{\ty}{\vs} \cup \overname{\typeerror}{\TypeErrorConfig}
-\]
-determines the result type of applying a unary operator when the type of its operand is known.
-Similarly, we determine the negation of integer constraints.
-\ProseOtherwiseTypeError
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Applying Unary Operations to Types}
 \listingref{apply-unop-type} shows examples of typing applications of unary operations.
@@ -978,7 +926,7 @@ Similarly, we determine the negation of integer constraints.
 \FormallyParagraph
 \begin{mathpar}
 \inferrule[bnot\_t\_bool]{
-  \checktypesat(\tenv, \vtone, \TBool) \typearrow \True \OrTypeError\\
+  \checktypesatisfies(\tenv, \vtone, \TBool) \typearrow \True \OrTypeError\\
 }{
   \applyunoptype(\tenv, \BNOT, \vtone) \typearrow \TBool
 }
@@ -1030,14 +978,6 @@ Similarly, we determine the negation of integer constraints.
 
 \TypingRuleDef{NegateConstraint}
 \RenderRelation{negate_constraint}
-\BackupOriginalRelation{
-The function
-\[
-  \negateconstraint(\overname{\intconstraint}{\vc}) \aslto \overname{\intconstraint}{\newc}
-\]
-takes an integer constraint $\vc$ and returns the constraint $\newc$,
-which corresponds to the negation of all the values that $\vc$ represents.
-} % END_OF_BACKUP_RELATION
 
 \ExampleRef{Applying Unary Operations to Types} shows examples of negating single expression
 constraints and range constraints.
@@ -1061,9 +1001,11 @@ constraints and range constraints.
 
 \FormallyParagraph
 \begin{mathpar}
-\inferrule[exact]{}
+\inferrule[exact]{
+  \vc = \ConstraintExact(\ve)
+}
 {
-  \negateconstraint(\overname{\ConstraintExact(\ve)}{\vc}) \typearrow
+  \negateconstraint(\vc) \typearrow
   \overname{\ConstraintExact(\EUnop(\SUB, \ve))}{\newc}
 }
 \end{mathpar}
@@ -1078,17 +1020,6 @@ constraints and range constraints.
 
 \TypingRuleDef{ApplyBinopTypes}
 \RenderRelation{apply_binop_types}
-\BackupOriginalRelation{
-The function
-\[
-  \applybinoptypes(\overname{\staticenvs}{\tenv} \aslsep \overname{\binop}{\op} \aslsep \overname{\ty}{\vtone}
-  \aslsep \overname{\ty}{\vttwo})
-  \aslto \overname{\ty}{\vt} \cup \overname{\typeerror}{\TypeErrorConfig}
-\]
-determines the result type $\vt$ of applying the binary operator $\op$
-to operands of type $\vtone$ and $\vttwo$ in the \staticenvironmentterm{} $\tenv$.
-\ProseOtherwiseTypeError
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Filtering Constraints for Binary Operations}
 Since binary operations may dynamically fail, the typechecker may remove values
@@ -1227,17 +1158,17 @@ range constraints. More precisely, they are a superset of the values for \verb|(
   \item \AllApplyCase{arith\_t\_int\_unconstrained}
   \begin{itemize}
     \item $\op$ is one of $\{\MUL, \DIV, \DIVRM, \MOD, \SHL,  \SHR, \POW, \ADD, \SUB\}$;
-    \item both $\vtone$ and $\vttwo$ are integer types and at least one them is the unconstrained integer type;
+    \item both $\vtone$ and $\vttwo$ are integer types and at least one of them is the unconstrained integer type;
     \item $\vt$ is the unconstrained integer type;
   \end{itemize}
 
   \item \AllApplyCase{arith\_t\_int\_parameterized}
   \begin{itemize}
     \item $\op$ is one of $\{\MUL, \DIV, \DIVRM, \MOD, \SHL,  \SHR, \POW, \ADD, \SUB\}$;
-    \item both $\vtone$ and $\vttwo$ are integer types, neither is an unconstrained integer type, and at least one them is a \parameterizedintegertypeterm;
+    \item both $\vtone$ and $\vttwo$ are integer types, neither is an unconstrained integer type, and at least one of them is a \parameterizedintegertypeterm;
     \item applying $\towellconstrained$ to $\vtone$ yields $\vtonewellconstrained$;
     \item applying $\towellconstrained$ to $\vttwo$ yields $\vttwowellconstrained$;
-    \item \Proseapplybinoptypes{$\tenv$}{$\op$}{$\vtonewellconstrained$}{$\vttwowellconstrained$}{$\vt$}.
+    \item \Proseapplybinoptypes{$\tenv$}{$\op$}{\\ $\vtonewellconstrained$}{$\vttwowellconstrained$}{$\vt$}.
   \end{itemize}
 
   \item \AllApplyCase{arith\_t\_int\_wellconstrained}
@@ -1378,10 +1309,12 @@ range constraints. More precisely, they are a superset of the values for \verb|(
 
 \begin{mathpar}
 \inferrule[bits\_concat]{
+  \vtone = \TBits(\vwone, \Ignore)\\
+  \vttwo = \TBits(\vwtwo, \Ignore)\\
   \vw \eqdef \EBinop(\ADD, \vwone, \vwtwo) \\
   \normalize(\tenv, \vw) \typearrow \vwp
 }{
-  \applybinoptypes(\tenv, \BVCONCAT, \overname{\TBits(\vwone, \Ignore)}{\vtone}, \overname{\TBits(\vwtwo, \Ignore)}{\vttwo}) \typearrow
+  \applybinoptypes(\tenv, \BVCONCAT, \vtone, \vttwo) \typearrow
   \overname{\TBits(\vwp, \emptylist)}{\vt}
 }
 \end{mathpar}
@@ -1468,14 +1401,15 @@ range constraints. More precisely, they are a superset of the values for \verb|(
 
 \begin{mathpar}
 \inferrule[arith\_t\_int\_wellconstrained]{
+  \vtone = \TInt(\vcone)\\
+  \vttwo = \TInt(\vcstwo)\\
   \op \in  \{\MUL, \POW, \ADD, \SUB, \DIVRM, \DIV, \MOD, \SHL, \SHR\}\\
   \vcone = \WellConstrained(\cstwo, \vpone)\\
   \vctwo = \WellConstrained(\csone, \vptwo)\\
   \annotateconstraintbinop(\tenv, \op, \vcsone, \vcstwo) \typearrow (\cs, \vpthree) \OrTypeError\\\\
   \vp = \precisionjoin(\vpone, \precisionjoin(\vptwo, \vpthree))
 }{
-      \applybinoptypes(\tenv, \op, \overname{\TInt(\vcone)}{\vtone},
-        \overname{\TInt(\vctwo)}{\vttwo}) \typearrow
+      \applybinoptypes(\tenv, \op, \vtone, \vttwo) \typearrow
         \overname{\TInt(\WellConstrained(\cs, \vp))}{\vt}
 }
 \end{mathpar}
@@ -1505,64 +1439,7 @@ range constraints. More precisely, they are a superset of the values for \verb|(
   \makeanonymous(\tenv, \vttwo) \typearrow \vttwoanon \OrTypeError\\\\
   {
   \begin{array}{l}
-  (\op, \astlabel(\vtoneanon), \astlabel(\vttwoanon)) \not\in\\
-    \left\{
-    \begin{array}{lclcl}
-      (\AND     &,& \TBool  &,& \TBool)\\
-      (\OR      &,& \TBool  &,& \TBool)\\
-      (\EQ    &,& \TBool  &,& \TBool)\\
-      (\IMPL    &,& \TBool  &,& \TBool)\\
-      %
-      (\AND     &,& \TBits  &,& \TBits)\\
-      (\OR      &,& \TBits  &,& \TBits)\\
-      (\XOR     &,& \TBits  &,& \TBits)\\
-      (\ADD    &,& \TBits  &,& \TBits)\\
-      (\SUB   &,& \TBits  &,& \TBits)\\
-      (\BVCONCAT&,& \TBits  &,& \TBits)\\
-      %
-      (\ADD    &,& \TBits  &,& \TInt)\\
-      (\SUB   &,& \TBits  &,& \TInt)\\
-      %
-      (\LE     &,& \TInt     &,& \TInt)\\
-      (\GE     &,& \TInt     &,& \TInt)\\
-      (\GT      &,& \TInt     &,& \TInt)\\
-      (\LT      &,& \TInt     &,& \TInt)\\
-      (\LE     &,& \TReal    &,& \TReal)\\
-      (\GE     &,& \TReal    &,& \TReal)\\
-      (\GT      &,& \TReal    &,& \TReal)\\
-      (\LT      &,& \TReal    &,& \TReal)\\
-      (\EQ    &,& \TInt     &,& \TInt)\\
-      (\NE     &,& \TInt     &,& \TInt)\\
-      (\EQ    &,& \TBool    &,& \TBool)\\
-      (\NE     &,& \TBool    &,& \TBool)\\
-      (\EQ    &,& \TReal    &,& \TReal)\\
-      (\NE     &,& \TReal    &,& \TReal)\\
-      (\EQ    &,& \TString  &,& \TString)\\
-      (\NE     &,& \TString  &,& \TString)\\
-      %
-      (\MUL   &,& \TInt  &,& \TInt)\\
-      (\DIV   &,& \TInt  &,& \TInt)\\
-      (\DIVRM &,& \TInt  &,& \TInt)\\
-      (\MOD   &,& \TInt  &,& \TInt)\\
-      (\SHL   &,& \TInt  &,& \TInt)\\
-      (\SHR   &,& \TInt  &,& \TInt)\\
-      (\POW   &,& \TInt  &,& \TInt)\\
-      (\ADD  &,& \TInt  &,& \TInt)\\
-      (\SUB &,& \TInt  &,& \TInt)\\
-      (\ADD  &,& \TReal &,& \TReal)\\
-      (\SUB &,& \TReal &,& \TReal)\\
-      (\MUL   &,& \TReal &,& \TReal)\\
-      (\RDIV  &,& \TReal &,& \TReal)\\
-      (\POW   &,& \TReal &,& \TInt)\\
-      %
-      (\ADD  &,& \TReal &,& \TReal)\\
-      (\SUB &,& \TReal &,& \TReal)\\
-      (\MUL   &,& \TReal &,& \TReal)\\
-      (\POW   &,& \TReal &,& \TInt)\\
-      (\RDIV  &,& \TReal &,& \TReal)
-    \end{array}
-    \right\}\\
-    \cup \{ (\STRCONCAT, \astlabel(\vtone), \astlabel(\vttwo)) \;|\; \issingular(\vtone) \land \issingular(\vttwo)\}\\
+  (\op, \astlabel(\vtoneanon), \astlabel(\vttwoanon)) \not\in \binopsignatures\\
   \end{array}
   }
 }{
@@ -1578,29 +1455,12 @@ range constraints. More precisely, they are a superset of the values for \verb|(
 
 \TypingRuleDef{FindNamedLCA}
 \RenderRelation{named_lowest_common_ancestor}
-\BackupOriginalRelation{
-The function
-\[
-  \namedlca(\overname{\staticenvs}{\tenv} \aslsep \overname{\ty}{\vt} \aslsep \overname{\ty}{\vs})
-  \aslto \overname{\ty}{\tty} \cup \overname{\typeerror}{\TypeErrorConfig}
-\]
-returns the lowest common named super type --- $\tty$ --- of the types $\vt$ and $\vs$ in $\tenv$.
-} % END_OF_BACKUP_RELATION
 \RenderRelation{supers}
-\BackupOriginalRelation{
-The function
-\[
-  \supers(\overname{\staticenvs}{\tenv} \aslsep \overname{\ty}{\vt})
-  \aslto \pow{\ty}
-\]
-returns the set of \emph{named supertypes} of a type $\vt$
-in the $\subtypes$ function of a \globalstaticenvironmentterm{} $\tenv$.
-} % END_OF_BACKUP_RELATION
 \[
   \supers(\tenv, \vt) \triangleq
   \begin{cases}
-    \{\vt\} \cup \supers(\vs) & \text{ if }G^\tenv.\subtypes(\vt) = \vs\\
-    \{\vt\}  & \text{ otherwise } (\text{that is, }G^\tenv.\subtypes(\vt) = \bot)\\
+    \{\vt\} \cup \supers(\vs) & \text{ if }\tenv.\staticenvsG.\subtypes(\vt) = \vs\\
+    \{\vt\}  & \text{ otherwise } (\text{that is, }\tenv.\staticenvsG.\subtypes(\vt) = \bot)\\
   \end{cases}
 \]
 
@@ -1651,7 +1511,7 @@ named lowest common ancestor.
 \inferrule[super]{
   \supers(\tenv, \vt) \typearrow \vtsupers\\
   \vs \not\in \vtsupers\\
-  G^\tenv.\subtypes(\vs) = \vsp\\
+  \tenv.\staticenvsG.\subtypes(\vs) = \vsp\\
   \namedlca(\tenv, \vt, \vsp) \typearrow \tty
 }{
   \namedlca(\tenv, \vt, \vs) \typearrow \tty
@@ -1660,7 +1520,7 @@ named lowest common ancestor.
 \inferrule[none]{
   \supers(\tenv, \vt) \typearrow \vtsupers\\
   \vs \not\in \vtsupers\\
-  G^\tenv.\subtypes(\vs) = \bot
+  \tenv.\staticenvsG.\subtypes(\vs) = \bot
 }{
   \namedlca(\tenv, \vt, \vs) \typearrow \None
 }
@@ -1668,50 +1528,20 @@ named lowest common ancestor.
 
 \TypingRuleDef{AnnotateConstraintBinop}
 \RenderRelation{annotate_constraint_binop}
-\BackupOriginalRelation{
-The function
-\[
-\annotateconstraintbinop\left(
-  \begin{array}{c}
-  \overname{\{\Over,\Under\}}{\vapprox} \aslsep\\
-  \overname{\staticenvs}{\tenv} \aslsep\\
-  \overname{\binop}{\op} \aslsep\\
-  \overname{\KleeneStar{\intconstraint}}{\csone} \aslsep\\
-  \overname{\KleeneStar{\intconstraint}}{\cstwo}
-  \end{array}
-\right) \aslto
-\begin{array}{r}
-\left(
-  \begin{array}{c}
-  \overname{\KleeneStar{\intconstraint}}{\annotatedcs} \aslsep\\
-  \overname{\precisionlossindicator}{\vp}
-  \end{array}
-\right)
-\\ \cup\ \overname{\typeerror}{\TypeErrorConfig}
-\end{array}
-\]
-annotates the application of the binary operation $\op$ to the lists of integer constraints
-$\csone$ and $\cstwo$, yielding a list of constraints --- $\annotatedcs$.
-%
-If the list is empty, the result is either $\CannotUnderapproximate$ or $\CannotOverapproximate$,
-based on $\vapprox$ (this function is invoked in the context of approximating lists of constraints).
-%
-\ProseOtherwiseTypeError\
-} % END_OF_BACKUP_RELATION
 
 The operator $\op$ is assumed to be only one of the operators in the following set:
 $\{\SHL, \SHR, \POW, \MOD, \DIVRM, \SUB, \MUL, \ADD, \DIV\}$.
-The rule employs $\binopisexploding$ to decide whether range constraints can be maintained
+The rule employs \\ $\binopisexploding$ to decide whether range constraints can be maintained
 as range constraints or have to be converted to a list of exact constraints.
 
 \ExampleDef{Annotating Constraints for Binary Operations}
 Applying $\ADD$ to
 $\{\AbbrevConstraintRange{\ELInt{2}}{\ELInt{4}}\}$ and
-$\{\AbbrevConstraintExact{\ELInt{2}}\}$ results in\\
-$\{\AbbrevConstraintRange{\ELInt{4}}{\ELInt{6}}\}$,
+$\{\AbbrevConstraintExact{\ELInt{2}}\}$ \\ results in
+$\{\AbbrevConstraintRange{\ELInt{4}}{\ELInt{6}}\}$,\\
 since $\binopisexploding(\ADD) \typearrow \False$
 while applying $\MUL$ to the same lists of constraints results in\\
-$\{\AbbrevConstraintExact{\ELInt{4}}, \AbbrevConstraintExact{\ELInt{6}}, \AbbrevConstraintExact{\ELInt{8}}\}$,
+$\{\AbbrevConstraintExact{\ELInt{4}}, \AbbrevConstraintExact{\ELInt{6}}, \AbbrevConstraintExact{\ELInt{8}}\}$,\\
 since $\binopisexploding(\MUL) \typearrow \True$.
 
 Annotating the constraints involves applying symbolic reasoning and in particular filtering out values that
@@ -1765,13 +1595,8 @@ Also see \ExampleRef{Applying Binary Operations to Constrained Integers}.
   \vpzero \eqdef \precisionjoin(\vpone, \vptwo)\\
   \vexpectedconstraintlength \eqdef \choice{\op = \MOD}{\listlen{\cstwoe}}{\listlen{\csonee} \times \listlen{\cstwoe}}\\
   {
-  (\csonearg, \cstwoarg, \vp) \eqdef \left\{
-  \begin{array}{ll}
-    \textbf{if }&\vexpectedconstraintlength < \maxconstraintsize\text{ then}\\
-    & (\csonee, \cstwoe, \vpzero)\\
-    \textbf{else}&\\
-    & (\csone, \cstwof, \PrecisionLost )
-  \end{array}\right.
+  (\csonearg, \cstwoarg, \vp) \eqdef
+  \ifthenelseop[V]{\vexpectedconstraintlength < \maxconstraintsize}{(\csonee, \cstwoe, \vpzero)}{(\csone, \cstwof, \PrecisionLost)}
   }\\\\
   \commonsuffixline\\\\
   \constraintbinop(\op, \csonearg, \cstwoarg) \typearrow \csvanilla\\
@@ -1801,28 +1626,6 @@ Also see \ExampleRef{Applying Binary Operations to Constrained Integers}.
 
 \TypingRuleDef{BinopFilterRhs}
 \RenderRelation{binop_filter_rhs}
-\BackupOriginalRelation{
-The function
-\[
-\begin{array}{r}
-\binopfilterrhs(
-    \overname{\{\Over,\Under\}}{\vapprox} \aslsep
-    \overname{\staticenvs}{\tenv} \aslsep
-    \overname{\binop}{\op} \aslsep
-    \overname{\KleeneStar{\intconstraint}}{\cs})
-\aslto \\
-\overname{\KleenePlus{\intconstraint}}{\newcs}
-\cup \{\CannotUnderapproximate, \CannotOverapproximate\}
-\end{array}
-\]
-filters the list of constraints $\cs$ by removing values that will definitely result in a dynamic
-error if found on the right-hand-side of a binary operation expression with the operator $\op$
-in any environment consisting of the \staticenvironmentterm{} $\tenv$.
-The result is the filtered list of constraints $\newcs$.
-%
-If the list is empty, the result is either $\CannotUnderapproximate$ or $\CannotOverapproximate$,
-based on $\vapprox$ (this function is invoked in the context of approximating lists of constraints).
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Filtering Right-hand-side Constraints}
 An example of filtering constraints appears in \listingref{apply-binop-constraints},
@@ -1837,7 +1640,7 @@ from the constraint \verb|-5..3|, thus avoiding including constraints
   \begin{itemize}
     \item $\op$ is one of $\SHL$, $\SHR$, and $\POW$;
     \item define $\vf$ as the specialization of $\refineconstraintbysign$ for the predicate
-          $\lambda x.\ x \geq 0$, which is $\True$ if and only if the tested number is greater or equal to $0$;
+          $\lambda x.\ x \geq 0$, which is $\True$ if and only if the tested number is greater than or equal to $0$;
     \item refining the list of constraints $\cs$ with $\vf$ and $\vapprox$ via $\refineconstraints$ yields \\
           $\newcs$\ProseTerminateAs{\CannotUnderapproximate, \CannotOverapproximate};
     \item checking whether $\newcs$ is empty yields $\True$\ProseTerminateAs{\BadOperands}.
@@ -1875,7 +1678,7 @@ from the constraint \verb|-5..3|, thus avoiding including constraints
 \begin{mathpar}
 \inferrule[greater\_than]{
   \op \in \{\MOD, \DIV, \DIVRM\}\\\\
-  \vf \eqdef \refineconstraintbysign(\tenv, \lambda x.\ x > 0)\\
+  \refineconstraintbysign(\tenv, \lambda x.\ x > 0) \typearrow \vf\\
   \refineconstraints(\vapprox, \cs, \vf) \typearrow \newcs \terminateas \CannotUnderapproximate, \CannotOverapproximate\\\\
   \techeck(\newcs \neq \emptylist, \BadOperands) \typearrow \True\OrTypeError
 }{
@@ -1893,20 +1696,6 @@ from the constraint \verb|-5..3|, thus avoiding including constraints
 
 \TypingRuleDef{RefineConstraintBySign}
 \RenderRelation{refine_constraint_by_sign}
-\BackupOriginalRelation{
-The function
-\[
-\refineconstraintbysign(\overname{\staticenvs}{\tenv} \aslsep \overname{\Z\rightarrow \Bool}{\vp} \aslsep \overname{\intconstraint}{\vc})
-\aslto \overname{\Option{\intconstraint}}{\vcopt}
-\]
-takes a predicate $\vp$ that returns $\True$ based on the sign of its input.
-The function conservatively refines the constraint $\vc$ in $\tenv$ by applying symbolic reasoning to yield a new constraint
-(inside an optional)
-that represents the values that satisfy the $\vc$ and for which $\vp$ holds.
-In this context, conservatively means that the new constraint may represent a superset of the values that a more precise
-reasoning may yield.
-If the set of those values is empty the result is $\None$.
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Refining Constraints with a Sign Predicate}
 The specification in \listingref{RefineConstraintBySign}
@@ -2023,15 +1812,17 @@ that tests whether an integer is positive: $\lambda x.\ x > 0$.
 \inferrule[range\_both\_reduce\_to\_z]{
   \reducetozopt(\tenv, \veone) \typearrow \some{\vzone}\\
   \reducetozopt(\tenv, \vetwo) \typearrow \some{\vztwo}\\
+  \vzeroorone \eqdef \choice{\vp(0)}{\ELInt{0}}{\ELInt{1}}\\
+  \vzeroorminusone \eqdef \choice{\vp(0)}{\ELInt{0}}{\ELInt{-1}}\\
+  \vrangezeroorone \eqdef \ConstraintRange(\vzeroorone, \vetwo)\\
+  \vrangezeroorminusone \eqdef \ConstraintRange(\veone, \vzeroorminusone)\\
   {
-    \begin{array}{c}
-  \vcopt \eqdef \\ \wrappedline\ \begin{cases}
+  \vcopt \eqdef \begin{cases}
     \some{\vc}& \text{if }\vp(\vzone) \land \vp(\vztwo)\\
-    \some{\ConstraintRange(\choice{\vp(0)}{\ELInt{0}}{\ELInt{1}}, \vetwo)}& \text{if }\neg\vp(\vzone) \land \vp(\vztwo)\\
-    \some{\ConstraintRange(\veone, \choice{\vp(0)}{\ELInt{0}}{\ELInt{-1}})}& \text{if }\vp(\vzone) \land \neg\vp(\vztwo)\\
+    \some{\vrangezeroorone}& \text{if }\neg\vp(\vzone) \land \vp(\vztwo)\\
+    \some{\vrangezeroorminusone}& \text{if }\vp(\vzone) \land \neg\vp(\vztwo)\\
     \None& \text{if }\neg\vp(\vzone) \land \neg\vp(\vztwo)\\
   \end{cases}
-\end{array}
   }
 }{
   \refineconstraintbysign(\tenv, \vp, \overname{\ConstraintRange(\veone, \vetwo)}{\vc}) \typearrow \vcopt
@@ -2043,13 +1834,13 @@ that tests whether an integer is positive: $\lambda x.\ x > 0$.
   \vc = \ConstraintRange(\veone, \vetwo)\\
   \reducetozopt(\tenv, \veone) \typearrow \some{\vzone}\\
   \reducetozopt(\tenv, \vetwo) \typearrow \None\\
+  \vzeroorone \eqdef \choice{\vp(0)}{\ELInt{0}}{\ELInt{1}}\\
+  \vrangezeroorone \eqdef \ConstraintRange(\vzeroorone, \vetwo)\\
   {
-    \begin{array}{c}
-  \vcopt \eqdef \\ \wrappedline\ \begin{cases}
+  \vcopt \eqdef  \begin{cases}
     \some{\vc}& \text{if }\vp(\vzone)\\
-    \some{\ConstraintRange(\choice{\vp(0)}{\ELInt{0}}{\ELInt{1}}, \vetwo)}& \text{else}\\
+    \some{\vrangezeroorone}& \text{otherwise}\\
   \end{cases}
-\end{array}
   }
 }{
   \refineconstraintbysign(\tenv, \vp, \vc) \typearrow \vcopt
@@ -2061,13 +1852,13 @@ that tests whether an integer is positive: $\lambda x.\ x > 0$.
   \vc = \ConstraintRange(\veone, \vetwo)\\
   \reducetozopt(\tenv, \veone) \typearrow \None\\
   \reducetozopt(\tenv, \vetwo) \typearrow \some{\vztwo}\\
+  \vzeroorminusone \eqdef \choice{\vp(0)}{\ELInt{0}}{\ELInt{-1}}\\
+  \vrangezeroorminusone \eqdef \ConstraintRange(\veone, \vzeroorminusone)\\
   {
-    \begin{array}{c}
-  \vcopt \eqdef \\ \wrappedline\ \begin{cases}
+  \vcopt \eqdef \begin{cases}
     \some{\vc}& \text{if }\vp(\vztwo)\\
-    \some{\ConstraintRange(\veone, \choice{\vp(0)}{\ELInt{0}}{\ELInt{-1}})}& \text{else}\\
+    \some{\vrangezeroorminusone}& \text{otherwise}\\
   \end{cases}
-\end{array}
   }
 }{
   \refineconstraintbysign(\tenv, \vp, \vc) \typearrow \vcopt
@@ -2086,17 +1877,6 @@ that tests whether an integer is positive: $\lambda x.\ x > 0$.
 
 \TypingRuleDef{ReduceToZOpt}
 \RenderRelation{reduce_to_z_opt}
-\BackupOriginalRelation{
-The function
-\[
-\reducetozopt(\overname{\staticenvs}{\tenv} \aslsep \overname{\expr}{\ve})
-\aslto \overname{\Option{\Z}}{\vzopt}
-\]
-returns an integer inside an optional if $\ve$ can be symbolically simplified into an integer in $\tenv$
-and $\None$ otherwise.
-The expression $\ve$ is assumed not to yield a \typingerrorterm{}
-when applying $\normalize$ to it.
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Reducing Expressions to Optional Integers}
 The specification in \listingref{ReduceToZOpt} shows two examples of expressions
@@ -2140,29 +1920,6 @@ and one that cannot be reduced into an integer constant, which yields $\None$.
 
 \TypingRuleDef{RefineConstraints}
 \RenderRelation{refine_constraints}
-\BackupOriginalRelation{
-The function
-\[
-\refineconstraints\left(
-  \begin{array}{c}
-  \overname{\{\Over,\Under\}}{\vapprox} \aslsep\\
-  \overname{\staticenvs}{\tenv} \aslsep\\
-  \overname{\intconstraint\rightarrow\Option{\intconstraint}}{\vf} \aslsep\\
-  \overname{\KleeneStar{\intconstraint}}{\cs}
-  \end{array}
-  \right)
-\aslto
-\begin{array}{ll}
-\overname{\KleeneStar{\intconstraint}}{\newcs} & \cup\\
-\{\CannotUnderapproximate, \CannotOverapproximate\}
-\end{array}
-\]
-refines a list of constraints $\cs$ by applying the refinement function $\vf$ to each constraint and retaining the constraints
-that do not refine to $\None$. The resulting list of constraints is given in $\newcs$.
-%
-If the list is empty, the result is either $\CannotUnderapproximate$ or $\CannotOverapproximate$,
-based on $\vapprox$ (this function is invoked in the context of approximating lists of constraints).
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Filtering Optional Constraints}
 The specification in \listingref{RefineConstraintBySign}
@@ -2248,28 +2005,6 @@ used by $\refineconstraintbysign$, the resulting $\None$ is also filtered out.
 
 \TypingRuleDef{RefineConstraintForDiv}
 \RenderRelation{refine_constraint_for_div}
-\BackupOriginalRelation{
-The function
-\[
-\refineconstraintfordiv\left(
-  \begin{array}{c}
-  \overname{\{\Over,\Under\}}{\vapprox} \aslsep\\
-  \overname{\binop}{\op} \aslsep\\
-  \overname{\KleeneStar{\intconstraint}}{\cs}
-  \end{array}
-  \right) \aslto
-  \begin{array}{ll}
-  \overname{\KleeneStar{\intconstraint}}{\vres} & \cup\\
-  \{\CannotUnderapproximate, \CannotOverapproximate\} &
-  \end{array}
-\]
-filters the list of constraints $\cs$ for $\op$,
-removing constraints that represents a division operation that will definitely fail
-when $\op$ is the division operation.
-%
-If the list is empty, the result is either $\CannotUnderapproximate$ or $\CannotOverapproximate$,
-based on $\vapprox$ (this function is invoked in the context of approximating lists of constraints).
-} % END_OF_BACKUP_RELATION
 
 See \ExampleRef{Filtering and Reducing Division-based Constraints}.
 
@@ -2310,7 +2045,7 @@ See \ExampleRef{Filtering and Reducing Division-based Constraints}.
 \inferrule[div\_non\_empty]{
   \op = \DIV\\
   \vi\in\listrange(\cs): \filterreduceconstraintdiv(\cs[\vi]) \typearrow \vcopt_\vi \OrTypeError\\\\
-  \vres \eqdef [\vi\in\listrange(\cs): \choice{\vcopt_\vi = \some{\vcp_\vi}}{\vcp}{\epsilon}]\\
+  \vres \eqdef \concatlist{\vi\in\listrange(\cs): \choice{\vcopt_\vi = \some{\vcp_\vi}}{[\vcp]}{\emptylist}}\\
   \vres \neq \emptylist
 }{
   \refineconstraintfordiv(\vapprox, \op, \cs) \typearrow \vres
@@ -2321,7 +2056,7 @@ See \ExampleRef{Filtering and Reducing Division-based Constraints}.
 \inferrule[div\_empty]{
   \op = \DIV\\
   \vi\in\listrange(\cs): \filterreduceconstraintdiv(\cs[\vi]) \typearrow \vcopt_\vi \OrTypeError\\\\
-  \vres \eqdef [\vi\in\listrange(\cs): \choice{\vcopt_\vi = \some{\vcp_\vi}}{\vcp}{\epsilon}]\\
+  \vres \eqdef \concatlist{\vi\in\listrange(\cs): \choice{\vcopt_\vi = \some{\vcp_\vi}}{[\vcp]}{\emptylist}}\\
   \vres = \emptylist\\
 }{
   \refineconstraintfordiv(\vapprox, \op, \cs) \typearrow \choice{\vapprox=\Over}{\CannotOverapproximate}{\CannotUnderapproximate}
@@ -2339,18 +2074,6 @@ See \ExampleRef{Filtering and Reducing Division-based Constraints}.
 
 \TypingRuleDef{FilterReduceConstraintDiv}
 \RenderRelation{filter_reduce_constraint_div}
-\BackupOriginalRelation{
-The function
-\[
-\filterreduceconstraintdiv(
-  \overname{\intconstraint}{\vc}) \aslto
-  \overname{\Option{\intconstraint}}{\vcopt}
-\]
-returns $\None$ if $\vc$ is an exact constraint for a \binopexpressionterm{} for dividing two integer literals
-where the denominator does not divide the numerator, and an optional containing $\vc$ otherwise.
-The result is returned in $\vcopt$.
-This is used to conservatively test whether $\vc$ would always fail dynamically.
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Filtering and Reducing Division-based Constraints}
 The specification in \listingref{FilterReduceConstraintDiv}
@@ -2419,7 +2142,7 @@ Specifically, notice the following:
     \vcopt \eqdef
     \begin{cases}
       \None & \text{if }\vztwo > 0 \land \frac{\vzone}{\vztwo} \not\in \Z\\
-      \some{\vc} & \text{else}
+      \some{\vc} & \text{otherwise}
     \end{cases}
   }
 }{
@@ -2434,7 +2157,7 @@ Specifically, notice the following:
     \vzoneopt \eqdef
     \begin{cases}
       \left\lceil\frac{\vzone}{\vztwo}\right\rceil & \text{if }\veoneopt = \some{(\vzone, \vztwo)} \land \vztwo > 0\\
-      \None & \text{else}
+      \None & \text{otherwise}
     \end{cases}
   }\\
   \getliteraldivopt(\vetwo) \typearrow \vetwoopt\\
@@ -2442,18 +2165,23 @@ Specifically, notice the following:
     \vztwoopt \eqdef
     \begin{cases}
       \left\lfloor\frac{\vzthree}{\vzfour}\right\rfloor & \text{if }\vetwoopt = \some{(\vzthree, \vzfour)} \land \vzfour > 0\\
-      \None & \text{else}
+      \None & \text{otherwise}
     \end{cases}
   }\\
+  \vczfive \eqdef \AbbrevConstraintExact{\ELInt{\vzfive}}\\
+  \vczfivesix \eqdef \AbbrevConstraintRange{\ELInt{\vzfive}}{\ELInt{\vzsix}}\\
+  \vczfiveetwo \eqdef \AbbrevConstraintRange{\ELInt{\vzfive}}{\vetwo}\\
+  \vceonezsix \eqdef \AbbrevConstraintRange{\veone}{\ELInt{\vzsix}}\\
+  \vceoneetwo \eqdef \AbbrevConstraintRange{\veone}{\vetwo}\\
   {
     \vcopt \eqdef
     \begin{cases}
-     \some{\AbbrevConstraintExact{\ELInt{\vzfive}}} & \text{if }\vzoneopt = \some{\vzfive} \land \vztwoopt = \some{\vzsix} \land \vzfive=\vzsix\\
-     \some{\AbbrevConstraintRange{\ELInt{\vzfive}}{\ELInt{\vzsix}}} & \text{if }\vzoneopt = \some{\vzfive} \land \vztwoopt = \some{\vzsix} \land \vzfive<\vzsix\\
+     \some{\vczfive} & \text{if }\vzoneopt = \some{\vzfive} \land \vztwoopt = \some{\vzsix} \land \vzfive=\vzsix\\
+     \some{\vczfivesix} & \text{if }\vzoneopt = \some{\vzfive} \land \vztwoopt = \some{\vzsix} \land \vzfive<\vzsix\\
      \None & \text{if }\vzoneopt = \some{\vzfive} \land \vztwoopt = \some{\vzsix} \land \vzfive>\vzsix\\
-     \some{\AbbrevConstraintRange{\ELInt{\vzfive}}{\vetwo}} & \text{if }\vzoneopt = \some{\vzfive} \land \vztwoopt = \None\\
-     \some{\AbbrevConstraintRange{\veone}{\ELInt{\vzsix}}} & \text{if }\vzoneopt = \None \land \vztwoopt = \some{\vzsix}\\
-     \some{\AbbrevConstraintRange{\veone}{\vetwo}} & \text{if }\vzoneopt = \None \land \vztwoopt = \None\\
+     \some{\vczfiveetwo} & \text{if }\vzoneopt = \some{\vzfive} \land \vztwoopt = \None\\
+     \some{\vceonezsix} & \text{if }\vzoneopt = \None \land \vztwoopt = \some{\vzsix}\\
+     \some{\vceoneetwo} & \text{if }\vzoneopt = \None \land \vztwoopt = \None\\
     \end{cases}
   }
 }{
@@ -2463,15 +2191,6 @@ Specifically, notice the following:
 
 \TypingRuleDef{GetLiteralDivOpt}
 \RenderRelation{get_literal_div_opt}
-\BackupOriginalRelation{
-The function
-\[
-\getliteraldivopt(\overname{\expr}{\ve}) \aslto \overname{\Option{(\Z\cartimes\Z)}}{\rangeopt}
-\]
-matches the expression $\ve$ to a binary operation expression over the division operation and two literal integer expressions.
-If $\ve$ matches this pattern, the result $\rangeopt$ is an optional containing the pair of integers appearing in the operand
-expressions. Otherwise, the result is $\None$.
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Obtaining Division Expressions Optionally Resulting in Literals}
 In \listingref{FilterReduceConstraintDiv},
@@ -2492,7 +2211,8 @@ and two literal integer expressions for the integers $\vzone$ and $\vztwo$ and $
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
-  \rangeopt \eqdef \choice{\ve = \AbbrevEBinop{\DIV}{\ELInt{\vzone}}{\ELInt{\vztwo}}}{\some{(\vzone, \vztwo)}}{\None}
+  \zoneDIVztwo \eqdef \AbbrevEBinop{\DIV}{\ELInt{\vzone}}{\ELInt{\vztwo}}\\
+  \rangeopt \eqdef \choice{\ve = \zoneDIVztwo}{\some{(\vzone, \vztwo)}}{\None}
 }{
   \getliteraldivopt(\ve) \typearrow \rangeopt
 }
@@ -2500,16 +2220,6 @@ and two literal integer expressions for the integers $\vzone$ and $\vztwo$ and $
 
 \TypingRuleDef{ExplodeIntervals}
 \RenderRelation{explode_intervals}
-\BackupOriginalRelation{
-The function
-\[
-\explodeintervals(\overname{\staticenvs}{\tenv} \aslsep \overname{\KleeneStar{\intconstraint}}{\cs})
-\aslto \left( \overname{\KleeneStar{\intconstraint}}{\newcs} \aslsep \overname{\precisionlossindicator}{\vp} \right)
-\]
-applies $\explodedinterval$ to each constraint of $\cs$ in $\tenv$, and returns
-a pair consisting of the list of exploded constraints in $\newcs$ and a
-\precisionlossindicatorterm{} $\vp$.
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Exploding Intervals}
 In \listingref{ExplodeIntervals}, annotating the constraints for \verb|y|
@@ -2560,26 +2270,7 @@ and so overall the result is that there is precision loss.
 \end{mathpar}
 
 \TypingRuleDef{ExplodeConstraint}
-\hypertarget{relation-explodeconstraint}{}
-% Transliteration note: the implementation uses folding where explode_constraint
-% is a folder. To simplify this function, we remove the input precision lost flag
-% and join all precision loss flags in explode_intervals.
-The function
-\[
-\begin{array}{r}
-\explodeconstraint(
-  \overname{\staticenvs}{\tenv} \aslsep
-  \overname{\intconstraint}{\vc})
-\aslto \\
-(\overname{\KleeneStar{\intconstraint}}{\vcs}, \overname{\precisionlossindicator}{\newprec})
-\end{array}
-\]
-given the \staticenvironmentterm{} $\tenv$ and the constraint $\vc$,
-expands $\vc$ into the equivalent list of exact constraints if
-$\vc$ matches an ascending range constraint that is not too large,
-and the singleton list for $\vc$ otherwise.
-The resulting list of constraints and the \precisionlossindicatorterm{}
-are in $\vcs$ and $\newprec$, respectively.
+\RenderRelation{explode_constraint}
 
 See \ExampleRef{Intervals too Large to Enumerate}.
 
@@ -2661,14 +2352,6 @@ See \ExampleRef{Intervals too Large to Enumerate}.
 
 \TypingRuleDef{IntervalTooLarge}
 \RenderRelation{interval_too_large}
-\BackupOriginalRelation{
-The function
-\[
-\intervaltoolarge(\overname{\Z}{\vzone} \aslsep \overname{\Z}{\vztwo}) \aslto \overname{\Bool}{\vb}
-\]
-determines whether the set of numbers between $\vzone$ and $\vztwo$, inclusive, contains more than $\maxexplodedintervalsize$
-integers, yielding the result in $\vb$.
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Intervals too Large to Enumerate}
 In \listingref{IntervalTooLarge}, the size of the interval used to annotate
@@ -2693,16 +2376,6 @@ The value $\vb$ is $\True$ if and only if the absolute value of $\vzone-\vztwo$ 
 
 \TypingRuleDef{BinopIsExploding}
 \RenderRelation{binop_is_exploding}
-\BackupOriginalRelation{
-The function
-\[
-\binopisexploding(\overname{\binop}{\op}) \aslto \overname{\Bool}{\vb}
-\]
-determines whether the binary operation $\op$ should lead to applying $\explodeintervals$
-when the $\op$ is applied to a pair of constraint lists.
-It is assumed that $\op$ is one of $\MUL$, $\SHL$, $\POW$, $\ADD$, $\DIV$, $\SUB$, $\MOD$, $\SHR$,
-and $\DIVRM$.
-} % END_OF_BACKUP_RELATION
 
 See \ExampleRef{Annotating Constraints for Binary Operations}.
 
@@ -2718,15 +2391,7 @@ The value $\vb$ is $\True$ if and only if $\op$ is one of $\MUL$, $\SHL$, and $\
 
 \TypingRuleDef{BitFieldsIncluded}
 \RenderRelation{bitfields_included}
-\BackupOriginalRelation{
-The predicate
-\[
-  \bitfieldsincluded(\overname{\staticenvs}{\tenv}, \overname{\KleeneStar{\bitfield}}{\bfsone} \aslsep \overname{\KleeneStar{\bitfield}}{\bfstwo})
-  \aslto \overname{\Bool}{\vb} \cup \overname{\typeerror}{\TypeErrorConfig}
-\]
-tests whether the set of bit fields $\bfsone$ is included in the set of bit fields $\bfstwo$ in environment $\tenv$,
-returning a \typingerrorterm{}, if one is detected.
-}
+
 
 \ExampleDef{Checking Whether all Bitfields are Included}
 In \listingref{MemBfs},
@@ -2758,14 +2423,6 @@ not included in \verb|FlaggedPacket|.
 
 \TypingRuleDef{MemBfs}
 \RenderRelation{mem_bfs}
-\BackupOriginalRelation{
-The function
-\[
-  \membfs(\overname{\staticenvs}{\tenv} \aslsep \overname{\KleenePlus{\bitfield}}{\bfstwo} \aslsep \overname{\bitfield}{\vbfone})
-  \aslto \overname{\Bool}{\vb}
-\]
-checks whether the bitfield $\vbf$ exists in $\bfstwo$ in the context of $\tenv$, returning the result in $\vb$.
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Checking Bitfield Membership}
 The specification in \listingref{MemBfs} is well-typed.
@@ -2775,7 +2432,7 @@ is a member of the set of bitfields in the type \verb|FlaggedPacket|.
 \ASLListing{No missing bitfields}{MemBfs}{\typingtests/TypingRule.MemBfs.asl}
 
 In \listingref{MemBfs-bad}, the bitfield \verb|lsb| is missing from
-the set of bitfields in the type \verb|FlaggedPacket|, which is why the specification
+the set of bitfields in the type \\ \verb|FlaggedPacket|, which is why the specification
 is ill-typed.
 \ASLListing{A missing bitfield}{MemBfs-bad}{\typingtests/TypingRule.MemBfs.bad.asl}
 
@@ -2947,14 +2604,6 @@ is ill-typed.
 
 \TypingRuleDef{CheckStructure}
 \RenderRelation{check_structure_label}
-\BackupOriginalRelation{
-The function
-\[
-  \checkstructurelabel(\overname{\staticenvs}{\tenv} \aslsep \overname{\ty}{\vt} \aslsep \overname{\ASTLabels}{\vl}) \aslto
-  \{\True\} \cup \typeerror
-\]
-returns $\True$ is $\vt$ is has the \structureterm\ a of type corresponding to the AST label $\vl$ and a \typingerrorterm{} otherwise.
-} % END_OF_BACKUP_RELATION
 
 See \ExampleRef{The Structure of a Type}.
 
@@ -2997,27 +2646,28 @@ See \ExampleRef{The Structure of a Type}.
 
 \TypingRuleDef{ToWellConstrained}
 \RenderRelation{to_well_constrained}
-\BackupOriginalRelation{
-The function
-\[
-  \towellconstrained(\overname{\ty}{\vt}) \aslto \overname{\ty}{\vtp}
-\]
-returns the \wellconstrainedversionterm\ of a type $\vt$ --- $\vtp$,
-which converts \parameterizedintegertypesterm{} to \wellconstrainedintegertypesterm{},
-and leaves all other types as are.
-} % END_OF_BACKUP_RELATION
 
-\ExampleDef{Converting Parameterized Integer Types to Well-constrainted Integer Types}
-The following table shows examples of applying $\towellconstrained$ to various types:
-\[
-\begin{array}{rl}
-\textbf{input type}           & \textbf{output type}\\
-\hline
-\TInt(\Parameterized(\vx))    & \TInt(\WellConstrained(\ConstraintExact(\EVar(\vx))))\\
-\TInt(\unconstrainedinteger)  & \TInt(\unconstrainedinteger)\\
-\TReal                        & \TReal\\
-\end{array}
-\]
+\ExampleDef{Converting Parameterized Integer Types to Well-constrained Integer Types}
+The following are two examples of applying $\towellconstrained$ to various types:
+\begin{mathpar}
+\inferrule{}{
+  {
+    \begin{array}{r}
+  \towellconstrained(\overname{\TInt(\Parameterized(\vx))}{\vt}) \typearrow\\ \TInt(\WellConstrained(\ConstraintExact(\EVar(\vx))))
+    \end{array}
+  }
+}
+\end{mathpar}
+
+\begin{mathpar}
+\inferrule{}{
+  {
+    \begin{array}{r}
+  \towellconstrained(\overname{\TInt(\unconstrainedinteger)}{\vt}) \typearrow\\ \TInt(\unconstrainedinteger)
+    \end{array}
+  }
+}
+\end{mathpar}
 
 \ProseParagraph
 \OneApplies
@@ -3058,15 +2708,6 @@ The following table shows examples of applying $\towellconstrained$ to various t
 
 \TypingRuleDef{GetWellConstrainedStructure}
 \RenderRelation{get_well_constrained_structure}
-\BackupOriginalRelation{
-The function
-\[
-  \getwellconstrainedstructure(\overname{\staticenvs}{\tenv} \aslsep \overname{\ty}{\vt})
-  \aslto \overname{\ty}{\vtp} \cup \overname{\typeerror}{\TypeErrorConfig}
-\]
-returns the \wellconstrainedstructureterm\ of a type $\vt$ in the \staticenvironmentterm{} $\tenv$ --- $\vtp$, which is defined as follows.
-\ProseOtherwiseTypeError
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Obtaining the Well-constrained Structure of a Type}
 In \listingref{GetWellConstrainedStructure},
@@ -3097,16 +2738,6 @@ $\unconstrainedinteger$.
 
 \TypingRuleDef{GetBitvectorWidth}
 \RenderRelation{get_bitvector_width}
-\BackupOriginalRelation{
-The function
-\[
-  \getbitvectorwidth(\overname{\staticenvs}{\tenv} \aslsep \overname{\ty}{\vt}) \aslto
-  \overname{\expr}{\ve} \cup \overname{\typeerror}{\TypeErrorConfig}
-\]
-returns the expression $\ve$, which represents the width of the bitvector type $\vt$
-in the \staticenvironmentterm{} $\tenv$.
-\ProseOtherwiseTypeError
-} % END_OF_BACKUP_RELATION
 
 See \ExampleRef{Obtaining the Integer Corresponding to a Bitvector Width}.
 
@@ -3146,16 +2777,6 @@ See \ExampleRef{Obtaining the Integer Corresponding to a Bitvector Width}.
 
 \TypingRuleDef{GetBitvectorConstWidth}
 \RenderRelation{get_bitvector_const_width}
-\BackupOriginalRelation{
-The function
-\[
-  \getbitvectorconstwidth(\overname{\staticenvs}{\tenv} \aslsep \overname{\ty}{\vt}) \aslto
-  \overname{\N}{\vw} \cup \overname{\typeerror}{\TypeErrorConfig}
-\]
-returns the natural number $\vw$, which represents the width of the bitvector type $\vt$
-in the \staticenvironmentterm{} $\tenv$.
-\ProseOtherwiseTypeError
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Obtaining the Integer Corresponding to a Bitvector Width}
 In \listingref{lesetfields}, annotating the \assignableexpression{} \verb|x.[status, time, data]|
@@ -3183,18 +2804,6 @@ which yield $1$, $16$, and $8$, respectively.
 
 \TypingRuleDef{CheckBitsEqualWidth}
 \RenderRelation{check_bits_equal_width}
-\BackupOriginalRelation{
-The function
-\[
-  \checkbitsequalwidth(
-    \overname{\staticenvs}{\tenv} \aslsep
-    \overname{\ty}{\vtone} \aslsep
-    \overname{\ty}{\vttwo}) \aslto
-  \{\True\} \cup \typeerror
-\]
-tests whether the types $\vtone$ and $\vttwo$ are bitvector types of the same width.
-If the answer is positive, the result is $\True$. \ProseOtherwiseTypeError
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Ensuring That Two Bitvectors Have Equal Width}
 In \listingref{CheckBitsEqualWidth}, annotating the bitfield \verb|info|
@@ -3236,19 +2845,6 @@ The specification in \listingref{CheckBitsEqualWidth-bad2} is ill-typed for a si
 
 \TypingRuleDef{PrecisionJoin}
 \RenderRelation{precision_join}
-\BackupOriginalRelation{
-The function
-\[
-    \precisionjoin(
-      \overname{\precisionlossindicator}{\vpone} \aslsep
-      \overname{\precisionlossindicator}{\vptwo}
-    )
-    \aslto
-    \overname{\precisionlossindicator}{\vp}
-\]
-returns the \precisionlossindicatorterm{} $\vp$, denoting whether $\vpone$ or
-$\vptwo$ denote a precision loss.
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Precision join}
 In \listingref{precisionjoin}, the statement \verb|var b = (a * a) + 2;| is

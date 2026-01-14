@@ -1,13 +1,17 @@
 # Basic tests
-  $ aslspec hello.spec --render; diff generated_macros.tex hello.expected; rm -f generated_macros.tex
+  $ aslspec hello.spec --render; diff -w generated_macros.tex hello.expected; rm -f generated_macros.tex
   Generated LaTeX macros into generated_macros.tex
-  $ aslspec typedefs.spec --render; diff generated_macros.tex typedefs.expected; rm -f generated_macros.tex
+  $ aslspec typedefs.spec --render; diff -w generated_macros.tex typedefs.expected; rm -f generated_macros.tex
   Generated LaTeX macros into generated_macros.tex
-  $ aslspec relations.spec --render; diff generated_macros.tex relations.expected; rm -f generated_macros.tex
+  $ aslspec relations.spec --render; diff -w generated_macros.tex relations.expected; rm -f generated_macros.tex
+  Generated LaTeX macros into generated_macros.tex
+  $ aslspec rule.spec --render; diff -w generated_macros.tex rule.expected; rm -f generated_macros.tex
+  Generated LaTeX macros into generated_macros.tex
+  $ aslspec operators.spec --render; diff -w generated_macros.tex operators.expected; rm -f generated_macros.tex
   Generated LaTeX macros into generated_macros.tex
 
   $ aslspec type_name.bad
-  Syntax Error: illegal element-defining identifier: t2 around type_name.bad line 2 column 1
+  Syntax Error: illegal element-defining identifier: t2 around type_name.bad line 1 column 41
   [1]
 
 # Test that --pp generates legal output
@@ -51,4 +55,7 @@
   $ aslspec instantiation_recursion.bad
   Specification Error: Unable to determine that `B` is subsumed by `A`
   While checking: B
+  [1]
+  $ aslspec relation_unnamed_arguments.bad
+  Specification Error: All arguments in the relation 'unnamed_arg_has_rule' must have names, since it specifies a rule.
   [1]

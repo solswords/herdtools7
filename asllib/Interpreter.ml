@@ -547,15 +547,15 @@ module Make (B : Backend.S) (C : Config) = struct
     (* Begin EvalEVar *)
     | E_Var x ->
         (match IEnv.find x env with
-        | Local v ->
-            let* () = B.on_read_identifier x (IEnv.get_scope env) v in
-            return_normal (v, env)
-        | Global v ->
-            let* () = B.on_read_identifier x (B.Scope.global ~init:false) v in
-            return_normal (v, env)
-        | NotFound ->
-            fatal_from e env
-            @@ Error.UndefinedIdentifier (C.error_handling_time, x))
+          | Local v ->
+              let* () = B.on_read_identifier x (IEnv.get_scope env) v in
+              return_normal (v, env)
+          | Global v ->
+              let* () = B.on_read_identifier x (B.Scope.global ~init:false) v in
+              return_normal (v, env)
+          | NotFound ->
+              fatal_from e env
+              @@ Error.UndefinedIdentifier (C.error_handling_time, x))
         |: SemanticsRule.EVar
     (* End *)
     | E_Binop (((`BAND | `BOR | `IMPL) as op), e1, e2)
@@ -843,7 +843,11 @@ module Make (B : Backend.S) (C : Config) = struct
             (i + 1, m)
           in
           List.fold_left fold (0, m_true) tys |> snd
-      | _ -> fatal_from loc env TypeInferenceNeeded
+      | _ ->
+          (* In all other cases, type-checking should already have confirmed
+             that the ATC succeeds. This case should only arise when
+             non-bits/integer types are nested within tuple types. *)
+          m_true
     in
     choice ~pos:loc env (in_values v ty) true false >>= fun (_, res) ->
     return res
@@ -1127,9 +1131,11 @@ module Make (B : Backend.S) (C : Config) = struct
         let n = List.length ldis in
         let* vm = m_init in
         let liv = List.init n (fun i -> B.return vm >>= B.get_index i) in
+        (* Begin DeclareLDITuple( *)
         let folder envm x vm =
           let**| env = envm in
           vm >>= declare_local_identifier env x >>= return_normal
+          (* Begin DeclareLDITuple) *)
         in
         List.fold_left2 folder (return_normal env) ldis liv
         |: SemanticsRule.LDTuple
@@ -1483,8 +1489,8 @@ module Make (B : Backend.S) (C : Config) = struct
         let genv2 = IEnv.decr_pending_calls name env_throw.global in
         let new_env = IEnv.{ local = env2.local; global = genv2 } in
         return (Throwing (v, v_ty, new_env)) |: SemanticsRule.Call
-    | Normal (ms, global) ->
-        let ms2 = List.map read_value_from ms in
+    | Normal (values_read_from, global) ->
+        let ms2 = List.map read_value_from values_read_from in
         let genv2 = IEnv.decr_pending_calls name global in
         let new_env = IEnv.{ local = env2.local; global = genv2 } in
         return_normal (ms2, new_env) |: SemanticsRule.Call
@@ -1578,7 +1584,7 @@ module Make (B : Backend.S) (C : Config) = struct
          let () =
            if false then Format.eprintf "Finished evaluating %s.@." name
          in
-         (* MatchFuncRest( *)
+         (* MatchFuncRes( *)
          match res with
          | Continuing env4 -> return_normal ([], env4.global)
          | Returning (xs, ret_genv) ->
@@ -1586,7 +1592,7 @@ module Make (B : Backend.S) (C : Config) = struct
                List.mapi (fun i v -> (v, return_identifier i, scope)) xs
              in
              return_normal (vs, ret_genv))
-        (* MatchFuncRest) *)
+        (* MatchFuncRes) *)
         |: SemanticsRule.FCall
   (* End *)
 
@@ -1623,15 +1629,15 @@ module Make (B : Backend.S) (C : Config) = struct
       eval_subprogram env main_name dummy_annotated ~params:[] ~args:[]
     in
     (match res with
-    | Normal ([ v ], _genv) -> read_value_from v
-    | Normal _ ->
-        Error.(
-          fatal_unknown_pos
-            (MismatchedReturnValue (C.error_handling_time, main_name)))
-    | Throwing ((v, _, _), ty, _genv) ->
-        let msg = Format.asprintf "%a %s" PP.pp_ty ty (B.debug_value v) in
-        Error.fatal_unknown_pos (Error.UncaughtException msg)
-    | Cutoff -> return zero)
+      | Normal ([ v ], _genv) -> read_value_from v
+      | Normal _ ->
+          Error.(
+            fatal_unknown_pos
+              (MismatchedReturnValue (C.error_handling_time, main_name)))
+      | Throwing ((v, _, _), ty, _genv) ->
+          let msg = Format.asprintf "%a %s" PP.pp_ty ty (B.debug_value v) in
+          Error.fatal_unknown_pos (Error.UncaughtException msg)
+      | Cutoff -> return zero)
     |: SemanticsRule.Spec
 
   let run_typed env main_name ast = run_typed_env [] env main_name ast

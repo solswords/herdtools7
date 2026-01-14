@@ -115,3 +115,19 @@
   }%
 }
 \makeatother
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% \DefineRule{name}{content} - Define a macro for later rendering rules
+%% \RenderRule{name} - Render the defined rule
+\makeatletter
+\newcommand{\DefineRule}[2]{%
+  \expandafter\newcommand\csname RenderRule@#1\endcsname{#2}%
+}
+\newcommand{\RenderRule}[1]{%
+  \@ifundefined{RenderRule@#1}{%
+    \PackageError{rendering_macros}{RenderRule '#1' is not defined! Check that you have defined render rule '#1' and applied aslspec to generate \string\DefineRule}{}%
+  }{%
+    \csname RenderRule@#1\endcsname%
+  }%
+}
+\makeatother

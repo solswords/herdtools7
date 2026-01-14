@@ -502,6 +502,8 @@ module RegMap = A.RegMap)
               else find_rec (k+1) rem in
         find_rec 0
 
+      let add_tag tag name = sprintf "tagged(%s,%d)" name (Misc.int_of_tag tag)
+
       let check_memory =
         let open Memory in
         match O.memory with
@@ -513,19 +515,23 @@ module RegMap = A.RegMap)
         let open Mode in
         fun env sym ->
           match sym with
-          | Virtual { name; tag=None; cap=0L; offset=0; _ } ->
-              check_memory name
-          | Virtual { name; tag=None; cap=0L; offset; _ } ->
-              let ty = find_global_type name env in
+          | Virtual { name=Symbol.Data s; tag=None; cap=0L; offset=0; _ } ->
+              check_memory s
+          | Virtual { name=Symbol.Data s; tag=Some t; cap=0L; offset=0; _ } ->
+              add_tag t (check_memory s)
+          | Virtual { name=Symbol.Data s; tag=None; cap=0L; offset; _ } ->
+              let ty = find_global_type s env in
               if CType.is_array ty then
-                let t = check_memory name in
+                let t = check_memory s in
                 sprintf "&(*%s)[%d]" t offset
               else Constant.pp_symbol_old sym |> check_memory
+          | Virtual { name=Symbol.Label _; _} -> assert false (* FIXME *)
           | _ -> Constant.pp_symbol_old sym |> check_memory
 
       let compile_val_fun =
         let open Constant in
         fun globEnv ptevalEnv parel1Env v -> match v with
+        | Symbolic (Virtual {name=Symbol.Label (p,lbl); _}) -> OutUtils.fmt_lbl_var p lbl
         | Symbolic (Virtual a)
           when not (PAC.is_canonical a.pac) ->
             Warn.user_error "Litmus cannot initialize a virtual address with a non-canonical PAC field"
@@ -533,7 +539,6 @@ module RegMap = A.RegMap)
             compile_symbol_fun globEnv sym
         | Concrete _ | ConcreteVector _ | Instruction _
           -> AL.GetInstr.dump_instr Tmpl.dump_v v
-        | Label (p,lbl) -> OutUtils.fmt_lbl_var p lbl
         | PteVal p ->
             let idx = find_pteval_index p ptevalEnv in
             add_pteval idx
@@ -560,7 +565,11 @@ module RegMap = A.RegMap)
           | _ -> k)
           [] t.Tmpl.init
 
-      let nop_init t = List.exists (fun (_,v) -> A.V.is_nop v) t.Tmpl.init
+      let is_nop_v = function
+        | Constant.Instruction i -> AL.is_nop i
+        | _ -> false
+
+      let nop_init t = List.exists (fun (_,v) -> is_nop_v v) t.Tmpl.init
 
       let dump_fun  chan args0 globEnv _volatileEnv proc t =
         if debug then debug_globEnv globEnv ;
@@ -629,7 +638,9 @@ module RegMap = A.RegMap)
           List.map
             (fun x ->
               let ty =
-                try RegMap.find x t.Tmpl.ty_env
+                try
+                  let ty = RegMap.find x t.Tmpl.ty_env in
+                  if CType.is_tag_ptr ty then CType.pointer_type ty else ty
                 with Not_found -> assert false in
               let x = Tmpl.dump_out_reg proc x in
               sprintf "%s *%s" (CType.dump ty) x) t.Tmpl.final in

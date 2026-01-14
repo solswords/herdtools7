@@ -872,11 +872,39 @@ module Make
 
          *)
 
+      (*
+       * Reading PTE from EL0 will yield a fault,
+       * check perfomed early in standard
+       * (ie non-pte2) mode.
+       *)
+       
+           
+      let get_instr_label ii =
+        match Label.norm ii.A.labels with
+        | Some hd -> ii.A.addr2v hd
+        | None -> V.intToV ii.A.addr
+
+      let set_elr_el1 v ii =
+        write_reg AArch64Base.elr_el1 v ii
+      and set_esr_el1 v ii =
+        write_reg AArch64Base.esr_el1 v ii
+
+      (* Emit fault event and set link register. *)
+      let emit_fault a ma dir an ft msg ii =
+        let lbl_v = get_instr_label ii in
+        insert_commit_to_fault ma
+          (fun _ ->
+             set_elr_el1 lbl_v ii
+             >>|
+             mk_fault (Some a) dir an ii ft msg) None ii
+        >>!  B.fault [AArch64Base.elr_el1, lbl_v]
+
+      (* Specific fault when accessing PTE from EL0. *)
       let mk_pte_fault a ma dir an ii =
         let open FaultType.AArch64 in
-        let ft = Some (MMU Permission) in
-        insert_commit_to_fault ma
-          (fun _ -> mk_fault (Some a) dir an ii ft (Some "EL0")) None ii >>! B.Exit
+        let ft = Some (MMU Permission)
+        and msg = Some "EL0" in
+        emit_fault a ma dir an ft msg ii
 
       let an_xpte =
         let open Annot in
@@ -1332,35 +1360,29 @@ module Make
  *)
 
 (*  memtag faults *)
-      let get_instr_label ii =
-        match Label.norm ii.A.labels with
-        | Some hd -> ii.A.addr2v hd
-        | None -> V.intToV ii.A.addr
-
-      let set_elr_el1 v ii =
-        write_reg AArch64Base.elr_el1 v ii
-      and set_esr_el1 v ii =
-        write_reg AArch64Base.esr_el1 v ii
 
       let lift_fault_memtag mfault mm dir ii =
         let lbl_v = get_instr_label ii in
-        if has_handler ii then
-          fun ma ->
-            M.bind_ctrldata ma (fun _ -> mfault >>| set_elr_el1 lbl_v ii) >>!
-            B.fault [AArch64Base.elr_el1, lbl_v]
-        else
-          let open Precision in
-          match C.mte_precision,dir with
-          | (Synchronous,_)|(Asymmetric,(Dir.R)) ->
-             fun ma ->  ma >>*= (fun _ -> mfault >>| set_elr_el1 lbl_v ii) >>!
-               B.fault [AArch64Base.elr_el1, lbl_v]
-          | (Asynchronous,_)|(Asymmetric,Dir.W) ->
-             fun ma ->
-             let set_tfsr = write_reg AArch64Base.tfsr V.one ii in
-             let ma = ma >>*== (fun a -> (set_tfsr >>| mfault) >>! a) in
-             mm ma >>! B.Next []
+        let open Precision in
+          match C.mte_precision, dir with
+          | (Synchronous, _)
+          | (Asymmetric, Dir.R) ->
+            let mexc _ =
+              mfault >>| set_elr_el1 lbl_v ii >>!
+              B.fault [AArch64Base.elr_el1, lbl_v] in
+            if has_handler ii then
+              fun ma -> M.bind_ctrldata ma mexc
+            else
+              fun ma -> ma >>*= mexc
+          | (Asynchronous,_)
+          | (Asymmetric,Dir.W) ->
+            fun ma ->
+              let set_tfsr = write_reg AArch64Base.tfsr V.one ii in
+              let ma = ma >>*== (fun a -> (set_tfsr >>| mfault) >>! a) in
+              mm ma >>! B.Next []
 
 (* KVM mode *)
+
       let some_ha = dirty.DirtyBit.some_ha || dirty.DirtyBit.some_hd
 
       let fire_spurious_af dir a m =
@@ -1375,11 +1397,7 @@ module Make
         else m
 
       let lift_kvm dir updatedb mop ma an ii mphy =
-        let lbl_v = get_instr_label ii in
-        let mfault ma a ft =
-          insert_commit_to_fault ma
-            (fun _ -> set_elr_el1 lbl_v ii >>| mk_fault (Some a) dir an ii ft None)
-            None ii >>! B.fault [AArch64Base.elr_el1, lbl_v] in
+        let mfault ma a ft = emit_fault a ma dir an ft None ii in
         let maccess a ma =
           check_ptw ii.AArch64.proc dir updatedb false a ma an ii
             ((let m = mop Access.PTE ma in
@@ -1949,10 +1967,10 @@ Arguments:
                            assert (not post) ;
                            fun m1 m2 -> M.seq_mem m2 m1
                         | _ -> (>>|) in
-                      ((read_reg_ord_sz sz rs1 ii >>> fun v ->
+                      ((read_reg_data_sz sz rs1 ii >>> fun v ->
                         do_write_mem sz an aexp ac a v ii) >>|
                          (add_size a sz >>= fun a ->
-                          read_reg_ord_sz sz rs2 ii >>> fun v ->
+                          read_reg_data_sz sz rs2 ii >>> fun v ->
                           do_write_mem sz an aexp ac a v ii)))
                   sz Annot.N
                   ma (M.unitT V.zero)
@@ -1979,10 +1997,10 @@ Arguments:
             let (>>>) = M.data_input_next in
             do_str rd
               (fun ac a _ ii ->
-                (read_reg_ord_sz sz rs1 ii >>> fun v ->
+                (read_reg_data_sz sz rs1 ii >>> fun v ->
                   do_write_mem sz an aexp ac a v ii) >>|
                   (add_size a sz >>= fun a ->
-                    read_reg_ord_sz sz rs2 ii >>> fun v ->
+                    read_reg_data_sz sz rs2 ii >>> fun v ->
                       do_write_mem sz an aexp ac a v ii))
               sz Annot.N
               (get_ea_idx rd k ii)
@@ -3415,13 +3433,14 @@ Arguments:
 
       let stzg = do_stzg Once
       and stz2g = do_stzg Twice
+      and st2g = stg Twice
 
 (*********************)
 (* Instruction fetch *)
 (*********************)
 
       let make_label_value proc lbl_str =
-        A.V.cstToV (Constant.Label (proc, lbl_str))
+        A.V.cstToV (Constant.mk_sym_virtual_label proc lbl_str)
 
       let read_loc_instr a ii =
         M.read_loc Port.No (mk_fetch Annot.N) a ii
@@ -3433,7 +3452,7 @@ Arguments:
       let v2tgt =
         let open Constant in
         function
-        | M.A.V.Val(Label (_, lbl)) -> Some (B.Lbl lbl)
+        | M.A.V.Val (Symbolic (Virtual {name=Symbol.Label (_, lbl); _})) -> Some (B.Lbl lbl)
         | M.A.V.Val (Concrete i) -> Some (B.Addr (M.A.V.Cst.Scalar.to_int i))
         | _ -> None
 
@@ -3611,7 +3630,7 @@ Arguments:
             >>= do_indirect_jump test [] i ii
 
         | I_ERET ->
-            let eret_to_addr v =
+           let eret_to_addr v =
               match v2tgt v with
               | Some tgt -> B.faultRetT tgt
               | _ ->
@@ -3702,6 +3721,10 @@ Arguments:
         | I_STG(rt,rn,(k,Idx)) ->
             check_memtag "STG" ;
             stg Once rt rn k ii
+        | I_ST2G(rt,rn,(k,Idx)) ->
+          check_memtag "ST2G" ;
+          check_mixed "ST2G" ;
+          st2g rt rn k ii
         | I_LDG (rt,rn,k) ->
             check_memtag "LDG" ;
             ldg rt rn k ii
@@ -4612,7 +4635,7 @@ Arguments:
             do_xpac r ii
 (*  Cannot handle *)
         (* | I_BL _|I_BLR _|I_BR _|I_RET _ *)
-        | (I_STG _|I_STZG _|I_STZ2G _
+        | (I_STG _|I_ST2G _|I_STZG _|I_STZ2G _
         | I_OP3_SIMD _ | I_OP3_SV _
         | I_LDR_SIMD _| I_STR_SIMD _
         | I_LD1SP _| I_LD2SP _| I_LD3SP _| I_LD4SP _

@@ -34,8 +34,6 @@ include MachAtom.Make
       let fullmixed = C.moreedges
     end)
 
-module PteVal = PteVal_gen.No(struct type arch_atom = atom end)
-
 (**********)
 (* Fences *)
 (**********)
@@ -82,11 +80,6 @@ let pp_dp = function
   | CTRL -> "Ctrl"
   | CTRLISYNC -> "CtrlIsb"
 
-(*******)
-(* RWM *)
-(*******)
-include Exch.LxSx(struct type arch_atom = atom end)
-
   include
     ArchExtra_gen.Make
     (struct
@@ -99,6 +92,8 @@ include Exch.LxSx(struct type arch_atom = atom end)
       let pp_reg = pp_reg
       let pp_i _ = assert false
       let free_registers = allowed_for_symb
+      type arch_atom = atom
+      module Value = Value
       include NoSpecial
     end)
 

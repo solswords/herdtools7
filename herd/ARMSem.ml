@@ -19,7 +19,7 @@
 module
   Make
     (C:Sem.Config)
-    (V:Value.S with type Cst.Instr.t = ARMBase.instruction)
+    (V:Value.S with type Cst.Instr.exec = ARMBase.instruction)
     =
   struct
     module ARM = ARMArch_herd.Make(SemExtra.ConfigToArchConfig(C))(V)
@@ -52,9 +52,12 @@ module
     let v2tgt =
       let open Constant in
       function
-      | M.A.V.Val(Label (_, lbl)) -> Some (B.Lbl lbl)
-      | M.A.V.Val (Concrete i) -> Some (B.Addr (M.A.V.Cst.Scalar.to_int i))
-      | _ -> None
+      | M.A.V.Val (Symbolic (Virtual ({name=Symbol.Label (_,lbl); _}))) ->
+        Some (B.Lbl lbl)
+      | M.A.V.Val (Concrete i) ->
+        Some (B.Addr (M.A.V.Cst.Scalar.to_int i))
+      | _ ->
+        None
 
 
 (********************)

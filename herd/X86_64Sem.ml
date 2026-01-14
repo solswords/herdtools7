@@ -19,7 +19,7 @@
 module
   Make
     (C:Sem.Config)
-    (V:Value.S with type Cst.Instr.t = X86_64Base.instruction)
+    (V:Value.S with type Cst.Instr.exec = X86_64Base.instruction)
   =
   struct
     module X86_64 = X86_64Arch_herd.Make(SemExtra.ConfigToArchConfig(C))(V)
@@ -284,9 +284,12 @@ module
       let v2tgt =
         let open Constant in
         function
-        | M.A.V.Val(Label (_, lbl)) -> Some (B.Lbl lbl)
-        | M.A.V.Val (Concrete i) -> Some (B.Addr (M.A.V.Cst.Scalar.to_int i))
-        | _ -> None
+        | M.A.V.Val (Symbolic (Virtual ({name=Symbol.Label (_,lbl); _}))) ->
+          Some (B.Lbl lbl)
+        | M.A.V.Val (Concrete i) ->
+          Some (B.Addr (M.A.V.Cst.Scalar.to_int i))
+        | _ ->
+          None
 
       let do_indirect_jump test bds i v =
         match  v2tgt v with

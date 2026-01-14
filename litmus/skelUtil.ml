@@ -177,6 +177,8 @@ module Make
       val get_stabilized : T.t -> StringSet.t
       val is_ptr : A.location -> env -> bool
       val is_rloc_ptr : A.rlocation -> env -> bool
+      val is_rloc_tag : A.rlocation -> env -> bool
+      val is_rloc_tag_ptr: A.rlocation -> env -> bool
       val is_rloc_label : A.rlocation -> env -> bool
       val ptr_in_outs : env -> T.t -> bool
       val is_pte : A.location -> env -> bool
@@ -187,6 +189,7 @@ module Make
       val ptr_pte_in_outs : env -> T.t -> bool
       val instr_in_outs : env -> T.t -> bool
       val label_in_outs : env -> T.t -> bool
+      val ptr_tag_in_outs: env -> T.t -> bool
       val get_faults : T.t -> (A.V.v, A.FaultType.t) Fault.atom list
       val find_label_offset : Proc.t -> string -> T.t -> int
 
@@ -242,6 +245,9 @@ module Make
 
         (* Dump function to translate back opcodes into instructions *)
         val dump_opcode : env -> T.t -> unit
+
+        (* Dump function to translate back numerical tags into symbolic names *)
+        val dump_tag : env -> T.t -> unit
 
        (* Dump topology-definitions as renaming of external ones *)
         val dump_topology_external : int -> unit
@@ -371,14 +377,14 @@ end
       let select_global env =
         select_types
           (function
-            | A.Location_reg _|A.Location_global (G.Pte _|G.Phy _) -> None
+            | A.Location_reg _|A.Location_global (G.Pte _|G.Phy _|G.AddrT _|G.Tag _) -> None
             | A.Location_global (G.Addr a) -> Some a)
           env
 
       let select_aligned env =
         select_types
           (function
-            | A.Location_reg _|A.Location_global (G.Pte _|G.Phy _) -> None
+            | A.Location_reg _|A.Location_global (G.Pte _|G.Phy _|G.AddrT _|G.Tag _) -> None
             | A.Location_global (G.Addr loc) ->
                 if is_aligned loc env then Some loc else None)
           env
@@ -419,6 +425,7 @@ end
         let tr_out = tr_out test in
         let rec pp_fmt t = match t with
         | CType.Pointer t when CType.is_ins_t t -> [fmt_label]
+        | CType.Pointer t when CType.is_tag t -> ["%s";"%s"]
         | CType.Pointer _ -> ["%s"]
         | CType.Base "pteval_t" ->
             ["("; "oa:%s";  ", af:%d"; ", db:%d";
@@ -480,7 +487,7 @@ end
           (fun a k -> match ConstrGen.loc_of_rloc a with
           | A.Location_global (G.Pte a) ->  StringSet.add a k
           | A.Location_reg _
-          | A.Location_global (G.Phy _|G.Addr _)
+          | A.Location_global (G.Phy _|G.Addr _|G.AddrT _|G.Tag _)
             -> k)
           locs StringSet.empty
 
@@ -522,6 +529,14 @@ end
       let is_rloc_label loc env  =
         let t = find_rloc_type loc env in
         CType.is_ins_ptr_t t
+
+      let is_rloc_tag loc env  =
+        let t = find_rloc_type loc env in
+        CType.is_tag t
+
+      let is_rloc_tag_ptr loc env  =
+        let t = find_rloc_type loc env in
+        CType.is_tag_ptr t
 
       let is_rloc_ptr loc env  =
         let t = find_rloc_type loc env in
@@ -565,6 +580,14 @@ end
         let t = find_rloc_type loc env in
         CType.is_ins_t t
 
+      let is_tag loc env =
+        let t = find_rloc_type loc env in
+        CType.is_tag t
+
+      let is_ptr_tag loc env =
+        let t = find_rloc_type loc env in
+        CType.is_tag_ptr t
+
       let instr_in_outs env test =
         let locs = get_displayed_locs test in
         A.RLocSet.exists (fun loc -> is_instr loc env) locs
@@ -573,6 +596,14 @@ end
         let locs = get_displayed_locs t in
         A.RLocSet.exists (fun loc -> is_rloc_label loc env)
           locs
+
+      let tag_in_outs env test =
+        let locs = get_displayed_locs test in
+        A.RLocSet.exists (fun loc -> is_tag loc env) locs
+
+      let ptr_tag_in_outs env test =
+        let locs = get_displayed_locs test in
+        A.RLocSet.exists (fun loc -> is_ptr_tag loc env) locs
 
       let get_faults test =
         let inc = T.C.get_faults test.T.condition
@@ -583,7 +614,7 @@ end
         try
           T.find_offset_out p lbl test
         with Not_found ->
-          let v = Constant.Label (p,lbl) in
+          let v = Constant.mk_sym_virtual_label p lbl in
           Warn.user_error "Non-existant label %s" (A.V.pp_v v)
 
 (* Instructions *)
@@ -627,7 +658,7 @@ end
       let get_instrs_final t = T.C.get_instrs t.T.condition
 
       let nop_set =
-        match A.V.Instr.nop with
+        match A.nop with
         | None -> A.V.Instr.Set.empty
         | Some nop -> A.V.Instr.Set.singleton nop
 
@@ -1060,7 +1091,10 @@ end
           O.o "" ;
           let module D = A.GetInstr.Make(O) in
           let lbl2instr,is = all_instrs t in
-          if not (A.V.Instr.Set.is_empty is && Misc.nilp lbl2instr) then begin
+          if
+            A.GetInstr.active
+            && not (A.V.Instr.Set.is_empty is && Misc.nilp lbl2instr)
+          then begin
             O.o "/***************************/" ;
             O.o "/* Get instruction opcodes */" ;
             O.o "/***************************/" ;
@@ -1083,38 +1117,41 @@ end
           end
 
         let dump_init_getinstrs t =
-          let  lbl2instr,is = all_instrs t in
           O.o "static void init_getinstrs(void) {" ;
-          A.V.Instr.Set.iter
-            (fun i ->
+          if A.GetInstr.active then begin
+            let lbl2instr,is = all_instrs t in
+            A.V.Instr.Set.iter
+              (fun i ->
               O.fi "%s = %s();"
                 (A.GetInstr.instr_name i)
                 (A.GetInstr.fun_name i))
             is ;
-          let lbl2instrs =
-            Misc.group
-              (fun ((p1,_),_) ((p2,_),_) -> Proc.equal p1 p2)
-              lbl2instr in
-          let open OutUtils in
-          List.iter
-            (fun ps ->
-              match ps with
-              | [] -> assert false
-              | ((p,_),_)::_ ->
-                  check_ascall () ;
-                  O.fi "size_t %s = prelude_size((ins_t *)code%i);"
-                    (fmt_prelude p) p ;
-                  List.iter
-                    (fun ((p,_ as lbl),_) ->
-                      O.fi
-                        "%s = *(((ins_t *)code%i)+%s+%s);"
-                        (fmt_lbl_instr lbl) p
-                        (fmt_prelude p)
-                        (fmt_lbl_instr_offset lbl))
-                    ps)
-            lbl2instrs ;
+            let lbl2instrs =
+              Misc.group
+                (fun ((p1,_),_) ((p2,_),_) -> Proc.equal p1 p2)
+                lbl2instr in
+            let open OutUtils in
+            List.iter
+              (fun ps ->
+                 match ps with
+                 | [] -> assert false
+                 | ((p,_),_)::_ ->
+                     check_ascall () ;
+                     O.fi "size_t %s = prelude_size((ins_t *)code%i);"
+                       (fmt_prelude p) p ;
+                     List.iter
+                       (fun ((p,_ as lbl),_) ->
+                          O.fi
+                            "%s = *(((ins_t *)code%i)+%s+%s);"
+                            (fmt_lbl_instr lbl) p
+                            (fmt_prelude p)
+                            (fmt_lbl_instr_offset lbl))
+                       ps)
+              lbl2instrs
+          end ;
           O.o "}" ;
           O.o ""
+
 
         let dump_opcode env t =
           if instr_in_outs env t then begin
@@ -1135,6 +1172,22 @@ end
               lbl2instr ;
             O.oi "else return \"???\";" ;
             O.o "}"
+          end
+
+        let dump_tag env t =
+          if (tag_in_outs env t || ptr_tag_in_outs env t) then
+          begin
+            O.o "static char *pretty_tag(tag_t tag) {" ;
+            O.oi "switch (tag) {" ;
+            List.iter
+              (fun t ->
+                O.fi "case %d: return \":%s\";"
+                  t (Misc.tag_of_int t))
+            (List.init 8 Fun.id) ;
+            O.oi "default: return \":?\";" ;
+            O.oi "}" ;
+            O.o "}" ;
+            O.o ""
           end
 
         let dump_topology_external n =

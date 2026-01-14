@@ -16,7 +16,7 @@ definition of LR(1) grammars and parser construction.
 
 The expanded context-free grammar is an LR(1) grammar, modulo shift-reduce
 conflicts that are resolved via appropriate precedence definitions.
-That is, given a list of token, returned from $\aslscan$, it is possible to apply
+That is, given a list of tokens, returned from $\aslscan$, it is possible to apply
 an LR(1) parser to obtain a parse tree if the list of tokens is in the formal language
 of the grammar and return a parse error otherwise.
 
@@ -56,7 +56,7 @@ For example, consider the derivation
 coupled with the derivation
 \begin{flalign*}
 \Nbinop \derives\ & \Tand \;|\; \Tband \;|\; \Tbor \;|\; \Tbeq \;|\; \Tdiv \;|\; \Tdivrm \;|\; \Txor \;|\; \Teqop \;|\; \Tneq &\\
-                      |\ & \Tgt \;|\; \Tgeq \;|\; \Timpl \;|\; \Tlt \;|\; \Tleq \;|\; \Tplus \;|\; \Tminus \;|\; \Tmod \;|\; \Tmul &\\
+                      |\ & \Tgt \;|\; \Tgeq \;|\; \Tbimpl \;|\; \Tlt \;|\; \Tleq \;|\; \Tplus \;|\; \Tminus \;|\; \Tmod \;|\; \Tmul &\\
                       |\ & \Tor \;|\; \Trdiv \;|\; \Tshl \;|\; \Tshr \;|\; \Tpow \;|\; \Tcoloncolon \;|\; \Tplusplus
 \end{flalign*}
 
@@ -74,7 +74,7 @@ and creating a version of the first derivation for each binary operator:
 By defining the derivations of $\Nbinop$ as inlined, we achieve the same effect more compactly:
 \begin{flalign*}
 \Nbinop \derivesinline\ & \Tand \;|\; \Tband \;|\; \Tbor \;|\; \Tbeq \;|\; \Tdiv \;|\; \Tdivrm \;|\; \Txor \;|\; \Teqop \;|\; \Tneq &\\
-                      |\ & \Tgt \;|\; \Tgeq \;|\; \Timpl \;|\; \Tlt \;|\; \Tleq \;|\; \Tplus \;|\; \Tminus \;|\; \Tmod \;|\; \Tmul &\\
+                      |\ & \Tgt \;|\; \Tgeq \;|\; \Tbimpl \;|\; \Tlt \;|\; \Tleq \;|\; \Tplus \;|\; \Tminus \;|\; \Tmod \;|\; \Tmul &\\
                       |\ & \Tor \;|\; \Trdiv \;|\; \Tshl \;|\; \Tshr \;|\; \Tpow \;|\; \Tcoloncolon \;|\; \Tplusplus
 \end{flalign*}
 
@@ -88,19 +88,19 @@ where $p_{1..m}$ are place holders for grammar symbols and may appear in any of 
 We refer to $N(p_{1..m})$ as a \emph{parametric non-terminal}.
 
 Given sentences $S_{1..m}$, we can expand $N(p_{1..m}) \derives R_1 \;|\; \ldots \;|\; R_k$
-by creating a unique symbol for $N(p_{1..m})$, denoted as $\uniquesymb{N(S_{1..m})}$, defining the
+by creating a unique symbol for $N(S_{1..m})$, denoted as $\uniquesymb{N(S_{1..m})}$, defining the
 derivations
 \[
   \uniquesymb{N(S_{1..m})} \derives R_1[S_1/p_1,\ldots,S_m/p_m] \;|\; \ldots \;|\; R_k[S_1/p_1,\ldots,S_m/p_m]
 \]
 where for each $i= 1..k$, $R_i[S_1/p_1,\ldots,S_m/p_m]$ means replacing each instance of $p_j$ with $S_j$, for each $j=1..m$.
-Then, each instance of $S_{1..m}$ in the grammar is replaced by $\uniquesymb{N(S_{1..m})}$.
-If all instances of a parametric non-terminal are expanded this way, we can remove the derivations of the parametric
-non-terminal altogether.
+Then, each instance of $N(S_{1..m})$ in the grammar is replaced by $\uniquesymb{N(S_{1..m})}$.
+Expanding all instances of parametric productions results in a grammar without any parametric productions.
 
 We note that a parametric production can be either a normal derivation or an inlined derivation.
 
-For example, the derivation for a list of ASL global declarations is as follows:
+\ExampleDef{Parametric List of Global Declaration}
+The derivation for a list of ASL global declarations is as follows:
 \begin{flalign*}
 \Nspec \derives\ & \maybeemptylist{\Ndecl} &
 \end{flalign*}
@@ -121,8 +121,6 @@ which results in the following derivation replacing the original derivation for 
 \begin{flalign*}
 \Nspec \derives\ & \Ndecllist &
 \end{flalign*}
-
-Expanding all instances of parametric productions results in a grammar without any parametric productions.
 
 \section{ASL Parametric Productions\label{sec:ASLParametricProductions}}
 We define the following parametric productions for various types of lists and optional productions.
@@ -172,7 +170,7 @@ We define the following parametric productions for various types of lists and op
 \paragraph{Parenthesized Comma-separated List With At Least Two Elements}
 \hypertarget{def-plisttwo}{}
 \begin{flalign*}
-\Plisttwo{x}   \derivesinline \ & \Tlpar \parsesep x \parsesep \Tcomma \parsesep \ClistOne{x} \parsesep \Trpar &\\
+\Plisttwo{x}   \derivesinline \ & \Tlpar \parsesep \Clisttwo{x} \parsesep \Trpar &\\
 \end{flalign*}
 
 \paragraph{Non-empty Comma-separated Trailing List}
@@ -182,7 +180,7 @@ We define the following parametric productions for various types of lists and op
                           |\  & x \parsesep \Tcomma \parsesep \TClistOne{x}
 \end{flalign*}
 
-\paragraph{Comma-separated Trailing List}
+\paragraph{Possibly-empty Comma-separated Trailing List}
 \hypertarget{def-tclistzero}{}
 \begin{flalign*}
 \TClistZero{x}   \derives \ & \option{\TClistOne{x}} &\\
@@ -195,7 +193,7 @@ The derivations allow certain parse trees where lists may have invalid sizes.
 Those parse trees must be rejected in a later phase.
 
 \hypertarget{def-tunops}{}
-Notice that two of the derivations (for $\Nexprpattern$ and for $\Nexpr$) end with \\
+Notice that two of the derivations (for $\Nexprpattern$ and for $\Nexpr$) end with
 $\precedence{\Tunops}$.
 This is a precedence annotation, which is not part of the right-hand-side sentence, and is explained in \secref{PriorityAndAssociativity}
 and can be ignored upon first reading.
@@ -210,10 +208,10 @@ For example, instead of $\Tidentifier(\id)$, we simply write $\Tidentifier$.
 
 \hypertarget{def-ndecl}{}
 \begin{flalign*}
-\Ndecl  \derives \ & \Npuritykeyword \parsesep \Noverride \parsesep \Tfunc \parsesep \Tidentifier \parsesep \Nparamsopt \parsesep \Nfuncargs \parsesep \Nreturntype \parsesep &\\
-    &\wrappedline \Nrecurselimit \parsesep \Nfuncbody\\
+\Ndecl  \derives \ & \Npuritykeyword \parsesep \Noverride \parsesep \Tfunc \parsesep \Tidentifier \parsesep \Nparamsopt \parsesep \Nfuncargs &\\
+    &\wrappedline\ \Nreturntype \parsesep \Nrecurselimit \parsesep \Nfuncbody\\
 |\ & \Nqualifier \parsesep \Noverride \parsesep \Tfunc \parsesep \Tidentifier \parsesep \Nparamsopt \parsesep \Nfuncargs &\\
-    &\wrappedline \Nrecurselimit \parsesep \Nfuncbody &\\
+    &\wrappedline\ \Nrecurselimit \parsesep \Nfuncbody &\\
 |\ & \Noverride \parsesep \Taccessor \parsesep \Tidentifier \parsesep \Nparamsopt \parsesep \Nfuncargs \parsesep \Tbeq \parsesep \Tidentifier \parsesep \Nasty &\\
    & \wrappedline\ \Naccessorbody &\\
 |\ & \Ttype \parsesep \Tidentifier \parsesep \Tof \parsesep \Ntydecl \parsesep \Nsubtypeopt \parsesep \Tsemicolon &\\
@@ -499,7 +497,7 @@ it must declare a new variable.
 |\ & \Nexpr \parsesep \Tslicing \parsesep \Nexpr &
 \end{flalign*}
 
-Pattern expressions ($\Nexprpattern$), given by the following derivations, is similar to regular expressions  ($\Nexpr$),
+Pattern expressions ($\Nexprpattern$), defined by the following derivations, are similar to regular expressions  ($\Nexpr$),
 except they do not derive tuples, which are the last derivation for $\Nexpr$.
 
 \hypertarget{def-nexprpattern}{}
@@ -520,7 +518,7 @@ except they do not derive tuples, which are the last derivation for $\Nexpr$.
                     |\  & \Nexpr \parsesep \Teqop \parsesep \Tmasklit &\\
                     |\  & \Nexpr \parsesep \Tneq \parsesep \Tmasklit &\\
                     |\  & \Tarbitrary \parsesep \Tcolon \parsesep \Nty &\\
-                    |\  & \Tidentifier \parsesep \Tlbrace \parsesep \Tminus \parsesep \Trbrace &\\
+                    |\  & \Tidentifier \parsesep \Tlbrace \parsesep \Tminus \parsesep \Trbrace & \mathhypertarget{any-pattern}\\
                     |\  & \Tidentifier \parsesep \Tlbrace \parsesep \ClistOne{\Nfieldassign} \parsesep \Trbrace &\\
                     |\  & \Tlpar \parsesep \Nexprpattern \parsesep \Trpar &
 \end{flalign*}
@@ -653,18 +651,18 @@ except they do not derive tuples, which are the last derivation for $\Nexpr$.
 \hypertarget{def-nbinop}{}
 \begin{flalign*}
 \Nbinop \derivesinline\ & \Tand \;|\; \Tband \;|\; \Tbor \;|\; \Tbeq \;|\; \Tdiv \;|\; \Tdivrm \;|\; \Txor \;|\; \Teqop \;|\; \Tneq &\\
-                     |\ & \Tgt \;|\; \Tgeq \;|\; \Timpl \;|\; \Tlt \;|\; \Tleq \;|\; \Tplus \;|\; \Tminus \;|\; \Tmod \;|\; \Tmul &\\
+                     |\ & \Tgt \;|\; \Tgeq \;|\; \Tbimpl \;|\; \Tlt \;|\; \Tleq \;|\; \Tplus \;|\; \Tminus \;|\; \Tmod \;|\; \Tmul &\\
                      |\ & \Tor \;|\; \Trdiv \;|\; \Tshl \;|\; \Tshr \;|\; \Tpow \;|\; \Tcoloncolon \;|\; \Tplusplus
 \end{flalign*}
 
 \section{Parse Trees\label{sec:ParseTrees}}
-We now define \emph{parse trees} for the ASL expanded grammar. Those are later used for build Abstract Syntax Trees.
+We now define \emph{parse trees} for the ASL expanded grammar. Those are later used to build Abstract Syntax Trees.
 
 \begin{definition}[Parse Trees]
 A \emph{parse tree} has one of the following forms:
 \begin{itemize}
   \item A \emph{token node}, given by the token itself, for example, $\Tlexeme(\Tarrow)$ and $\Tidentifier(\id)$;
-  \item \hypertarget{def-epsilonnode}{} $\epsilonnode$, which represents the empty sentence --- $\emptysentence$.
+  \item \hypertarget{def-epsilonnode}{} $\epsilonnode$, which represents the empty sentence --- $\emptysentence$; or
   \item A \emph{non-terminal node} of the form $N(n_{1..k})$ where $N$ is a non-terminal symbol,
         which is said to label the node,
         and $n_{1..k}$ are its children parse nodes,
@@ -717,12 +715,12 @@ $n$ such that $\yield(n)=\ts$.
 
 The \emph{language of a grammar} $G$ is defined as follows:
 \[
-\Lang(G) = \{\yield(n) \;|\; n \text{ is a well-formed parse tree for }G\} \enspace.
+\Lang{G} = \{\yield(n) \;|\; n \text{ is a well-formed parse tree for }G\} \enspace.
 \]
 
 \section{Priority and Associativity\label{sec:PriorityAndAssociativity}}
 A context-free grammar $G$ is \emph{ambiguous} if there can be more than one parse tree for a given list of tokens
-$\ts \in \Lang(G)$.
+$\ts \in \Lang{G}$.
 Indeed the expanded ASL grammar is ambiguous, for example, due to its definition of binary operation expressions.
 To allow assigning a unique parse tree to each sequence of tokens in the language of the ASL grammar,
 we utilize the standard technique of associating priority levels to productions and using them to resolve
@@ -741,7 +739,7 @@ the conflict is resolved based on the associativity associated with the token be
 reduce for $\leftassoc$, shift for $\rightassoc$, and a parsing error for $\nonassoc$.
 
 The two rules involving a unary minus operation are not assigned the priority level of $\Tminus$,
-but rather then the priority level $\Tunops$, as denoted by the notation \\
+but rather the priority level $\Tunops$, as denoted by the notation \\
 $\precedence{\Tunops}$
 appearing to their right. This is a standard way of dealing with a unary minus operation
 in many programming languages, which involves defining an artificial token $\Tunops$,
@@ -759,7 +757,7 @@ $\Tmul$, $\Tdiv$, $\Tdivrm$, $\Trdiv$, $\Tmod$, $\Tshl$, $\Tshr$              & 
 $\Tplus$, $\Tminus$, $\Tor$, $\Tand$, $\Txor$, $\Tcoloncolon$, $\Tplusplus$   & $\leftassoc$\\
 $\Tgt$, $\Tgeq$, $\Tlt$, $\Tleq$                                              & $\nonassoc$\\
 $\Teqop$, $\Tneq$                                                             & $\leftassoc$\\
-$\Tbor$, $\Tband$, $\Timpl$, $\Tbeq$, $\Tas$                                  & $\leftassoc$\\
+$\Tbor$, $\Tband$, $\Tbimpl$, $\Tbeq$, $\Tas$                                  & $\leftassoc$\\
 $\Telse$                                                                      & $\nonassoc$
 \end{tabular}
 \end{center}

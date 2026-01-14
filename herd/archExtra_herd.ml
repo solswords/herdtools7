@@ -21,7 +21,10 @@ module type I = sig
 
   val arch : Archs.t
 
+  type instr
+
   module V : Value.S
+
   val endian : Endian.t
 
   type arch_reg
@@ -29,7 +32,7 @@ module type I = sig
   val reg_compare : arch_reg -> arch_reg -> int
   val get_val : arch_reg -> V.v -> V.v
 
-  val fromto_of_instr : V.Cst.Instr.t -> (Label.Set.t * Label.Set.t) option
+  val fromto_of_instr : instr -> (Label.Set.t * Label.Set.t) option
 
   module FaultType : FaultType.S
 end
@@ -43,6 +46,7 @@ module type S = sig
 
   module I : I
 
+  type instr = I.instr
   type global_loc = I.V.v
   type v = I.V.v
 
@@ -71,7 +75,6 @@ module type S = sig
 
 
   (* Code memory is a mapping from labels to sequences of instructions, too far from actual machine, maybe *)
-  type instr = I.V.Cst.Instr.t
   type code = (int * instr) list
 
   val convert_if_imm_branch : int -> int -> int Label.Map.t -> int Label.Map.t -> instr -> instr
@@ -124,6 +127,7 @@ module type S = sig
   val symbol : location -> Constant.symbol option
   val offset : location -> int option
   val symbolic_data : location -> Constant.symbolic_data option
+  val get_symbol_name : location -> string option
   val of_symbolic_data : Constant.symbolic_data -> location
 
 (* Extra for locations *)
@@ -154,8 +158,9 @@ module type S = sig
   val mask_type : TestType.t -> v -> v
 
   type size_env
+  val debug_size_env : size_env -> string
   val size_env_empty : size_env
-  val build_size_env : (location * (TestType.t * 'v)) list -> size_env
+  val build_size_env : (location * (TestType.t * v)) list -> size_env
   val look_size : size_env -> string -> MachSize.sz
   val look_size_location : size_env -> location -> MachSize.sz
 
@@ -273,7 +278,12 @@ module Make(C:Config) (I:I) : S with module I = I
             (Archs.pp I.arch)
 
       module I = I
+
+      type instr = I.instr
+      type global_loc = I.V.v
       type v = I.V.v
+
+      type proc = Proc.t
 
       module OV =
         struct
@@ -283,10 +293,6 @@ module Make(C:Config) (I:I) : S with module I = I
 
       module VSet = MySet.Make(OV)
       module VMap = MyMap.Make(OV)
-
-      type global_loc = v
-
-      type proc = Proc.t
 
       let pp_proc = Proc.dump
 
@@ -331,7 +337,6 @@ module Make(C:Config) (I:I) : S with module I = I
       (*********************************)
 
       (* Code memory is a mapping from globals locs, to instructions *)
-      type instr = I.V.Cst.Instr.t
       type code = (int * instr) list
 
       (* This function is a default behaviour for all architectures.
@@ -406,6 +411,15 @@ module Make(C:Config) (I:I) : S with module I = I
         | Some (I.V.Val (Symbolic (Virtual sym))) -> Some sym
         | _ -> None
 
+      let get_symbol_name loc =
+        let open Constant in
+        match global loc with
+        | Some (I.V.Val (Symbolic (Physical (name,_))))
+          -> Some name
+        | Some (I.V.Val (Symbolic (Virtual {name;_})))
+          -> Some (Symbol.pp name)
+        | _ -> None
+
       let of_symbolic_data s =
         Location_global (I.V.Val (Constant.of_symbolic_data s))
 
@@ -474,8 +488,10 @@ module Make(C:Config) (I:I) : S with module I = I
 (* Compare id in fault and other id, at least one id must be allowed in fault *)
         let same_sym_fault sym1 sym2 = match sym1,sym2 with
 (* Both ids allowed in fault, compare *)
-          |(Virtual {name=s1;_},Virtual {name=s2;_})
-          |(System (PTE,s1),System (PTE,s2))
+          | (Virtual {name=s1;_},Virtual {name=s2;_})
+            -> Symbol.compare s1 s2 = 0
+          | (System (PTE,s1),System (PTE,s2))
+          (* | (System (TAG,s1),System (TAG,s2)) *)
            -> Misc.string_eq s1 s2
 (* One id allowed, the other on forbidden, does not match *)
           | (Virtual _,(System ((PTE|TLB|PTE2),_)|Physical _|TagAddr _))
@@ -496,11 +512,6 @@ module Make(C:Config) (I:I) : S with module I = I
         let same_id_fault v1 v2 = match v1,v2 with
           | I.V.Val (Symbolic sym1), I.V.Val (Symbolic sym2)
             -> same_sym_fault sym1 sym2
-          | I.V.Val (Constant.Label (_, l1)),I.V.Val (Constant.Label (_, l2))
-            -> Misc.string_eq l1 l2
-          | I.V.Val (Symbolic _), I.V.Val (Constant.Label (_, _))
-          | I.V.Val (Constant.Label (_, _)), I.V.Val (Symbolic _)
-            -> false
           | _,_
             ->
               Warn.fatal
@@ -614,6 +625,18 @@ module Make(C:Config) (I:I) : S with module I = I
            else size_of_t b
         | TyDef -> size_of_t TestType.default
         | TyDefPointer|Pointer _ -> I.V.Cst.Scalar.machsize
+
+      (* A few cases where size is deduced from initial value *)
+      let mem_access_size_of_v v =
+        let tydef =
+          let open Constant in
+          let open TestType in
+          match I.V.as_constant v with
+          | Some (PteVal _|Symbolic _) ->
+              TyDefPointer
+          | _ ->
+              TyDef in
+         mem_access_size_of_t tydef
 
       let mask_type t v =
         let sz = mem_access_size_of_t t in
@@ -750,7 +773,7 @@ module Make(C:Config) (I:I) : S with module I = I
                   let tag = None in
                   let cap = 0L in
                   let sym_data =
-                    { Constant.name=s ;
+                    { Constant.name=Constant.Symbol.Data s ;
                       tag=tag ;
                       cap=cap ;
                       offset=i*nbytes;
@@ -823,11 +846,15 @@ module Make(C:Config) (I:I) : S with module I = I
           | Location_global
               (I.V.Val
                  (Concrete _|ConcreteVector _|ConcreteRecord _
-                 |Label _|Instruction _|Frozen _
+                 |Instruction _|Frozen _
                  |Tag _|PteVal _|AddrReg _))
             ->
               Warn.user_error
                 "Very strange location (look_address) %s\n"
+                (pp_location loc)
+          | Location_global (I.V.Val (Symbolic (Virtual {name=n;_}))) when Symbol.is_label n ->
+              Warn.user_error
+                "No default value defined for location %s\n"
                 (pp_location loc)
           | Location_global (I.V.Val (Symbolic (Virtual _|Physical _)))
           | Location_reg _ -> reg_default_value
@@ -845,21 +872,33 @@ module Make(C:Config) (I:I) : S with module I = I
 
       type size_env = MachSize.sz StringMap.t
 
+      let debug_size_env =
+        StringMap.pp_str_delim ", "
+          (fun loc sz ->
+             Printf.sprintf "%s -> %s"
+               loc
+               (MachSize.pp sz))
+
       let size_env_empty = StringMap.empty
 
       let look_size env s = StringMap.safe_find MachSize.Word s env
 
       let look_size_location env loc =
         match symbolic_data loc with
-        | Some {Constant.name=s;_} -> look_size env s
+        | Some {Constant.name=s;_} -> look_size env (Constant.Symbol.pp s)
         | _ -> assert false
 
       let build_size_env bds =
         List.fold_left
-          (fun m (loc,(t,_)) ->
+          (fun m (loc,(t,v)) ->
             match symbolic_data loc with
             | Some sym ->
-                StringMap.add sym.Constant.name (mem_access_size_of_t t) m
+               let sz =
+                 let open TestType in
+                 match t with
+                 | TyDef -> mem_access_size_of_v v
+                 | _ -> mem_access_size_of_t t in
+               StringMap.add (Constant.Symbol.pp sym.Constant.name) sz m
             | _ -> m)
           size_env_empty bds
 
@@ -1062,7 +1101,7 @@ module Make(C:Config) (I:I) : S with module I = I
               | Location_global
                 (I.V.Val (Symbolic (Virtual {name=s; offset=_;_})) as a)
                 ->
-                  let sz = look_size senv s in
+                  let sz = look_size senv (Constant.Symbol.pp s) in
                   let eas = byte_eas sz a in
                   let vs = List.map (get_of_val st) eas in
                   let v = recompose vs in

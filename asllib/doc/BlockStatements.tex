@@ -43,16 +43,6 @@ as statements $\stmt$.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \TypeRulesDef{Block Statements}
 \RenderRelation{annotate_block}
-\BackupOriginalRelation{
-The function
-\[
-  \annotateblock(\overname{\staticenvs}{\tenv} \aslsep \overname{\stmt}{\vs}) \aslto
-  (\overname{\stmt}{\newstmt} \times \overname{\TSideEffectSet}{\vses}) \cup \overname{\typeerror}{\TypeErrorConfig}
-\]
-annotates a block statement $\vs$ in \staticenvironmentterm{} $\tenv$ and returns the annotated
-statement $\newstmt$ and inferred \sideeffectsetterm\ $\vses$.
-\ProseOtherwiseTypeError
-} % END_OF_BACKUP_RELATION
 
 \TypingRuleDef{Block}
 See \ExampleRef{Block Statements}.
@@ -63,6 +53,7 @@ See \ExampleRef{Block Statements}.
   \item the modified environment $\newtenv$ is dropped.
 \end{itemize}
 \FormallyParagraph
+\BackupOriginalRule{
 \begin{mathpar}
 \inferrule{
   \annotatestmt(\tenv, \vs) \typearrow (\newstmt, \Ignore, \vses) \OrTypeError
@@ -70,6 +61,8 @@ See \ExampleRef{Block Statements}.
   \annotateblock(\tenv, \vs) \typearrow (\newstmt, \vses)
 }
 \end{mathpar}
+} % END_OF_BACKUP_RULE
+\RenderRule{annotate_block}
 \CodeSubsection{\BlockBegin}{\BlockEnd}{../Typing.ml}
 
 \subsection{Comments}
@@ -84,37 +77,10 @@ an enclosing block, which has the effect of dropping bindings of the identifiers
 \SemanticsRulesDef{Block Statements}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \RenderRelation{eval_block}
-\BackupOriginalRelation{
-The relation
-\[
-  \evalblock(\overname{\envs}{\env} \times \overname{\stmt}{\stm}) \;\aslrel\;
-  \left(
-  \begin{array}{cl}
-  \overname{\TContinuing}{\Continuing(\newg, \newenv)} &\cup\\
-  \overname{\TReturning}{\ReturningConfig} &\cup\\
-  \overname{\TThrowing}{\ThrowingConfig} &\cup\\
-  \overname{\TDynError}{\DynErrorConfig} &\cup\\
-  \overname{\TDiverging}{\DivergingConfig} &\cup\\
-  \end{array}
-  \right)
-\]
-evaluates a statement $\stm$ as a \emph{block}. That is, $\stm$ is evaluated in a fresh local environment,
-which drops back to the original local environment of $\env$ when the evaluation terminates.
-\ProseOtherwiseAbnormal
-} % END_OF_BACKUP_RELATION
 
 \SemanticsRuleDef{Block}
 See \ExampleRef{Block Statements}.
 
-We first define the helper function $\poplocalscope$:
-\hypertarget{relation-poplocalscope}{}
-\[
-  \begin{array}{c}
-    \poplocalscope : \overname{\dynamicenvs}{\vouterenv} \cartimes \overname{\dynamicenvs}{\vinnerenv} \rightarrow \dynamicenvs \\
-    \poplocalscope(\vouterenv, \vinnerenv) \triangleq
-      (G^{\vinnerenv}, \restrictfunc{L^{\vinnerenv}}{{\dom(L^\vouterenv)}})
-  \end{array}
-\]
 The $\poplocalscope$ function is used below to effectively discard the bindings for variables declared inside the block statement $\stm$.
 
 \ProseParagraph
@@ -189,3 +155,27 @@ The $\poplocalscope$ function is used below to effectively discard the bindings 
 \CodeSubsection{\EvalBlockBegin}{\EvalBlockEnd}{../Interpreter.ml}
 
 That is, evaluating a block discards the bindings for variables declared inside $\stm$.
+
+\SemanticsRuleDef{PopLocalScope}
+\RenderRelation{pop_local_scope}
+
+See \ExampleRef{Block Statements}.
+
+\ProseParagraph
+\ProseEqdef{$\newdenv$}{$\vinnerenv$ without the bindings to local storage elements that are not in $\vouterenv$}.
+
+\FormallyParagraph
+\begin{mathpar}
+\inferrule{}{
+  {
+    \begin{array}{r}
+  \poplocalscope(\vouterenv, \vinnerenv) \evalarrow\\
+    \{ \dynamicenvsG:
+      \vinnerenv.\dynamicenvsG,
+        \dynamicenvsL:
+      \restrictfunc{\vinnerenv.\dynamicenvsL}{{\dom(\vouterenv.\dynamicenvsL)}}
+    \}
+    \end{array}
+  }
+}
+\end{mathpar}

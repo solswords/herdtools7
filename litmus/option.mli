@@ -49,6 +49,7 @@ val get_tar : unit -> string
 val crossrun : Crossrun.t ref
 val adbdir : string ref
 val index : string option ref
+val outnames : string option ref
 val hexa : bool ref
 val limit : bool ref
 val no : string option ref
@@ -114,6 +115,7 @@ val carch : Archs.System.t ref
 val mode : Mode.t ref
 val usearch : UseArch.t ref
 val fault_handling : Fault.Handling.t ref
+val mte_precision : Precision.t ref
 val variant : (Variant_litmus.t -> bool) ref
 
 (* Arch dependent option *)

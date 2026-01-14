@@ -91,6 +91,7 @@ and get_tar () = match !tar with
 let crossrun = ref Crossrun.No
 let adbdir = ref "/data/local/tmp"
 let index = ref None
+let outnames = ref None
 let hexa = ref false
 let limit = ref true
 let no = ref None
@@ -168,6 +169,7 @@ let carch = ref `Unknown
 let mode = ref Mode.Std
 let usearch = ref UseArch.Trad
 let fault_handling = ref Fault.Handling.default
+let mte_precision = ref Precision.default
 let variant = ref (fun _ -> false)
 
 (* Arch dependent options *)

@@ -11,7 +11,7 @@ converted to enumeration label literal values (instances of $\LLabel$).
 In the remainder of this reference, we refer to literal values simply as literals.
 
 \ExampleDef{Literals}
-\listingref{literals1} shows literals on the right hand side of assignments,
+\listingref{literals1} shows literals on the right-hand side of assignments,
 and their corresponding types in comments:
 \ASLListing{Examples of literals and their corresponding types}{literals1}{\typingtests/TypingRule.Lit.asl}
 
@@ -48,14 +48,14 @@ and their corresponding types in comments:
 \RenderType[remove_hypertargets]{literal}
 
 \subsection{ASTRule.Value \label{sec:ASTRule.Value}}
-\MarkedIgnoredRelationDefinition{
+\NotImportedToASLSpecYet{
 \hypertarget{build-value}{}
 The function
 \[
   \buildvalue(\overname{\parsenode{\Nvalue}}{\vparsednode}) \;\aslto\; \overname{\literal}{\vastnode}
 \]
 transforms a parse node $\vparsednode$ for $\Nvalue$ into an AST node $\vastnode$ for $\literal$.
-} % END_OF_IGNORED_RELATION
+} % END_OF_UNIMPORTED_RELATION
 
 
 \begin{mathpar}
@@ -99,18 +99,6 @@ See \ExampleRef{Literals}.
 
 \TypingRuleDef{Lit}
 \RenderRelation{annotate_literal}
-\BackupOriginalRelation{
-The relation
-\[
-\annotateliteral(\overname{\staticenvs}{\texttt{tenv}}, \overname{\literal}{\texttt{l}})
-\;\bigtimes\;
-\overname{\ty}{\texttt{t}}
-\]
-annotates
-a literal $\texttt{l}$ in the \staticenvironmentterm{} $\texttt{tenv}$,
-resulting in a type
-$\texttt{t}$.
-} % END_OF_BACKUP_RELATION
 See \ExampleRef{Literals}.
 
 \ProseParagraph
@@ -131,7 +119,7 @@ See \ExampleRef{Literals}.
 
   \item \AllApplyCase{real}
   \begin{itemize}
-    \item $\vl$ is real literal;
+    \item $\vl$ is a real literal;
     \item \Proseeqdef{$\vt$}{the \realtypeterm}.
   \end{itemize}
 
@@ -156,6 +144,7 @@ See \ExampleRef{Literals}.
 \end{itemize}
 
 \FormallyParagraph
+\BackupOriginalRule{
 \begin{mathpar}
 \inferrule[int]{}{
 {
@@ -189,11 +178,13 @@ See \ExampleRef{Literals}.
 
 \begin{mathpar}
 \inferrule[label]{
-  G^\tenv.\declaredtypes(\vlabel) = (\vt, \Ignore)
+  \tenv.\staticenvsG.\declaredtypes(\vlabel) = (\vt, \Ignore)
 }{
   \annotateliteral(\tenv, \overname{\LLabel(\vlabel)}{\vl}) \typearrow \vt
 }
 \end{mathpar}
+} % END_OF_BACKUP_RULE
+\RenderRule{annotate_literal}
 \CodeSubsection{\LitBegin}{\LitEnd}{../Typing.ml}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

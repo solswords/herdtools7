@@ -1,7 +1,7 @@
 \chapter{Static Evaluation\label{chap:StaticEvaluation}}
 
 In this chapter, we define how to employ dynamic evaluation of expressions
-during typechecking in order to yield a literal value.
+during typechecking to yield a literal value.
 
 The rest of this chapter defines \TypingRuleRef{StaticEnvToEnv},
 which converts a \staticenvironmentterm{} into an environment for dynamic evaluation,
@@ -9,19 +9,8 @@ which is then used in \TypingRuleRef{StaticEval} to define the overall static ev
 
 \TypingRuleDef{StaticEval}
 \RenderRelation{static_eval}
-\BackupOriginalRelation{
-The function
-\[
-  \staticeval(\overname{\staticenvs}{\tenv} \aslsep \overname{\expr}{\ve}) \;\aslto\;
-  \overname{\literal}{\vv} \cup
-  \overname{\typeerror}{\TypeErrorConfig}
-\]
-evaluates an expression $\ve$
-in the \staticenvironmentterm{} $\tenv$, returning a literal $\vv$.
-If the evaluation terminates by a thrown exception of a value that is not a literal
-(for example, a record value), the result is a \typingerrorterm{}.
-} % END_OF_BACKUP_RELATION
-If $\ve$ is \pureterm{}, the result is unique.
+
+This function assumes that $\ve$ is a \pureterm{} and thus the evaluation is deterministic.
 
 \hypertarget{def-staticallyevaluable}{}
 We say that an expression $\ve$ is \staticallyevaluableterm{} in a given \staticenvironmentterm{} $\tenv$ if
@@ -34,13 +23,13 @@ are bound in $\tenv$. Therefore, a dynamic environment is constructed from the c
 
 \ExampleDef{Static Evaluation of Expressions}
 In \listingref{static-eval}, the expression \verb|16 * 2| is statically evaluated
-(to $\LInt(32)$) in order to determine that the it is a \staticallyevaluableterm{} expression
+(to $\LInt(32)$) in order to determine that it is a \staticallyevaluableterm{} expression
 assigned to a \verb|constant| variable (by \TypingRuleRef{SDecl}.CONSTANT).
 The expressions defining the slices for bitfields \verb|upper| and \verb|lower|,
 and the width of the bitvector type \verb|Word| are also statically evaluated.
 \ASLListing{Static evaluation of expressions}{static-eval}{\typingtests/TypingRule.StaticEval.asl}
 
-In \listingref{static-eval-bad}, a typo replaced \verb|2| by \verb|3| in the definition
+In \listingref{static-eval-bad}, a typo replaced \verb|2| with \verb|3| in the definition
 of the bitfield \verb|upper|, which fails the static evaluation of the expression \verb|WORD_SIZE DIV 3|
 (as \verb|64| is not divisible by \verb|3|), which results in a \typingerrorterm.
 \ASLListing{Static evaluation of expressions}{static-eval-bad}{\typingtests/TypingRule.StaticEval.bad.asl}
@@ -104,42 +93,36 @@ of the bitfield \verb|upper|, which fails the static evaluation of the expressio
 
 \TypingRuleDef{StaticEnvToEnv}
 \RenderRelation{static_env_to_env}
-\BackupOriginalRelation{
-The function
-\[
-  \staticenvtoenv(\overname{\staticenvs}{\tenv}) \typearrow \overname{\envs}{\env}
-\]
-transforms the constants defined in the \staticenvironmentterm{} $\tenv$ into an environment $\env$.
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Transforming Static environments to Dynamic Environments}
 In \listingref{static-eval}, in order to statically evaluate the expression
 \verb|HALF_WORD_SIZE * 2| defining the width of the \verb|Word| type,
-the \staticenvironmentterm{} $\tenv$, defined as follows:
+the \staticenvironmentterm{} $\tenv$, is defined as follows:
 \[
 \{ \constantvalues \mapsto \{\vHALFWORDSIZE \mapsto \LInt(32)\},\ldots \}
 \]
 is transformed into the dynamic environment $\env$, defined as follows:
 \[
-( \overname{\{\vHALFWORDSIZE \mapsto \nvint(32)\}}{G^\env}, \overname{\emptyfunc}{L^\env}) \enspace.
+\{ \dynamicenvsG: \{\vHALFWORDSIZE \mapsto \nvint(32)\}, \dynamicenvsL: \emptyfunc \} \enspace.
 \]
 
 \ProseParagraph
 \AllApply
 \begin{itemize}
   \item define the global dynamic environment $\vglobal$ as the map that binds
-        each $\id$ in the domain of $G^\tenv.\constantvalues$ to $\NVLiteral(\vl)$
-        if $G^\tenv.\constantvalues(\id) = \vl$;
+        each $\id$ in the domain of $\tenv.\staticenvsG.\constantvalues$ to $\NVLiteral(\vl)$
+        if
+        $\tenv.\staticenvsG.\constantvalues(\id) = \vl$;
   \item define the local dynamic environment $\vlocal$ as the empty map;
   \item define the environment $\env$ to have the static component $\tenv$ and the dynamic
-        environment $(\vglobal, \vlocal)$;
+        environment $\{\dynamicenvsG: \vglobal, \dynamicenvsL: \vlocal\}$;
 \end{itemize}
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
-  \vglobal \eqdef [\id \mapsto \NVLiteral(\vl) \;|\; G^\tenv.\constantvalues(\id) = \vl]\\
+  \vglobal \eqdef [\id \mapsto \NVLiteral(\vl) \;|\; \tenv.\staticenvsG.\constantvalues(\id) = \vl]\\
   \vlocal \eqdef \emptyfunc
 }{
-  \staticenvtoenv(\tenv) \typearrow \overname{(\tenv, (\vglobal, \vlocal))}{\env}
+  \staticenvtoenv(\tenv) \typearrow \overname{(\tenv, \{\dynamicenvsG: \vglobal, \dynamicenvsL: \vlocal\})}{\env}
 }
 \end{mathpar}

@@ -20,6 +20,7 @@ module type Config = sig
   val barrier : Barrier.t
   val mode : Mode.t
   val precision : Fault.Handling.t
+  val tagcheck : Precision.t
   val variant : Variant_litmus.t -> bool
   val driver : Driver.t
 end
@@ -30,6 +31,7 @@ module Default = struct
   let barrier = Barrier.UserFence
   let mode = Mode.Std
   let precision = Fault.Handling.default
+  let tagcheck = Precision.default
   let variant _ = false
   let driver = Driver.Shell
 end
@@ -52,22 +54,26 @@ module Generic
       let base =  A.base_type
       let pointer = CType.Pointer base
       let code_pointer = Pointer (CType.ins_t)
-      let tag = Base "tag_t"
+      let tag = CType.tag_t
+      let tagged_pointer = Pointer (CType.tag_t)
       let base_array sz = CType.Array ("int", sz)
       let pteval_t = CType.pteval_t
       let parel1_t = CType.parel1_t
       let ins_t = CType.ins_t
 
-      let typeof = function
-        | Constant.Concrete _ -> base
-        | Constant.ConcreteVector vs -> base_array (List.length vs)
-        | Constant.Symbolic _ -> pointer
-        | Constant.Label _ -> code_pointer
-        | Constant.Tag _ -> tag
-        | Constant.PteVal _ -> pteval_t
-        | Constant.AddrReg _ -> parel1_t
-        | Constant.Instruction _ -> ins_t
-        | Constant.Frozen _ | Constant.ConcreteRecord _ -> assert false
+      let typeof =
+        let open Constant in
+        function
+        | Concrete _ -> base
+        | ConcreteVector vs -> base_array (List.length vs)
+        | Symbolic _ as symb when is_label symb -> code_pointer
+        | Symbolic (Virtual {tag=Some(_); _}) -> tagged_pointer
+        | Symbolic _ -> pointer
+        | Tag _ -> tag
+        | PteVal _ -> pteval_t
+        | AddrReg _ -> parel1_t
+        | Instruction _ -> ins_t
+        | Frozen _ | ConcreteRecord _ -> assert false
 
       let misc_to_c loc = function
         | TestType.TyDef when A.is_pte_loc loc -> pteval_t
@@ -210,7 +216,7 @@ module Generic
         List.fold_left
           (fun env (loc,(t,v)) -> match loc,v with
           | _,Constant.Concrete _ -> env
-          | A.Location_global _,Symbolic s ->
+          | A.Location_global _,Symbolic s when (Constant.is_data v) ->
               let a = A.Location_global (G.tr_symbol s) in
               begin try
                 ignore (A.LocMap.find a env) ;
@@ -378,7 +384,7 @@ module A.FaultType = A.FaultType)
       List.fold_left
         (fun k (_,v) ->
           match v with
-          | Constant.Label (_,lbl) ->
+          | Symbolic (Virtual {Constant.name=Symbol.Label (_,lbl); _}) ->
               Label.Set.add lbl k
           |Concrete _|ConcreteVector _|ConcreteRecord _
           |Symbolic _|Tag _|PteVal _|AddrReg _
@@ -430,7 +436,7 @@ module A.FaultType = A.FaultType)
     let count_ret =
       if do_self then fun code -> count_ins C.is_ret code else fun _ -> 0
 
-    let count_nop = count_ins C.is_nop
+    let count_nop = count_ins A.is_nop
 
 (****************)
 (* Compile code *)
@@ -695,7 +701,7 @@ module A.FaultType = A.FaultType)
           let addrs,ptes =
             G.Set.fold
               (fun s (a,p) -> match s with
-              | G.Addr s -> StringSet.add s a,p
+              | G.Addr s | G.AddrT (s,_) | G.Tag (s,_) -> StringSet.add s a,p
               | G.Pte s -> a,StringSet.add s p
               | G.Phy _ -> assert false)
               addrs (StringSet.empty,StringSet.empty) in
@@ -777,7 +783,7 @@ module A.FaultType = A.FaultType)
           (fun (_,(t,v)) env ->
             match t,v with
             | (TestType.TyDef|TestType.TyDefPointer),
-              Constant.Symbolic s ->
+              Constant.Symbolic s when (Constant.is_data v) ->
                 let a = G.get_base_symbol s in
                 begin try
                   let _ = G.Map.find a env in
@@ -792,7 +798,9 @@ module A.FaultType = A.FaultType)
             | _ -> env)
           init env in
       G.Map.fold
-        (fun a ty k -> match a with G.Addr a -> (a,ty)::k | G.Pte _| G.Phy _ -> k)
+        (fun a ty k -> match a with
+          | G.Addr a | G.AddrT (a,_) -> (a,ty)::k
+          | G.Pte _| G.Phy _ | G.Tag _ -> k)
         env []
 
     let type_out env p t =
@@ -851,7 +859,14 @@ module A.FaultType = A.FaultType)
             (fun (p,(c,f)) ->
               (* Add nop to signal code start *)
               let is_user = ProcsUser.is procs_user p in
-              let nop = A.Instruction A.nop in
+              let nop =
+                match A.nop with
+                | None ->
+                    Warn.fatal
+                      "Architecture %s has no NOP instruction, compilation is impossible"
+                      (Archs.pp A.arch)
+                | Some nop ->
+                    A.Instruction nop in
               (* Except in user mode, where it will be added later *)
               let c = if not is_user then nop::c else c in
               let c = (* Append nop for faukt handler to return at end of code *)

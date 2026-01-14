@@ -1,0 +1,49 @@
+% ==================================================
+% AUTO-GENERATED - DO NOT EDIT
+% ==================================================
+
+% ------------------
+% Macros for symbols
+% ------------------
+
+\newcommand\Bool[0]{ \hyperlink{type-Bool}{\textsf{Bool}} } % Generated from Bool
+\newcommand\N[0]{ \hyperlink{type-N}{\textsf{N}} } % Generated from N
+\newcommand\None[0]{ \hyperlink{constant-None}{\textsf{None}} } % Generated from None
+\newcommand\boundvariable[0]{ \hyperlink{type-boundvariable}{\textsf{bound\_variable}} } % Generated from bound_variable
+\newcommand\f[0]{ \hyperlink{relation-f}{\textit{f}} } % Generated from f
+
+% -------------------
+% Macros for elements
+% -------------------
+
+\DefineConstant{bot}{\texthypertarget{constant-bot}$\bot$} % EndDefineConstant
+
+\DefineConstant{None}{\texthypertarget{constant-None}$\None$} % EndDefineConstant
+
+\DefineConstant{empty_set}{\texthypertarget{constant-emptyset}$\emptyset$} % EndDefineConstant
+
+\DefineConstant{empty_list}{\texthypertarget{constant-emptylist}$\emptylist$} % EndDefineConstant
+
+\DefineType{Z}{\texthypertarget{type-Z}$\Z$} % EndDefineType
+
+\DefineType{Q}{\texthypertarget{type-Q}$\Q$} % EndDefineType
+
+\DefineType{bound_variable}{\texthypertarget{type-boundvariable}$\boundvariable$} % EndDefineType
+
+\DefineType{N}{\texthypertarget{type-N}$\N$} % EndDefineType
+
+\DefineType{Bool}{\texthypertarget{type-Bool}$\Bool$} % EndDefineType
+
+\DefineRelation{f}{
+The relation
+\[
+\mathhypertarget{relation-f}\f\left(\overtext{\N}{\texttt{a}}, \overtext{\N}{\texttt{b}}, \overtext{\N}{\texttt{c}}, \overtext{\pow{\N}}{\texttt{S}}\right) \bigtimes \N
+\]
+} % EndDefineRelation
+
+\DefineRule{f}{\begin{mathpar}
+\inferrule{ { \texttt{a}\intplus\texttt{b} \equal \texttt{c} } \\\\
+ { \texttt{d} \eqdef \ifthenelseop[H]{\texttt{a} \member \texttt{S}}{\texttt{b}}{\texttt{c}} } }{
+ { \f(\texttt{a}, \texttt{b}, \texttt{c}, \texttt{S}) \typearrow \texttt{d} } 
+}
+\end{mathpar}} % EndDefineRule

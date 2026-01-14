@@ -96,12 +96,14 @@ val lowercase : string -> string
 val uppercase : string -> string
 val capitalize : string -> string
 val uncapitalize : string -> string
+val string_starts_with : prefix:string -> string -> bool
 
 (* strip characters to form a valid c variable/type/enum name *)
 val to_c_name : string -> string
 
 (* Backward compatibility *)
 val find_opt : ('a -> bool) -> 'a list -> 'a option
+val find_map : ('a -> 'b option) -> 'a list -> 'b option
 val split_on_char : char -> string -> string list
 val filter_map : ('a -> 'b option) -> 'a list -> 'b list
 (* Float pair (position) parsint *)
@@ -341,6 +343,12 @@ val add_physical : string -> string
 val tr_physical : string -> string option
 val is_physical : string -> bool
 val pp_physical : string -> string
+
+val int_of_tag: string -> int
+val tag_of_int: int -> string
+val pp_tagged : string -> int -> string
+val pp_tag : string -> string
+val add_tag : string -> string
 
 (******************)
 (* Hash utilities *)

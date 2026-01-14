@@ -155,6 +155,8 @@ let fold_atom = fold_non_mixed
 
 let worth_final _ = false
 
+let get_machine_feature _ = StringSet.empty
+
 (* Atomic variation *)
 
 (* No atomic variation *)
@@ -210,7 +212,7 @@ include NoWide
 
 (* End of atoms *)
 
-module PteVal = PteVal_gen.No(struct type arch_atom = atom end)
+module Value = Value_gen.NoPte(struct type arch_atom = atom end)
 
 (**********)
 (* Fences *)
@@ -261,7 +263,7 @@ let var_fence f = match varatom with
 (********)
 
 include ClassicDep
-include NoRmw.Make(struct type arch_atom = atom end)
+module RMW = Rmw.No(struct type nonrec atom = atom end)
 include
     ArchExtra_gen.Make
     (struct
@@ -272,6 +274,8 @@ include
       let pp_reg = pp_reg
       let pp_i _ = assert false
       let free_registers = allowed_for_symb
+      type arch_atom = atom
+      module Value = Value
       include NoSpecial
     end)
 end

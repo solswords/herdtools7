@@ -26,6 +26,11 @@ open OptNames
 
 module PStride = ParseTag.Make(Stride)
 
+module Refs = struct
+    let fault_handling = ref Fault.Handling.default
+    let mte_precision = ref Precision.default
+end
+
 let opts =
   [
 (* General behavior *)
@@ -46,8 +51,10 @@ let opts =
     "<dir> target directory on device in mode -crossrun adb";
    "-mach", Arg.String MyName.read_cfg,
    "<name> read configuration file name.cfg";
-   "-index",  argstringo Option.index ,
+   "-index",  argstringo Option.index,
    "<@name> save index of compiled tests in file <@name>" ;
+   "-outnames",  argstringo Option.outnames,
+   "<name> save names of compiled tests in file <name>" ;
    "-hexa", Arg.Set Option.hexa,
    " hexadecimal output";
    "-no", argstringo Option.no,
@@ -73,7 +80,7 @@ let opts =
        let reducetag = check_tag
      end in
      let module P = ParseTag.MakeS(Opt) in
-   P.parse "-variant" Option.variant "select a variation" end ;
+   P.parse "-variant" Option.variant Variant_litmus.helper_message end ;
    begin let module P = ParseTag.Make(Barrier) in
    P.parse "-barrier" Option.barrier "set type of barriers" end ;
    "-delay", Arg.Int set_delay,
@@ -268,6 +275,7 @@ let () =
 (* Static options *)
       let verbose = verbose
       let index = !index
+      let outnames = !outnames
       let no = !no
       let hint = !hint
       let verbose_prelude = match !verbose_prelude with
@@ -303,8 +311,8 @@ let () =
           end
       | Some b -> b
       let ascall = !ascall
-      let fault_handling = !fault_handling
-      let mte_precision = Precision.Synchronous
+      let fault_handling = !Refs.fault_handling
+      let mte_precision = !Refs.mte_precision
       let variant = !variant
       let nocatch = false
       let crossrun = match !mode,!crossrun with
@@ -371,7 +379,7 @@ let () =
       let asmcomment = !asmcomment
       let asmcommentaslabel = !asmcommentaslabel
     end in
-    let module T = Top_litmus.Top (Config) (Tar) in
+     let module T = Top_litmus.Top (Config) (Tar) in
     T.from_files sources ;
     if not (Option.is_out ()) then MySys.rmdir outname ;
     exit 0

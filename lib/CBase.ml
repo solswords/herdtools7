@@ -93,6 +93,9 @@ type instruction =
   | Symb of string
   | PCall of string * expression list
 
+let nop = None
+and is_nop _ = false
+
 type parsedInstruction = instruction
 
 let dump_op =
@@ -242,10 +245,9 @@ let fold_regs (_fc,_fs) acc _ins = acc
 let map_regs _fc _fs ins = ins
 let fold_addrs _f acc _ins = acc
 let map_addrs _f ins = ins
-let norm_ins ins = ins
 let get_next _ins = Warn.fatal "C get_next not implemented"
 
-let is_valid _ = true
+include InstrUtils.No(struct type instr = instruction end)
 
 include Pseudo.Make
     (struct
@@ -258,7 +260,7 @@ include Pseudo.Make
         function
           | Const(Concrete _|ConcreteVector _) as k -> k
           | Const
-              (Symbolic _|Label _|Tag _|ConcreteRecord _
+              (Symbolic _|Tag _|ConcreteRecord _
               |PteVal _|AddrReg _ |Instruction _|Frozen _ as v) ->
              Warn.fatal "No constant '%s' allowed" (ParsedConstant.pp_v v)
           | LoadReg _ as l -> l

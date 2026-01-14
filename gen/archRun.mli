@@ -21,7 +21,6 @@ module type S = sig
   with type fence = A.fence
   and type dp = A.dp
   and type atom = A.atom
-  and type rmw = A.rmw
   module R : Relax.S
   with type fence = A.fence
   and type dp = A.dp
@@ -29,5 +28,5 @@ module type S = sig
   module C : Cycle.S
          with type edge=E.edge
           and type atom = A.atom
-          and module PteVal = A.PteVal
+          and module Value = A.Value
 end

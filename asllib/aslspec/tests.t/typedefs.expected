@@ -6,30 +6,57 @@
 % Macros for symbols
 % ------------------
 
-\newcommand\Int[0]{ \hyperlink{type-Int}{\textsf{Int}} } % Generated from Int
-\newcommand\One[0]{ \hyperlink{constant-One}{\textsf{One}} } % Generated from One
-\newcommand\Two[0]{ \hyperlink{constant-Two}{\textsf{Two}} } % Generated from Two
 \newcommand\B[0]{ \hyperlink{type-B}{\textsf{B}} } % Generated from B
 \newcommand\C[0]{ \hyperlink{type-C}{\textsf{C}} } % Generated from C
-\newcommand\Rec[0]{ \hyperlink{type-Rec}{\textsf{Rec}} } % Generated from Rec
+\newcommand\Int[0]{ \hyperlink{type-Int}{\textsf{Int}} } % Generated from Int
 \newcommand\LRec[0]{ \hyperlink{type-LRec}{\textsf{LRec}} } % Generated from LRec
-\newcommand\expr[0]{ \hyperlink{ast-expr}{\textsf{expr}} } % Generated from expr
+\newcommand\None[0]{ \hyperlink{constant-None}{\textsf{None}} } % Generated from None
 \newcommand\Number[0]{ \hyperlink{ast-Number}{\textsc{Number}} } % Generated from Number
+\newcommand\One[0]{ \hyperlink{constant-One}{\textsf{One}} } % Generated from One
 \newcommand\Plus[0]{ \hyperlink{ast-Plus}{\textsc{Plus}} } % Generated from Plus
+\newcommand\Rec[0]{ \hyperlink{type-Rec}{\textsf{Rec}} } % Generated from Rec
+\newcommand\Two[0]{ \hyperlink{constant-Two}{\textsf{Two}} } % Generated from Two
+\newcommand\FIELDanonf[0]{ \hyperlink{recordfield-anonf}{\textsf{anon\_f}} } % Generated from anon_f
+\newcommand\FIELDanong[0]{ \hyperlink{recordfield-anong}{\textsf{anon\_g}} } % Generated from anon_g
+\newcommand\boundvariable[0]{ \hyperlink{type-boundvariable}{\textsf{bound\_variable}} } % Generated from bound_variable
+\newcommand\expr[0]{ \hyperlink{ast-expr}{\textsf{expr}} } % Generated from expr
+\newcommand\FIELDf[0]{ \hyperlink{recordfield-f}{\textsf{f}} } % Generated from f
+\newcommand\FIELDg[0]{ \hyperlink{recordfield-g}{\textsf{g}} } % Generated from g
 
 % -------------------
 % Macros for elements
 % -------------------
 
+\DefineConstant{bot}{\texthypertarget{constant-bot}$\bot$} % EndDefineConstant
+
+\DefineConstant{None}{\texthypertarget{constant-None}$\None$} % EndDefineConstant
+
+\DefineConstant{empty_set}{\texthypertarget{constant-emptyset}$\emptyset$} % EndDefineConstant
+
+\DefineConstant{empty_list}{\texthypertarget{constant-emptylist}$\emptylist$} % EndDefineConstant
+
+\DefineType{Bool}{
+\begin{flalign*}
+\Bool\mathhypertarget{type-Bool} \triangleq\ & \True\mathhypertarget{type-True}\\
+\cup\ & \False\mathhypertarget{type-False}\end{flalign*}} % EndDefineType
+
+\DefineType{N}{\texthypertarget{type-N}$\N$} % EndDefineType
+
+\DefineType{Z}{\texthypertarget{type-Z}$\Z$} % EndDefineType
+
+\DefineType{Q}{\texthypertarget{type-Q}$\Q$} % EndDefineType
+
+\DefineType{bound_variable}{\texthypertarget{type-boundvariable}$\boundvariable$} % EndDefineType
+
 \DefineType{Int}{\texthypertarget{type-Int}$\Int$} % EndDefineType
 
-\DefineConstant{One}{\hypertarget{constant-One}{} $\One$} % EndDefineConstant
+\DefineConstant{One}{\texthypertarget{constant-One}$\One$} % EndDefineConstant
 
-\DefineConstant{Two}{\hypertarget{constant-Two}{} $\Two$} % EndDefineConstant
+\DefineConstant{Two}{\texthypertarget{constant-Two}$\Two$} % EndDefineConstant
 
 \DefineType{B}{
 \begin{flalign*}
-\B\texthypertarget{type-B} \triangleq\ & \mathhypertarget{type-C}\C\\
+\B\mathhypertarget{type-B} \triangleq\ & \C\mathhypertarget{type-C}\\
 \cup\ & \pow{\Int}\\
 \cup\ & \Option{\Int}\\
 \cup\ & \KleeneStar{\Int}\\
@@ -40,18 +67,16 @@
 \cup\ & \{\One, \Two\}\\
 \cup\ & \left(\Int, \Int\right)\\
 \cup\ & \Rec\left(\Int, \Int\right)\mathhypertarget{type-Rec}\\
-\cup\ & \left\{\begin{array}{lcl}
-               \text{f} & : & \Int\\
-               \text{g} & : & \left(\Int, \Int\right) \rightarrow \pow{\Int}
-               \end{array}\right\}\\
-\cup\ & \LRec\left\{\begin{array}{lcl}
-                    \text{f} & : & \Rec\left(\Int, \Int\right)\\
-                    \text{g} & : & \left(\Int, \Int\right) \rightarrow \pow{\Int}
-                    \end{array}\right\}\mathhypertarget{type-LRec}\end{flalign*}} % EndDefineType
+\cup\ & \mathhypertarget{recordfield-anonf}\mathhypertarget{recordfield-anong}\left\{\begin{array}{lcl}
+                                                                    \FIELDanonf & : & \Int\\
+                                                                    \FIELDanong & : & \left(\Int, \Int\right) \rightarrow \pow{\Int}
+                                                                    \end{array}\right\}\\
+\cup\ & \mathhypertarget{type-LRec}\mathhypertarget{recordfield-f}\mathhypertarget{recordfield-g}\LRec\left\{\begin{array}{lcl}
+                                                                    \FIELDf & : & \Rec\left(\Int, \Int\right)\\
+                                                                    \FIELDg & : & \left(\Int, \Int\right) \rightarrow \pow{\Int}
+                                                                    \end{array}\right\}\end{flalign*}} % EndDefineType
 
 \DefineType{expr}{
 \begin{flalign*}
-\expr\texthypertarget{ast-expr} \derives\ & \mathhypertarget{ast-Number}\Number\left(\overtext{\Int}{\texttt{v}}\right)\\
-|\ & \Plus\left(\overtext{\expr}{\texttt{lhs}}, \overtext{\expr}{\texttt{rhs}}\right)\mathhypertarget{ast-Plus}\end{flalign*}} % EndDefineType
-
-
+\expr\mathhypertarget{ast-expr} \derives\ & \Number\left(\overtext{\Int}{\texttt{v}}\right)\mathhypertarget{ast-Number}\\
+\PIPE\ & \Plus\left(\overtext{\expr}{\texttt{lhs}}, \overtext{\expr}{\texttt{rhs}}\right)\mathhypertarget{ast-Plus}\end{flalign*}} % EndDefineType

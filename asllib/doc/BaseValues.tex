@@ -1,21 +1,19 @@
 \section{Base Values\label{sec:BaseValues}}
 \hypertarget{def-basevalueterm}{}
-Each type, with the exceptions stated below, have a \basevalueterm,
-which is used to initialize storage elements (either local of global),
+Each type, with the exceptions stated below, has a \basevalueterm,
+which is used to initialize storage elements (either local or global),
 if an initializer is not supplied.
 
 \RequirementDef{NoBaseValue}
 The following types do not have a \basevalueterm{}:
 \begin{itemize}
-    \item \parameterizedintegertypesterm{};
+    \item \parameterizedintegertypesterm{} ---
+          only subprogram parameters can be parameterized integers, and since they will be initialized by their
+          invocation, there is no need to define a \basevalueterm{} for them; \identi{WVQZ}
     \item a \wellconstrainedintegertypeterm{} whose list of constraints
-        represents the empty set;
+          represents the empty set;
     \item a \bitvectortypeterm{} whose length is negative.
 \end{itemize}
-
-\identi{WVQZ}
-Subprogram parameters can be parameterized integers, and since they will be initialized by their
-invocation, there is no need to have a \basevalueterm{} for them.
 
 \ExampleDef{Base Values}
 \listingref{base-values} shows a specification with examples of well-typed \basevalueterm{}
@@ -50,16 +48,6 @@ which negates the possibility of having a \basevalueterm.
 \ASLListing{No Base Value for an Empty Integer Type}{base-values-bad-empty-type}{\typingtests/TypingRule.BaseValue.bad_empty.asl}
 
 \RenderRelation{base_value}
-\BackupOriginalRelation{
-The function
-\[
-\basevalue(\overname{\staticenvs}{\tenv} \aslsep \overname{\ty}{\vt}) \aslto
-\overname{\expr}{\veinit} \cup \overname{\typeerror}{\TypeErrorConfig}
-\]
-returns the expression $\veinit$ which can be used to initialize a storage element
-of type $\vt$ in the \staticenvironmentterm{} $\tenv$.
-\ProseOtherwiseTypeError
-} % END_OF_BACKUP_RELATION
 
 \TypingRuleDef{BaseValue}
 See \ExampleRef{Base Values} and \ExampleRef{Types Without Base Value}.
@@ -79,7 +67,7 @@ See \ExampleRef{Base Values} and \ExampleRef{Types Without Base Value}.
         \item applying $\reducetozopt$ to $\ve$ in $\tenv$ yields $\vzopt$;
         \item $\vzopt$ is not $\None$;
         \item view $\vzopt$ as the singleton integer $\length$;
-        \item checking that $\length$ is greater or equal to $0$ yields $\True$\ProseTerminateAs{\NoBaseValue};
+        \item checking that $\length$ is greater than or equal to $0$ yields $\True$\ProseTerminateAs{\NoBaseValue};
         \item $\veinit$ is the literal expression for a bitvector made of a sequence of $\length$ values of $0$.
     \end{itemize}
 
@@ -106,8 +94,9 @@ See \ExampleRef{Base Values} and \ExampleRef{Types Without Base Value}.
 
     \item \AllApplyCase{t\_int\_parameterized} \identr{QGGH}
     \begin{itemize}
-        \item $\vt$ is the \parameterizedintegertypeterm;
+        \item $\vt$ is a \parameterizedintegertypeterm;
         \item the result is a \typingerrorterm{} indicating the lack of a statically known base value.
+        \ProseNote{See \RequirementRef{NoBaseValue}}
     \end{itemize}
 
     \item \AllApplyCase{t\_int\_wellconstrained} \identr{CFTD}
@@ -115,7 +104,7 @@ See \ExampleRef{Base Values} and \ExampleRef{Types Without Base Value}.
         \item $\vt$ is the \wellconstrainedintegertypeterm\ with a list of constraints $\cs$;
         \item define $\vzminlist$ as the concatenation of lists obtained for each
               constraint $\cs[\vi]$ in $\tenv$, for each $\vi\in\listrange(\cs)$, via $\constraintabsmin$;
-        \item checking whether $\vzminlist$ is empty yields $\True$\ProseOrTypeError{\NoBaseValue};
+        \item checking whether $\vzminlist$ is empty yields $\True$ or a \typingerrorterm{} with \errorcodeterm{} \NoBaseValue;
         \item determining the minimal absolute integer in $\vzminlist$ via $\listminabs$ yields $\vzmin$;
         \item $\veinit$ is the integer literal expression for $\vzmin$.
     \end{itemize}
@@ -139,7 +128,7 @@ See \ExampleRef{Base Values} and \ExampleRef{Types Without Base Value}.
         \item applying $\basevalue$ to $\vtefield$ in $\tenv$ for each $(\name, \vtefield)$ in $\fields$
               yields $\ve_\name$\ProseOrTypeError;
         \item $\veinit$ is the record construction expression assigning each field $\name$
-              where $(\name, \vtefield)$ is an element of $\fields$ to $\vtefield$, that is, \\
+              (where $(\name, \vtefield)$ is an element of $\fields$) to $\vtefield$, that is, \\
               $\ERecord((\name, \vtefield) \in \fields: (\name, \ve_\name))$.
     \end{itemize}
 
@@ -152,17 +141,17 @@ See \ExampleRef{Base Values} and \ExampleRef{Types Without Base Value}.
     \item \AllApplyCase{t\_tuple} \identr{QWSQ}
     \begin{itemize}
         \item $\vt$ is the \tupletypeterm{} over the list of types $\vt_{1..k}$, that is, $\TTuple(\vt_{1..k})$;
-        \item applying $\basevalue$ to each type $\vt_\vi$ in $\tenv$ for $\vi=1..k$; yields the list of expressions $\ve_{1..k}$;
+        \item applying $\basevalue$ to each type $\vt_\vi$ in $\tenv$, for $\vi=1..k$, yields the list of expressions $\ve_{1..k}$;
         \item $\veinit$ is the tuple expression $\ETuple(\ve_{1..k})$.
     \end{itemize}
 
     \item \AllApplyCase{t\_array\_enum}
     \begin{itemize}
-        \item $\vt$ is the enumerated array type over for the enumeration $\venum$ and labels $\vlabels$ and element type $\tty$,
-              that is, $\TArray(\ArrayLengthEnum(\venum, \vlabels), \tty)$ ;
+        \item $\vt$ is the enumerated array type over the enumeration $\venum$ and labels $\vlabels$ and element type $\tty$
+              ($\TArray(\ArrayLengthEnum(\venum, \vlabels), \tty)$);
         \item applying $\basevalue$ to $\tty$ in $\tenv$ yields the expression $\vvalue$\ProseOrTypeError;
         \item $\veinit$ is the array construction expression for an enumerated array with labels $\vlabels$ and initial value $\vvalue$,
-              that is, $\EEnumArray\{\EArrayLabels: \vlabels, \EArrayValue: \vvalue\}$.
+              ($\EEnumArray\{\EArrayLabels: \vlabels, \EArrayValue: \vvalue\}$).
     \end{itemize}
 
     \item \AllApplyCase{t\_array\_expr} \identr{WGVR}
@@ -170,8 +159,8 @@ See \ExampleRef{Base Values} and \ExampleRef{Types Without Base Value}.
         \item $\vt$ is the array type over an integer index expression $\vlength$ and element type $\tty$, that is,
               $\TArray(\ArrayLengthExpr(\vlength), \tty)$ ;
         \item applying $\basevalue$ to $\tty$ in $\tenv$ yields the expression $\vvalue$\ProseOrTypeError;
-        \item $\veinit$ is the array construction expression with length expression $\vlength$ and value expression $\vvalue$,
-              that is, $\EArray\{\EArrayLength: \length, \EArrayValue: \vvalue\}$.
+        \item $\veinit$ is the array construction expression with length expression $\vlength$ and value expression $\vvalue$
+              ($\EArray\{\EArrayLength: \length, \EArrayValue: \vvalue\}$).
     \end{itemize}
 \end{itemize}
 
@@ -301,17 +290,6 @@ See \ExampleRef{Base Values} and \ExampleRef{Types Without Base Value}.
 
 \TypingRuleDef{ConstraintAbsMin}
 \RenderRelation{constraint_abs_min}
-\BackupOriginalRelation{
-The function
-\[
-    \constraintabsmin(\overname{\staticenvs}{\tenv} \aslsep \overname{\intconstraint}{\vc}) \aslto
-    \overname{\KleeneStar{\Z}}{\vzs}
-    \cup \overname{\typeerror}{\TypeErrorVal{\NoBaseValue}}
-\]
-returns a single element list containing the integer closest to $0$ that satisfies the constraint $\vc$ in $\tenv$, if one exists,
-and an empty list if the constraint represents an empty set.
-Otherwise, the result is $\TypeErrorVal{\NoBaseValue}$.
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Minimal Absolute Value in a Constraint List}
 The minimal absolute value of \verb|{7, -2}| is \verb|-2|.\\
@@ -347,7 +325,7 @@ The minimal absolute value of \verb|{-2..2, 5}| is \verb|0|.
             \item the empty list, if $\vvone$ is greater than $\vvtwo$ (since there are no integers satisfying the constraint);
             \item the single element list for $\vvtwo$, if $\vvone$ is less than $\vvtwo$ and both are negative;
             \item the single element list for $0$, if $\vvone$ is negative and $\vvtwo$ is non-negative;
-            \item the single element list for $\vvone$, if $\vvone$ is non-negative and $\vvtwo$ is greater or equal to $\vvone$.
+            \item the single element list for $\vvone$, if $\vvone$ is non-negative and $\vvtwo$ is greater than or equal to $\vvone$.
         \end{itemize}
     \end{itemize}
 \end{itemize}
@@ -371,7 +349,8 @@ The minimal absolute value of \verb|{-2..2, 5}| is \verb|0|.
     \reducetozopt(\tenv, \vetwo) \typearrow \vzopttwo\\
     \techeck(\vzopttwo \neq \None, \NoBaseValue) \typearrow \True \OrTypeError\\\\
     \vzopttwo \eqname \some{\vvtwo}\\
-    \vzs \eqdef {
+    {
+    \vzs \eqdef
         \begin{cases}
            \emptylist & \vvone > \vvtwo\\
            [\vvtwo] & \vvone \leq \vvtwo < 0\\
@@ -386,16 +365,6 @@ The minimal absolute value of \verb|{-2..2, 5}| is \verb|0|.
 
 \TypingRuleDef{ListMinAbs}
 \RenderRelation{list_min_abs}
-\BackupOriginalRelation{
-The function
-\[
-\listminabs(\overname{\KleeneStar{\Z}}{\vl}) \aslto \overname{\Z}{\vz}
-\]
-returns $\vz$ --- the integer closest to $0$ among the list
-of integers in the list $\vl$. The result is biased towards positive integers. That is,
-if two integers $x$ and $y$ have the same absolute value and $x$ is positive and $y$ is negative
-then $x$ is considered closer to $0$.
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Minimal Absolute Value}
 The minimal absolute value of $[9, -3]$ is $-3$,
@@ -414,7 +383,7 @@ and the minimal absolute value of $[2, -2]$ is $2$.
         \item $\vl$ is the list where $\vzone$ is its \head\ and $\vltwo$ is its \tail;
         \item $\vltwo$ is not the empty list;
         \item applying $\listminabs$ to $\vltwo$ yields $\vztwo$;
-        \item define $\vz$ based on $\vzone$ and $\vztwo$ by the following cases:
+        \item define $\vz$ based on $\vzone$ and $\vztwo$ according to the following cases:
         \begin{itemize}
             \item $\vzone$ if the absolute value of $\vzone$ is less than the absolute value of $\vztwo$;
             \item $\vztwo$ if the absolute value of $\vzone$ is greater than the absolute value of $\vztwo$;

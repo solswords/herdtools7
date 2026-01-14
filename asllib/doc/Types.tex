@@ -50,18 +50,6 @@ and types that must be declared and named are grammatically derived from $\Ntyde
 
 \paragraph{Typing:}
 \RenderRelation{annotate_type}
-\BackupOriginalRelation{
-The function
-\[
-  \annotatetype(\overname{\Bool}{\vdecl} \aslsep \overname{\staticenvs}{\tenv} \aslsep \overname{\ty}{\tty})
-  \aslto (\overname{\ty}{\newty} \times \overname{\TSideEffectSet}{\vses}) \cup \overname{\typeerror}{\TypeErrorConfig}
-\]
-typechecks a type $\tty$ in a \staticenvironmentterm{} $\tenv$,
-resulting in a \typedast\ $\newty$ and a \sideeffectsetterm\ $\vses$.
-The flag $\decl$ indicates whether $\tty$ is a type currently being declared or not,
-and makes a difference only when $\tty$ is an \enumerationtypeterm{} or a \structuredtypeterm.
-\ProseOtherwiseTypeError
-} % END_OF_BACKUP_RELATION
 
 \paragraph{Semantics:} Types are not evaluated dynamically.
   However, the dynamic semantics of types is given by their \emph{domain of values},
@@ -72,7 +60,7 @@ and makes a difference only when $\tty$ is an \enumerationtypeterm{} or a \struc
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \AbstractSyntaxDef{Types}
-\MarkedIgnoredRelationDefinition{
+\NotImportedToASLSpecYet{
 \hypertarget{build-ty}{}
 The function
 \[
@@ -81,12 +69,12 @@ The function
 \]
 transforms an anonymous type parse node $\vparsednode$ into the corresponding AST node $\vastnode$.
 \ProseOtherwiseBuildError
-} % END_OF_IGNORED_RELATION
+} % END_OF_UNIMPORTED_RELATION
 
 
 We define $\buildty$ per type in the following sections.
 
-\MarkedIgnoredRelationDefinition{
+\NotImportedToASLSpecYet{
 \hypertarget{build-tydecl}{}
 The function
 \[
@@ -95,12 +83,12 @@ The function
 \]
 transforms a \namedtype\ parse node $\vparsednode$ into an AST node $\vastnode$.
 \ProseOtherwiseBuildError
-} % END_OF_IGNORED_RELATION
+} % END_OF_UNIMPORTED_RELATION
 
 
 We define $\buildtydecl$ per the corresponding type in the following sections.
 
-\MarkedIgnoredRelationDefinition{
+\NotImportedToASLSpecYet{
 \hypertarget{build-tyorcollection}{}
 The function
 \[
@@ -109,12 +97,12 @@ The function
 \]
 transforms a type annotation parse node $\vparsednode$ into a type AST node $\vastnode$.
 \ProseOtherwiseBuildError
-} % END_OF_IGNORED_RELATION
+} % END_OF_UNIMPORTED_RELATION
 
 
 We define $\buildtyorcollection$ per the corresponding type in the following sections.
 
-\MarkedIgnoredRelationDefinition{
+\NotImportedToASLSpecYet{
 \hypertarget{build-as-ty}{}
 The function
 \[
@@ -123,7 +111,7 @@ The function
 \]
 transforms a type annotation parse node $\vparsednode$ into a type AST node $\vastnode$.
 \ProseOtherwiseBuildError
-} % END_OF_IGNORED_RELATION
+} % END_OF_UNIMPORTED_RELATION
 
 
 Formally:
@@ -137,7 +125,7 @@ Formally:
 
 \hypertarget{integertypeterm}{}
 \section{Integer Types\label{sec:IntegerTypes}}
-The \emph{\integertypesterm{}} represent mathematical integer value.
+The \emph{\integertypesterm{}} represent the mathematical integer values.
 
 There are four kinds of integer types, and we
 use the term \integertypeterm{} to refer to them collectively:
@@ -225,21 +213,7 @@ is a parameterized integer type, \underline{not} an unconstrained integer type.
 
 \subsection{Abstract Syntax\label{sec:IntegerTypesAST}}
 \RenderTypes[remove_hypertargets]{ty_int_constraint_and_kind}
-\BackupOriginalAST{
-  \begin{flalign*}
-\ty \derives\ & \TInt(\constraintkind)\\
-\constraintkind \derives\ & \unconstrained
-& \\
-|\ & \wellconstrained(\intconstraint^{+})
-& \\
-|\ & \pendingconstrained{}
-& \\
-|\ & \parameterized(\overtext{\identifier}{parameter}) &\\
-\intconstraint \derives\ & \ConstraintExact(\expr)
-& \\
-|\ & \ConstraintRange(\overtext{\expr}{start}, \overtext{\expr}{end})&
-\end{flalign*}
-}
+
 
 \ASTRuleDef{Ty.TInt}
 \begin{mathpar}
@@ -250,14 +224,14 @@ is a parameterized integer type, \underline{not} an unconstrained integer type.
 \end{mathpar}
 
 \ASTRuleDef{IntConstraintsOpt}
-\MarkedIgnoredRelationDefinition{
+\NotImportedToASLSpecYet{
 \hypertarget{build-constraintkindopt}{}
 The function
 \[
   \buildconstraintkindopt(\overname{\parsenode{\Nconstraintkindopt}}{\vparsednode}) \;\aslto\; \overname{\constraintkind}{\vastnode}
 \]
 transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
-} % END_OF_IGNORED_RELATION
+} % END_OF_UNIMPORTED_RELATION
 
 
 \begin{mathpar}
@@ -279,14 +253,14 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 \end{mathpar}
 
 \subsection{ASTRule.IntConstraints\label{sec:ASTRule.IntConstraints}}
-\MarkedIgnoredRelationDefinition{
+\NotImportedToASLSpecYet{
 \hypertarget{build-constraintkind}{}
 The function
 \[
   \buildconstraintkind(\overname{\parsenode{\Nconstraintkind}}{\vparsednode}) \;\aslto\; \overname{\constraintkind}{\vastnode}
 \]
 transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
-} % END_OF_IGNORED_RELATION
+} % END_OF_UNIMPORTED_RELATION
 
 
 \begin{mathpar}
@@ -310,14 +284,14 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 \end{mathpar}
 
 \ASTRuleDef{IntConstraint}
-\MarkedIgnoredRelationDefinition{
+\NotImportedToASLSpecYet{
 \hypertarget{build-intconstraint}{}
 The function
 \[
   \buildintconstraint(\overname{\parsenode{\Nintconstraint}}{\vparsednode}) \;\aslto\; \overname{\intconstraint}{\vastnode}
 \]
 transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
-} % END_OF_IGNORED_RELATION
+} % END_OF_UNIMPORTED_RELATION
 
 
 \begin{mathpar}
@@ -347,20 +321,36 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 \hypertarget{def-iswellconstrainedinteger}{}
 We use the following helper predicates to classify integer types:
 \[
-  \begin{array}{rcl}
-  \isunconstrainedinteger(\overname{\ty}{\vt}) &\aslto& \Bool\\
-  \isparameterizedinteger(\overname{\ty}{\vt}) &\aslto& \Bool\\
-  \iswellconstrainedinteger(\overname{\ty}{\vt}) &\aslto& \Bool
-  \end{array}
+\isunconstrainedinteger(\overname{\ty}{\vt}) \aslto \overname{\Bool}{\vb}
 \]
-Those are defined as follows:
+\begin{mathpar}
+\inferrule{}{
+  \isunconstrainedinteger(\vt) \typearrow \overname{\vt = \TInt(c) \land \astlabel(c)=\Unconstrained}{\vb}
+}
+\end{mathpar}
+
 \[
-  \begin{array}{rcl}
-  \isunconstrainedinteger(\vt) &\triangleq& \vt = \TInt(c) \land \astlabel(c)=\Unconstrained\\
-  \isparameterizedinteger(\vt) &\triangleq& \vt = \TInt(c) \land \astlabel(c)=\Parameterized\\
-  \iswellconstrainedinteger(\vt) &\triangleq& \vt = \TInt(c) \land \astlabel(c)=\WellConstrained\\
-\end{array}
+\isparameterizedinteger(\overname{\ty}{\vt}) \aslto \overname{\Bool}{\vb}
 \]
+\begin{mathpar}
+\inferrule{}{
+  \isparameterizedinteger(\vt) \typearrow \overname{\vt = \TInt(c) \land \astlabel(c)=\Parameterized}{\vb}
+}
+\end{mathpar}
+
+\[
+\iswellconstrainedinteger(\overname{\ty}{\vt}) \aslto \overname{\Bool}{\vb}
+\]
+\begin{mathpar}
+\inferrule{}{
+{
+  \iswellconstrainedinteger(\vt) \typearrow \overname{
+    \begin{array}{cl}\vt = \TInt(c) & \land\\
+      \astlabel(c)=\WellConstrained &
+    \end{array}}{\vb}
+}
+}
+\end{mathpar}
 \identd{ZTPP} \identr{WJYH} \identr{HJPN} \identr{CZTX} \identr{TPHR}
 
 \hypertarget{def-unconstrainedinteger}{}
@@ -397,7 +387,7 @@ correspond to \CaseName{pending\_constrained}.
   \item \AllApplyCase{well\_constrained}
     \begin{itemize}
       \item $\tty$ is the well-constrained integer type constrained by
-        constraints $\vc_i$, for $u=1..k$;
+        constraints $\vc_i$, for $i=1..k$;
       \item annotating each constraint $\vc_i$, for $i=1..k$,
       yields $(\newc_i, \vxs_i)$\ProseOrTypeError;
       \item $\newconstraints$ is the list of annotated constraints $\newc_i$,
@@ -470,19 +460,6 @@ correspond to \CaseName{pending\_constrained}.
 
 \TypingRuleDef{AnnotateConstraint}
 \RenderRelation{annotate_constraint}
-\BackupOriginalRelation{
-The function
-\[
-\begin{array}{r}
-\annotateconstraint(\overname{\staticenvs}{\tenv} \aslsep \overname{\intconstraint}{\vc})
-\aslto (\overname{\intconstraint}{\newc} \times \overname{\TSideEffectSet}{\vses})\ \cup \\
-\overname{\typeerror}{\TypeErrorConfig}
-\end{array}
-\]
-annotates an integer constraint $\vc$ in the \staticenvironmentterm{} $\tenv$ yielding the annotated
-integer constraint $\newc$ and \sideeffectsetterm\ $\vses$.
-\ProseOtherwiseTypeError
-} % END_OF_BACKUP_RELATION
 
 \listingref{annotate-constraint} shows examples of \wellconstrainedintegertypesterm{}
 and the resulting annotated constraints in comments.
@@ -495,15 +472,14 @@ expressions of \texttt{let} storage elements.
 \begin{itemize}
   \item \AllApplyCase{exact}
   \begin{itemize}
-    \item $\vc$ is the exact integer constraint for the expression $\ve$, that is, \\ $\ConstraintExact(\ve)$;
-    \item applying $\annotatesymbolicconstrainedinteger$ to $\ve$ in $\tenv$ yields \\
-          $(\vep, \vses)$\ProseOrTypeError;
-    \item define $\newc$ as the exact integer constraint for $\vep$, that is, $\ConstraintExact(\vep)$.
+        \item $\vc$ is the exact integer constraint for the expression $\ve$, that is,\\ $\ConstraintExact(\ve)$;
+        \item applying $\annotatesymbolicconstrainedinteger$ to $\ve$ in $\tenv$ yields\\ $(\vep, \vses)$\ProseOrTypeError;
+        \item define $\newc$ as the exact integer constraint for $\vep$ ($\ConstraintExact(\vep)$).
   \end{itemize}
 
   \item \AllApplyCase{range}
   \begin{itemize}
-    \item $\vc$ is the range integer constraint for expressions $\veone$ and $\vetwo$, that is, \\ $\ConstraintRange(\veone, \vetwo)$;
+    \item $\vc$ is the \Proserangeconstraint{$\veone$}{$\vetwo$} ($\ConstraintRange(\veone, \vetwo)$);
     \item applying $\annotatesymbolicconstrainedinteger$ to $\veone$ in $\tenv$ yields\\ $(\veonep, \vsesone)$\ProseOrTypeError;
     \item applying $\annotatesymbolicconstrainedinteger$ to $\vetwo$ in $\tenv$ yields\\ $(\vetwop, \vsestwo)$\ProseOrTypeError;
     \item define $\newc$ as the range integer constraint for expressions $\veonep$ and $\vetwop$, that is, $\ConstraintRange(\veonep, \vetwop)$;
@@ -514,9 +490,10 @@ expressions of \texttt{let} storage elements.
 \FormallyParagraph
 \begin{mathpar}
 \inferrule[exact]{
+  \vc = \ConstraintExact(\ve)\\
   \annotatesymbolicconstrainedinteger(\tenv, \ve) \typearrow (\vep, \vses) \OrTypeError
 }{
-  \annotateconstraint(\tenv, \overname{\ConstraintExact(\ve)}{\vc}) \typearrow (\overname{\ConstraintExact(\vep)}{\newc}, \vses)
+  \annotateconstraint(\tenv, \vc) \typearrow (\overname{\ConstraintExact(\vep)}{\newc}, \vses)
 }
 \end{mathpar}
 
@@ -546,8 +523,8 @@ There is no mechanism in the language to generate an irrational value of \realty
 Conversions from an \integertypeterm{} value to a \realtypeterm{} value are performed
 using the \stdlibfunc{Real}.
 %
-Conversions from a \realtypeterm{} value an \integertypeterm{} value to are performed
-using the \stdlibfunc{RoundDown}, \stdlibfunc{RoundUp}. and \stdlibfunc{RoundTowardsZero}.
+Conversions from a \realtypeterm{} value to an \integertypeterm{} value to are performed
+using the \stdlibfunc{RoundDown}, the \stdlibfunc{RoundUp}, and the \stdlibfunc{RoundTowardsZero}.
 
 \ExampleDef{Well-typed Real Types}
 In \listingref{typing-treal}, all the uses of the \realtypeterm{} are well-typed.
@@ -560,11 +537,7 @@ In \listingref{typing-treal}, all the uses of the \realtypeterm{} are well-typed
 
 \subsection{Abstract Syntax}
 \RenderTypes[remove_hypertargets]{ty_real}
-\BackupOriginalAST{
-\begin{flalign*}
-\ty \derives\ & \TReal &
-\end{flalign*}
-}
+
 
 \ASTRuleDef{TReal}
 \begin{mathpar}
@@ -616,11 +589,7 @@ In \listingref{typing-tstring}, all the uses of the \stringtypeterm{} are well-t
 
 \subsection{Abstract Syntax}
 \RenderTypes[remove_hypertargets]{ty_string}
-\BackupOriginalAST{
-\begin{flalign*}
-\ty \derives\ & \TString&
-\end{flalign*}
-}
+
 
 \ASTRuleDef{Ty.String}
 \begin{mathpar}
@@ -666,11 +635,7 @@ In \listingref{typing-tbool}, all the uses of the \booleantypeterm{} are well-ty
 
 \subsection{Abstract Syntax}
 \RenderTypes[remove_hypertargets]{ty_bool}
-\BackupOriginalAST{
-\begin{flalign*}
-\ty \derives\ & \TBool &
-\end{flalign*}
-}
+
 
 \ASTRuleDef{Ty.BoolType}
 \begin{mathpar}
@@ -703,7 +668,7 @@ See \ExampleRef{Well-typed Boolean Types} for examples of well-typed \booleantyp
 
 \section{Bitvector Types\label{sec:BitvectorTypes}}
 \hypertarget{bitvectortypeterm}{}
-\emph{Bitvectors} represent sequences of $0$ and $1$ bits.
+\emph{Bitvectors} represent sequences of $0$ and $1$ bits ordered according to \RequirementRef{BitvectorOrdering}.
 %
 The \texttt{bits(N)} type represents a bitvector of width \texttt{N},
 where \texttt{N} may specify a fixed width or a constrained width.
@@ -729,12 +694,6 @@ as exemplified by \listingref{Bit}.
 It is \desugared{} by \ASTRuleCaseRef{Ty.TBits}{BIT}.
 
 \ASLListing{Syntactic sugar for single bit bitvector types}{Bit}{\definitiontests/Bit.asl}
-
-\RequirementDef{BitvectorsMSB}
-In a bitvector literal, the most significant bit (\ProseMSB) is the leftmost value
-and the least significant bit (\ProseLSB) is the rightmost value.
-% INLINED_EXAMPLE
-For example, in \verb|'10'| the \ProseMSB{} is \verb|1| and the \ProseLSB{} is \verb|0|.
 
 \RequirementDef{BitvectorWidthImmutable}
 The width of a bitvector cannot be modified.
@@ -796,11 +755,7 @@ bv=0x14, rotated twice=0x05
 
 \subsection{Abstract Syntax}
 \RenderTypes[remove_hypertargets]{ty_bits}
-\BackupOriginalAST{
-\begin{flalign*}
-\ty \derives\ & \TBits(\overtext{\expr}{width}, \bitfield^{*}) &
-\end{flalign*}
-}
+
 
 \ASTRuleDef{Ty.TBits}
 \begin{mathpar}
@@ -849,13 +804,11 @@ to be \constrainedintegersterm.
     \begin{itemize}
       \item $\bitfields$ is not empty;
       \item checking that $\seswidth$ is \pureterm{} via $\sesispure$ yields $\True$\ProseTerminateAs{\SideEffectViolation};
-      \item annotating the bitfields $\bitfields$ yields \\
-            $(\bitfieldsp, \vsesbitfields)$\ProseOrTypeError;
+      \item annotating the bitfields $\bitfields$ yields\\ $(\bitfieldsp, \vsesbitfields)$\ProseOrTypeError;
       \item \Prosestaticeval{$\tenv$}{$\ewidthp$}{$\LInt(\vwidth)$};
       \item \Prosecheckcommonbitfieldsalign{$\tenv$}{$\bitfieldsp$}{$\vwidth$}\ProseOrTypeError;
       \item \Proseeqdef{$\newty$}{the \bitvectortypeterm{} with width given by the expression
-            $\ewidthp$ and the bitfields given by $\bitfieldsp$, that is, \\
-            $\TBits(\ewidthp, \bitfieldsp)$};
+            $\ewidthp$ and the bitfields given by $\bitfieldsp$, that is, $\TBits(\ewidthp, \bitfieldsp)$};
       \item \Proseeqdef{$\vses$}{the union of $\seswidth$ and $\vsesbitfields$}.
     \end{itemize}
 
@@ -909,7 +862,7 @@ to be \constrainedintegersterm.
   {
     \begin{array}{r}
   \annotatetype(\overname{\Ignore}{\vdecl}, \tenv, \overname{\TBits(\ewidth, \bitfields)}{\tty}) \typearrow \\
-  (\overname{\TBits(\ewidthp, \bitfieldsp)}{\newty}, \overname{\seswidth}{\seswidth})
+  (\overname{\TBits(\ewidthp, \emptylist)}{\newty}, \overname{\seswidth}{\seswidth})
     \end{array}
   }
 }
@@ -964,11 +917,7 @@ element index.
 
 \subsection{Abstract Syntax}
 \RenderTypes[remove_hypertargets]{ty_tuple}
-\BackupOriginalAST{
-\begin{flalign*}
-\ty \derives\ & \TTuple(\ty^{*}) &
-\end{flalign*}
-}
+
 
 \ASTRuleDef{Ty.TTuple}
 \begin{mathpar}
@@ -998,7 +947,7 @@ See \ExampleRef{Well-typed Tuples} for examples of well-typed \tupletypesterm.
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
-  k \geq 2\\
+  k > 1\\
   \tys \eqname \tty_{1..k}\\
   i=1..k: \annotatetype(\False, \tenv, \tty_i) \typearrow (\ttyp_i, \vxs_i) \OrTypeError\\\\
   \vses \eqdef \bigcup_{i=1..k} \vxs_i
@@ -1079,11 +1028,7 @@ where an enumeration is used outside of a type definition.
 
 \subsection{Abstract Syntax}
 \RenderTypes[remove_hypertargets]{ty_enum}
-\BackupOriginalAST{
-\begin{flalign*}
-\ty \derives\ & \TEnum(\overtext{\Identifier^{*}}{labels}) &
-\end{flalign*}
-}
+
 
 \ASTRuleDef{TyDecl.TEnum}
 \begin{mathpar}
@@ -1132,7 +1077,7 @@ show examples of ill-typed enumeration type declarations.
 \begin{mathpar}
 \inferrule{
   \checknoduplicates(\vli) \typearrow \True \OrTypeError\\\\
-  \vl \in \vli: \checkvarnotingenv(G^\tenv, \vl) \typearrow \True \OrTypeError
+  \vl \in \vli: \checkvarnotingenv(\tenv.\staticenvsG, \vl) \typearrow \True \OrTypeError
 }{
   \annotatetype(\True, \tenv, \overname{\TEnum(\vli)}{\tty}) \typearrow (\overname{\TEnum(\vli)}{\newty}, \overname{\emptyset}{\vses})
 }
@@ -1178,11 +1123,7 @@ In \listingref{typing-tarray}, all the uses of array types are well-typed.
 
 \subsection{Abstract Syntax}
 \RenderTypes[remove_hypertargets]{ty_array}
-\BackupOriginalAST{
-\begin{flalign*}
-\ty \derives\ & \TArray(\arrayindex, \ty) &\\
-\end{flalign*}
-}
+
 
 \RenderType[remove_hypertargets]{array_index}
 
@@ -1221,10 +1162,10 @@ Similarly in \listingref{typing-tarray-bad2}, the array type for \verb|illegal_a
     \begin{itemize}
       \item the array index is $\ve$ and determining whether $\ve$ corresponds to an enumeration in $\tenv$
       via $\getvariableenum$ yields the enumeration variable
-      name $\vs$ of size $\vi$, that is, $\some{ \vs, \vi }$\ProseOrTypeError;
+      name $\vs$ and list of labels $\vlabels$, that is, $\some{ \vs, \vlabels }$\ProseOrTypeError;
       \item $\newty$ is the array type indexed by an \enumerationtypeterm{}
-      named $\vs$ of length $\vi$ and of elements of type $\vtp$, that is, $\TArray(\ArrayLengthEnum(\vs, \vi), \vtp)$;
-      \item define $\vses$ as $\vsest$.
+      named $\vs$ with list of labels $\vlabels$ and of elements of type $\vtp$\\ ($\TArray(\ArrayLengthEnum(\vs, \vlabels), \vtp)$);
+      \item \Proseeqdef{$\vses$}{the empty set}.
     \end{itemize}
 
     \item \AllApplyCase{expr\_not\_enum}
@@ -1232,11 +1173,11 @@ Similarly in \listingref{typing-tarray-bad2}, the array type for \verb|illegal_a
       \item the array index is $\ve$ and determining whether $\ve$ corresponds to an enumeration in $\tenv$
       via $\getvariableenum$ yields $\None$ (meaning it does not
       correspond to an enumeration)\ProseOrTypeError;
-      \item annotating the \symbolicallyevaluableterm{} \constrainedintegerterm{} expression $\ve$ yields\\
+      \item annotating the \symbolicallyevaluableterm{} \constrainedintegerterm{} expression $\ve$ yields
       $(\vep, \vsesindex)$\ProseOrTypeError;
       \item $\newty$ the array type indexed by integer bounded by
-      the expression $\vep$ and of elements of type $\vtp$, that is,
-      $\TArray(\ArrayLengthExpr(\vep), \vtp)$;
+      the expression $\vep$ and of elements of type $\vtp$
+      ($\TArray(\ArrayLengthExpr(\vep), \vtp)$);
       \item define $\vses$ as the union of $\vsest$ and $\vsesindex$.
     \end{itemize}
   \end{itemize}
@@ -1245,12 +1186,13 @@ Similarly in \listingref{typing-tarray-bad2}, the array type for \verb|illegal_a
 \FormallyParagraph
 \begin{mathpar}
 \inferrule[expr\_is\_enum]{
+  \tty = \AbbrevTArrayLengthExpr{\ve}{\vt}\\
   \annotatetype(\False, \tenv, \vt) \typearrow (\vtp, \vsest) \OrTypeError\\\\
   \commonprefixline\\\\
   \getvariableenum(\tenv, \ve) \typearrow \some{ \vs, \vlabels }
 }{
-  \annotatetype(\overname{\Ignore}{\vdecl}, \tenv, \overname{\AbbrevTArrayLengthExpr{\ve}{\vt}}{\tty}) \typearrow
-  (\overname{\AbbrevTArrayLengthEnum{\ve}{\vlabels}{\vtp}}{\newty}, \overname{\emptyset}{\vsest})
+  \annotatetype(\overname{\Ignore}{\vdecl}, \tenv, \tty) \typearrow
+  (\overname{\AbbrevTArrayLengthEnum{\ve}{\vlabels}{\vtp}}{\newty}, \overname{\emptyset}{\vses})
 }
 \end{mathpar}
 
@@ -1270,17 +1212,6 @@ Similarly in \listingref{typing-tarray-bad2}, the array type for \verb|illegal_a
 
 \TypingRuleDef{GetVariableEnum}
 \RenderRelation{get_variable_enum}
-\BackupOriginalRelation{
-The function
-\[
-\getvariableenum(\overname{\staticenvs}{\tenv} \aslsep \overname{\expr}{\ve}) \aslto
-\Option{ (\overname{\Identifier}{\vx}, \overname{\KleenePlus{\Identifier}}{\vlabels})}
-\]
-tests whether the expression $\ve$ represents a variable of an \enumerationtypeterm{}.
-If so, the result is $\vx$ --- the name of the variable and the list of labels $\vlabels$,
-declared for the \enumerationtypeterm{}.
-Otherwise, the result is $\None$.
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Retrieving Enumeration Labels from Variable Expressions}
 \listingref{typing-getvariableenum} shows examples of retrieving
@@ -1331,7 +1262,7 @@ enumeration labels from variable expressions.
 
 \begin{mathpar}
 \inferrule[no\_declared\_type]{
-  G^\tenv.\declaredtypes(\vx) = \bot
+  \tenv.\staticenvsG.\declaredtypes(\vx) = \bot
 }{
   \getvariableenum(\tenv, \overname{\EVar(\vx)}{\ve}) \typearrow \None
 }
@@ -1339,7 +1270,7 @@ enumeration labels from variable expressions.
 
 \begin{mathpar}
 \inferrule[declared\_enum]{
-  G^\tenv.\declaredtypes(\vx) = (\vt, \Ignore)\\
+  \tenv.\staticenvsG.\declaredtypes(\vx) = (\vt, \Ignore)\\
   \makeanonymous(\tenv, \vt) \typearrow \TEnum(\vlabels)
 }{
   \getvariableenum(\tenv, \overname{\EVar(\vx)}{\ve}) \typearrow \some{(\vx, \vlabels)}
@@ -1348,7 +1279,7 @@ enumeration labels from variable expressions.
 
 \begin{mathpar}
 \inferrule[declared\_not\_enum]{
-  G^\tenv.\declaredtypes(\vx) = (\vt, \Ignore)\\
+  \tenv.\staticenvsG.\declaredtypes(\vx) = (\vt, \Ignore)\\
   \makeanonymous(\tenv, \vt) \typearrow \vtone\\
   \astlabel(\vtone) \neq \TEnum
 }{
@@ -1365,18 +1296,6 @@ See \ExampleRef{Annotating Symbolically Evaluable Expressions}.
 
 \TypingRuleDef{AnnotateSymbolicallyEvaluableExpr}
 \RenderRelation{annotate_symbolically_evaluable_expr}
-\BackupOriginalRelation{
-The function
-\[
-\begin{array}{r}
-  \annotatesymbolicallyevaluableexpr(\overname{\staticenvs}{\tenv} \aslsep \overname{\expr}{\ve}) \aslto \\
-  (\overname{\ty}{\vt}\times\overname{\expr}{\vep}\times\overname{\TSideEffectSet}{\vses}) \cup \overname{\typeerror}{\TypeErrorConfig}
-\end{array}
-\]
-annotates the expression $\ve$ in the \staticenvironmentterm{} $\tenv$ and checks that it is \symbolicallyevaluableterm,
-yielding the type in $\vt$, the annotated expression $\vep$ and the \sideeffectsetterm{} $\vses$.
-\ProseOtherwiseTypeError
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Annotating Symbolically Evaluable Expressions}
 \listingref{typing-annotatesymbolicallyevaluableexpr} shows examples of
@@ -1404,15 +1323,6 @@ expressions and classifies them as either \symbolicallyevaluableterm{} or not.
 
 \TypingRuleDef{CheckUnderlyingInteger}
 \RenderRelation{check_underlying_integer}
-\BackupOriginalRelation{
-The function
-\[
-  \checkunderlyinginteger(\overname{\staticenvs}{\tenv} \aslsep \overname{\ty}{\vt}) \aslto
-  \{\True\} \cup \typeerror
-\]
-returns $\True$ is $\vt$ is has the \underlyingtypeterm{} of an \integertypeterm{}.
-\ProseOtherwiseTypeError
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Checking for an Underlying Integer Type}
 All of the expressions appearing on the right-hand-side of the assignments in
@@ -1462,11 +1372,7 @@ is ill-typed, since the field \verb|v| repeats.
 
 \subsection{Abstract Syntax}
 \RenderTypes[remove_hypertargets]{ty_record}
-\BackupOriginalAST{
-\begin{flalign*}
-\ty \derives\ & \TRecord(\field^{*}) &
-\end{flalign*}
-}
+
 
 \ASTRuleDef{TyDecl.TRecord}
 \begin{mathpar}
@@ -1537,11 +1443,7 @@ In \listingref{typing-texception}, all the uses of exception types are well-type
 
 \subsection{Abstract Syntax}
 \RenderTypes[remove_hypertargets]{ty_exception}
-\BackupOriginalAST{
-\begin{flalign*}
-\ty \derives\ & \TException(\field^{*}) &
-\end{flalign*}
-}
+
 
 \ASTRuleDef{TyDecl.TException}
 \begin{mathpar}
@@ -1573,17 +1475,17 @@ See \listingref{checkisnotcollection} for an ill-typed specification.
 
 \subsection{Abstract Syntax}
 \RenderTypes[remove_hypertargets]{ty_collection}
-\BackupOriginalAST{
-\begin{flalign*}
-\ty \derives\ & \TCollection(\field^{*}) &
-\end{flalign*}
-}
+
 
 \ASTRuleDef{TyDecl.TCollection}
 \begin{mathpar}
 \inferrule{}{
-  \buildtyorcollection(\Ntyorcollection(\Tcollection, \punnode{\Nfields})) \astarrow
+{
+  \begin{array}{r}
+  \buildtyorcollection(\Ntyorcollection(\Tcollection, \punnode{\Nfields})) \astarrow\\
   \overname{\TCollection(\astof{\vfields})}{\vastnode}
+  \end{array}
+}
 }
 \and
 \inferrule{}{
@@ -1592,7 +1494,7 @@ See \listingref{checkisnotcollection} for an ill-typed specification.
 }
 \end{mathpar}
 
-\section{Typing Collection Types}
+\subsection{Typing Collection Types}
 \ExampleDef{Typing Collection Types}
 \listingref{TCollection} shows examples of well-typed collection types
 and ill-typed collection types in comments.
@@ -1621,6 +1523,7 @@ collection types in comments.
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
+  \tty = \TCollection(\fields)\\
   \fields \eqname [i=1..k: (\vx_i, \vt_i)]\\
   \checknoduplicates(\vx_{1..k}) \typearrow \True \OrTypeError\\\\
   i=1..k: \annotatetype(\False, \tenv, \vt_i) \typearrow (\vtp_i, \vxs_i) \OrTypeError\\\\
@@ -1628,12 +1531,12 @@ collection types in comments.
   i=1..k: \checkstructurelabel(\tenv, \vtp_i, \TBits) \typearrow \True \OrTypeError\\\\
   \vses \eqdef \bigcup_{i=1..k} \vxs_i
 }{
-  \annotatetype(\False, \tenv, \overname{\TCollection(\fields)}{\tty}) \typearrow (\overname{\TCollection(\fieldsp)}{\newty}, \vses)
+  \annotatetype(\False, \tenv, \tty) \typearrow (\overname{\TCollection(\fieldsp)}{\newty}, \vses)
 }
 \end{mathpar}
 
 \section{Named Types\label{sec:NamedTypes}}
-Named type declarations allow declaring new types names with a given type.
+A named type declaration allows declaring a new type associated with the given name.
 The intent is that, by default, any named type should not be assignable to or from any other named type, even
 if they coincidentally have the same \structureterm. Where assignment between named types is desired it is usually
 achieved by grouping related types via a common supertype.
@@ -1666,11 +1569,7 @@ due to an assignment between two different named types (\verb|Char| and \verb|By
 
 \subsection{Abstract Syntax}
 \RenderTypes[remove_hypertargets]{ty_named}
-\BackupOriginalAST{
-\begin{flalign*}
-\ty \derives\ & \TNamed(\overtext{\Identifier}{type name}) &
-\end{flalign*}
-}
+
 
 \ASTRuleDef{Ty.TNamed}
 \begin{mathpar}
@@ -1704,9 +1603,9 @@ show examples of ill-typed named types.
 \FormallyParagraph
 \begin{mathpar}
 \inferrule{
-  \techeck(G^\tenv.\declaredtypes(\vx) \neq \bot, \UndefinedIdentifier) \typearrow \True \OrTypeError\\\\
-  G^\tenv.\declaredtypes(\vx) = (\Ignore, \vpurity)\\
-  \vses \eqdef \{\ \GlobalEffectTerm(\vpurity), \Immutability(\True) \}
+  \techeck(\tenv.\staticenvsG.\declaredtypes(\vx) \neq \bot, \UndefinedIdentifier) \typearrow \True \OrTypeError\\\\
+  \tenv.\staticenvsG.\declaredtypes(\vx) = (\Ignore, \vpurity)\\
+  \vses \eqdef \{\ \GlobalEffect(\vpurity), \Immutability(\True) \}
 }{
   \annotatetype(\overname{\Ignore}{\vdecl}, \tenv, \overname{\TNamed(\vx)}{\tty}) \typearrow (\overname{\TNamed(\vx)}{\newty}, \vses)
 }
@@ -1733,7 +1632,7 @@ A declared type can be an \enumerationtypeterm{}, a \recordtypeterm, an \excepti
 \identr{RGRVJ}%
 \RequirementDef{RestrictionsOnAnonymousTypes}
 A declared type for an enumeration, a record type, or an exception type
-are only permitted in named type declarations. This is enforced by \TypingRuleRef{TNonDecl}.
+is only permitted in named type declarations. This is enforced by \TypingRuleRef{TNonDecl}.
 %
 See \ExampleRef{Ill-typed pending-constrained integer type}.
 

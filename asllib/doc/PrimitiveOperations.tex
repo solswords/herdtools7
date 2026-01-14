@@ -8,7 +8,7 @@ and pairs of \nativevaluesterm{} (binary operations) into other \nativevaluester
 The term \emph{Primitive Operations} denotes the set of operations available
 in the expression syntax that use an \emph{Operator} derived from either
 $\unop$ or $\binop$.
-This chapter defines the Primitive Operations as functions over literals.
+This chapter defines the Primitive Operations as functions on literals.
 
 Primitive operations are evaluated both statically and dynamically.
 We define the static evaluation of primitive operations on literals
@@ -22,15 +22,15 @@ on \nativevaluesterm{} via $\evalunop$ and $\evalbinop$.
 
 \ChapterOutline
 \begin{itemize}
-  \item \FormalRelationsRef{Primitive Operations} defines the formal relations
-        primitive operations;
+  \item \FormalRelationsRef{Primitive Operations} defines the formal relations for primitive operations;
   \item \SyntaxRef{Primitive Operations} defines the syntax for unary operations and binary operations;
   \item \AbstractSyntaxRef{Primitive Operations} defines the AST for unary operations and binary operations;
   \item \secref{PrimitiveOperationSignatures} defines the signatures for all primitive operations;
+  \item \secref{PrimitiveOperationDomains} defines the valid sets of operand values for primitive operations;
   \item \TypeRulesRef{Primitive Operations} defines the static evaluation of primitive operations for literal values;
-  \item \SemanticsRulesRef{Primitive Operations} defines how to adapt $\unopliterals$
-        and $\binopliterals$ to be used by the dynamic semantics. Essentially this is done by unwrapping
-        \nativevaluesterm{} into literal values, applying $\unopliterals$ and $\binopliterals$,
+  \item \SemanticsRulesRef{Primitive Operations} defines how to adapt the static evaluation of the primitive operations
+        (given by $\unopliterals$ and $\binopliterals$) for the dynamic semantics. Essentially this is done by unwrapping
+        \nativevaluesterm{} into literal values, applying either $\unopliterals$ or $\binopliterals$,
         and finally wrapping the results by \nativevaluesterm{}.
 \end{itemize}
 
@@ -42,14 +42,14 @@ on \nativevaluesterm{} via $\evalunop$ and $\evalbinop$.
   and $\buildbinop$ (see \ASTRuleRef{Binop}).
 
 \paragraph{Typing:} primitive operations are not directly annotated; rather \unopexpressionsterm{}
-  and \binopexpressionsterm{} are annotated (see \TypingRuleRef{EUnop} and \TypingRuleRef{EBinop}).\\
+  and \binopexpressionsterm{} are annotated (see \TypingRuleRef{EUnop} and \TypingRuleRef{EBinop}).
   Unary operations are statically evaluated by $\unopliterals$
   (see \TypingRuleRef{UnopLiterals}) and binary operations are statically evaluated
-  by $\binopliterals$ \\
+  by $\binopliterals$
   (see \TypingRuleRef{BinopLiterals}).
 
 \paragraph{Semantics:} unary operations are dynamically evaluated via
-  $\evalunop$ \\
+  $\evalunop$
   (see \SemanticsRuleRef{UnopValues})
   and binary operations are dynamically evaluated via
   $\evalbinop$ (see \SemanticsRuleRef{BinopValues}).
@@ -58,41 +58,23 @@ on \nativevaluesterm{} via $\evalunop$ and $\evalbinop$.
 \begin{flalign*}
 \Nunop \derivesinline\ & \Tbnot \;|\; \Tminus \;|\; \Tnot &\\
 \Nbinop \derivesinline\ & \Tand \;|\; \Tband \;|\; \Tbor \;|\; \Tbeq \;|\; \Tdiv \;|\; \Tdivrm \;|\; \Txor \;|\; \Teqop \;|\; \Tneq &\\
-                      |\ & \Tgt \;|\; \Tgeq \;|\; \Timpl \;|\; \Tlt \;|\; \Tleq \;|\; \Tplus \;|\; \Tminus \;|\; \Tmod \;|\; \Tmul &\\
+                      |\ & \Tgt \;|\; \Tgeq \;|\; \Tbimpl \;|\; \Tlt \;|\; \Tleq \;|\; \Tplus \;|\; \Tminus \;|\; \Tmod \;|\; \Tmul &\\
                       |\ & \Tor \;|\; \Trdiv \;|\; \Tshl \;|\; \Tshr \;|\; \Tpow \;|\; \Tcoloncolon \;|\; \Tplusplus
 \end{flalign*}
 
 \AbstractSyntaxDef{Primitive Operations}
 \RenderTypes[remove_hypertargets]{unop_and_binop}
-\BackupOriginalAST{
-\begin{flalign*}
-\unop \derives\ & \overname{\BNOT}{\texttt{"!"}} \;|\; \overname{\NEG}{\texttt{"-"}} \;|\; \overname{\NOT}{\texttt{"NOT"}} & \\
-\binop  \derives\ & \overname{\BAND}{\texttt{"\&\&"}} \;|\; \overname{\BOR}{\texttt{"||"}} \;|\; \overname{\IMPL}{\texttt{"==>"}}
-              \;|\; \overname{\BEQ}{\texttt{"<=>"}}
-        & \\
-        |\ & \overname{\EQOP}{\texttt{"=="}} \;|\; \overname{\NEQ}{\texttt{"!="}} \;|\; \overname{\GT}{\texttt{"<"}}
-        \;|\; \overname{\GEQ}{\texttt{">="}} \;|\; \overname{\LT}{\texttt{"<"}} \;|\; \overname{\LEQ}{\texttt{"<="}}
-        & \\
-        |\ & \overname{\PLUS}{\texttt{"+"}} \;|\; \overname{\MINUS}{\texttt{"-"}} \;|\; \overname{\OR}{\texttt{"OR"}}
-        \;|\; \overname{\XOR}{\texttt{"XOR"}} \;|\; \overname{\AND}{\texttt{"AND"}}
-        & \\
-        |\ & \overname{\MUL}{\texttt{"*"}} \;|\; \overname{\DIV}{\texttt{"DIV"}} \;|\; \overname{\DIVRM}{\texttt{"DIVRM"}}
-        \;|\; \overname{\MOD}{\texttt{"MOD"}} \;|\; \overname{\SHL}{\shiftleftlexeme}  \;|\; \overname{\SHR}{\shiftrightlexeme}
-        & \\
-        |\ & \overname{\RDIV}{\texttt{"/"}} \;|\; \overname{\POW}{\texttt{"\^{}"}} \;|\; \overname{\BVCONCAT}{\texttt{"::"}} \;|\; \overname{\STRCONCAT}{\texttt{"++"}}
-        &
-\end{flalign*}
-}
+
 
 \ASTRuleDef{Unop}
-\MarkedIgnoredRelationDefinition{
+\NotImportedToASLSpecYet{
 \hypertarget{build-unop}{}
 The function
 \[
   \buildunop(\overname{\parsenode{\Nunop}}{\vparsednode}) \;\aslto\; \overname{\unop}{\vastnode}
 \]
 transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
-} % END_OF_IGNORED_RELATION
+} % END_OF_UNIMPORTED_RELATION
 
 
 \begin{mathpar}
@@ -114,14 +96,14 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 \end{mathpar}
 
 \ASTRuleDef{Binop}
-\MarkedIgnoredRelationDefinition{
+\NotImportedToASLSpecYet{
 \hypertarget{build-binop}{}
 The function
 \[
   \buildbinop(\overname{\parsenode{\Nbinop}}{\vparsednode}) \;\aslto\; \overname{\binop}{\vastnode}
 \]
 transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
-} % END_OF_IGNORED_RELATION
+} % END_OF_UNIMPORTED_RELATION
 
 
 \begin{mathpar}
@@ -192,7 +174,7 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 
 \begin{mathpar}
 \inferrule[impl]{}{
-  \buildbinop(\Nbinop(\Timpl)) \astarrow \overname{\IMPL}{\vastnode}
+  \buildbinop(\Nbinop(\Tbimpl)) \astarrow \overname{\IMPL}{\vastnode}
 }
 \end{mathpar}
 
@@ -275,7 +257,7 @@ transforms a parse node $\vparsednode$ into an AST node $\vastnode$.
 \end{mathpar}
 
 \section{Primitive Operation Signatures\label{sec:PrimitiveOperationSignatures}}
-ASL follows mathematical and programming language tradition of allowing operators such as \texttt{+} to be overloaded
+ASL follows the mathematical and programming language tradition of allowing operators such as \texttt{+} to be overloaded
 to refer to one of several different operations.
 %
 \taref{BooleanOperators}, \taref{IntegerOperators}, \taref{BitvectorOperators}, \taref{RealOperators},
@@ -331,7 +313,7 @@ $\Tband$  & $\LBool$ & $\LBool$ & $\LBool$ & $\andbool$\\
 $\Tbor$   & $\LBool$ & $\LBool$ & $\LBool$ & $\orbool$\\
 $\Teqop$  & $\LBool$ & $\LBool$ & $\LBool$ & $\eqbool$\\
 $\Tneq$   & $\LBool$ & $\LBool$ & $\LBool$ & $\nebool$\\
-$\Timpl$  & $\LBool$ & $\LBool$ & $\LBool$ & $\impliesbool$\\
+$\Tbimpl$  & $\LBool$ & $\LBool$ & $\LBool$ & $\impliesbool$\\
 $\Tbeq$   & $\LBool$ & $\LBool$ & $\LBool$ & $\equivbool$\\
 \hline
 \end{tabular}
@@ -482,35 +464,52 @@ $\Tneq$   & $\LLabel$ & $\LLabel$ & $\LBool$ & $\neenum$\\
 \end{tabular}
 \end{table}
 
-\pagebreak
+\clearpage
+\section{Primitive Operation Domains\label{sec:PrimitiveOperationDomains}}
+The unary operations ($\aslnotbool$, $\negateint$, $\negatereal$, and $\notbits$) are valid for all possible literal values,
+and most binary operations are also valid for all possible combinations of literal values of their operands.
+However, some binary operations are only considered valid for a subset of possible operand values.
+For a given primitive operation, its \emph{domain} is the set of
+all possible combinations of argument values for which the operation is considered valid.
+%
+If the domain of a binary operation is not all possible combinations of argument values,
+then the operation is said to have a \emph{restricted domain}.
+%
+If an operation is applied to arguments that are outside its domain,
+the results is a \typingerrorterm{}.
+
+The following table summarises the conditions that must hold for a binary operation whose domain is restricted:
+\begin{center}
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Operation} $a\;\op\;b$& \textbf{Condition}\\
+\hline
+$\divint$         & $b > 0$ and $b$ divides $a$ evenly (that is, $a \mod b = 0$)\\
+$\fdivint$        & $b > 0$\\
+$\fremint$        & $b > 0$\\
+$\expint$         & $b \geq 0$\\
+$\shiftleftint$   & $b \geq 0$\\
+$\shiftrightint$  & $b \geq 0$\\
+$\divreal$        & $b \neq 0$\\
+$\expreal$        & $a \neq 0$ and $b \geq 0$\\
+$\addbits$        & length of $a$ = length of $b$\\
+$\subbits$        & length of $a$ = length of $b$\\
+$\andbits$        & length of $a$ = length of $b$\\
+$\orbits$         & length of $a$ = length of $b$\\
+$\xorbits$        & length of $a$ = length of $b$\\
+$\eqbits$         & length of $a$ = length of $b$\\
+$\nebits$         & length of $a$ = length of $b$\\
+\hline
+\end{tabular}
+\end{center}
+
 \TypeRulesDef{Primitive Operations}
 \TypingRuleDef{UnopLiterals}
 \RenderRelation{unop_literals}
-\BackupOriginalRelation{
-The function
-\[
-  \unopliterals(\overname{\unop}{\op} \aslsep \overname{\literal}{\vl}) \aslto
-  \overname{\literal}{\vr} \cup \typeerror
-\]
-statically evaluates a unary operator $\op$ (a terminal derived from the AST non-terminal for unary operators)
-over a literal $\vl$ and returns the resulting literal $\vr$.
-\ProseOtherwiseTypeError
-} % END_OF_BACKUP_RELATION
 
-\hypertarget{def-unopsignatures}{}
 The following set of unary operator types and argument types defines the correct argument type
 for a given unary operator:
-\[
-\unopsignatures \triangleq
-\left\{
-\begin{array}{lcll}
-  (\NEG   &,& \LInt)        &,\\
-  (\NEG   &,& \LReal)       &,\\
-  (\BNOT  &,& \LBool)       &,\\
-  (\NOT   &,& \LBitvector)  &\\
-\end{array}
-\right\}
-\]
+\RenderConstant{unop_signatures}
 
 \ExampleDef{Unary Operations}
 \listingref{unary-operations} shows applications of unary operations
@@ -558,7 +557,7 @@ not_bits: NOT '11 01' = 0x2
     \item define $\vr$ as the Boolean literal for $\neg\vb$.
   \end{itemize}
 
-  \item \AllApplyCase{not\_bits\_empty, not\_bits\_not\_empty}
+  \item \AllApplyCase{not\_bits}
   \begin{itemize}
     \item $\op$ is $\NOT$ and $\vl$ is a bitvector literal for the sequence of bits $\bits$;
     \item $\vc$ is the sequence of bits of the same length as $\bits$ where in each position
@@ -568,6 +567,7 @@ not_bits: NOT '11 01' = 0x2
 \end{itemize}
 
 \FormallyParagraph
+\BackupOriginalRule{
 \begin{mathpar}
 \inferrule[error]{
   (\op, \astlabel(\vl)) \not\in \unopsignatures
@@ -587,35 +587,25 @@ not_bits: NOT '11 01' = 0x2
   \unopliterals(\overname{\BNOT}{\op}, \overname{\LBool(b)}{\vl}) \typearrow \overname{\LBool(\neg b)}{\vr}
 }
 \and
-\inferrule[not\_bits\_empty]{
+\inferrule[not\_bits.empty]{
   \bits \eqname \emptylist\\
   c \eqdef \emptylist
 }{
   \unopliterals(\overname{\NOT}{\op}, \overname{\LBitvector(\bits)}{\vl}) \typearrow\overname{\LBitvector(c)}{\vr}
 }
 \and
-\inferrule[not\_bits\_not\_empty]{
-  \bits \eqname \vb_{1..k}\\
-  c \eqdef [i=1..k: (1-\vb_\vi)]
+\inferrule[not\_bits.non\_empty]{
+  \bits \eqname \vb_{k..0}\\
+  c \eqdef [i=k..0: (1-\vb_\vi)]
 }{
   \unopliterals(\overname{\NOT}{\op}, \overname{\LBitvector(\bits)}{\vl}) \typearrow\overname{\LBitvector(c)}{\vr}
 }
 \end{mathpar}
+} % END_OF_BACKUP_RULE
+\RenderRule{unop_literals}
 
 \TypingRuleDef{BinopLiterals}
 \RenderRelation{binop_literals}
-\BackupOriginalRelation{
-The function
-\[
-  \binopliterals(\overname{\binop}{\op} \aslsep \overname{\literal}{\vvone} \aslsep \overname{\literal}{\vvtwo}) \aslto
-  \overname{\literal}{\vr} \cup \typeerror
-\]
-statically evaluates a binary operator $\op$ (a terminal derived from the AST non-terminal for binary operators)
-over a pair of literals $\vlone$ and $\vltwo$
-and returns the resulting literal $\vr$.
-The result is a \typingerrorterm{}, if it is illegal to apply the operator
-to the given values, or a different kind of \typingerrorterm{} is detected.
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Boolean Operations}
 \listingref{binary-operations-boolean} shows applications
@@ -694,7 +684,7 @@ followed by the resulting console output.
 eq_int: 5 == 10 = FALSE
 ne_int: 5 != 10 = TRUE
 le_int: 10 <= 10 = TRUE
-lt_int: 10 < 10 = TRUE
+lt_int: 10 < 10 = FALSE
 lt_int: 5 < 10 = TRUE
 gt_int: 10 > 10 = FALSE
 gt_int: 11 > 10 = TRUE
@@ -789,10 +779,23 @@ binary operations in terms of the type of the binary operator
 and argument types of its operand literals:
 \[
 \binopsignatures \triangleq
+\begin{array}{ll}
+  \binoparithsignatures &\cup\\
+  \binoprelsignatures   &\cup\\
+  \binopboolsignatures  &\cup\\
+  \binopbitssignatures  &\cup\\
+  \binopstrsignatures   &
+\end{array}
+\]
+
+The set of valid signatures for arithmetic operations is defined as follows:
+\hypertarget{def-binoparithsignatures}{}
+\[
+\binoparithsignatures \triangleq
 \left\{
 \begin{array}{lclcll}
-  (\ADD      &,& \LInt &,& \LInt)&,\\
-  (\SUB     &,& \LInt &,& \LInt)&,\\
+  (\ADD       &,& \LInt &,& \LInt)&,\\
+  (\SUB       &,& \LInt &,& \LInt)&,\\
   (\MUL       &,& \LInt &,& \LInt)&,\\
   (\DIV       &,& \LInt &,& \LInt)&,\\
   (\DIVRM     &,& \LInt &,& \LInt)&,\\
@@ -800,41 +803,13 @@ and argument types of its operand literals:
   (\POW       &,& \LInt &,& \LInt)&,\\
   (\SHL       &,& \LInt &,& \LInt)&,\\
   (\SHR       &,& \LInt &,& \LInt)&,\\
-  (\EQ      &,& \LInt &,& \LInt)&,\\
-  (\NE       &,& \LInt &,& \LInt)&,\\
-  (\LE       &,& \LInt &,& \LInt)&,\\
-  (\LT        &,& \LInt &,& \LInt)&,\\
-  (\GE       &,& \LInt &,& \LInt)&,\\
-  (\GT        &,& \LInt &,& \LInt)&,\\
-  (\BAND      &,& \LBool &,& \LBool)&,\\
-  (\BOR       &,& \LBool &,& \LBool)&,\\
-  (\IMPL      &,& \LBool &,& \LBool)&,\\
-  (\BEQ       &,& \LBool &,& \LBool)&,\\
-  (\NE       &,& \LBool &,& \LBool)&,\\
   (\MUL       &,& \LInt  &,& \LReal)&,\\
   (\MUL       &,& \LReal &,& \LInt)&,\\
-  (\ADD      &,& \LReal &,& \LReal)&,\\
-  (\SUB     &,& \LReal &,& \LReal)&,\\
+  (\ADD       &,& \LReal &,& \LReal)&,\\
+  (\SUB       &,& \LReal &,& \LReal)&,\\
   (\MUL       &,& \LReal &,& \LReal)&,\\
   (\RDIV      &,& \LReal &,& \LReal)&,\\
   (\POW       &,& \LReal &,& \LInt)&,\\
-  (\EQ      &,& \LReal &,& \LReal)&,\\
-  (\NE       &,& \LReal &,& \LReal)&,\\
-  (\LE       &,& \LReal &,& \LReal)&,\\
-  (\LT        &,& \LReal &,& \LReal)&,\\
-  (\GE       &,& \LReal &,& \LReal)&,\\
-  (\GT        &,& \LReal &,& \LReal)&,\\
-  (\EQ      &,& \LBitvector &,& \LBitvector)&,\\
-  (\NE       &,& \LBitvector &,& \LBitvector)&,\\
-  (\OR        &,& \LBitvector &,& \LBitvector)&,\\
-  (\AND       &,& \LBitvector &,& \LBitvector)&,\\
-  (\XOR       &,& \LBitvector &,& \LBitvector)&,\\
-  (\SUB     &,& \LBitvector &,& \LBitvector)&,\\
-  (\ADD      &,& \LBitvector &,& \LBitvector)&,\\
-  (\BVCONCAT  &,& \LBitvector &,& \LBitvector)&,\\
-  (\STRCONCAT &,& \Ignore &,& \Ignore)&,\\
-  (\SUB     &,& \LBitvector &,& \LInt)&,\\
-  (\ADD      &,& \LBitvector &,& \LInt)&\\
   (\EQ      &,& \LString &,& \LString)&,\\
   (\NE       &,& \LString &,& \LString)&,\\
   (\EQ      &,& \LLabel &,& \LLabel)&,\\
@@ -843,37 +818,107 @@ and argument types of its operand literals:
 \right\}
 \]
 
+The set of valid signatures for relational operations is defined as follows:
+\hypertarget{def-binoprelsignatures}{}
+\[
+\binoprelsignatures \triangleq
+\left\{
+\begin{array}{lclcll}
+  (\EQ        &,& \LInt &,& \LInt)&,\\
+  (\NE        &,& \LInt &,& \LInt)&,\\
+  (\LE        &,& \LInt &,& \LInt)&,\\
+  (\LT        &,& \LInt &,& \LInt)&,\\
+  (\GE        &,& \LInt &,& \LInt)&,\\
+  (\GT        &,& \LInt &,& \LInt)&,\\
+  (\EQ        &,& \LBool &,& \LBool)&,\\
+  (\NE        &,& \LBool &,& \LBool)&,\\
+  (\EQ        &,& \LReal &,& \LReal)&,\\
+  (\NE        &,& \LReal &,& \LReal)&,\\
+  (\LE        &,& \LReal &,& \LReal)&,\\
+  (\LT        &,& \LReal &,& \LReal)&,\\
+  (\GE        &,& \LReal &,& \LReal)&,\\
+  (\GT        &,& \LReal &,& \LReal)&,\\
+  (\EQ        &,& \LBitvector &,& \LBitvector)&,\\
+  (\NE        &,& \LBitvector &,& \LBitvector)&\\
+\end{array}
+\right\}
+\]
+
+The set of valid signatures for (binary) Boolean operations is defined as follows:
+\hypertarget{def-binopboolsignatures}{}
+\[
+\binopboolsignatures \triangleq
+\left\{
+\begin{array}{lclcll}
+  (\BEQ       &,& \LBool &,& \LBool)&,\\
+  (\BAND      &,& \LBool &,& \LBool)&,\\
+  (\BOR       &,& \LBool &,& \LBool)&,\\
+  (\IMPL      &,& \LBool &,& \LBool)&\\
+\end{array}
+\right\}
+\]
+
+The set of valid signatures for bitvector operations is defined as follows:
+\hypertarget{def-binopbitssignatures}{}
+\[
+\binopbitssignatures \triangleq
+\left\{
+\begin{array}{lclcll}
+  (\OR        &,& \LBitvector &,& \LBitvector)&,\\
+  (\AND       &,& \LBitvector &,& \LBitvector)&,\\
+  (\XOR       &,& \LBitvector &,& \LBitvector)&,\\
+  (\SUB       &,& \LBitvector &,& \LBitvector)&,\\
+  (\ADD       &,& \LBitvector &,& \LBitvector)&,\\
+  (\BVCONCAT  &,& \LBitvector &,& \LBitvector)&,\\
+  (\SUB       &,& \LBitvector &,& \LInt)&,\\
+  (\ADD       &,& \LBitvector &,& \LInt)&\\
+\end{array}
+\right\}
+\]
+
+The set of valid signatures for string concatenation operations is defined as follows:
+\hypertarget{def-binopstrsignatures}{}
+\[
+\binopstrsignatures \triangleq
+\left\{
+  \begin{array}{cl}
+  (\STRCONCAT, \astlabel(\vtone), \astlabel(\vttwo)) & |\\
+   \vtone \in \issingular(\vtone) \land \vttwo \in \issingular(\vttwo) &
+   \end{array}
+\right\}
+\]
+
 \ProseParagraph
 \OneApplies
 \begin{itemize}
   \item \AllApplyCase{error}
   \begin{itemize}
-    \item $(\op, \astlabel(\vlone), \astlabel(\vltwo))$ is not included in $\binopsignatures$;
+    \item $(\op, \astlabel(\vvone), \astlabel(\vvtwo))$ is not included in $\binopsignatures$;
     \item the result is a \typingerrorterm{} indicating the $\op$ cannot be applied to the arguments
-          with the types given by $\astlabel(\vlone)$ and $\astlabel(\vltwo)$.
+          with the types given by $\astlabel(\vvone)$ and $\astlabel(\vvtwo)$.
   \end{itemize}
 
   \item \AllApplyCase{add\_int}
   \begin{itemize}
-    \item $\op$ is $\ADD$, $\vlone$ is the literal integer for $a$, and $\vltwo$ is the literal integer for $b$;
+    \item $\op$ is $\ADD$, $\vvone$ is the literal integer for $a$, and $\vvtwo$ is the literal integer for $b$;
     \item define $\vr$ as the literal integer for $a+b$.
   \end{itemize}
 
   \item \AllApplyCase{sub\_int}
   \begin{itemize}
-    \item $\op$ is $\SUB$, $\vlone$ is the literal integer for $a$, and $\vltwo$ is the literal integer for $b$;
+    \item $\op$ is $\SUB$, $\vvone$ is the literal integer for $a$, and $\vvtwo$ is the literal integer for $b$;
     \item define $\vr$ as the literal integer for $a-b$.
   \end{itemize}
 
   \item \AllApplyCase{mul\_int}
   \begin{itemize}
-    \item $\op$ is $\MUL$, $\vlone$ is the literal integer for $a$, and $\vltwo$ is the literal integer for $b$;
+    \item $\op$ is $\MUL$, $\vvone$ is the literal integer for $a$, and $\vvtwo$ is the literal integer for $b$;
     \item define $\vr$ as the literal integer for $a\times b$.
   \end{itemize}
 
   \item \AllApplyCase{div\_int}
   \begin{itemize}
-    \item $\op$ is $\DIV$, $\vlone$ is the literal integer for $a$, and $\vltwo$ is the literal integer for $b$;
+    \item $\op$ is $\DIV$, $\vvone$ is the literal integer for $a$, and $\vvtwo$ is the literal integer for $b$;
     \item checking that $b$ is positive yields $\True$\ProseOrTypeError;
     \item define $n$ as $a$ divided by $b$ (note that $n$ is potentially a fraction);
     \item checking that $n$ is an integer yields $\True$\ProseOrTypeError;
@@ -882,7 +927,7 @@ and argument types of its operand literals:
 
   \item \AllApplyCase{fdiv\_int}
   \begin{itemize}
-    \item $\op$ is $\DIVRM$, $\vlone$ is the literal integer for $a$, and $\vltwo$ is the literal integer for $b$;
+    \item $\op$ is $\DIVRM$, $\vvone$ is the literal integer for $a$, and $\vvtwo$ is the literal integer for $b$;
     \item checking that $b$ is positive yields $\True$\ProseOrTypeError;
     \item define $n$ as $a$ divided by $b$, rounded down (if $a$ is negative, $n$ is rounded down towards infinity);
     \item define $\vr$ as the literal integer for $n$.
@@ -890,15 +935,15 @@ and argument types of its operand literals:
 
   \item \AllApplyCase{frem\_int}
   \begin{itemize}
-    \item $\op$ is $\MOD$, $\vlone$ is the literal integer for $a$, and $\vltwo$ is the literal integer for $b$;
-    \item applying $\binopliterals$ to $\DIVRM$ with $\vlone$ and $\vltwo$ yields $c$\ProseOrTypeError;
-    \item define $n$ as $a-c$;
+    \item $\op$ is $\MOD$, $\vvone$ is the literal integer for $a$, and $\vvtwo$ is the literal integer for $b$;
+    \item applying $\binopliterals$ to $\DIVRM$ with $\vvone$ and $\vvtwo$ yields $c$\ProseOrTypeError;
+    \item define $n$ as $a - (c \times b)$;
     \item define $\vr$ as the literal integer for $n$.
   \end{itemize}
 
   \item \AllApplyCase{exp\_int}
   \begin{itemize}
-    \item $\op$ is $\POW$, $\vlone$ is the literal integer for $a$, and $\vltwo$ is the literal integer for $b$;
+    \item $\op$ is $\POW$, $\vvone$ is the literal integer for $a$, and $\vvtwo$ is the literal integer for $b$;
     \item checking that $b$ is non-negative yields $\True$\ProseOrTypeError;
     \item define $n$ as $a^b$;
     \item define $\vr$ as the literal integer for $n$.
@@ -906,126 +951,126 @@ and argument types of its operand literals:
 
   \item \AllApplyCase{shl}
   \begin{itemize}
-    \item $\op$ is $\SHL$, $\vlone$ is the literal integer for $a$, and $\vltwo$ is the literal integer for $b$;
+    \item $\op$ is $\SHL$, $\vvone$ is the literal integer for $a$, and $\vvtwo$ is the literal integer for $b$;
     \item checking that $b$ is non-negative yields $\True$\ProseOrTypeError;
-    \item applying $\binopliterals$ to $\POW$ with $2$ and $\vltwo$ yields the literal integer for $e$;
-    \item applying $\binopliterals$ to $\MUL$ with $2$ and the literal integer for $e$ yields $\vr$.
+    \item applying $\binopliterals$ to $\POW$ with the literal integer for $2$ and $\vvtwo$ yields the literal integer for $e$;
+    \item applying $\binopliterals$ to $\MUL$ with $\vvone$ and the literal integer for $e$ yields $\vr$.
   \end{itemize}
 
   \item \AllApplyCase{shr}
   \begin{itemize}
-    \item $\op$ is $\SHR$, $\vlone$ is the literal integer for $a$, and $\vltwo$ is the literal integer for $b$;
+    \item $\op$ is $\SHR$, $\vvone$ is the literal integer for $a$, and $\vvtwo$ is the literal integer for $b$;
     \item checking that $b$ is non-negative yields $\True$\ProseOrTypeError;
-    \item applying $\binopliterals$ to $\POW$ with $2$ and $\vltwo$ yields the literal integer for $e$;
-    \item applying $\binopliterals$ to $\DIVRM$ with $2$ and the literal integer for $e$ yields $\vr$.
+    \item applying $\binopliterals$ to $\POW$ with the literal integer for $2$ and $\vvtwo$ yields the literal integer for $e$;
+    \item applying $\binopliterals$ to $\DIVRM$ with the literal integer for $2$ and the literal integer for $e$ yields $\vr$.
   \end{itemize}
 
   \item \AllApplyCase{eq\_int}
   \begin{itemize}
-    \item $\op$ is $\EQ$, $\vlone$ is the literal integer for $a$, and $\vltwo$ is the literal integer for $b$;
+    \item $\op$ is $\EQ$, $\vvone$ is the literal integer for $a$, and $\vvtwo$ is the literal integer for $b$;
     \item define $\vr$ as the Boolean literal that is $\True$ if and only if $a$ is equal to $b$.
   \end{itemize}
 
   \item \AllApplyCase{ne\_int}
   \begin{itemize}
-    \item $\op$ is $\NE$, $\vlone$ is the literal integer for $a$, and $\vltwo$ is the literal integer for $b$;
+    \item $\op$ is $\NE$, $\vvone$ is the literal integer for $a$, and $\vvtwo$ is the literal integer for $b$;
     \item define $\vr$ as the Boolean literal that is $\True$ if and only if $a$ is different from $b$ holds.
   \end{itemize}
 
   \item \AllApplyCase{le\_int}
   \begin{itemize}
-    \item $\op$ is $\LE$, $\vlone$ is the literal integer for $a$, and $\vltwo$ is the literal integer for $b$;
-    \item define $\vr$ as the Boolean literal that is $\True$ if and only if $a$ is less than or equal to $b$s.
+    \item $\op$ is $\LE$, $\vvone$ is the literal integer for $a$, and $\vvtwo$ is the literal integer for $b$;
+    \item define $\vr$ as the Boolean literal that is $\True$ if and only if $a$ is less than or equal to $b$.
   \end{itemize}
 
   \item \AllApplyCase{lt\_int}
   \begin{itemize}
-    \item $\op$ is $\LT$, $\vlone$ is the literal integer for $a$, and $\vltwo$ is the literal integer for $b$;
-    \item define $\vr$ as the Boolean literal that is $\True$ if and only if $a$ is less than $b$s.
+    \item $\op$ is $\LT$, $\vvone$ is the literal integer for $a$, and $\vvtwo$ is the literal integer for $b$;
+    \item define $\vr$ as the Boolean literal that is $\True$ if and only if $a$ is less than $b$.
   \end{itemize}
 
   \item \AllApplyCase{ge\_int}
   \begin{itemize}
-    \item $\op$ is $\GE$, $\vlone$ is the literal integer for $a$, and $\vltwo$ is the literal integer for $b$;
-    \item define $\vr$ as the Boolean literal that is $\True$ if and only if $a$ is greater or equal than $b$s.
+    \item $\op$ is $\GE$, $\vvone$ is the literal integer for $a$, and $\vvtwo$ is the literal integer for $b$;
+    \item define $\vr$ as the Boolean literal that is $\True$ if and only if $a$ is greater than or equal to $b$.
   \end{itemize}
 
   \item \AllApplyCase{gt\_int}
   \begin{itemize}
-    \item $\op$ is $\GT$, $\vlone$ is the literal integer for $a$, and $\vltwo$ is the literal integer for $b$;
-    \item define $\vr$ as the Boolean literal that is $\True$ if and only if $a$ is greater than $b$s.
+    \item $\op$ is $\GT$, $\vvone$ is the literal integer for $a$, and $\vvtwo$ is the literal integer for $b$;
+    \item define $\vr$ as the Boolean literal that is $\True$ if and only if $a$ is greater than $b$.
   \end{itemize}
 
   \item \AllApplyCase{and\_bool}
   \begin{itemize}
-    \item $\op$ is $\BAND$, $\vlone$ is the literal Boolean for $a$, and $\vltwo$ is the literal Boolean for $b$;
+    \item $\op$ is $\BAND$, $\vvone$ is the literal Boolean for $a$, and $\vvtwo$ is the literal Boolean for $b$;
     \item define $\vr$ as the Boolean literal that is $\True$ if and only if both $a$ and $b$ are $\True$.
   \end{itemize}
 
   \item \AllApplyCase{or\_bool}
   \begin{itemize}
-    \item $\op$ is $\BOR$, $\vlone$ is the literal Boolean for $a$, and $\vltwo$ is the literal Boolean for $b$;
+    \item $\op$ is $\BOR$, $\vvone$ is the literal Boolean for $a$, and $\vvtwo$ is the literal Boolean for $b$;
     \item define $\vr$ as the Boolean literal that is $\True$ if and only if at least one of $a$ and $b$ is $\True$.
   \end{itemize}
 
   \item \AllApplyCase{implies\_bool}
   \begin{itemize}
-    \item $\op$ is $\IMPL$, $\vlone$ is the literal Boolean for $a$, and $\vltwo$ is the literal Boolean for $b$;
+    \item $\op$ is $\IMPL$, $\vvone$ is the literal Boolean for $a$, and $\vvtwo$ is the literal Boolean for $b$;
     \item define $\vr$ as the Boolean literal that is $\True$ if and only if $a$ is $\False$ or $b$ is $\True$.
   \end{itemize}
 
   \item \AllApplyCase{eq\_bool}
   \begin{itemize}
-    \item $\op$ is $\BEQ$, $\vlone$ is the literal Boolean for $a$, and $\vltwo$ is the literal Boolean for $b$;
+    \item $\op$ is either $\BEQ$ or $\EQ$, $\vvone$ is the literal Boolean for $a$, and $\vvtwo$ is the literal Boolean for $b$;
     \item define $\vr$ as the Boolean literal that is $\True$ if and only if $a$ is equal to $b$.
   \end{itemize}
 
   \item \AllApplyCase{ne\_bool}
   \begin{itemize}
-    \item $\op$ is $\NE$, $\vlone$ is the literal Boolean for $a$, and $\vltwo$ is the literal Boolean for $b$;
+    \item $\op$ is $\NE$, $\vvone$ is the literal Boolean for $a$, and $\vvtwo$ is the literal Boolean for $b$;
     \item define $\vr$ as the Boolean literal that is $\True$ if and only if $a$ is different from $b$.
   \end{itemize}
 
   \item \AllApplyCase{mul\_int\_real}
   \begin{itemize}
-    \item $\op$ is $\MUL$, $\vlone$ is the literal integer for $a$, and $\vltwo$ is the literal real for $b$;
+    \item $\op$ is $\MUL$, $\vvone$ is the literal integer for $a$, and $\vvtwo$ is the literal real for $b$;
     \item define $\vr$ as the literal real for $a\times b$.
   \end{itemize}
 
   \item \AllApplyCase{mul\_real\_int}
   \begin{itemize}
-    \item $\op$ is $\MUL$, $\vlone$ is the literal real for $a$, and $\vltwo$ is the literal integer for $b$;
+    \item $\op$ is $\MUL$, $\vvone$ is the literal real for $a$, and $\vvtwo$ is the literal integer for $b$;
     \item define $\vr$ as the literal real for $a\times b$.
   \end{itemize}
 
   \item \AllApplyCase{add\_real}
   \begin{itemize}
-    \item $\op$ is $\ADD$, $\vlone$ is the literal real for $a$, and $\vltwo$ is the literal real for $b$;
+    \item $\op$ is $\ADD$, $\vvone$ is the literal real for $a$, and $\vvtwo$ is the literal real for $b$;
     \item define $\vr$ as the real literal for $a + b$.
   \end{itemize}
 
   \item \AllApplyCase{sub\_real}
   \begin{itemize}
-    \item $\op$ is $\SUB$, $\vlone$ is the literal real for $a$, and $\vltwo$ is the literal real for $b$;
+    \item $\op$ is $\SUB$, $\vvone$ is the literal real for $a$, and $\vvtwo$ is the literal real for $b$;
     \item define $\vr$ as the real literal for $a - b$.
   \end{itemize}
 
   \item \AllApplyCase{mul\_real}
   \begin{itemize}
-    \item $\op$ is $\MUL$, $\vlone$ is the literal real for $a$, and $\vltwo$ is the literal real for $b$;
+    \item $\op$ is $\MUL$, $\vvone$ is the literal real for $a$, and $\vvtwo$ is the literal real for $b$;
     \item define $\vr$ as the real literal for $a \times b$.
   \end{itemize}
 
   \item \AllApplyCase{div\_real}
   \begin{itemize}
-    \item $\op$ is $\RDIV$, $\vlone$ is the literal real for $a$, and $\vltwo$ is the literal real for $b$;
+    \item $\op$ is $\RDIV$, $\vvone$ is the literal real for $a$, and $\vvtwo$ is the literal real for $b$;
     \item checking whether $b$ is different from $0$ yields $\True$\ProseOrTypeError;
     \item define $\vr$ as the real literal for $a \div b$.
   \end{itemize}
 
   \item \AllApplyCase{exp\_real}
   \begin{itemize}
-    \item $\op$ is $\POW$, $\vlone$ is the literal real for $a$, and $\vltwo$ is the literal integer for $b$;
+    \item $\op$ is $\POW$, $\vvone$ is the literal real for $a$, and $\vvtwo$ is the literal integer for $b$;
     \item since exponentiation is undefined when $a$ is 0 and $b$ is negative,
           checking whether $a$ is different from $0$ or $b$ is non-negative yields $\True$\ProseOrTypeError;
     \item define $\vr$ as the real literal for $a^b$.
@@ -1033,37 +1078,37 @@ and argument types of its operand literals:
 
   \item \AllApplyCase{eq\_real}
   \begin{itemize}
-    \item $\op$ is $\EQ$, $\vlone$ is the literal real for $a$, and $\vltwo$ is the literal real for $b$;
+    \item $\op$ is $\EQ$, $\vvone$ is the literal real for $a$, and $\vvtwo$ is the literal real for $b$;
     \item define $\vr$ as the Boolean literal that is $\True$ if and only if $a$ is equal to $b$.
   \end{itemize}
 
   \item \AllApplyCase{ne\_real}
   \begin{itemize}
-    \item $\op$ is $\NE$, $\vlone$ is the literal real for $a$, and $\vltwo$ is the literal real for $b$;
+    \item $\op$ is $\NE$, $\vvone$ is the literal real for $a$, and $\vvtwo$ is the literal real for $b$;
     \item define $\vr$ as the Boolean literal that is $\True$ if and only if $a$ is different from $b$.
   \end{itemize}
 
   \item \AllApplyCase{le\_real}
   \begin{itemize}
-    \item $\op$ is $\LE$, $\vlone$ is the literal real for $a$, and $\vltwo$ is the literal real for $b$;
+    \item $\op$ is $\LE$, $\vvone$ is the literal real for $a$, and $\vvtwo$ is the literal real for $b$;
     \item define $\vr$ as the Boolean literal that is $\True$ if and only if $a$ is less than or equal to $b$.
   \end{itemize}
 
   \item \AllApplyCase{lt\_real}
   \begin{itemize}
-    \item $\op$ is $\LT$, $\vlone$ is the literal real for $a$, and $\vltwo$ is the literal real for $b$;
+    \item $\op$ is $\LT$, $\vvone$ is the literal real for $a$, and $\vvtwo$ is the literal real for $b$;
     \item define $\vr$ as the Boolean literal that is $\True$ if and only if $a$ is less than $b$.
   \end{itemize}
 
   \item \AllApplyCase{ge\_real}
   \begin{itemize}
-    \item $\op$ is $\GE$, $\vlone$ is the literal real for $a$, and $\vltwo$ is the literal real for $b$;
+    \item $\op$ is $\GE$, $\vvone$ is the literal real for $a$, and $\vvtwo$ is the literal real for $b$;
     \item define $\vr$ as the Boolean literal that is $\True$ if and only if $a$ is greater than or equal to $b$.
   \end{itemize}
 
   \item \AllApplyCase{gt\_real}
   \begin{itemize}
-    \item $\op$ is $\GT$, $\vlone$ is the literal real for $a$, and $\vltwo$ is the literal real for $b$;
+    \item $\op$ is $\GT$, $\vvone$ is the literal real for $a$, and $\vvtwo$ is the literal real for $b$;
     \item define $\vr$ as the Boolean literal that is $\True$ if and only if $a$ is greater than $b$.
   \end{itemize}
 
@@ -1093,10 +1138,10 @@ and argument types of its operand literals:
 
   \item \AllApplyCase{eq\_bits\_not\_empty}
   \begin{itemize}
-    \item $\vvone$ is a bitvector literal for $a_{1..k}$;
-    \item $\vvtwo$ is a bitvector literal for $b_{1..k}$;
+    \item $\vvone$ is a bitvector literal for $a_{k..0}$;
+    \item $\vvtwo$ is a bitvector literal for $b_{k..0}$;
     \item $\op$ is $\EQ$;
-    \item define $\vb$ as $\True$ if and only if $a_i$ is equal to $b_i$, for $i=1..k$;
+    \item define $\vb$ as $\True$ if and only if $a_i$ is equal to $b_i$, for $i=k..0$;
     \item define $\vr$ as the Boolean literal for $\vb$.
   \end{itemize}
 
@@ -1111,59 +1156,59 @@ and argument types of its operand literals:
 
   \item \AllApplyCase{or\_bits}
   \begin{itemize}
-    \item $\vvone$ is a bitvector literal for $a_{1..k}$;
-    \item $\vvtwo$ is a bitvector literal for $b_{1..k}$;
+    \item $\vvone$ is a bitvector literal for $a_{k..0}$;
+    \item $\vvtwo$ is a bitvector literal for $b_{k..0}$;
     \item $\op$ is $\OR$;
-    \item define $c_i$ as the maximum of $a_i$ and $b_i$ for $i=1..k$;
-    \item define $\vr$ as the bitvector literal for $c_{1..k}$.
+    \item define $c_i$ as the maximum of $a_i$ and $b_i$ for $i=k..0$;
+    \item define $\vr$ as the bitvector literal for $c_{k..0}$.
   \end{itemize}
 
   \item \AllApplyCase{and\_bits}
   \begin{itemize}
-    \item $\vvone$ is a bitvector literal for $a_{1..k}$;
-    \item $\vvtwo$ is a bitvector literal for $b_{1..k}$;
+    \item $\vvone$ is a bitvector literal for $a_{k..0}$;
+    \item $\vvtwo$ is a bitvector literal for $b_{k..0}$;
     \item $\op$ is $\AND$;
-    \item define $c_i$ as the minimum of $a_i$ and $b_i$ for $i=1..k$;
-    \item define $\vr$ as the bitvector literal for $c_{1..k}$.
+    \item define $c_i$ as the minimum of $a_i$ and $b_i$ for $i=k..0$;
+    \item define $\vr$ as the bitvector literal for $c_{k..0}$.
   \end{itemize}
 
   \item \AllApplyCase{xor\_bits}
   \begin{itemize}
-    \item $\vvone$ is a bitvector literal for $a_{1..k}$;
-    \item $\vvtwo$ is a bitvector literal for $b_{1..k}$;
+    \item $\vvone$ is a bitvector literal for $a_{k..0}$;
+    \item $\vvtwo$ is a bitvector literal for $b_{k..0}$;
     \item $\op$ is $\XOR$;
-    \item define $c_i$ as $1$ if $a_i$ is different from $b_i$ and $0$ otherwise, for $i=1..k$;
-    \item define $\vr$ as the bitvector literal for $c_{1..k}$.
+    \item define $c_i$ as $1$ if $a_i$ is different from $b_i$ and $0$ otherwise, for $i=k..0$;
+    \item define $\vr$ as the bitvector literal for $c_{k..0}$.
   \end{itemize}
 
   \item \AllApplyCase{add\_bits}
   \begin{itemize}
-    \item $\vvone$ is a bitvector literal for $a_{1..k}$;
-    \item $\vvtwo$ is a bitvector literal for $b_{1..k}$;
+    \item $\vvone$ is a bitvector literal for $a_{k..0}$;
+    \item $\vvtwo$ is a bitvector literal for $b_{k..0}$;
     \item $\op$ is $\ADD$;
-    \item define $a$ as the natural number represented by $a_{1..k}$;
-    \item define $b$ as the natural number represented by $b_{1..k}$;
-    \item define $c$ as the two's complement little endian representation of $a+b$ in $k$ bits;
+    \item define $a$ as the natural number represented by $a_{k..0}$;
+    \item define $b$ as the natural number represented by $b_{k..0}$;
+    \item define $c$ as the two's complement representation of $a+b$ in $k+1$ bits;
     \item define $\vr$ as the bitvector literal for $c$.
   \end{itemize}
 
   \item \AllApplyCase{sub\_bits}
   \begin{itemize}
-    \item $\vvone$ is a bitvector literal for $a_{1..k}$;
-    \item $\vvtwo$ is a bitvector literal for $b_{1..k}$;
+    \item $\vvone$ is a bitvector literal for $a_{k..0}$;
+    \item $\vvtwo$ is a bitvector literal for $b_{k..0}$;
     \item $\op$ is $\SUB$;
-    \item define $a$ as the natural number represented by $a_{1..k}$;
-    \item define $b$ as the natural number represented by $b_{1..k}$;
-    \item define $c$ as the two's complement little endian representation of $a-b$ in $k$ bits;
+    \item define $a$ as the natural number represented by $a_{k..0}$;
+    \item define $b$ as the natural number represented by $b_{k..0}$;
+    \item define $c$ as the two's complement representation of $a-b$ in $k+1$ bits;
     \item define $\vr$ as the bitvector literal for $c$.
   \end{itemize}
 
   \item \AllApplyCase{concat\_bits}
   \begin{itemize}
-    \item $\vvone$ is a bitvector literal for $a_{1..k}$;
-    \item $\vvtwo$ is a bitvector literal for $b_{1..l}$;
+    \item $\vvone$ is a bitvector literal for $a_{k..0}$;
+    \item $\vvtwo$ is a bitvector literal for $b_{l..0}$;
     \item $\op$ is $\BVCONCAT$;
-    \item define $\vr$ as the bitvector literal for $a_{1..k}b_{1..l}$.
+    \item define $\vr$ as the bitvector literal for $a_{k..0}b_{l..0}$.
   \end{itemize}
 
   \item \AllApplyCase{add\_bits\_int}
@@ -1172,7 +1217,7 @@ and argument types of its operand literals:
     \item $\vvtwo$ is an integer literal for $b$;
     \item $\op$ is $\ADD$;
     \item define $y$ as the natural number represented by $a$;
-    \item define $c$ as the two's complement little endian representation of $y+b$ in $\listlen{a}$ bits;
+    \item define $c$ as the two's complement representation of $y+b$ in $\listlen{a}$ bits;
     \item define $\vr$ as the bitvector literal for $c$.
   \end{itemize}
 
@@ -1182,25 +1227,25 @@ and argument types of its operand literals:
     \item $\vvtwo$ is an integer literal for $b$;
     \item $\op$ is $\SUB$;
     \item define $y$ as the natural number represented by $a$;
-    \item define $c$ as the two's complement little endian representation of $y-b$ in $\listlen{a}$ bits;
+    \item define $c$ as the two's complement representation of $y-b$ in $\listlen{a}$ bits;
     \item define $\vr$ as the bitvector literal for $c$.
   \end{itemize}
 
   \item \AllApplyCase{eq\_string}
   \begin{itemize}
-    \item $\op$ is $\EQ$, $\vlone$ is the literal string for $a$, and $\vltwo$ is the literal string for $b$;
+    \item $\op$ is $\EQ$, $\vvone$ is the literal string for $a$, and $\vvtwo$ is the literal string for $b$;
     \item define $\vr$ as the Boolean literal that is $\True$ if and only if $a$ is equal to $b$.
   \end{itemize}
 
   \item \AllApplyCase{ne\_string}
   \begin{itemize}
-    \item $\op$ is $\NE$, $\vlone$ is the literal string for $a$, and $\vltwo$ is the literal string for $b$;
+    \item $\op$ is $\NE$, $\vvone$ is the literal string for $a$, and $\vvtwo$ is the literal string for $b$;
     \item define $\vr$ as the Boolean literal that is $\True$ if and only if $a$ is different from $b$.
   \end{itemize}
 
   \item \AllApplyCase{concat\_strings}
   \begin{itemize}
-    \item $\vvone$ and $\vvtwo$ are not both bitvector literals;
+    \item $\vvone$ and $\vvtwo$ are not both bitvector literals \ProseNote{(otherwise the case \textsc{concat\_bits} would apply)};
     \item $\op$ is $\STRCONCAT$;
     \item define $\vsone$ as $\literaltostring(\vvone)$;
     \item define $\vstwo$ as $\literaltostring(\vvtwo)$;
@@ -1209,13 +1254,13 @@ and argument types of its operand literals:
 
   \item \AllApplyCase{eq\_label}
   \begin{itemize}
-    \item $\op$ is $\EQ$, $\vlone$ is the literal label for $a$, and $\vltwo$ is the literal label for $b$;
+    \item $\op$ is $\EQ$, $\vvone$ is the literal label for $a$, and $\vvtwo$ is the literal label for $b$;
     \item define $\vr$ as the Boolean literal that is $\True$ if and only if $a$ is equal to $b$.
   \end{itemize}
 
   \item \AllApplyCase{ne\_label}
   \begin{itemize}
-    \item $\op$ is $\NE$, $\vlone$ is the literal label for $a$, and $\vltwo$ is the literal label for $b$;
+    \item $\op$ is $\NE$, $\vvone$ is the literal label for $a$, and $\vvtwo$ is the literal label for $b$;
     \item define $\vr$ as the Boolean literal that is $\True$ if and only if $a$ is different from $b$.
   \end{itemize}
 
@@ -1225,9 +1270,9 @@ and argument types of its operand literals:
 
 \begin{mathpar}
 \inferrule[error]{
-  (\op, \astlabel(\vlone), \astlabel(\vltwo)) \not\in \binopsignatures
+  (\op, \astlabel(\vvone), \astlabel(\vvtwo)) \not\in \binopsignatures
 }{
-  \binopliterals(\op, \overname{\vlone}{\vvone}, \overname{\vltwo}{\vvtwo}) \typearrow \TypeErrorVal{\BadOperands}
+  \binopliterals(\op, \vvone, \vvtwo) \typearrow \TypeErrorVal{\BadOperands}
 }
 \end{mathpar}
 
@@ -1360,8 +1405,10 @@ and argument types of its operand literals:
 \end{mathpar}
 
 \begin{mathpar}
-\inferrule[eq\_bool]{}{
-  \binopliterals(\overname{\BEQ}{\op}, \overname{\LBool(a)}{\vvone}, \overname{\LBool(b)}{\vvtwo}) \typearrow \overname{\LBool(a = b)}{\vr}
+\inferrule[eq\_bool]{
+  \op \in \{\EQ, \BEQ\}
+}{
+  \binopliterals(\op, \overname{\LBool(a)}{\vvone}, \overname{\LBool(b)}{\vvtwo}) \typearrow \overname{\LBool(a = b)}{\vr}
 }
 \end{mathpar}
 
@@ -1456,21 +1503,18 @@ and argument types of its operand literals:
 \end{mathpar}
 
 \subsubsection{Operators Over Bitvectors \label{sec:BitvectorOperations}}
-\hypertarget{relation-bintounsigned}{}
-The function $\bintounsigned : \KleeneStar{\Bit} \rightarrow \N$ converts a non-empty sequence of bits
-into a natural number:
+\RenderRelation{binary_to_unsigned}
+
+It is defined as follows for a non-empty bit sequence:
 \[
-  \bintounsigned(a_{n..1}) \triangleq \sum_{i=1}^n a_i \cdot 2^{a_i}
+  \binarytounsigned(a_{n..0}) \triangleq \sum_{i=0}^n a_i \cdot 2^{i}
 \]
-and an empty sequence of bits into $0$:
+and as $0$ for an empty bit sequence:
 \[
-  \bintounsigned(\emptylist) \triangleq 0 \enspace.
+  \binarytounsigned(\emptylist) \triangleq 0 \enspace.
 \]
 
-\hypertarget{relation-inttobits}{}
-The function $\inttobits : \overname{\Z}{\texttt{val}} \times \overname{\Z}{\texttt{width}} \rightarrow \KleeneStar{\Bit}$
-converts an integer \texttt{val} to its two's complement little endian representation
-of \texttt{width} bits.
+\RenderRelation{int_to_bits}
 
 \begin{mathpar}
 \inferrule[bitwise\_different\_bitwidths]{
@@ -1481,23 +1525,28 @@ of \texttt{width} bits.
 }
 \and
 \inferrule[bitwise\_empty]{
-  \op \in \{\OR, \AND, \XOR, \ADD, \SUB\}
+  \op \in \{\OR, \AND, \XOR, \ADD, \SUB\}\\
+  a = \emptylist\\
+  b = \emptylist
 }{
-  \binopliterals(\op, \overname{\LBitvector(\emptylist)}{\vvone}, \overname{\LBitvector(\emptylist)}{\vvtwo}) \typearrow
+  \binopliterals(\op, \overname{\LBitvector(a)}{\vvone}, \overname{\LBitvector(b)}{\vvtwo}) \typearrow
   \overname{\LBitvector(\emptylist)}{\vr}
 }
 \end{mathpar}
 
 \begin{mathpar}
-\inferrule[eq\_bits\_empty]{}{
-  \binopliterals(\overname{\EQ}{\op}, \overname{\LBitvector(\emptylist)}{\vvone}, \overname{\LBitvector(\emptylist)}{\vvtwo}) \typearrow
+\inferrule[eq\_bits\_empty]{
+  a = \emptylist\\
+  b = \emptylist
+}{
+  \binopliterals(\overname{\EQ}{\op}, \overname{\LBitvector(a)}{\vvone}, \overname{\LBitvector(b)}{\vvtwo}) \typearrow
   \overname{\LBool(\True)}{\vr}
 }
 \and
 \inferrule[eq\_bits\_not\_empty]{
-  \vb \eqdef \bigwedge_{i=1}^k a_i = b_i
+  \vb \eqdef \bigwedge_{i=0}^k a_i = b_i
 }{
-  \binopliterals(\overname{\EQ}{\op}, \overname{\LBitvector(a_{1..k})}{\vvone}, \overname{\LBitvector(b_{1..k})}{\vvtwo}) \typearrow
+  \binopliterals(\overname{\EQ}{\op}, \overname{\LBitvector(a_{k..0})}{\vvone}, \overname{\LBitvector(b_{k..0})}{\vvtwo}) \typearrow
   \overname{\LBool(\vb)}{\vr}
 }
 \end{mathpar}
@@ -1512,22 +1561,28 @@ of \texttt{width} bits.
 
 \begin{mathpar}
 \inferrule[or\_bits]{
-  i=1..k: c_i = \max(a_i, b_i)
+  \vvone = \LBitvector(a_{k..0})\\
+  \vvtwo = \LBitvector(b_{k..0})\\
+  i=k..0: c_i = \max(a_i, b_i)
 }{
-  \binopliterals(\overname{\OR}{\op}, \overname{\LBitvector(a_{1..k})}{\vvone}, \overname{\LBitvector(b_{1..k})}{\vvtwo}) \typearrow \LBitvector(c_{1..k})
+  \binopliterals(\overname{\OR}{\op}, \vvone, \vvtwo) \typearrow \LBitvector(c_{k..0})
 }
 \end{mathpar}
 
 \begin{mathpar}
 \inferrule[and\_bits]{
-  i=1..k: c_i = \min(a_i, b_i)
+  \vvone = \LBitvector(a_{k..0})\\
+  \vvtwo = \LBitvector(b_{k..0})\\
+  i=k..0: c_i = \min(a_i, b_i)
 }{
-  \binopliterals(\overname{\AND}{\op}, \overname{\LBitvector(a_{1..k})}{\vvone}, \overname{\LBitvector(b_{1..k})}{\vvtwo}) \typearrow \LBitvector(c_{1..k})
+  \binopliterals(\overname{\AND}{\op}, \vvone, \vvtwo) \typearrow \LBitvector(c_{k..0})
 }
 \end{mathpar}
 
 \begin{mathpar}
 \inferrule[xor\_bits]{
+  \vvone = \LBitvector(a_{k..0})\\
+  \vvtwo = \LBitvector(b_{k..0})\\
   {
     \textit{xor\_bit} = \lambda a,b\in\Bit.\ \left\{
       \begin{array}{ll}
@@ -1536,29 +1591,33 @@ of \texttt{width} bits.
       \end{array}
     \right.
   }\\
-  i=1..k: c_i=\textit{xor\_bit}(a_i, b_i)
+  i=k..0: c_i=\textit{xor\_bit}(a_i, b_i)
 }{
-  \binopliterals(\overname{\XOR}{\op}, \overname{\LBitvector(a_{1..k})}{\vvone}, \overname{\LBitvector(b_{1..k})}{\vvtwo}) \typearrow \LBitvector(c_{1..k})
+  \binopliterals(\overname{\XOR}{\op}, \vvone, \vvtwo) \typearrow \LBitvector(c_{k..0})
 }
 \end{mathpar}
 
 \begin{mathpar}
 \inferrule[add\_bits]{
-  a \eqdef \bintounsigned(a_{1..k})\\
-  b \eqdef \bintounsigned(b_{1..k})\\
+  \vvone = \LBitvector(a_{k..0})\\
+  \vvtwo = \LBitvector(b_{k..0})\\
+  a \eqdef \binarytounsigned(a_{k..0})\\
+  b \eqdef \binarytounsigned(b_{k..0})\\
   c \eqdef \inttobits(a + b, k)
 }{
-  \binopliterals(\overname{\ADD}{\op}, \overname{\LBitvector(a_{1..k})}{\vvone}, \overname{\LBitvector(b_{1..k})}{\vvtwo}) \typearrow \overname{\LBitvector(c)}{\vr}
+  \binopliterals(\overname{\ADD}{\op}, \vvone, \vvtwo) \typearrow \overname{\LBitvector(c)}{\vr}
 }
 \end{mathpar}
 
 \begin{mathpar}
 \inferrule[sub\_bits]{
-  a \eqdef \bintounsigned(a_{1..k})\\
-  b \eqdef \bintounsigned(b_{1..k})\\
+  \vvone = \LBitvector(a_{k..0})\\
+  \vvtwo = \LBitvector(b_{k..0})\\
+  a \eqdef \binarytounsigned(a_{k..0})\\
+  b \eqdef \binarytounsigned(b_{k..0})\\
   c \eqdef \inttobits(a - b, k)
 }{
-  \binopliterals(\overname{\SUB}{\op}, \overname{\LBitvector(a_{1..k})}{\vvone}, \overname{\LBitvector(b_{1..k})}{\vvtwo}) \typearrow \overname{\LBitvector(c)}{\vr}
+  \binopliterals(\overname{\SUB}{\op}, \vvone, \vvtwo) \typearrow \overname{\LBitvector(c)}{\vr}
 }
 \end{mathpar}
 
@@ -1566,8 +1625,8 @@ of \texttt{width} bits.
 \inferrule[concat\_bits]{}{
   {
   \begin{array}{r}
-  \binopliterals(\overname{\BVCONCAT}{\op}, \overname{\LBitvector(a_{1..k})}{\vvone}, \overname{\LBitvector(b_{1..l})}{\vvtwo}) \typearrow \\
-  \overname{\LBitvector(a_{1..k})\LBitvector(b_{1..l})}{\vr}
+  \binopliterals(\overname{\BVCONCAT}{\op}, \overname{\LBitvector(\va)}{\vvone}, \overname{\LBitvector(\vb)}{\vvtwo}) \typearrow \\
+  \overname{\LBitvector(\va \concat \vb)}{\vr}
   \end{array}
   }
 }
@@ -1575,7 +1634,7 @@ of \texttt{width} bits.
 
 \begin{mathpar}
 \inferrule[add\_bits\_int]{
-  y \eqdef \bintounsigned(a)\\
+  y \eqdef \binarytounsigned(a)\\
   c \eqdef \inttobits(y + b, \listlen{a})
 }{
   \binopliterals(\overname{\ADD}{\op}, \overname{\LBitvector(a)}{\vvone}, \overname{\LInt(b)}{\vvtwo}) \typearrow \overname{\LBitvector(c)}{\vr}
@@ -1584,7 +1643,7 @@ of \texttt{width} bits.
 
 \begin{mathpar}
 \inferrule[sub\_bits\_int]{
-  y \eqdef \bintounsigned(a)\\
+  y \eqdef \binarytounsigned(a)\\
   c \eqdef \inttobits(y - b, \listlen{a})
 }{
   \binopliterals(\overname{\SUB}{\op}, \overname{\LBitvector(a)}{\vvone}, \overname{\LInt(b)}{\vvtwo}) \typearrow \overname{\LBitvector(c)}{\vr}
@@ -1636,13 +1695,6 @@ of \texttt{width} bits.
 
 \SemanticsRuleDef{UnopValues}
 \RenderRelation{eval_unop}
-\BackupOriginalRelation{
-The function
-\[
-  \evalunop(\overname{\unop}{\op} \aslsep \overname{\nativevalue}{\vv}) \aslto \overname{\nativevalue}{\vw} \cup \TDynError
-\]
-evaluates a unary operator $\op$ over a \nativevalueterm{} $\vv$ and returns the \nativevalueterm{} $\vw$ or an error.
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Valid Unary Operation}
 The following grounded rule shows how the application of negation
@@ -1720,15 +1772,6 @@ translates the resulting \typingerrorterm{} into the corresponding \dynamicerror
 
 \SemanticsRuleDef{BinopValues}
 \RenderRelation{eval_binop}
-\BackupOriginalRelation{
-The function
-\[
-  \evalbinop(\overname{\binop}{\op} \aslsep \overname{\nativevalue}{\vvone} \aslsep \overname{\nativevalue}{\vvtwo})
-  \aslto \overname{\nativevalue}{\vw} \cup \TDynError
-\]
-evaluates a binary operator $\op$ over a pair of \nativevaluesterm{}  --- $\vvone$ and $\vvtwo$ --- and returns the
-\nativevalueterm{}  $\vw$ or an error.
-} % END_OF_BACKUP_RELATION
 
 \ExampleDef{Valid Binary Operation}
 The following grounded rule shows how the application of addition
