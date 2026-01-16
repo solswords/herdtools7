@@ -226,8 +226,8 @@
                                             ;; FIXME
                                             '((FNAME . "ASL Standard Library")
                                               (LNUM . 378)
-                                              (BOL . 9530)
-                                              (CNUM . 9546)))))
+                                              (BOL . 9570)
+                                              (CNUM . 9586)))))
                    (change-ev_error err1 :backtrace (cons (list "Replicate-1"
                                                                (list (val-fix n) (val-fix m))
                                                                (list (val-fix x)))

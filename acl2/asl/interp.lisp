@@ -1167,7 +1167,19 @@ binder)."
 
   (defret val_result-p-of-<fn>
     (implies (val_result-p x)
-             (val_result-p new-x))))
+             (val_result-p new-x)))
+  
+  (defthm ev_error->desc-of-init-backtrace
+         (equal (ev_error->desc (init-backtrace err pos))
+                (ev_error->desc err))
+         :hints(("Goal" :in-theory (enable init-backtrace
+                                           ev_error->desc-when-wrong-kind))))
+
+  (defthm ev_throwing->throwdata-of-init-backtrace
+         (equal (ev_throwing->throwdata (init-backtrace err pos))
+                (ev_throwing->throwdata err))
+         :hints(("Goal" :in-theory (enable init-backtrace
+                                           ev_throwing->throwdata-when-wrong-kind)))))
 
 (acl2::def-b*-binder evob
   :parents (asl-interpreter-functions)
