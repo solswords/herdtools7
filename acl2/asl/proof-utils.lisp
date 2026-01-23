@@ -55,7 +55,7 @@
              (not (termination-error-p x))))
 
   (defthm termination-error-p-of-init-backtrace
-    (iff (termination-error-p (init-backtrace x pos))
+    (iff (termination-error-p (init-backtrace x storage pos))
          (termination-error-p x))
     :hints(("Goal" :in-theory (enable init-backtrace))))
 
@@ -236,7 +236,7 @@
                   (member ctor '(v_int v_bool v_real v_string v_bitvector v_label v_record v_array))
                   (symbolp name))
              (append (acl2::template-subst '((<name>-look (val-imaplist-assoc <str> env.local.storage))
-                                             ((<ctor> <name>) (cdr <name>-look)))
+                                             ((<ctor> <name> :quietp t) (cdr <name>-look)))
                                            :atom-alist `((<ctor> . ,ctor)
                                                          (<name> . ,name)
                                                          (<str> . ,str))
@@ -314,8 +314,8 @@
                        ;; (no-duplicatesp-equal (acl2::alist-keys (car env.local.storage)))
                        )
                   (b* (((mv (ev_normal res) new-orac) <loop-form>))
-                    (implies (not (termination-error-p res))
-                             (and (equal new-orac orac)
+                    (and (equal new-orac orac)
+                         (implies (not (termination-error-p res))
                                   <concl>)))))
        :hints (;; copied from just-induct-and-expand
                (if (equal (car id) '(0))
@@ -700,7 +700,7 @@ as follows, more or less following the above made-up example:</p>
                'v_int))
        ((unless ctor)
         (er hard? 'def-asl-subprogram "Couldn't understand parameter: ~x0" p1)))
-    (cons `((,ctor ,(car params)))
+    (cons `((,ctor ,(car params) :quietp t))
           (subprogram-param-bindings (cdr params) (cdr fn-params)))))
 
 (define subprogram-arg-bindings ((args symbol-listp)
@@ -724,7 +724,7 @@ as follows, more or less following the above made-up example:</p>
                  (:otherwise nil))))
        ((unless ctor)
         (er hard? 'def-asl-subprogram "Couldn't understand arg: ~x0" p1)))
-    (cons `((,ctor ,(car args)))
+    (cons `((,ctor ,(car args) :quietp t))
           (subprogram-arg-bindings (cdr args) (cdr fn-args)))))
 
 
@@ -874,8 +874,8 @@ as follows, more or less following the above made-up example:</p>
                                            <params>
                                            <args>))
                        (spec (ev_normal (func_result <retvals> (env->global env)))))
-                    (implies (not (termination-error-p res))
-                             (and (equal new-orac orac)
+                    (and (equal new-orac orac)
+                         (implies (not (termination-error-p res))
                                   <concl>)))))
        :hints ((:@ (not :no-expand-hint)
                 ("goal" :expand ((:free (params args)
@@ -995,7 +995,7 @@ as follows, more or less following the above made-up example:</p>
        (binding (car x))
        (rest (val-bindings-rev-subst (cdr x) state)))
     (case-match binding
-      (((ctor var) . &)
+      (((ctor var . &) . &)
        (b* ((ctor-macro (intern-in-package-of-symbol
                          (concatenate 'string "PATBIND-" (symbol-name ctor))
                          ctor))

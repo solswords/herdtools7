@@ -184,6 +184,22 @@
           :in-theory (e/d (termination-error-p)
                           (eval_subprogram-*t-equals-original)))))
 
-(def-stdlib-trace-thms asl-subprogram-table)
-(def-stdlib-trace-thms asl-prim-subprogram-table)
+
+
+(encapsulate nil
+  (local (defthm equal-of-hides
+         (equal (equal (ev_error->backtrace (hide x))
+                       (ev_error->backtrace (hide y)))
+                (or (equal x y)
+                    (hide (equal (ev_error->backtrace (hide x))
+                                 (ev_error->backtrace (hide y))))))
+         :hints (("goal" :expand ((:free (x) (hide x)))))))
+  
+  (local (deftheory pre (current-theory :here)))
+
+  (def-stdlib-trace-thms asl-subprogram-table)
+
+  (local (in-theory (theory 'pre)))
+  
+  (def-stdlib-trace-thms asl-prim-subprogram-table))
 

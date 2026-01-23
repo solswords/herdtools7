@@ -1146,7 +1146,7 @@ error has been reached. Arguably unnecessary given FGL's backtrace capability."
   :short "@(csee B*) binder: see @(see patbind-evo)")
 
 
-(define init-backtrace ((x eval_result-p) (pos posn-p))
+(define init-backtrace ((x eval_result-p) (storage val-imaplist-p) (pos posn-p))
   :short "If @('x') is of ev_error or ev_throwing type (not ev_normal), set the backtrace
 field to a list containing the given position to initialize the
 backtrace. Called from the interpreter in cases where an error/throw may have
@@ -1155,8 +1155,8 @@ binder)."
   :returns (new-x eval_result-p)
   (eval_result-case x
     :ev_normal   (eval_result-fix x)
-    :ev_throwing (change-ev_throwing x :backtrace (list (posn-fix pos)))
-    :ev_error    (change-ev_error x :backtrace (list (posn-fix pos))))
+    :ev_throwing (change-ev_throwing x :backtrace (list (val-imaplist-fix storage) (posn-fix pos)))
+    :ev_error    (change-ev_error x :backtrace (list (val-imaplist-fix storage) (posn-fix pos))))
   ///
   (defret eval_result-kind-of-<fn>
     (equal (eval_result-kind new-x)
@@ -1170,13 +1170,13 @@ binder)."
              (val_result-p new-x)))
   
   (defthm ev_error->desc-of-init-backtrace
-         (equal (ev_error->desc (init-backtrace err pos))
+         (equal (ev_error->desc (init-backtrace err storage pos))
                 (ev_error->desc err))
          :hints(("Goal" :in-theory (enable init-backtrace
                                            ev_error->desc-when-wrong-kind))))
 
   (defthm ev_throwing->throwdata-of-init-backtrace
-         (equal (ev_throwing->throwdata (init-backtrace err pos))
+         (equal (ev_throwing->throwdata (init-backtrace err storage pos))
                 (ev_throwing->throwdata err))
          :hints(("Goal" :in-theory (enable init-backtrace
                                            ev_throwing->throwdata-when-wrong-kind)))))
@@ -1198,8 +1198,12 @@ passed down from a context where a code position wasn't available.</p>"
                             `((,(car acl2::args) evresult.res)))
                     ,acl2::rest-expr)
 
-       :ev_throwing (mv (init-backtrace (ev_throwing-fix evresult) pos) orac)
-       :otherwise (pass-error (init-backtrace (ev_error-fix evresult) pos) orac))))
+       :ev_throwing (mv (init-backtrace (ev_throwing-fix evresult)
+                                        (local-env->storage (env->local env))
+                                        pos) orac)
+       :otherwise (pass-error (init-backtrace (ev_error-fix evresult)
+                                              (local-env->storage (env->local env))
+                                              pos) orac))))
 
 (defxdoc evob
   :short "@(csee B*) binder: see @(see patbind-evob)")
@@ -1903,22 +1907,32 @@ evaluation of @('e_arbitrary') expressions."
            :pattern_all (evo_normal (v_bool t)) ;; SemanticsRule.PAll
            :pattern_any (evtailcall (eval_pattern-any env val desc.patterns))
            :pattern_geq (b* (((evoo (expr_result v1)) (eval_expr env desc.expr)))
-                          (evo-return (init-backtrace (eval_binop :ge val v1.val) pos)))
+                          (evo-return (init-backtrace (eval_binop :ge val v1.val)
+                                                      (local-env->storage (env->local env))
+                                                      pos)))
            :pattern_leq (b* (((evoo (expr_result v1)) (eval_expr env desc.expr)))
-                          (evo-return (init-backtrace (eval_binop :le val v1.val) pos)))
+                          (evo-return (init-backtrace (eval_binop :le val v1.val)
+                                                      (local-env->storage (env->local env))
+                                                      pos)))
            :pattern_mask ;;We are not checking whether set/unset are consistent
            (val-case val
              :v_bitvector (evo-return (eval_pattern_mask val desc.mask))
              :otherwise (evo_error "Unsupported pattern_mask case" desc (list pos)))
            :pattern_not (b* (((evoo v1) (eval_pattern env val desc.pattern)))
-                          (evo-return (init-backtrace (eval_unop :bnot v1) pos)))
+                          (evo-return (init-backtrace (eval_unop :bnot v1)
+                                                      (local-env->storage (env->local env))
+                                                      pos)))
            :pattern_range (b* (((evoo (expr_result v1)) (eval_expr env desc.lower))
                                ((evoo (expr_result v2)) (eval_expr env desc.upper))
                                ((evob lower) (eval_binop :ge val v1.val))
                                ((evob upper) (eval_binop :le val v2.val)))
-                            (evo-return (init-backtrace (eval_binop :band lower upper) pos)))
+                            (evo-return (init-backtrace (eval_binop :band lower upper)
+                                                        (local-env->storage (env->local env))
+                                                        pos)))
            :pattern_single (b* (((evoo (expr_result v1)) (eval_expr env desc.expr)))
-                             (evo-return (init-backtrace (eval_binop :eq val v1.val) pos)))
+                             (evo-return (init-backtrace (eval_binop :eq val v1.val)
+                                                         (local-env->storage (env->local env))
+                                                         pos)))
            :pattern_tuple (b* ((len (len desc.patterns))
                                ((evo vs) (val-case val
                                            :v_array (if (eql (len val.arr) len)
@@ -2290,7 +2304,7 @@ global) environment."
                        (val-case assert.val
                          :v_bool (if assert.val.val
                                      (evo_normal (continuing assert.env))
-                                   (evo_error "DE_DAF" s.expr (list pos)))
+                                   (evo_error "DE_DAF: Dynamic assertion failed" s.expr (list pos)))
                          :otherwise (evo_error "Non-boolean assertion result. ~%This should never hapen if our ASL was type-checked"
                                                s.expr (list pos))))
            :s_for (b* (((evoo (expr_result startr)) (eval_expr env s.start_e))
@@ -2334,7 +2348,7 @@ global) environment."
                          (str (vallist-to-string e.val))
                          (- (cw (if s.newline "~s0~%" "~s0") str)))
                       (evo_normal (continuing e.env)))
-           :s_unreachable (evo_error "DE_UNR" s (list pos))
+           :s_unreachable (evo_error "DE_UNR: Unreachable statement reached" s (list pos))
            :s_pragma (evo_error "unsupported statement" s (list pos)))))
 
      (define eval_catchers ((env env-p)
