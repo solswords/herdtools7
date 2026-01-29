@@ -2251,3 +2251,31 @@
     :hints ((vl::big-mutrec-default-hint 'eval_expr-*t-fn id nil world))))
 
 
+
+
+(defthmd eval_subprogram-*t-with-emptying-tracespec
+  (implies (and (equal ts-entry (find-call-tracespec name pos tracespec))
+                ts-entry
+                (call-tracespec->no-trace ts-entry)
+                (call-tracespec->empty-tracespec ts-entry)
+                (not (call-tracespec->interior-tracespec ts-entry))
+                (not (call-tracespec->abort ts-entry)))
+           (equal (eval_subprogram-*t env name vparams vars)
+                  (eval_subprogram-*t env name vparams vars
+                                      :tracespec (make-tracespec))))
+  :hints (("goal" :expand ((:free (tracespec) (eval_subprogram-*t env name vparams vars))
+                           (find-call-tracespec name pos '(nil nil nil nil))))))
+
+
+(defthmd eval_stmt-*t-with-emptying-tracespec
+  (implies (and (equal ts-entry (find-stmt-tracespec s tracespec))
+                ts-entry
+                (stmt-tracespec->no-trace ts-entry)
+                (stmt-tracespec->empty-tracespec ts-entry)
+                (not (stmt-tracespec->interior-tracespec ts-entry))
+                (not (stmt-tracespec->abort ts-entry)))
+           (equal (eval_stmt-*t env s)
+                  (eval_stmt-*t env s :tracespec (make-tracespec))))
+  :hints (("goal" :expand ((:free (tracespec) (eval_stmt-*t env s))
+                           (find-stmt-tracespec s '(nil nil nil nil))))))
+
