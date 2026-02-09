@@ -25,7 +25,7 @@
 ;; TODO: Document and add the stdlib proofs.
 
 (include-book "toplevel")
-(include-book "trace-interp")
+(include-book "trace-subset")
 (include-book "proofs/stdlib/top")
 (include-book "xdoc/save" :dir :system)
 (include-book "oslib/date" :dir :system)

@@ -2150,6 +2150,34 @@
                            append
                            hons-assoc-equal)))
 
+(local (defthm call-interior-tracespec-of-nil
+         (equal (call-interior-tracespec nil tracespec)
+                (combine-tracespecs t nil tracespec))
+         :hints(("Goal" :in-theory (enable call-interior-tracespec)))))
+
+(local (defthm stmt-interior-tracespec-of-nil
+         (equal (stmt-interior-tracespec nil tracespec)
+                (combine-tracespecs nil nil tracespec))
+         :hints(("Goal" :in-theory (enable stmt-interior-tracespec)))))
+
+(local (defthm call-abort-after-of-nil
+         (not (call-abort-after nil x))
+         :hints(("Goal" :in-theory (enable call-abort-after)))))
+
+(local (defthm stmt-abort-after-of-nil
+         (not (stmt-abort-after nil x))
+         :hints(("Goal" :in-theory (enable stmt-abort-after)))))
+
+(local (defthm stmt-trace-output-of-nil
+         (equal (stmt-trace-output nil env s res trace)
+                (asl-tracelist-fix trace))
+         :hints(("Goal" :in-theory (enable stmt-trace-output)))))
+
+(local (defthm call-trace-output-of-nil
+         (equal (call-trace-output nil name vparams vargs pos res trace)
+                (asl-tracelist-fix trace))
+         :hints(("Goal" :in-theory (enable call-trace-output)))))
+
 (with-output
   ;; makes it so it won't take forever to print the induction scheme
   :evisc (:gag-mode (evisc-tuple 3 4 nil nil))
@@ -2252,6 +2280,42 @@
 
 
 
+(local (defthm maybe-call-tracespec->abort-when-exists
+         (implies x
+                  (equal (maybe-call-tracespec->abort x)
+                         (call-tracespec->abort x)))
+         :hints(("Goal" :in-theory (enable maybe-call-tracespec->abort)))))
+
+(local (defthm maybe-stmt-tracespec->abort-when-exists
+         (implies x
+                  (equal (maybe-stmt-tracespec->abort x)
+                         (stmt-tracespec->abort x)))
+         :hints(("Goal" :in-theory (enable maybe-stmt-tracespec->abort)))))
+
+(local (defthm call-abort-after-when-no-abort
+         (implies (not (call-tracespec->abort x))
+                  (not (call-abort-after x res)))
+         :hints(("Goal" :in-theory (enable call-abort-after
+                                           maybe-call-tracespec->abort)))))
+
+(local (defthm stmt-abort-after-when-no-abort
+         (implies (not (stmt-tracespec->abort x))
+                  (not (stmt-abort-after x res)))
+         :hints(("Goal" :in-theory (enable stmt-abort-after
+                                           maybe-stmt-tracespec->abort)))))
+
+(local (defthm call-trace-output-when-no-trace
+         (implies (call-tracespec->no-trace x)
+                  (equal (call-trace-output x name vparams vargs pos res trace)
+                         (asl-tracelist-fix trace)))
+         :hints(("Goal" :in-theory (enable call-trace-output)))))
+
+(local (defthm stmt-trace-output-when-no-trace
+         (implies (stmt-tracespec->no-trace x)
+                  (equal (stmt-trace-output x env s res trace)
+                         (asl-tracelist-fix trace)))
+         :hints(("Goal" :in-theory (enable stmt-trace-output)))))
+
 
 (defthmd eval_subprogram-*t-with-emptying-tracespec
   (implies (and (equal ts-entry (find-call-tracespec name pos tracespec))
@@ -2264,7 +2328,10 @@
                   (eval_subprogram-*t env name vparams vars
                                       :tracespec (make-tracespec))))
   :hints (("goal" :expand ((:free (tracespec) (eval_subprogram-*t env name vparams vars))
-                           (find-call-tracespec name pos '(nil nil nil nil))))))
+                           (find-call-tracespec name pos '(nil nil nil nil)))
+           :in-theory (enable call-interior-tracespec
+                              maybe-call-tracespec->interior-tracespec
+                              maybe-call-tracespec->empty-tracespec))))
 
 
 (defthmd eval_stmt-*t-with-emptying-tracespec
@@ -2277,5 +2344,9 @@
            (equal (eval_stmt-*t env s)
                   (eval_stmt-*t env s :tracespec (make-tracespec))))
   :hints (("goal" :expand ((:free (tracespec) (eval_stmt-*t env s))
-                           (find-stmt-tracespec s '(nil nil nil nil))))))
+                           (find-stmt-tracespec s '(nil nil nil nil)))
+           :in-theory (enable stmt-interior-tracespec
+                              maybe-stmt-tracespec->interior-tracespec
+                              maybe-stmt-tracespec->empty-tracespec))))
+
 
