@@ -47,6 +47,20 @@
   :returns (val integerp :rule-classes :type-prescription)
   (l_int->val (e_literal->val (expr->desc x))))
 
+(define int-literal-expr ((val integerp))
+  :returns (e expr-p)
+  (expr (e_literal (l_int val))
+        (posn "" 0 0 0))
+  ///
+  (defret int-literal-expr-p-of-<fn>
+    (int-literal-expr-p e)
+    :hints(("Goal" :in-theory (enable int-literal-expr-p))))
+  
+  (defret int-literal-expr->val-of-<fn>
+    (equal (int-literal-expr->val e)
+           (ifix val))
+    :hints(("Goal" :in-theory (enable int-literal-expr->val)))))
+
 
 (define int_constraint-resolved-p ((x int_constraint-p))
   (int_constraint-case x
