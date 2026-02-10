@@ -26,6 +26,7 @@
 
 (include-book "toplevel")
 (include-book "trace-subset")
+(include-book "stack-preserved")
 (include-book "proofs/stdlib/top")
 (include-book "xdoc/save" :dir :system)
 (include-book "oslib/date" :dir :system)
