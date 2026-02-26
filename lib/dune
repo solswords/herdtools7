@@ -92,8 +92,9 @@
 (library
  (name herdtools)
  (wrapped false)
- (libraries str asllib zarith)
+ (libraries str aslref zarith)
  (modules_without_implementation
+  myRel
   sign
   outTests
   AST

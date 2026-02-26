@@ -91,8 +91,8 @@ and pp_opt_named_type_terms fmt opt_named_terms =
 and pp_record_fields fmt fields =
   pp_sep_list ~sep:", " pp_record_field fmt fields
 
-and pp_record_field fmt { name_and_type; att } =
-  fprintf fmt "%a%a" pp_named_type_term name_and_type pp_attribute_key_values
+and pp_record_field fmt { name; term; att } =
+  fprintf fmt "%a%a" pp_named_type_term (name, term) pp_attribute_key_values
     (Attributes.bindings att)
 
 let pp_type_term_with_attributes fmt ({ TypeVariant.term } as variant) =
@@ -119,8 +119,7 @@ let rec pp_expr fmt =
       fprintf fmt "%s(%a)" name (pp_comma_list pp_expr) args
   | Map { lhs; args } ->
       fprintf fmt "%a(%a)" pp_expr lhs (pp_comma_list pp_expr) args
-  | FieldAccess { var; fields } ->
-      pp_print_string fmt (String.concat "." (var :: fields))
+  | FieldAccess { base; field } -> fprintf fmt "%a.%s" pp_expr base field
   | ListIndex { list_var; index } -> fprintf fmt "%s[%a]" list_var pp_expr index
   | Record { label_opt; fields } ->
       fprintf fmt "%a[%a]"
@@ -129,6 +128,11 @@ let rec pp_expr fmt =
         (pp_sep_list ~sep:", " (fun fmt (field, expr) ->
              fprintf fmt "%s : %a" field pp_expr expr))
         fields
+  | RecordUpdate { record_expr; updates } ->
+      fprintf fmt "%a[%a]" pp_expr record_expr
+        (pp_sep_list ~sep:", " (fun fmt (field, expr) ->
+             fprintf fmt "%s : %a" field pp_expr expr))
+        updates
   | Transition { lhs; rhs; short_circuit } ->
       fprintf fmt "%a -> %a%a" pp_expr lhs pp_expr rhs pp_short_circuit
         short_circuit

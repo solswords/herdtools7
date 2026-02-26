@@ -108,10 +108,7 @@ module Make (S : SPEC_VALUE) = struct
           (args, layout)
     | Record { label_opt; fields } ->
         let pp_record_fields_as_pairs =
-          List.map
-            (fun ({ name_and_type = field_name, _; _ } as field) ->
-              (field_name, field))
-            fields
+          List.map (fun field -> (field.name, field)) fields
         in
         fprintf fmt "%a%a" pp_id_opt_as_macro label_opt
           (pp_fields pp_field_name pp_record_field_as_pair)
@@ -143,9 +140,8 @@ module Make (S : SPEC_VALUE) = struct
     pp_aligned_elements ~pp_sep:pp_comma ~alignment:"c" pp_opt_named_type_term
       layout fmt opt_type_terms
 
-  and pp_record_field_as_pair fmt ({ name_and_type = _, field_type; _ }, layout)
-      =
-    pp_type_term fmt (field_type, layout)
+  and pp_record_field_as_pair fmt ({ term }, layout) =
+    pp_type_term fmt (term, layout)
 
   (** [pp_output_types fmt (terms, layout)] renders the relation output [terms]
       in with the given [layout]. *)
@@ -230,10 +226,7 @@ module Make (S : SPEC_VALUE) = struct
     | Record { fields } ->
         (* Records are a special case, since each field has its own hypertarget. *)
         let field_hyperlink_targets =
-          List.map
-            (fun { Term.name_and_type = field_name, _; _ } ->
-              hypertarget_for_id field_name)
-            fields
+          List.map (fun { Term.name } -> hypertarget_for_id name) fields
         in
         fprintf fmt "%a%a%a"
           (pp_print_option pp_mathhypertarget)
@@ -388,15 +381,6 @@ module Make (S : SPEC_VALUE) = struct
   module RenderRule = struct
     open Rule
 
-    (** Renders the field path [path] with [fmt]. *)
-    let pp_field_path fmt = function
-      | [] -> assert false
-      | var :: [] -> pp_var fmt var
-      | var :: path ->
-          fprintf fmt "%a.%a" pp_var var
-            (PP.pp_sep_list ~sep:"." pp_field_name)
-            path
-
     (** Returns the macro for a given relation category and a default long right
         arrow for [None]. *)
     let arrow_macro_name_for_category_opt =
@@ -415,7 +399,10 @@ module Make (S : SPEC_VALUE) = struct
       | Label id -> (
           match Spec.defining_node_for_id S.spec id with
           | Node_Type typedef ->
-              [ Type.short_circuit_macro typedef |> Option.get ]
+              [
+                Type.short_circuit_macro typedef |> Option.get
+                (* get is ensured to succeed by [Spec.check_relations_outputs] *);
+              ]
           | Node_TypeVariant { term = Label id } -> [ get_or_gen_math_macro id ]
           | _ -> assert false)
       | ConstantsSet constant_names ->
@@ -451,7 +438,9 @@ module Make (S : SPEC_VALUE) = struct
           | _ ->
               pp_var fmt name)
       | Relation { name; is_operator; args } when is_operator ->
-          pp_operator name layout fmt args
+          (* operators often use custom macros, which might not mix well with arrays,
+             so it's better to put them inside braces. *)
+          fprintf fmt "{ %a }" (pp_operator name layout) args
       | Relation { args } | Tuple { args } | Map { args } ->
           let pp_lhs fmt lhs =
             match lhs with
@@ -472,9 +461,33 @@ module Make (S : SPEC_VALUE) = struct
             label_opt
             (pp_fields pp_field_name pp_expr)
             (fields, layout)
+      | RecordUpdate { record_expr; updates } ->
+          let layout =
+            horizontal_if_unspecified layout [ record_expr; record_expr ]
+          in
+          let record_layout, updates_layout =
+            match layout with
+            | Horizontal [ record_layout; updates_layout ]
+            | Vertical [ record_layout; updates_layout ] ->
+                (record_layout, updates_layout)
+            | _ ->
+                failwith
+                  (let msg =
+                     Format.asprintf
+                       "the layout for record update expression %a has an \
+                        invalid layout (%a)"
+                       PP.pp_expr expr PP.pp_layout layout
+                   in
+                   failwith msg)
+          in
+          fprintf fmt "%a%a" pp_expr
+            (record_expr, record_layout)
+            (pp_fields pp_field_name pp_expr)
+            (updates, updates_layout)
       | ListIndex { list_var; index } ->
           fprintf fmt "%a[%a]" pp_var list_var pp_expr (index, layout)
-      | FieldAccess { var; fields } -> pp_field_path fmt (var :: fields)
+      | FieldAccess { base; field } ->
+          fprintf fmt "%a.%a" pp_expr (base, layout) pp_field_name field
       | Indexed { index; list_var; body } ->
           let pp_indexed_lhs fmt ((index, list_var), _layout) =
             fprintf fmt "%a \\in %a(%a)" pp_var index pp_macro
@@ -501,6 +514,12 @@ module Make (S : SPEC_VALUE) = struct
         [layout]. *)
     and pp_operator op_name layout fmt args =
       let op_macro = get_or_gen_math_macro op_name in
+      let layout =
+        if Spec.is_cond_operator_name S.spec op_name then
+          (* Special case for the match_cases operator, which is always vertical. *)
+          vertical_if_unspecified layout args
+        else horizontal_if_unspecified layout args
+      in
       let operator = Spec.relation_for_id S.spec op_name in
       match operator.Relation.input with
       | [] ->
@@ -604,7 +623,7 @@ module Make (S : SPEC_VALUE) = struct
         pp_case_name_opt name_opt
         (pp_print_list
          (* The quadruple backslash means the next premise definitely starts on a new line. *)
-           ~pp_sep:(fun fmt () -> fprintf fmt {|\\\\@.|})
+           ~pp_sep:(fun fmt () -> fprintf fmt {|\hva\\\\@.|})
            pp_premise)
         premises pp_conclusion conclusion
 

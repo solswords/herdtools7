@@ -35,19 +35,18 @@ let bool_of_string s =
 %token CASE
 %token COLON_EQ
 %token EQ_COLON
+%token COND
 %token CONSTANT
 %token CONSTANTS_SET
 %token CUSTOM
 %token FUN
 %token FUNCTION
 %token INDEX
-%token LATEX
 %token LIST0
 %token LIST1
 %token MATH_MACRO
 %token MATH_LAYOUT
 %token LHS_HYPERTARGETS
-%token AUTO_NAME
 %token OPTION
 %token OPERATOR
 %token PARTIAL
@@ -62,12 +61,9 @@ let bool_of_string s =
 %token SHORT_CIRCUIT_MACRO
 %token TYPEDEF
 %token TYPING
+%token VARIADIC
 
 %token IFF
-%token LIST
-%token SET
-%token SIZE
-%token SOME
 
 (* Punctuation and operator tokens *)
 %token ARROW
@@ -88,6 +84,9 @@ let bool_of_string s =
 %token MINUS
 %token MINUS_MINUS
 
+%nonassoc COLON_EQ
+%nonassoc EQ_COLON
+
 %token PLUS
 %token TIMES
 %token DIVIDE
@@ -101,12 +100,6 @@ let bool_of_string s =
 %token NEQ
 
 %token IF THEN ELSE
-
-%right MINUS
-%right PLUS
-%right TIMES
-%right DIVIDE
-%right EXPONENT
 %right AND
 %right OR
 %right ELSE
@@ -115,14 +108,20 @@ let bool_of_string s =
 %nonassoc IN
 %nonassoc NOT_IN
 %nonassoc IFF
-%nonassoc COLON_EQ
-%nonassoc EQ_COLON
 %nonassoc LE
 %nonassoc LT
 %nonassoc GE
 %nonassoc GT
 %nonassoc NEQ
+
+%right MINUS
+%right PLUS
+%right TIMES
+%right DIVIDE
+%right EXPONENT
+
 %left LPAR
+%left DOT
 
 %%
 
@@ -214,10 +213,14 @@ let relation_definition :=
         Elem_Relation (Relation.make name relation_property relation_category input output relation_attributes opt_relation_rule) }
 
 let operator_definition :=
-    OPERATOR; name=IDENTIFIER; ~=parameters; input=plist0(opt_named_type_term); ARROW; output=type_term;
+    ~=is_variadic; OPERATOR; name=IDENTIFIER; ~=parameters; input=plist0(opt_named_type_term); ARROW; output=type_term;
     ~=operator_attributes;
     {   check_definition_name name;
-        Elem_Relation (Relation.make_operator name parameters input output operator_attributes) }
+        Elem_Relation (Relation.make_operator name parameters input output is_variadic operator_attributes) }
+
+let is_variadic :=
+    | VARIADIC; { true }
+    | { false }
 
 let parameters :=
     | LBRACKET; params=tclist1(IDENTIFIER); RBRACKET; { params }
@@ -398,16 +401,25 @@ let expr :=
       { Expr.make_tuple args }
     | lhs=expr; args=plist0(expr);
       { Expr.make_application lhs args }
-    | var=IDENTIFIER; DOT; ~=field_path;
-      { Expr.FieldAccess { var; fields = field_path} }
+    | base=expr; DOT; field=IDENTIFIER;
+      { Expr.FieldAccess { base; field } }
     | list_var=IDENTIFIER; LBRACKET; index=expr; RBRACKET;
       { Expr.make_list_index list_var index }
     | label_opt=ioption(IDENTIFIER); LBRACKET; fields=tclist1(field_and_value); RBRACKET;
       { Expr.make_record label_opt fields }
+    | base=expr; LPAR; fields=tclist1(field_and_value); RPAR;
+      { Expr.make_record_update base fields }
     | lhs=expr; ~=infix_expr_operator; rhs=expr;
       { Expr.make_operator_application infix_expr_operator [lhs; rhs] }
     | IF; cond=expr; THEN; then_branch=expr; ELSE; else_branch=expr;
       { Expr.make_operator_application "if_then_else" [cond; then_branch; else_branch] }
+    | cond_expr
+
+let cond_expr :=
+    | COND; LPAR; cases=tclist1(cond_case); RPAR;
+      { Expr.make_operator_application "cond_op" cases }
+let cond_case :=
+    | condition=expr; COLON; result=expr; { Expr.make_operator_application "cond_case" [condition; result] }
 
 let maybe_output_expr ==
     | { false }
@@ -449,10 +461,6 @@ let short_circuit_expr :=
     | lhs=IDENTIFIER; args=plist0(IDENTIFIER);
       { Expr.make_application (Expr.make_var lhs) (List.map Expr.make_var args) }
 
-let field_path :=
-  | id=IDENTIFIER; { [ id ] }
-  | id1=IDENTIFIER; DOT; fields=field_path; { id1 :: fields }
-
 let infix_expr_operator ==
     | COLON_EQ; { "assign" }
     | EQ_COLON; { "reverse_assign" }
@@ -481,9 +489,6 @@ let judgment_attributes ==
 
 let judgment_attribute :=
     | math_layout_attribute
-    | auto_name_attribute
-
-let auto_name_attribute := AUTO_NAME; EQ; value=IDENTIFIER; { (Auto_Name, BoolAttribute (bool_of_string value)) }
 
 let render_rule :=
   | RENDER; RULE; name=IDENTIFIER; EQ; relation_name=IDENTIFIER; rule_name=pared(rule_name);

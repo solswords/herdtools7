@@ -9,7 +9,6 @@
 \newcommand\Bool[0]{ \hyperlink{type-Bool}{\textsf{Bool}} } % Generated from Bool
 \newcommand\N[0]{ \hyperlink{type-N}{\textsf{N}} } % Generated from N
 \newcommand\None[0]{ \hyperlink{constant-None}{\textsf{None}} } % Generated from None
-\newcommand\boundvariable[0]{ \hyperlink{type-boundvariable}{\textsf{bound\_variable}} } % Generated from bound_variable
 \newcommand\f[0]{ \hyperlink{relation-f}{\textit{f}} } % Generated from f
 
 % -------------------
@@ -28,7 +27,7 @@
 
 \DefineType{Q}{\texthypertarget{type-Q}$\Q$} % EndDefineType
 
-\DefineType{bound_variable}{\texthypertarget{type-boundvariable}$\boundvariable$} % EndDefineType
+\DefineType{ASTLabels}{\texthypertarget{type-ASTLabels}$\ASTLabels$} % EndDefineType
 
 \DefineType{N}{\texthypertarget{type-N}$\N$} % EndDefineType
 
@@ -42,8 +41,8 @@ The relation
 } % EndDefineRelation
 
 \DefineRule{f}{\begin{mathpar}
-\inferrule{ { \texttt{a}\intplus\texttt{b} \equal \texttt{c} } \\\\
- { \texttt{d} \eqdef \ifthenelseop[H]{\texttt{a} \member \texttt{S}}{\texttt{b}}{\texttt{c}} } }{
+\inferrule{ { { { \texttt{a}\intplus\texttt{b} } \equal \texttt{c} } } \\\\
+ { { \texttt{d} \eqdef { \ifthenelseop[H]{{ \texttt{a} \member \texttt{S} }}{\texttt{b}}{\texttt{c}} } } } }{
  { \f(\texttt{a}, \texttt{b}, \texttt{c}, \texttt{S}) \typearrow \texttt{d} } 
 }
 \end{mathpar}} % EndDefineRule

@@ -182,7 +182,12 @@ module Make(C:Config) (S:Sem.Semantics) : S with module S = S	=
       | None -> Opts.unroll_default A.arch
       | Some u -> u
 
-  let _profile = C.debug.Debug_herd.profile_asl
+    let speedcheck =
+      match C.speedcheck with
+      | Speed.False -> false
+      | Speed.True | Speed.Fast -> true
+
+  let _profile = C.debug.Debug_herd.profile_mem
   let start_profile = if _profile then Sys.time else fun () -> 0.
   let end_profile = if _profile then end_profile else fun _ _ -> ()
 
@@ -757,33 +762,6 @@ and get_written e = match E.written_of e with
 
 
 
-(* Add (local) final edges in rfm, ie for all (register) location, find the last (po+iico) store to it *)
-
-let add_finals es =
-    U.LocEnv.fold
-      (fun loc stores k ->
-        let stores =
-          List.filter
-            (fun x -> not (E.EventSet.mem x (es.E.speculated))) stores in
-      match stores with
-      | [] -> k
-      | ew::stores ->
-          let last =
-            List.fold_right
-              (fun ew0 ew ->
-                if U.is_before_strict es ew0 ew then ew
-                else begin
-                  (* If writes to a given register by a given thread
-                     are not totally ordered, it gets weird to define
-                     the last or 'final'register write *)
-                  if not (U.is_before_strict es ew ew0) then
-                    Warn.fatal
-                      "Ambiguous po for register %s" (A.pp_location loc) ;
-                  ew0
-                end)
-              stores ew in
-          S.RFMap.add (S.Final loc) (S.Store last) k)
-
 (*******************************)
 (* Compute rfmap for registers *)
 (*******************************)
@@ -792,57 +770,56 @@ let map_loc_find loc m =
   try U.LocEnv.find loc m
   with Not_found -> []
 
-let match_reg_events es =
-  let loc_loads = U.collect_reg_loads es
-  and loc_stores = U.collect_reg_stores es
-  (* Share computation of the iico relation *)
-  and is_before_strict =  U.is_before_strict es in
+let match_reg_events add_eq es csn =
+  let loc_loads_stores = U.collect_reg_loads_stores es in
+  let is_before_strict = U.is_before_strict es in
+  let compare e1 e2 =
+    if is_before_strict e1 e2 then -1
+    else if is_before_strict e2 e1 then 1
+    else
+      let () =
+        Printf.eprintf "Not ordered stores %a and %a\n" E.debug_event e1
+          E.debug_event e2
+      in
+      assert false
+  in
+  let module StoreSet = Set.Make (struct
+    type t = E.event
 
-(* For all loads find the right store, the one "just before" the load *)
-  let rfm =
-    U.LocEnv.fold
-      (fun loc loads k ->
-        let stores = map_loc_find loc loc_stores in
-        List.fold_right
-          (fun er k ->
-            let rf =
-              List.fold_left
-                (fun rf ew ->
-                  if is_before_strict ew er then
-                    match rf with
-                    | S.Init -> S.Store ew
-                    | S.Store ew0 ->
-                        if U.is_before_strict es ew0 ew then
-                          S.Store ew
-                        else begin
-                          (* store order is total *)
-                            if not (is_before_strict ew ew0) then begin
-                              Printf.eprintf "Not ordered stores %a and %a\n"
-                                E.debug_event ew0
-                                E.debug_event ew ;
-                              assert false
-                            end ;
-                          rf
-                        end
-                  else rf)
-                S.Init stores in
-            S.RFMap.add (S.Load er) rf k)
-          loads k)
-      loc_loads S.RFMap.empty in
-(* Complete with stores to final state *)
-  add_finals es loc_stores rfm
+    let compare = compare
+  end) in
+  let add wt rf (rfm, csn) = (S.RFMap.add wt rf rfm, add_eq rfm wt rf csn) in
+  (* For all loads find the right store, the one "just before" the load *)
+  U.LocEnv.fold
+    (fun loc (loads, stores) k ->
+      (* We order them with respect to is_before_strict *)
+      let stores = StoreSet.of_list stores in
+      (* Add the final value *)
+      let k =
+        match StoreSet.max_elt_opt stores with
+        | Some store -> add (S.Final loc) (S.Store store) k
+        | None -> k (* If there is no store to this value *)
+      in
+      (* Add the corresponding store for each load *)
+      List.fold_left
+        (fun k load ->
+          let f e = is_before_strict e load in
+          let rf =
+            match StoreSet.find_last_opt f stores with
+            | Some store -> S.Store store
+            | None -> S.Init
+          in
+          add (S.Load load) rf k)
+        k loads)
+    loc_loads_stores (S.RFMap.empty, csn)
 
-
-
-    let get_rf_value test read rf = match rf with
-    | S.Init ->
-        let loc = get_loc read in
-        let look_address =
-          A.look_address_in_state test.Test_herd.init_state in
-        begin
-          try look_address loc with A.LocUndetermined -> assert false
-        end
-    | S.Store e -> get_written e
+let get_rf_value test read =
+  let look_address = A.look_address_in_state test.Test_herd.init_state in
+  function
+  | S.Store e -> get_written e
+  | S.Init -> (
+      let loc = get_loc read in
+      try look_address loc with A.LocUndetermined -> assert false)
 
 (* Add a constraint for two values *)
 
@@ -868,53 +845,88 @@ let match_reg_events es =
 
     let debug_solver = C.debug.Debug_herd.solver > 0
 
-    let do_solve_regs test es csn =
+    let wanted_final_value test =
+      let map =
+        let rec loop acc =
+          let open ConstrGen in
+          function
+          | Atom (LV (Loc (A.Location_reg _ as loc), v)) -> A.LocMap.add loc v acc
+          | And li -> List.fold_left loop acc li
+          | Or [ x ] -> loop acc x
+          | _ -> acc
+        in
+        match test.Test_herd.cond with
+        | ConstrGen.ExistsState prop -> loop A.LocMap.empty prop
+        | _ -> A.LocMap.empty
+      in
+      fun loc -> A.LocMap.find_opt loc map
 
-      let rfm = match_reg_events es in
-      let csn =
-        S.RFMap.fold
-          (fun wt rf csn -> match wt with
-          | S.Final _ -> csn
-          | S.Load load ->
-              let v_loaded = get_read load in
-              let v_stored = get_rf_value test load rf in
-              try add_eq v_loaded v_stored csn
-              with Contradiction ->
-                let loc = Misc.as_some (E.location_of load) in
-                Printf.eprintf
-                  "Contradiction on reg %s: loaded %s vs. stored %s\n"
-                  (A.pp_location loc)
-                  (A.V.pp_v v_loaded)
-                  (A.V.pp_v v_stored) ;
-                let module PP = Pretty.Make(S) in
-                PP.show_es_rfm test es rfm ;
-                assert false)
-          rfm csn in
-      if  debug_solver then
-        prerr_endline "++ Solve  registers" ;
-      match VC.solve csn with
-      | VC.NoSolns ->
-         if debug_solver then
-           pp_nosol "register" test es rfm ;
-         None
-      | VC.Maybe (sol,csn) ->
-          Some
-            (E.simplify_vars_in_event_structure sol es,
-             S.simplify_vars_in_rfmap sol rfm,
-             csn)
+    (* Add the equations given by one read-from register pairing *)
+    let add_eq_for_rf_reg test wanted_final_values es rfm wt rf csn =
+      match wt with
+      | S.Final loc -> (
+          if not speedcheck then csn
+          else
+            match (wanted_final_values loc, rf) with
+            | Some v_wanted, S.Store store ->
+                let v_stored = get_written store in
+                if debug_solver then
+                  (* Delay finding the contradiction to the solver *)
+                  VC.Assign (v_stored, VC.Atom v_wanted) :: csn
+                else add_eq v_stored v_wanted csn
+            | _ -> csn)
+      | S.Load load -> (
+          let v_loaded = get_read load
+          and v_stored = get_rf_value test load rf in
+          try add_eq v_loaded v_stored csn
+          with Contradiction ->
+            (* This shouldn't happen, unless mistake in the semantics. *)
+            let loc = Misc.as_some (E.location_of load) in
+            let () =
+              Printf.eprintf
+                "Contradiction on reg %s: loaded %s vs. stored %s\n"
+                (A.pp_location loc) (A.V.pp_v v_loaded) (A.V.pp_v v_stored)
+            in
+            let module PP = Pretty.Make (S) in
+            let () = PP.show_es_rfm test es rfm in
+            assert false)
+
+    let do_solve_regs test es csn =
+      profile "do_solve_regs" @@ fun () ->
+      let wanted_final_values =
+        if speedcheck then wanted_final_value test else Fun.const None
+      in
+      try
+        let rfm, csn =
+          match_reg_events
+            (add_eq_for_rf_reg test wanted_final_values es)
+            es csn
+        in
+        if debug_solver then prerr_endline "++ Solve  registers";
+        match VC.solve csn with
+        | VC.NoSolns ->
+            if debug_solver then pp_nosol "register" test es rfm;
+            None
+        | VC.Maybe (sol, csn) ->
+            Some
+              ( E.simplify_vars_in_event_structure sol es,
+                S.simplify_vars_in_rfmap sol rfm,
+                csn )
+      with Contradiction -> None
 
     let solve_regs test es csn =
+      profile "solve_regs" @@ fun () ->
       match do_solve_regs test es csn with
-      | Some (es,rfm,cns) as r ->
+      | Some (es, rfm, cns) as r ->
           if debug_solver && C.verbose > 0 then begin
-            let module PP = Pretty.Make(S) in
-            prerr_endline "Reg solved, direct" ;
+            let module PP = Pretty.Make (S) in
+            prerr_endline "Reg solved, direct";
             Printf.eprintf "++++ Remaing equations:\n%s\n++++++\n%!"
-              (VC.pp_cnstrnts cns) ;
+              (VC.pp_cnstrnts cns);
             PP.show_es_rfm test es rfm
-          end ;
+          end;
           r
-      | None ->  None
+      | None -> None
 
 (**************************************)
 (* Step 2. Generate rfmap for memory  *)
@@ -1033,12 +1045,19 @@ let match_reg_events es =
 
     let is_spec es e = E.EventSet.mem e es.E.speculated
 
+    let check_values solver_state store load =
+      if not speedcheck then true else
+        let v_written = get_written store and v_read = get_read load in
+        match VC.Hint.hint_solve_one solver_state v_read v_written with
+        | VC.NoSolns -> false
+        | VC.Maybe () -> true
+
 (* Consider all stores that may feed a load
    - Compatible location.
    - Not after in program order
     (suppressed when uniproc is not optmised early) *)
 
-    let map_load_possible_stores test es _rfm loads stores compat_locs =
+    let map_load_possible_stores test es cns loads stores compat_locs =
       let ok = match C.optace with
         | OptAce.False -> fun _ _ -> true
         | OptAce.True ->
@@ -1051,6 +1070,7 @@ let match_reg_events es =
         | OptAce.Iico ->
            let iico = U.iico es in
            fun load store -> not (E.EventRel.mem (load,store) iico) in
+      let solver_state = if speedcheck then VC.Hint.make_solver_state cns else VC.Hint.make_solver_state [] in
       let m =
         E.EventSet.fold
           (fun store map_load ->
@@ -1059,7 +1079,8 @@ let match_reg_events es =
                 if
                   compat_locs store load &&
                   check_speculation es store load &&
-                  ok load store
+                  ok load store &&
+                  check_values solver_state store load
                 then
                   load,S.Store store::stores
                 else c)
@@ -1080,8 +1101,18 @@ let match_reg_events es =
           m;
         eprintf "%!"
       end ;
-(* Check for loads that cannot feed on some write *)
-      if not do_deps && not asl then begin
+      (* Check for loads that cannot feed on some write.
+
+         In ASL mode, we have not constructed yet the full program, so reads
+         can not have a matching write.
+
+         When speedcheck mode is activated, it is possible to have reads that
+         don't match any write. Indeed, when speedcheck mode is activated, it
+         is possible possible that we know the value that was read at that
+         point, from the final condition of the test. There is then a check
+         when constructing a rfm that the values are compatible.
+      *)
+      if not do_deps && not asl && not speedcheck then begin
         List.iter
           (fun (load,stores) ->
             match stores with
@@ -1149,7 +1180,7 @@ let match_reg_events es =
 
     let solve_mem_or_res test es rfm cns kont res loads stores compat_locs add_eqs =
       let possible =
-        map_load_possible_stores test es rfm loads stores compat_locs in
+        map_load_possible_stores test es cns loads stores compat_locs in
       let possible =
         List.map
           (fun (er,ws) ->
@@ -1453,17 +1484,17 @@ let match_reg_events es =
       ms
 
 (* Non-mixed pairing for tags, if any *)
-    let pair_tags test es rfm =
+    let pair_tags test es cns =
       let tags = E.EventSet.filter E.is_tag es.E.events in
       let loads = E.EventSet.filter E.is_load tags
       and stores = E.EventSet.filter E.is_store tags in
       let m =
-        map_load_possible_stores test es rfm loads stores compatible_locs_mem in
+        map_load_possible_stores test es cns loads stores compatible_locs_mem in
       m
 
     let solve_mem_mixed test es rfm cns kont res =
       let match_tags = if morello then []
-        else pair_tags test es rfm in
+        else pair_tags test es cns in
       let tag_loads,tag_possible_stores = List.split match_tags in
       let ms = expose_scas es in
       let rss,wsss = List.split ms in
@@ -1941,9 +1972,8 @@ let match_reg_events es =
             (*jade: looks compatible with speculation, but there might be some
               unforeseen subtlety here so flagging it to be sure*)
              let ppoloc =
-               E.EventRel.restrict_rel
-                 (fun e1 e2 -> E.is_explicit e1 && E.is_explicit e2)
-                 ppoloc in
+               E.EventRel.restrict_domains
+                 E.is_explicit E.is_explicit ppoloc in
                match U.compute_pco rfm ppoloc with
                | None -> raise Exit
                | Some pco -> E.EventRel.union pco0 pco in

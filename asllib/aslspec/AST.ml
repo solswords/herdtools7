@@ -48,9 +48,6 @@ module AttributeKey = struct
         (** An attribute for [TypesRender] elements indicating whether
             hypertargets should be generated for the LHS of type definitions in
             the rendered output. *)
-    | Auto_Name
-        (** An attribute indicating whether automatic naming of sub-expressions
-            in rule judgments should be enabled. *)
 
   (* A total ordering on attribute keys. *)
   let compare a b =
@@ -63,7 +60,6 @@ module AttributeKey = struct
       | LHS_Hypertargets -> 5
       | Associative -> 6
       | Custom -> 7
-      | Auto_Name -> 8
     in
     let a_int = key_to_int a in
     let b_int = key_to_int b in
@@ -80,7 +76,6 @@ module AttributeKey = struct
     | LHS_Hypertargets -> "lhs_hypertargets"
     | Associative -> "associative"
     | Custom -> "custom"
-    | Auto_Name -> "auto_name"
 end
 
 (** A value associated with an attribute key. *)
@@ -187,6 +182,15 @@ module Term = struct
     | List1  (** All non-empty sequences of the given member type. *)
     | Option  (** A set containing at most a single value of the given type. *)
 
+  let type_operator_equal op1 op2 =
+    match (op1, op2) with
+    | Powerset, Powerset -> true
+    | Powerset_Finite, Powerset_Finite -> true
+    | List0, List0 -> true
+    | List1, List1 -> true
+    | Option, Option -> true
+    | _ -> false
+
   (** Terms for constructing types out of other types, with [Label t] being the
       leaf case.
 
@@ -225,7 +229,7 @@ module Term = struct
   and opt_named_type_term = string option * t
   (** A term optionally associated with a variable name. *)
 
-  and record_field = { name_and_type : named_type_term; att : Attributes.t }
+  and record_field = { name : string; term : t; att : Attributes.t }
   (** A field of a record type. *)
 
   (** [make_type_operation op term] Constructs a type term in which [op] is
@@ -240,16 +244,16 @@ module Term = struct
       tuple args [args]. *)
   let make_labelled_tuple label args = Tuple { label_opt = Some label; args }
 
-  let make_record_field named_type_term attributes =
+  let make_record_field (name, term) attributes =
     let att = Attributes.of_list attributes in
-    { name_and_type = named_type_term; att }
+    { name; term; att }
 
   (** [make_record fields] Constructs an unlabelled record with fields [fields].
   *)
   let make_record fields = Record { label_opt = None; fields }
 
-  let field_type { name_and_type = _, field_type; _ } = field_type
-  let field_name { name_and_type = name, _; _ } = name
+  let field_type { term } = term
+  let field_name { name } = name
 
   let record_field_math_macro { att } =
     Attributes.find_math_macro AttributeKey.Math_Macro att
@@ -267,12 +271,15 @@ module Expr = struct
   (** A term that can be used to form a rule judgment. *)
   type t =
     | Var of string
-    | FieldAccess of { var : string; fields : string list }
+    | FieldAccess of { base : t; field : string }
     | ListIndex of { list_var : string; index : t }
         (** An expression indexing into the list variable [list_var] at position
             [index]. *)
     | Record of { label_opt : string option; fields : (string * t) list }
         (** A record construction expression. *)
+    | RecordUpdate of { record_expr : t; updates : (string * t) list }
+        (** A record update expression that updates the fields given in
+            [updates] of the record given by [record_expr]. *)
     | UnresolvedApplication of { lhs : t; args : t list }
         (** An application expression whose left-hand side has not yet been
             resolved. *)
@@ -321,6 +328,10 @@ module Expr = struct
     Relation { name; is_operator = true; args }
 
   let make_record label_opt fields = Record { label_opt; fields }
+
+  let make_record_update record_expr updates =
+    RecordUpdate { record_expr; updates }
+
   let make_list_index list_var index = ListIndex { list_var; index }
 end
 
@@ -385,9 +396,11 @@ end
 
 (** A datatype for top-level type terms used in the definition of a type. *)
 module TypeVariant : sig
-  type t = { type_kind : Term.type_kind; term : Term.t; att : Attributes.t }
+  open Term
 
-  val make : Term.type_kind -> Term.t -> attribute_pairs -> t
+  type t = { type_kind : type_kind; term : Term.t; att : Attributes.t }
+
+  val make : type_kind -> Term.t -> attribute_pairs -> t
   val attributes_to_list : t -> attribute_pairs
   val prose_description : t -> string
   val math_macro : t -> string option
@@ -491,12 +504,6 @@ module Rule = struct
     | Some (MathLayoutAttribute layout) -> layout
     | _ -> Unspecified
 
-  (** [auto_name_judgment] returns [true] if automatic naming of sub-expressions
-      in the judgment is enabled, [false] otherwise. By default, automatic
-      naming is enabled unless the [auto_name] attribute is set to [false]. *)
-  let auto_name_judgment { att } =
-    Attributes.get_bool AttributeKey.Auto_Name ~default:true att
-
   (** A tree of elements. *)
   type rule_element =
     | Judgment of judgment  (** A leaf judgment. *)
@@ -533,6 +540,8 @@ module Relation : sig
     parameters : string list;
         (** Type parameters. Currently, only available to operators. *)
     is_operator : bool;
+    is_variadic : bool;
+        (** Whether the operator accepts a variable number of arguments. *)
     property : relation_property;
     category : relation_category option;
     input : Term.opt_named_type_term list;
@@ -556,6 +565,7 @@ module Relation : sig
     string list ->
     Term.opt_named_type_term list ->
     Term.t ->
+    bool ->
     attribute_pairs ->
     t
 
@@ -587,6 +597,7 @@ end = struct
     name : string;
     parameters : string list;
     is_operator : bool;
+    is_variadic : bool;
     property : relation_property;
     category : relation_category option;
     input : Term.opt_named_type_term list;
@@ -600,6 +611,7 @@ end = struct
       name;
       parameters = [];
       is_operator = false;
+      is_variadic = false;
       property;
       category;
       input;
@@ -608,11 +620,12 @@ end = struct
       rule_opt;
     }
 
-  let make_operator name parameters input output_type attributes =
+  let make_operator name parameters input output_type is_variadic attributes =
     {
       name;
       parameters;
       is_operator = true;
+      is_variadic;
       property = RelationProperty_Function;
       category = None;
       input;
