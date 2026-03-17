@@ -674,6 +674,10 @@ let pp_csv pp_desc label =
 let pp_error_csv f e = pp_csv pp_error_desc error_label f e
 let pp_warning_csv f w = pp_csv pp_warning_desc warning_label f w
 
+let pp_human pp_desc =
+  fun f ->
+  Format.pp_set_margin f 200; pp_desc f
+
 let pp_gnu pp_desc =
   let pos_in_line pos = Lexing.(pos.pos_cnum - pos.pos_bol) in
   fun f pos ->
@@ -691,13 +695,13 @@ end
 module ErrorPrinter (C : ERROR_PRINTER_CONFIG) = struct
   let eprintln e =
     match C.output_format with
-    | HumanReadable -> Format.eprintf "@[<2>%a@]@." pp_error e
+    | HumanReadable -> Format.eprintf "@[<2>%a@]@." (pp_human pp_error) e
     | CSV -> Printf.eprintf "%a\n" pp_error_csv e
     | GNU -> Printf.eprintf "%a\n" (pp_gnu pp_error_desc) e
 
   let warn w =
     match C.output_format with
-    | HumanReadable -> Format.eprintf "@[<2>%a@]@." pp_warning w
+    | HumanReadable -> Format.eprintf "@[<2>%a@]@." (pp_human pp_warning) w
     | CSV -> Printf.eprintf "%a\n" pp_warning_csv w
     | GNU -> Printf.eprintf "%a\n" (pp_gnu pp_warning_desc) w
 
