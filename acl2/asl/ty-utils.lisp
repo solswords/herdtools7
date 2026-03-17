@@ -1393,7 +1393,12 @@
   (defret int_constraint-satisfied-of-<fn>
     (iff (int_constraint-satisfied v new-x)
          (int_constraint-satisfied v x))
-    :hints(("Goal" :in-theory (enable int_constraint-satisfied)))))
+    :hints(("Goal" :in-theory (enable int_constraint-satisfied))))
+
+  (defret int_constraint-value-fix-of-<fn>
+    (equal (int_constraint-value-fix v new-x)
+           (int_constraint-value-fix v x))
+    :hints(("Goal" :in-theory (enable int_constraint-value-fix)))))
 
 (define int_constraintlist-normalize ((x int_constraintlist-p))
   :guard (int_constraintlist-resolved-p x)
@@ -1411,7 +1416,12 @@
   (defret int_constraintlist-satisfied-of-<fn>
     (iff (int_constraintlist-satisfied v new-x)
          (int_constraintlist-satisfied v x))
-    :hints(("Goal" :in-theory (enable int_constraintlist-satisfied)))))
+    :hints(("Goal" :in-theory (enable int_constraintlist-satisfied))))
+  
+  (defret int_constraintlist-value-fix-of-<fn>
+    (equal (int_constraintlist-value-fix v new-x)
+           (int_constraintlist-value-fix v x))
+    :hints(("Goal" :in-theory (enable int_constraintlist-value-fix)))))
 
 (define constraint_kind-normalize ((x constraint_kind-p))
   :guard (constraint_kind-resolved-p x)
@@ -1429,7 +1439,12 @@
   (defret constraint_kind-satisfied-of-<fn>
     (iff (constraint_kind-satisfied v new-x)
          (constraint_kind-satisfied v x))
-    :hints(("Goal" :in-theory (enable constraint_kind-satisfied)))))
+    :hints(("Goal" :in-theory (enable constraint_kind-satisfied))))
+
+  (defret constraint_kind-value-fix-of-<fn>
+    (equal (constraint_kind-value-fix v new-x)
+           (constraint_kind-value-fix v x))
+    :hints(("Goal" :in-theory (enable constraint_kind-value-fix)))))
 
 
 (defines ty-normalize
@@ -1686,3 +1701,116 @@
                           (:instance ty-fix-val-when-satisfied))
              :in-theory (disable ty-fix-val-when-satisfied)))))
 
+
+
+(defines ty-norm-posns
+  :flag-local nil
+  :ruler-extenders :all
+  :verify-guards nil
+  (define ty-norm-posns ((x ty-p))
+    :guard (ty-resolved-p x)
+    :measure (ty-count x)
+    :returns (new-x ty-p)
+    (b* ((x (ty->desc x)))
+      (ty
+       (type_desc-case x
+         :t_int (t_int (constraint_kind-normalize x.constraint))
+         :t_bits (t_bits (int-literal-expr-normalize x.expr) nil)
+         :t_tuple (t_tuple (tuple-type-norm-posns x.types))
+         :t_array (t_array (array_index-case x.index
+                             :arraylength_expr (arraylength_expr (int-literal-expr-normalize x.index.length))
+                             :arraylength_enum x.index)
+                           (ty-norm-posns x.type))
+         :t_record
+         (t_record
+          (record-type-norm-posns x.fields))
+         :t_exception
+         (t_exception
+          (record-type-norm-posns x.fields))
+         :t_collection
+         (t_collection
+          (record-type-norm-posns x.fields))
+         :otherwise (type_desc-fix x))
+       *fake-posn*)))
+
+  (define tuple-type-norm-posns ((x tylist-p))
+    :guard (tylist-resolved-p x)
+    :measure (tylist-count x)
+    :returns (new-x tylist-p)
+    (if (atom x)
+        nil
+      (cons (ty-norm-posns (car x))
+            (tuple-type-norm-posns (cdr x)))))
+
+  (define record-type-norm-posns ((fields typed_identifierlist-p))
+    :measure (typed_identifierlist-count fields)
+    :guard (typed_identifierlist-resolved-p fields)
+    :returns (new-fields typed_identifierlist-p)
+    (b* (((when (atom fields))
+          nil)
+         ((typed_identifier f1) (car fields)))
+      (cons (typed_identifier f1.name (ty-norm-posns f1.type))
+            (record-type-norm-posns (cdr fields)))))
+  ///
+  (std::defret-mutual ty-fix-val-of-ty-norm-posns
+    (defret <fn>-of-ty-norm-posns
+      (equal (ty-fix-val x (ty-norm-posns ty))
+             new-x)
+      :hints ('(:expand ((:free (ty) <call>)
+                         (ty-norm-posns ty))))
+      :fn ty-fix-val)
+    (defret <fn>-of-ty-norm-posns
+      (equal (tuple-type-fix-val x (tuple-type-norm-posns types))
+             new-x)
+      :hints ('(:expand ((:free (types) <call>)
+                         (tuple-type-norm-posns types))))
+      :fn tuple-type-fix-val)
+    (defret <fn>-of-ty-norm-posns
+      (equal (array-type-fix-val len x (ty-norm-posns ty))
+             new-x)
+      :hints ('(:expand ((:free (len ty) <call>))))
+      :fn array-type-fix-val)
+    (defret <fn>-of-ty-norm-posns
+      (equal (record-type-fix-val x (record-type-norm-posns fields))
+             new-x)
+      :hints ('(:expand (<call>
+                         (record-type-fix-val x nil)
+                         (:free (a b) (record-type-fix-val x (cons a b)))
+                         (record-type-norm-posns fields))))
+      :fn record-type-fix-val)
+    :mutual-recursion ty-fix-val)
+
+  (defthm typed_identifierlist->names-of-record-type-norm-posns
+    (equal (typed_identifierlist->names (record-type-norm-posns fields))
+           (typed_identifierlist->names fields))
+    :hints(("Goal" :in-theory (enable typed_identifierlist->names)
+            :induct t
+            :expand ((record-type-norm-posns fields)))))
+  
+  (defthm-ty-satisfied-flag ty-satisfied-of-ty-norm-posns
+    (defthm ty-satisfied-of-ty-norm-posns
+      (iff (ty-satisfied x (ty-norm-posns ty))
+           (ty-satisfied x ty))
+      :hints ('(:expand ((:free (ty) (ty-satisfied x ty))
+                         (ty-norm-posns ty))))
+      :flag ty-satisfied)
+    (defthm tuple-type-satisfied-of-ty-norm-posns
+      (iff (tuple-type-satisfied x (tuple-type-norm-posns types))
+           (tuple-type-satisfied x types))
+      :hints ('(:expand ((:free (types) (tuple-type-satisfied x types))
+                         (tuple-type-norm-posns types))))
+      :flag tuple-type-satisfied)
+    (defthm array-type-satisfied-of-ty-norm-posns
+      (iff (array-type-satisfied x (ty-norm-posns ty))
+           (array-type-satisfied x ty))
+      :hints ('(:expand ((:free ( ty) (array-type-satisfied x ty)))))
+      :flag array-type-satisfied)
+    (defthm record-type-satisfied-of-ty-norm-posns
+      (iff (record-type-satisfied x (record-type-norm-posns fields))
+           (record-type-satisfied x fields))
+      :hints ('(:expand ((record-type-satisfied x fields)
+                         (record-type-satisfied x nil)
+                         (:free (a b) (record-type-satisfied x (cons a b)))
+                         (record-type-norm-posns fields))))
+      :flag record-type-satisfied)))
+  
