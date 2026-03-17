@@ -207,7 +207,7 @@ stmt-tracespec) or @(see call-tracespec) objects.</p>"
   (fty::defoption maybe-tracespec tracespec
     :parents (tracespec)
     :measure (acl2::two-nats-measure (acl2-count x) 2))
-     
+
   (defprod stmt-tracespec
     :parents (tracespec)
     :short "Specification for a condition under which a statement execution should be
@@ -234,7 +234,7 @@ the given line number.")
      (cnum
       acl2::maybe-natp
       "If NIL, no requirement; otherwise, the code position of the statement must have
-the given column number (note: not character number as in a @(see posn).")
+the given column number (note: not character number as in a @(see posn)).")
      (initial-vars
       identifierlist-p
       "If tracing, collect the given variable values at the beginning of execution")
