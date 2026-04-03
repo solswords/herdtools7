@@ -222,6 +222,11 @@
                                            head
                                            tail)))))
 
+(defthm vallist-p-of-values-when-val-imap-p
+  (implies (val-imap-p x)
+           (vallist-p (omap::values x)))
+  :hints(("Goal" :in-theory (enable omap::values val-imap-p))))
+
 
 (define typed_identifierlist->names ((x typed_identifierlist-p))
   :parents (typed_identifierlist)
@@ -274,7 +279,7 @@
         ((:t_array :v_record)
          :when (array_index-case ty.index :arraylength_enum)
          (and (equal (omap::keys x.rec) (set::mergesort (arraylength_enum->elts ty.index)))
-              (array-type-satisfied (omap::key-ord-values x.rec) ty.type)))
+              (array-type-satisfied (omap::values x.rec) ty.type)))
         ((:t_record :v_record)
          (and (no-duplicatesp-equal (typed_identifierlist->names ty.fields))
               (equal (omap::keys x.rec) (set::mergesort (typed_identifierlist->names ty.fields)))
@@ -401,19 +406,17 @@
              val)
     :hints(("Goal" :in-theory (enable constraint_kind-satisfied)))))
 
-
-
 (defthm omap-values-subset-of-from-lists
   (implies (equal (len x) (len y))
-           (subsetp-equal (omap::key-ord-values (omap::from-lists x y))
+           (subsetp-equal (omap::values (omap::from-lists x y))
                           y))
-  :hints(("Goal" :in-theory (enable omap::key-ord-values omap::from-lists)
+  :hints(("Goal" :in-theory (enable omap::values omap::from-lists)
           :induct (omap::from-lists x y))
          (and stable-under-simplificationp
-              '(:use ((:instance omap::key-ord-values-of-update
+              '(:use ((:instance omap::values-of-update
                        (key (car x)) (val (car y))
                        (x (omap::from-lists (cdr x) (cdr y)))))
-                :in-theory (disable omap::key-ord-values-of-update)))))
+                :in-theory (disable omap::values-of-update)))))
 
 
 
@@ -544,11 +547,11 @@
   (defthm array-type-satisfied-of-values-of-repeat
     (implies (ty-satisfied val ty)
              (array-type-satisfied
-              (omap::key-ord-values
+              (omap::values
                (omap::from-lists keys (acl2::repeat (len keys) val)))
               ty))
     :hints (("goal" :use ((:instance array-type-satisfied-when-subsetp
-                           (y (omap::key-ord-values
+                           (y (omap::values
                                (omap::from-lists keys (acl2::repeat (len keys) val))))
                            (x (list val)))
                           (:instance omap-values-subset-of-from-lists
@@ -598,6 +601,11 @@
            (iff (mergesort x)
                 (consp x))
            :hints(("Goal" :in-theory (enable mergesort)))))
+
+  (local (defthm consp-of-values
+           (equal (consp (omap::values x))
+                  (not (omap::emptyp x)))
+           :hints(("Goal" :in-theory (enable omap::values)))))
   
   (defthm-ty-satisfied-flag ty-satisfying-val-sufficient
     (defthm ty-satisfying-val-sufficient
@@ -899,7 +907,90 @@
                 (atom x))))
 
 
+(local (defthm identifierlist-fix-when-not-consp
+         (implies (not (consp x))
+                  (equal (identifierlist-fix x) nil))))
 
+(local (defthm array-type-satisfied-of-nil
+         (array-type-satisfied nil ty)
+         :hints (("goal" :expand ((array-type-satisfied nil ty))))))
+
+(local (defthm insert-identifier-fix-mergesort
+         (equal (insert (identifier-fix k1)
+                        (mergesort (identifierlist-fix keys)))
+                (mergesort (identifierlist-fix (cons k1 keys))))
+         :hints(("Goal" :in-theory (enable identifierlist-fix)
+                 :expand ((:free (a b) (mergesort (cons a b))))))))
+
+(local (defcong acl2::set-equiv equal (array-type-satisfied x ty) 1
+         :hints (("goal" :use ((:instance (:functional-instance
+                                           acl2::element-list-p-set-equiv-congruence
+                                           (acl2::element-list-p (lambda (x) (array-type-satisfied x ty)))
+                                           (acl2::element-list-final-cdr-p (lambda (x) t))
+                                           (acl2::element-p (lambda (x) (ty-satisfied x ty))))
+                                (x x) (y x-equiv)))
+                  :in-theory (enable array-type-satisfied)))))
+
+
+(local (defthm array-type-satisfied-of-values-of-update
+         (implies (and (array-type-satisfied (omap::values x) ty)
+                       (ty-satisfied val ty))
+                  (array-type-satisfied (omap::values (omap::update key val x)) ty))
+         :hints (("goal" :use ((:instance omap::values-of-update (key key) (val val) (x x))
+                               (:instance array-type-satisfied-when-subsetp
+                                (y (omap::values (omap::update key val x)))
+                                (x (cons val (omap::values x)))))
+                  :in-theory (disable omap::values-of-update
+                                      array-type-satisfied-when-subsetp)
+                  :expand ((array-type-satisfied (cons val (omap::values x)) ty))
+                  :do-not-induct t))))
+
+(local (defthm array-type-satisfied-of-values-of-from-lists
+         (implies (and (array-type-satisfied vals ty)
+                       (equal (len keys) (len vals)))
+                  (array-type-satisfied (omap::values (omap::from-lists keys vals)) ty))
+         :hints (("goal" :use ((:instance array-type-satisfied-when-subsetp
+                                (y (omap::values (omap::from-lists keys vals)))
+                                (x vals)))
+                  :in-theory (disable array-type-satisfied-when-subsetp)
+                  :do-not-induct t))))
+
+
+;; (local (defthm key-ord-values-of-update-under-set-equiv
+;;          (acl2::set-equiv (omap::key-ord-values (omap::update key val x))
+;;                           (if (omap::assoc key x)
+;;                               (cons val (remove (omap::lookup key x) (omap::key-ord-values x)))
+;;                             (cons val (omap::key-ord-values x))))
+;;          :hints(("Goal" :in-theory (enable omap::update omap::key-ord-values))
+
+
+(local
+ #!omap
+ (defthm restrict-of-insert
+   (equal (restrict (set::insert k keys) x)
+          (if (assoc k x)
+              (update k (lookup k x) (restrict keys x))
+            (restrict keys x)))
+   :hints (("goal" :use ((:instance diff-key-when-unequal
+                          (x (restrict (set::insert k keys) x))
+                          (y (if (assoc k x)
+                                 (update k (lookup k x) (restrict keys x))
+                               (restrict keys x)))))
+            :in-theory (enable assoc-of-restrict lookup)))))
+
+(local (defthm lookup-member-of-values
+         (implies (omap::assoc k x)
+                  (member-equal (omap::lookup k x) (omap::values x)))
+         :hints(("Goal" :use ((:instance omap::in-values-when-assoc
+                               (a k) (m x) (b (omap::lookup k x))))
+                 :in-theory (enable omap::lookup
+                                    set::in-to-member)))))
+
+(local (defthm ty-satisfied-of-member-when-array-type-satisfied
+         (implies (and (array-type-satisfied lst ty)
+                       (member-equal x lst))
+                  (ty-satisfied x ty))
+         :hints(("Goal" :in-theory (enable array-type-satisfied)))))
 
 
 (defines ty-fix-val
@@ -937,12 +1028,8 @@
                     ;; values unless exactly the right keys are present.
                     ;; Rather, it preserves the order of the keys.
                     (v_record (let ((keys (set::mergesort ty.index.elts)))
-                                (omap::from-lists
-                                 keys
-                                 (array-type-fix-val
-                                  (len keys)
-                                  (omap::key-ord-values (v_record->rec x))
-                                  ty.type))))))
+                                (enumarray-type-fix-val
+                                 keys (v_record->rec x) ty.type)))))
         (:t_record (v_record (record-type-fix-val (v_record->rec x) ty.fields)))
         (:t_exception (v_record (record-type-fix-val (v_record->rec x) ty.fields)))
         (:t_collection (v_record (record-type-fix-val (v_record->rec x) ty.fields)))
@@ -979,6 +1066,22 @@
         nil
       (cons (ty-fix-val (and (consp x) (car x)) ty)
             (array-type-fix-val (1- len) (and (consp x) (cdr x)) ty))))
+
+  (define enumarray-type-fix-val ((keys identifierlist-p) (x val-imap-p) (ty ty-p))
+    :guard (and (ty-resolved-p ty)
+                (subsetp-equal keys (omap::keys x))
+                (array-type-satisfied (omap::values x) ty))
+    :measure (acl2::two-nats-measure (ty-count ty) (len keys))
+    :returns (new-x (And (val-imap-p new-x)
+                         (equal (omap::keys new-x) (mergesort (identifierlist-fix keys)))
+                         (implies (ty-satisfiable ty)
+                                  (array-type-satisfied (omap::values new-x) ty))))
+    (if (atom keys)
+        nil
+      (omap::update (identifier-fix (car keys))
+                    (ty-fix-val (omap::lookup (identifier-fix (car keys))
+                                              (val-imap-fix x)) ty)
+                    (enumarray-type-fix-val (cdr keys) x ty))))
 
   (define record-type-fix-val ((x val-imap-p) (fields typed_identifierlist-p))
     :guard (and (typed_identifierlist-resolved-p fields)
@@ -1104,6 +1207,22 @@
   ;;                 (and (consp c)
   ;;                      (Equal (car c) a)
   ;;                      (equal (cdr c) b)))))
+
+  
+  
+  (local (defthm ty-satisfied-of-lookup-when-array-type-satisfied
+           (implies (and (array-type-satisfied (omap::values x) ty)
+                         (member-equal k (omap::keys x)))
+                    (ty-satisfied (omap::lookup k x) ty))))
+
+  (local (defthm ty-satisfied-of-cdr-assoc-when-array-type-satisfied
+           (implies (and (array-type-satisfied (omap::values x) ty)
+                         (member-equal k (omap::keys x)))
+                    (ty-satisfied (cdr (omap::assoc k x)) ty))
+           :hints (("Goal" :use ty-satisfied-of-lookup-when-array-type-satisfied
+                    :in-theory (e/d (omap::lookup)
+                                    (ty-satisfied-of-lookup-when-array-type-satisfied))))))
+  
   
   (std::defret-mutual ty-fix-val-when-satisfied
     (defret <fn>-when-satisfied
@@ -1127,6 +1246,18 @@
                          <call>
                          (:free (x ty) (array-type-fix-val 0 x ty)))))
       :fn array-type-fix-val)
+    (defret <fn>-when-satisfied
+      (implies (and (array-type-satisfied (omap::values (val-imap-fix x)) ty)
+                    (subsetp (identifierlist-fix keys) (omap::keys (val-imap-fix x))))
+               (equal new-x (omap::restrict (mergesort (identifierlist-fix keys))
+                                            (val-imap-fix x))))
+      :hints ('(:expand ((array-type-satisfied x ty)
+                         (identifierlist-fix keys)
+                         (:free (a b) (mergesort (cons a b)))
+                         <call>
+                         (:free (x ty) (array-type-fix-val 0 x ty)))
+                :in-theory (disable INSERT-IDENTIFIER-FIX-MERGESORT)))
+      :fn enumarray-type-fix-val)
     (defret <fn>-when-satisfied-aux
       (implies (record-type-satisfied x fields)
                (equal new-x
@@ -1770,6 +1901,11 @@
              new-x)
       :hints ('(:expand ((:free (len ty) <call>))))
       :fn array-type-fix-val)
+    (defret <fn>-of-ty-norm-posns
+      (equal (enumarray-type-fix-val keys x (ty-norm-posns ty))
+             new-x)
+      :hints ('(:expand ((:free (ty) <call>))))
+      :fn enumarray-type-fix-val)
     (defret <fn>-of-ty-norm-posns
       (equal (record-type-fix-val x (record-type-norm-posns fields))
              new-x)
