@@ -2438,7 +2438,6 @@
                   (not (stmt-abort-after x res)))
          :hints(("Goal" :in-theory (enable stmt-abort-after
                                            maybe-stmt-tracespec->abort)))))
-
 (local (defthm call-trace-output-when-no-trace
          (implies (call-tracespec->no-trace x)
                   (equal (call-trace-output x name vparams vargs pos res trace)
@@ -2483,5 +2482,130 @@
            :in-theory (enable stmt-interior-tracespec
                               maybe-stmt-tracespec->interior-tracespec
                               maybe-stmt-tracespec->empty-tracespec))))
+
+#||
+(defthmd eval_subprogram-*t-with-trace
+  (implies (and (equal ts-entry (find-call-tracespec name pos tracespec))
+                ts-entry
+                (not (call-tracespec->no-trace ts-entry))
+                (call-tracespec->empty-tracespec ts-entry)
+                (not (call-tracespec->interior-tracespec ts-entry))
+                (not (call-tracespec->abort ts-entry)))
+           (and
+            (equal (mv-nth 0 (eval_subprogram-*t env name vparams vars))
+                   (mv-nth 0 (eval_subprogram-*t env name vparams vars
+                                                 :tracespec (make-tracespec))))
+            (equal (mv-nth 1 (eval_subprogram-*t env name vparams vars))
+                   (mv-nth 1 (eval_subprogram-*t env name vparams vars
+                                      :tracespec (make-tracespec))))))
+  :hints (("goal" :expand ((:free (tracespec) (eval_subprogram-*t env name vparams vars))
+                           (find-call-tracespec name pos '(nil nil nil nil)))
+           :in-theory (enable call-interior-tracespec call-trace-output
+                              maybe-call-tracespec->interior-tracespec
+                              maybe-call-tracespec->empty-tracespec))))
+
+(defthmd eval_stmt-*t-with-trace
+  (implies (and (equal ts-entry (find-stmt-tracespec s tracespec))
+                ts-entry
+                (not (stmt-tracespec->no-trace ts-entry))
+                (stmt-tracespec->empty-tracespec ts-entry)
+                (not (stmt-tracespec->interior-tracespec ts-entry))
+                (not (stmt-tracespec->abort ts-entry)))
+           (and
+            (equal (mv-nth 0 (eval_stmt-*t env s))
+                   (mv-nth 0 (eval_stmt-*t env s :tracespec (make-tracespec))))
+            (equal (mv-nth 1 (eval_stmt-*t env s))
+                   (mv-nth 1 (eval_stmt-*t env s :tracespec (make-tracespec))))
+            ))
+  :hints (("goal" :expand ((:free (tracespec) (eval_stmt-*t env s))
+                           (find-stmt-tracespec s '(nil nil nil nil)))
+           :in-theory (enable stmt-interior-tracespec stmt-trace-output
+                              maybe-stmt-tracespec->interior-tracespec
+                              maybe-stmt-tracespec->empty-tracespec))))
+||#
+
+(local
+ (defthm find-stmt-tracespec-of-nil
+   (not (find-stmt-tracespec s '(nil nil nil nil)))
+   :hints(("Goal" :in-theory (enable  find-stmt-tracespec)))))
+
+(local
+ (defthm find-call-tracespec-of-nil
+   (not (find-call-tracespec fn pos '(nil nil nil nil)))
+   :hints(("Goal" :in-theory (enable  find-call-tracespec)))))
+;;-------- Assisted by Codex - reasoning High
+
+(with-output
+  ;; Keep the generated event from printing a huge induction scheme.
+  :evisc (:gag-mode (evisc-tuple 3 4 nil nil))
+  :off (event)
+
+  (std::defret-mutual-generate <fn>-no-trace-when-empty-tracespec
+    :mutual-recursion asl-interpreter-mutual-recursion-*t
+    :rules
+    ((t
+      (:add-concl (not (equal (ev_error->desc res) "Trace abort")))
+      (:add-concl (equal trace nil))
+      (:add-hyp (equal tracespec '(nil nil nil nil))))
+     ((:fnname eval_call-*t)
+      (:add-hyp (not (find-call-tracespec name pos tracespec))))
+     ((:fnname eval_subprogram-*t)
+      (:add-hyp (not (find-call-tracespec name pos tracespec))))
+     ((:fnname eval_stmt-*t)
+      (:add-hyp (not (find-stmt-tracespec s tracespec)))))
+    :hints ((vl::big-mutrec-default-hint 'eval_expr-*t-fn id nil world))))
+
+(defthm trace-of-eval_stmt-*t1-with-empty-trace
+  (equal (mv-nth 2 (eval_stmt-*t1 env s :tracespec '(nil nil nil nil)))
+         nil)
+  :hints (("Goal" :use eval_stmt-*t1-no-trace-when-empty-tracespec)))
+
+(defthm trace-of-eval_call-*t-with-empty-trace
+  (equal (mv-nth 2 (eval_call-*t env name vparams vargs pos
+                                 :tracespec '(nil nil nil nil)))
+         nil)
+  :hints (("Goal" :use eval_call-*t-no-trace-when-empty-tracespec)))
+
+;;---------- End of Codex assistance
+(defthmd eval_stmt-*t-with-trace
+  (implies (and (equal ts-entry (find-stmt-tracespec s tracespec))
+                ts-entry
+                (not (stmt-tracespec->no-trace ts-entry))
+                (stmt-tracespec->empty-tracespec ts-entry)
+                (not (stmt-tracespec->interior-tracespec ts-entry))
+                (not (stmt-tracespec->abort ts-entry)))
+           (equal (eval_stmt-*t env s)
+                  (b* (((mv res orac &)
+                        (eval_stmt-*t env s :tracespec nil)))
+                  (mv res orac
+                      (stmt-trace-output ts-entry env s res nil))))
+           )
+  :hints (("Goal"
+           :expand ((:free (tracespec) (eval_stmt-*t env s))
+                    (find-stmt-tracespec s '(nil nil nil nil)))
+           :in-theory (enable stmt-interior-tracespec
+                              maybe-stmt-tracespec->interior-tracespec
+                              maybe-stmt-tracespec->empty-tracespec))))
+
+(defthmd eval_subprogram-*t-with-trace
+  (implies (and (equal ts-entry (find-call-tracespec fn pos tracespec))
+                ts-entry
+                (not (call-tracespec->no-trace ts-entry))
+                (call-tracespec->empty-tracespec ts-entry)
+                (not (call-tracespec->interior-tracespec ts-entry))
+                (not (call-tracespec->abort ts-entry)))
+           (equal (eval_subprogram-*t env fn vparams vargs)
+                  (b* (((mv res orac &)
+                        (eval_subprogram-*t env fn vparams vargs :tracespec nil)))
+                    (mv res orac
+                        (call-trace-output ts-entry fn vparams vargs pos res nil))))
+           )
+  :hints (("Goal"
+           :expand ((:free (tracespec) (eval_subprogram-*t env fn vparams vargs))
+                    (find-call-tracespec fn pos '(nil nil nil nil)))
+           :in-theory (enable call-interior-tracespec
+                              maybe-call-tracespec->interior-tracespec
+                              maybe-call-tracespec->empty-tracespec))))
+
 
 
