@@ -488,6 +488,12 @@ interior tracespec @('new-ts') from some matching call or statement tracespec."
         (trace (append trace-tmp trace)))
      ,acl2::rest-expr))
 
+(acl2::def-b*-binder evbind-nonrec-*t
+  :body
+  `(b* (((mv ,(car acl2::args) orac trace-tmp) . ,acl2::forms)
+        (trace (append trace-tmp trace)))
+     ,acl2::rest-expr))
+
 (acl2::def-b*-binder evo-*t
   :body
   `(b* ((evresult ,(car acl2::forms)))
@@ -543,7 +549,7 @@ interior tracespec @('new-ts') from some matching call or statement tracespec."
 (defconsts *eval-trace-substitution*
   (pair-suffixed (append *asl-interp-fns*
                          '(evo_normal pass-error evo_error evo_throwing evo-return
-                                      evbind evoo evo evob evs evtailcall
+                                      evbind evbind-nonrec evoo evo evob evs evtailcall
                                       asl-interpreter-mutual-recursion))
                  '-*t))
   

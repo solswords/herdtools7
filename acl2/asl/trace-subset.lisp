@@ -1976,7 +1976,7 @@ asl-interpreter-mutual-recursion-*t) for overview."
                                     '(asl-interpreter-mutual-recursion))
                             '-*tt)
              (pair-suffixed '(evo_normal pass-error evo_error evo_throwing evo-return
-                                         evbind evoo evo evob evs evtailcall)
+                                         evbind evbind-nonrec evoo evo evob evs evtailcall)
                             '-*t))))
   (local (in-theory (disable (:t eval_result-kind)
                              (:t append)
