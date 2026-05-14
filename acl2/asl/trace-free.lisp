@@ -2530,15 +2530,21 @@
                 (equal ts-entry (find-stmt-tracespec s tracespec))
                 (if ts-entry
                     (and (stmt-tracespec->empty-tracespec ts-entry)
-                         (not (stmt-tracespec->interior-tracespec ts-entry))
-                         (not (stmt-tracespec->abort ts-entry)))
+                         (not (stmt-tracespec->interior-tracespec ts-entry)))
                   (and (trace-free-stmt-p s)
                        (trace-free-ty-timeframe-imap-p (static_env_global->declared_types static-env)))))
            (equal (eval_stmt-*t env s)
-                  (b* (((mv res orac &)
-                        (eval_stmt-*t env s :tracespec nil)))
-                  (mv res orac
-                      (stmt-trace-output ts-entry env s res nil)))))
+                  (b* (((when (eq (maybe-stmt-tracespec->abort ts-entry) :before))
+                        (b* ((trace (stmt-trace-abort-before-output ts-entry env s)))
+                          (pass-error-*t
+                           (ev_error "Trace abort" ts-entry (list (stmt->pos_start s))))))
+                       ((mv res orac &)
+                        (eval_stmt-*t env s :tracespec nil))
+                       (trace (stmt-trace-output ts-entry env s res nil))
+                       ((when (stmt-abort-after ts-entry res))
+                        (pass-error-*t
+                         (ev_error "Trace abort" ts-entry (list (stmt->pos_start s))))))
+                    (mv res orac trace))))
   :hints (("Goal"
            :expand ((:free (tracespec) (eval_stmt-*t env s))
                     (find-stmt-tracespec s '(nil nil nil nil)))
@@ -2553,16 +2559,21 @@
                 (equal ts-entry (find-call-tracespec fn pos tracespec))
                 (if ts-entry
                     (and (call-tracespec->empty-tracespec ts-entry)
-                         (not (call-tracespec->interior-tracespec ts-entry))
-                         (not (call-tracespec->abort ts-entry)))
+                         (not (call-tracespec->interior-tracespec ts-entry)))
                   (and (trace-free-fnname-p fn)
                        (trace-free-ty-timeframe-imap-p (static_env_global->declared_types static-env)))))
            (equal (eval_subprogram-*t env fn vparams vargs)
-                  (b* (((mv res orac &)
-                        (eval_subprogram-*t env fn vparams vargs :tracespec nil)))
-                    (mv res orac
-                        (call-trace-output ts-entry fn vparams vargs pos res nil))))
-           )
+                  (b* (((when (eq (maybe-call-tracespec->abort ts-entry) :before))
+                        (b* ((trace (call-trace-abort-before-output ts-entry fn vparams vargs pos)))
+                          (pass-error-*t
+                           (ev_error "Trace abort" ts-entry (list (posn-fix pos))))))
+                       ((mv res orac &)
+                        (eval_subprogram-*t env fn vparams vargs :tracespec nil))
+                       (trace (call-trace-output ts-entry fn vparams vargs pos res nil))
+                       ((when (call-abort-after ts-entry res))
+                        (pass-error-*t
+                         (ev_error "Trace abort" ts-entry (list (posn-fix pos))))))
+                    (mv res orac trace))))
   :hints (("Goal"
            :expand ((:free (tracespec) (eval_subprogram-*t env fn vparams vargs))
                     (find-call-tracespec fn pos '(nil nil nil nil)))
@@ -2570,6 +2581,7 @@
                               eval_subprogram-*t1-equals-original
                               maybe-call-tracespec->interior-tracespec
                               maybe-call-tracespec->empty-tracespec))))
+
 
 
 
