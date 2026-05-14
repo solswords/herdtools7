@@ -2529,8 +2529,9 @@
   (implies (and (syntaxp (not (equal tracespec ''nil)))
                 (equal ts-entry (find-stmt-tracespec s tracespec))
                 (if ts-entry
-                    (and (stmt-tracespec->empty-tracespec ts-entry)
-                         (not (stmt-tracespec->interior-tracespec ts-entry)))
+                    (or (eq (stmt-tracespec->abort ts-entry) :before)
+                        (and (stmt-tracespec->empty-tracespec ts-entry)
+                             (not (stmt-tracespec->interior-tracespec ts-entry))))
                   (and (trace-free-stmt-p s)
                        (trace-free-ty-timeframe-imap-p (static_env_global->declared_types static-env)))))
            (equal (eval_stmt-*t env s)
@@ -2558,8 +2559,9 @@
   (implies (and (syntaxp (not (equal tracespec ''nil)))
                 (equal ts-entry (find-call-tracespec fn pos tracespec))
                 (if ts-entry
-                    (and (call-tracespec->empty-tracespec ts-entry)
-                         (not (call-tracespec->interior-tracespec ts-entry)))
+                    (or (eq (call-tracespec->abort ts-entry) :before)
+                        (and (call-tracespec->empty-tracespec ts-entry)
+                             (not (call-tracespec->interior-tracespec ts-entry))))
                   (and (trace-free-fnname-p fn)
                        (trace-free-ty-timeframe-imap-p (static_env_global->declared_types static-env)))))
            (equal (eval_subprogram-*t env fn vparams vargs)
@@ -2581,6 +2583,7 @@
                               eval_subprogram-*t1-equals-original
                               maybe-call-tracespec->interior-tracespec
                               maybe-call-tracespec->empty-tracespec))))
+
 
 
 
