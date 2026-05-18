@@ -527,7 +527,7 @@ module Make(Cfg:Config) : XXXCompile_gen.S =
 
     let next_reg_sz st p sz =
       let r,st = next_reg st in
-      let loc = A.Reg (p,r) in
+      let loc = A.of_reg p r in
       let st = A.add_type loc (type_of_sz sz) st in
       r,st
 
@@ -943,7 +943,7 @@ module Make(Cfg:Config) : XXXCompile_gen.S =
     let do_emit_mov_sz emit_mov_sz sz st p init v =
       let rA,init,csi,st = emit_mov_sz sz st p init v in
       let st =
-        let loc = A.Reg (p,rA) in
+        let loc = A.of_reg p rA in
         let t = type_of_sz sz in
         A.add_type loc t st in
       rA,init,csi,st
@@ -2192,7 +2192,7 @@ module Make(Cfg:Config) : XXXCompile_gen.S =
         | Cas -> map_some emit_cas
         | LdOp op -> map_some (emit_ldop op)
         | StOp op -> emit_stop op
-        | AllAmo -> assert false
+        | AllAmo | SafeAmo -> assert false
 
 (* Fences *)
     let emit_cachesync s isb r =
@@ -2844,7 +2844,7 @@ module Make(Cfg:Config) : XXXCompile_gen.S =
         | Swp ->  map_some_dp (emit_ldop_dep swp swp_mixed)
         | Cas -> map_some_dp emit_cas_dep
         | StOp op -> emit_stop_dep op
-        | AllAmo -> assert false
+        | AllAmo | SafeAmo -> assert false
 
     let emit_fence_dp st p init n f (dp,csel) r1 n1 =
       let vdep = node2vdep n1 in

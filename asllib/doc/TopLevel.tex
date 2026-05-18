@@ -34,7 +34,7 @@ The relation
 \checkandinterpret(\overname{\Strings}{\vspectext}, \overname{\Strings}{\vstdtext}) \;\aslrel\;
 \left(
     \begin{array}{cc}
-        (\overname{\tint}{\vret} \cartimes \overname{\XGraphs}{\vg})   & \cup\\
+        (\overname{\tint}{\vret}, \overname{\XGraphs}{\vg})   & \cup\\
         \{\ \LexicalErrorConfig, \ParseErrorConfig, \BuildErrorConfig\ \}    & \cup\\
         \overname{\typeerror}{\TypeErrorConfig}    & \cup\\
         \overname{\TDynError}{\DynErrorConfig}      & \cup\\
@@ -226,7 +226,7 @@ yielding the subprogram description $\vnewf$.
 \begin{mathpar}
 \inferrule{
   {
-  \vf \eqname
+  \vf \reverseeqdef
   {
   \left\{
     \begin{array}{rcl}
@@ -277,8 +277,8 @@ yielding the subprogram description $\vnewf$.
 \hypertarget{def-renamelocalsargs}{}
 The function
 \[
-\renamelocalsargs(\overname{\KleeneStar{(\Identifier\cartimes\ty)}}{\args}) \aslto
-\overname{\KleeneStar{(\Identifier\cartimes\ty)}}{\newargs}
+\renamelocalsargs(\overname{\KleeneStar{(\Identifier, \ty)}}{\args}) \aslto
+\overname{\KleeneStar{(\Identifier, \ty)}}{\newargs}
 \]
 renames the local storage elements appearing in the list of arguments
 $\args$, yielding the list of arguments $\newargs$.
@@ -326,13 +326,12 @@ $\args$, yielding the list of arguments $\newargs$.
 \hypertarget{def-renamelocalsnamedargs}{}
 The function
 \[
-\renamelocalsnamedargs(\overname{\KleeneStar{(\Identifier\cartimes\Option{\ty})}}{\params}) \aslto
-\overname{\KleeneStar{(\Identifier\cartimes\Option{\ty})}}{\newparams}
+\renamelocalsnamedargs(\overname{\KleeneStar{(\Identifier, \Option{\ty})}}{\params}) \aslto
+\overname{\KleeneStar{(\Identifier, \Option{\ty})}}{\newparams}
 \]
 renames the local storage elements appearing in the list of parameters $\params$,
 yielding the list of parameters $\newparams$.
 } % END_OF_UNIMPORTED_RELATION
-
 
 \ProseParagraph
 \OneApplies
@@ -362,7 +361,7 @@ yielding the list of parameters $\newparams$.
 
 \begin{mathpar}
 \inferrule[non\_empty]{
-  \params \eqname (\name,\tyopt) \cons \vargsone\\
+  \params \reverseeqdef (\name,\tyopt) \cons \vargsone\\
   \renamelocalsname(\name) \astarrow \namep\hva\\
   \mapopt{\renamelocalsty}(\tyopt) \astarrow \tyoptp\\
   \renamelocalsnamedargs(\paramsone) \astarrow \paramsonep
@@ -622,14 +621,13 @@ yielding the statement $\news$.
 
   \item \AllApplyCase{s\_try}
   \begin{itemize}
-    \item $\vs$ is a \trystatementterm{} with statement $\vsone$, list of catch clauses $\catchers$,
+    \item $\vs$ is a \trystatementterm{} with statement $\vsone$, list of \catchersterm{} $\catchers$,
           and optional \Totherwise{} statement $\otherwiseopt$;
     \item \Proserenamelocalsstmt{$\vsone$}{$\vsonep$};
     \item \Proseeqdef{$\catchersp$}{the list of catchers obtained by applying \\
-          $\renamelocalscatcher$ to each catcher in $\catchers$};
+          $\renamelocalscatcher$ to each \catchersterm{} in $\catchers$};
     \item \Prosemapopt{$\renamelocalsstmt$}{$\otherwiseopt$}{$\otherwiseoptp$};
-    \item \Proseeqdef{$\news$}{\trystatementterm{} with statement $\vsonep$, list of catch clauses \\
-          $\catchersp$, and optional \Totherwise{} statement  $\otherwiseoptp$}.
+    \item \Proseeqdef{$\news$}{\trystatementterm{} with statement $\vsonep$, list of \catchersterm{} $\catchersp$, and optional \Totherwise{} statement  $\otherwiseoptp$}.
   \end{itemize}
 
   \item \AllApplyCase{s\_print}
@@ -1616,14 +1614,14 @@ The function
 \renamelocalscatcher(\overname{\catcher}{\vc}) \aslto \overname{\catcher}{\newc}
 \]
 renames the identifiers corresponding to local storage elements that appear in the
-catcher clause $\vc$, yielding the catcher clause $\newc$.
+\catcherterm{} $\vc$, yielding the \catcherterm{} $\newc$.
 } % END_OF_UNIMPORTED_RELATION
 
 
 \ProseParagraph
 \AllApply
 \begin{itemize}
-  \item $\vc$ is a catcher clause with optional exception name $\optexnname$, exception type $\exnty$,
+  \item $\vc$ is a \catcherterm{} with optional exception name $\optexnname$, exception type $\exnty$,
         and \Twhen{} statement $\whenstmt$;
   \item \Prosemapopt{$\renamelocalsname$}{$\optexnname$}{$\optexnnamep$};
   \item \Proserenamelocalsty{$\exnty$}{$\exntyp$};
@@ -1679,7 +1677,7 @@ It produces a build error when $\decl$ is not a function.
 \begin{mathpar}
 \inferrule{
   \becheck(\astlabel(\vdecl) = \DFunc, \BuildBadDeclaration) \typearrow \True \OrBuildError\hva\\\\
-  \vdecl \eqname \DFunc(\funcsig)\\
+  \vdecl \reverseeqdef \DFunc(\funcsig)\\
   \funcsigp \eqdef \funcsig[\funcbuiltin \mapsto \True]
 }{
   \setbuiltin(\vdecl) \astarrow \DFunc(\funcsigp)

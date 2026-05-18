@@ -1,3 +1,4 @@
+
 \chapter{Dynamic Semantics Definitions\label{chap:Semantics}}
 
 The dynamic semantics of ASL define all valid behaviours of a given ASL specification.
@@ -147,10 +148,8 @@ We define the following shorthand notations for \nativevalueterm{} literals:
 We define the following types of \nativevaluesterm{}:
 \RenderTypes{native_types}
 
-
-
 \begin{definition}[Dynamic Environments\label{def:dynamicenvironments}]
-A \emph{sequential dynamic environment}, or \\ \emph{dynamic environment}
+A \emph{sequential dynamic environment}, or \\ \emph{\dynamicenvironmentterm}
 $\denv \in \dynamicenvs$
 consists of a \emph{dynamic global environment} and a \emph{dynamic local environment}.
 \hypertarget{def-pending-calls}{}%
@@ -161,7 +160,6 @@ to the number of calls being evaluated for those subprograms via the $\pendingca
 The dynamic local environment maps identifiers corresponding to local storage elements to \nativevaluesterm{}:
 
 \RenderTypes{dynamic_envs_and_components}
-
 
 \end{definition}
 
@@ -178,7 +176,7 @@ are mutually exclusive.
 In the rest of this reference, we assume all dynamic environments
 are well-formed.
 
-\hypertarget{constant-emptydenv}{}
+\texthypertarget{constant-emptydenv}
 An empty dynamic environment $\emptydenv$ is defined as follows:
 \[
 \emptydenv \triangleq ([\storage \mapsto \emptyfunc, \pendingcalls \mapsto \emptyfunc], \emptyfunc) \enspace.
@@ -247,8 +245,8 @@ and the output nodes are contained in the set of nodes:
 We denote the empty execution graph $\emptygraph \triangleq (\emptyset, \emptyset, \emptyset)$.
 %
 We define the following functions, which return an execution graph that represents a single Read/Write Effect to a variable \texttt{x}.
-\hypertarget{operator-writeeffect}{}
-\hypertarget{operator-readeffect}{}
+\hypertarget{relation-writeeffect}{}
+\hypertarget{relation-readeffect}{}
 \begin{definition}[Read/Write Effects]
 \[
   \begin{array}{rclll}
@@ -281,6 +279,9 @@ the ordered composition $\ordered{S_1}{l}{S_2}$ is defined as follows:
 \]
 Intuitively, this composition constrains the output effects of $S_1$ to appear before any effect of $S_2$ with respect
 to the given ordering label.
+
+\texthypertarget{def-parallellist}
+We write $\parallelgraphs{L}$ for the parallel composition of all execution graphs in the list $L$.
 \end{definition}
 
 \subsection{Concurrent Values\label{sec:ConcurrentValues}}
@@ -308,7 +309,7 @@ ASL dynamic semantics mainly utilize the following types of output \semanticscon
   \Semanticsconfigurationsterm{} consisting of different combinations of values,
   execution graphs, and environments. These represent intermediate results
   generated while evaluating various constructs such as
-  expressions, side-effect-free expressions, \assignableexpressions,
+  expressions, \sideeffectfreeexpressionsterm{}, \assignableexpressions,
   local declaration items, slices, and expression lists
   (which are evaluated in two different ways, by $\ResultExprList$ and $\ResultExprListM$, for the purpose of concurrency):
 \RenderType{TNormal}
@@ -318,7 +319,7 @@ ASL dynamic semantics mainly utilize the following types of output \semanticscon
   There are two flavors of exceptions:
   exceptions without an exception value (as in \texttt{throw;}), and ones with an exception value,
   an identifier to which the Read Effect is attributed, and an associated type.
-  The ASL dynamic semantics propagate these \emph{exceptional \semanticsconfigurationsterm{}} to the nearest catch clause that matches
+  The ASL dynamic semantics propagate these \emph{exceptional \semanticsconfigurationsterm{}} to the nearest \catcherterm{} that matches
   them, and otherwise they are caught at the top-level and reported as errors (see \dynamicerrorsterm{} below).
 
   \item[Returned Values.] \Semanticsconfigurationsterm{} in \RenderType{TReturning}
@@ -343,7 +344,6 @@ ASL dynamic semantics mainly utilize the following types of output \semanticscon
 
 \end{description}
 Helper relations often have output \semanticsconfigurationsterm{} that are just tuples, without an associated configuration domain.
-
 
 
 We will say that a semantic transition
@@ -372,8 +372,8 @@ appearing are \hyperlink{def-freshvariables}{fresh}:
 
 \subsection{Extracting and Substituting Elements of Semantics Configurations}
 
-\hypertarget{operator-graphof}{}
-\hypertarget{operator-environof}{}
+\hypertarget{relation-graphof}{}
+\hypertarget{relation-environof}{}
 Given a \semanticsconfigurationterm{} $C$, we define the graph component of the \semanticsconfigurationterm{},
 $\graphof{C}$, and the environment of the \semanticsconfigurationterm{}, $\environof{C}$, as follows:
 \[
@@ -388,7 +388,7 @@ $\graphof{C}$, and the environment of the \semanticsconfigurationterm{}, $\envir
   \ResultExprList((\Ignore, \vg), \env) & \vg & \env \\
   \ResultExprListM(\Ignore, \env) & \text{undefined} & \env\\
   \ResultPattern(\Ignore, \Ignore) & \vg & \text{undefined}\\
-  \ResultCall(\Ignore, \env) & \text{undefined} & \env\\
+  \ResultCall(\Ignore, \vg) & \vg & \text{undefined}\\
   \Throwing(\Ignore, \Ignore,\vg, \env) & \vg & \env\\
   \Returning((\Ignore,\vg), \env) & \vg & \env\\
   \Continuing(\vg, \env) & \vg & \env\\
@@ -397,7 +397,7 @@ $\graphof{C}$, and the environment of the \semanticsconfigurationterm{}, $\envir
 \end{array}
 \]
 
-\hypertarget{operator-withgraph}{}
+\hypertarget{relation-withgraph}{}
 Given a \semanticsconfigurationterm{} $C$, we define $\withgraph{C}{\vgp}$ to be a \semanticsconfigurationterm{}
 like $C$ where the graph component is substituted with $\vgp$:
 \begin{small}
@@ -413,7 +413,7 @@ like $C$ where the graph component is substituted with $\vgp$:
   \ResultExprList(([i=1..k: \vv_i], \vg), \env) & \ResultExprList(([i=1..k: \vv_i], \vgp), \env)\\
   \ResultExprListM([i=1..k: (\vv_i,\vg_i)], \env) & \text{undefined}\\
   \ResultPattern(\vb, \vg) & \ResultPattern(\vb, \vgp)\\
-  \ResultCall([i=1..k: (\vv_i,\vg_i)], \env) & \text{undefined}\\
+  \ResultCall((\vvs, \gdenv), \vg) & \ResultCall((\vvs, \gdenv), \vgp)\\
   \Throwing(\valuereadfrom(\vx,\vv),\vt,\vg, \env) & \Throwing(\valuereadfrom(\vx,\vv),\vt,\vgp, \env)\\
   \Returning((i=1..k: \vv_i,\vg), \env) & \Returning((i=1..k: \vv_i,\vgp), \env)\\
   \Continuing(\vg, \env) & \Continuing(\vgp, \env)\\
@@ -432,18 +432,18 @@ like $C$ where the environment component, if one exists, is substituted with $\e
   \textbf{\Semanticsconfigurationterm{}} & \withenviron{C}{\envp}\\
   \hline
   \ResultExpr((\vv, \vg), \env) & \ResultExpr((\vv, \vg), \envp)\\
-  \ResultExprSEF(\vv, \vg) & \text{undefined}\\
+  \ResultExprSEF(\Ignore, \Ignore) & \text{undefined}\\
   \ResultLexpr(\vg, \env) & \ResultLexpr(\vg, \envp)\\
   \ResultLDI(\vg, \env) & \ResultLDI(\vg, \envp)\\
   \ResultSlices(([i=1..k: (\va_i,\vb)], \vg), \env) & \ResultSlices(([i=1..k: (\va_i,\vb)], \vg), \envp)\\
   \ResultExprList(([i=1..k: \vv_i], \vg), \env) & \ResultExprList(([i=1..k: \vv_i], \vg), \envp)\\
   \ResultExprListM([i=1..k: (\vv_i,\vg_i)], \env) & \ResultExprListM([i=1..k: (\vv_i,\vg_i)], \envp)\\
-  \ResultPattern(\vb, \vg) & \text{undefined}\\
-  \ResultCall([i=1..k: (\vv_i,\vg_i)], \env) & \ResultCall([i=1..k: (\vv_i,\vg_i)], \envp)\\
+  \ResultPattern(\Ignore, \Ignore) & \text{undefined}\\
+  \ResultCall(\Ignore, \Ignore) & \text{undefined}\\
   \Throwing(\valuereadfrom(\vx,\vv),\vt,\vg, \env) & \Throwing(\valuereadfrom(\vx,\vv),\vt,\vg, \envp)\\
   \Returning((i=1..k: \vv_i,\vg), \env) & \Returning((i=1..k: \vv_i,\vg), \envp)\\
   \Continuing(\vg, \env) & \Continuing(\vg, \envp)\\
-  \DynamicError(\vs) & \text{undefined}\\
+  \DynamicError(\Ignore) & \text{undefined}\\
   \Diverging & \text{undefined} \\
 \end{array}
 \]
@@ -497,8 +497,9 @@ to an output \semanticsconfigurationterm{} with the value resulting from the cal
 
 We annotate subexpressions to allow referring to them.
 
-\hypertarget{def-emptyenv}{}
-We define the empty environment $\emptyenv$ as $(\emptydenv, \emptytenv)$.
+\texthypertarget{def-emptyenv}
+We define the empty environment as follows:
+\RenderConstant{empty_env}
 
 Notice that, we have dropped the execution graph component and simplified pairs of the form $(\vv,\vg)$,
 where $\vv$ is a \nativevalueterm{}  and $\vg$ is an execution graph, to just $\vv$.
@@ -554,8 +555,8 @@ For example, \SemanticsRuleRef{ECond} is duplicated below:
 \begin{mathpar}
 \inferrule{
   \evalexpr(\env, \econd) \evalarrow \ResultExpr(\mcond, \envone) \OrAbnormal\hva\\\\
-  \mcond \eqname (\nvbool(\vb), \vgone)\\
-  \vep \eqdef \choice{\vb}{\veone}{\vetwo}\hva\\\\
+  \mcond \reverseeqdef (\nvbool(\vb), \vgone)\\
+  \vep \eqdef \ifthenelseop[H]{\vb}{\veone}{\vetwo}\hva\\\\
   \evalexpr(\envone, \vep) \evalarrow \ResultExpr((\vv, \vgtwo), \newenv)  \OrAbnormal\hva\\\\
   \vg \eqdef \ordered{\vgone}{\aslctrl}{\vgtwo}
 }{
@@ -615,6 +616,29 @@ Print statements:
 \end{Verbatim}
 % CONSOLE_END
 
+\ExampleDef{Evaluation Order and Parenthesis}
+
+Evaluation order and parenthesis are separate concepts. More precisely,
+parentheses affect how text is parsed into ASL's AST, and then evaluation
+order is defined with respect to ASL's AST.
+
+For example, \listingref{evaluation-order-and-parenthesis},
+which is followed by output to the console from running the specification,
+shows a \verb|main()|
+function with three statements, each parenthesised differently.
+However, the order of side-effects is the same
+across all three statements, due to ASL's defined evaluation order.
+In particular, each line prints \verb|123| when executed.
+
+\ASLListing{Evaluation order and parenthesis}{evaluation-order-and-parenthesis}{\definitiontests/EvaluationOrderAndParenthesis.asl}
+% CONSOLE_BEGIN aslref \definitiontests/EvaluationOrderAndParenthesis.asl
+\begin{Verbatim}[fontsize=\footnotesize, frame=single]
+123
+123
+123
+\end{Verbatim}
+% CONSOLE_END
+
 \section{Semantics of Diverging Specifications\label{sec:Semantics of Diverging Specifications}}
 While typical specifications are intended to always terminate,
 diverging specifications can be potentially useful.
@@ -653,7 +677,7 @@ obtained by expanding the macro rule for \SemanticsRuleRef{Loop}.CONTINUE:
 \begin{mathpar}
 \inferrule{
   \evalexpr(\env, \econd) \evalarrow \ResultExpr(\condm, \envone)\\
-  \condm \eqname (\nvbool(\vb), \vgone)\\
+  \condm \reverseeqdef (\nvbool(\vb), \vgone)\\
   \vb = \iswhile\hva\\
   \ticklooplimit(\vlimitopt) \evalarrow \vlimitoptp\\
   \evalblock(\envone, \vbody) \evalarrow \Continuing(\vgtwo, \envtwo)\hva\\
@@ -669,12 +693,11 @@ for the same macro rule:
 \begin{mathpar}
 \inferrule{
   \evalexpr(\env, \econd) \evalarrow \ResultExpr(\condm, \envone)\\
-  \condm \eqname (\nvbool(\vb), \vgone)\\
+  \condm \reverseeqdef (\nvbool(\vb), \vgone)\\
   \vb = \iswhile\hva\\
   \ticklooplimit(\vlimitopt) \evalarrow \vlimitoptp\\
   \evalblock(\envone, \vbody) \evalarrow \Continuing(\vgtwo, \envtwo)\hva\\
   \evalloop(\envtwo, \iswhile, \vlimitoptp, \econd, \vbody) \evalarrow \DivergingConfig\\
-  \newg \eqdef \ordered{\ordered{\vgone}{\aslctrl}{\vgtwo}}{\aslpo}{\vgthree}
 }{
   \evalloop(\env, \iswhile, \vlimitopt, \econd, \vbody) \evalarrow \DivergingConfig
 }
@@ -695,10 +718,11 @@ $g = C \evalarrow D$ holds if and only if one of the following applies:
 
 To exemplify a diverging evaluation, consider the sequential semantics
 of the statement \verb|while TRUE do pass; end;| evaluated with
-an environment $\env$.
+an environment $\env$. That is, consider the rules where \executiongraphsterm{}
+and related judgments are omitted.
 The infinite \derivationtreeterm{} consists of vertices
 \[
-\{S_1, L_1, V_1\} \cup \{n \geq 2 \;|\; E_n, B_n, T_n, P_n, Q_n\} \enspace,
+\{S_1, L_1, V_1\} \cup \{n \geq 2 \;|\; E_n, B_n, T_n, P_n, Q_n, V_n\} \enspace,
 \]
 which we use to annotate the vertices of the \derivationtreeterm{} defined below
 (we inline aliasing equalities and deconstructing equalities,
@@ -709,12 +733,12 @@ The root of the infinite \derivationtreeterm{} is the following one:
 \inferrule{
   {
   \begin{array}{rc}
-  L_1:& \evallimit(\env, \None) \evalarrow \None\\
-  V_1:& \evalloop(\env, \True, \None, \ETrue, \SPass) \evalarrow \Diverging
+  L_1:& \evallimit(\env, \none) \evalarrow \none\\
+  V_1:& \evalloop(\env, \True, \none, \ETrue, \SPass) \evalarrow \Diverging
   \end{array}
   }
 }{
-  S_1: \evalstmt(\env, \SWhile(\ETrue, \None, \SPass)) \evalarrow \Diverging
+  S_1: \evalstmt(\env, \SWhile(\ETrue, \none, \SPass)) \evalarrow \Diverging
 }
 \end{mathpar}
 
@@ -725,13 +749,13 @@ and the rest of the \derivationtreeterm{} is given as:
   \begin{array}{rc}
   E_{n+1}:& \evalexpr(\env, \ETrue) \evalarrow \ResultExpr(\nvbool(\vb), \env)\\
   B_{n+1}:& \vb = \True\\
-  T_{n+1}:& \ticklooplimit(\None) \evalarrow \None\\
+  T_{n+1}:& \ticklooplimit(\none) \evalarrow \none\\
           & \left(\inferrule{Q_{n+1}:\evalstmt(\env, \SPass)\evalarrow \Continuing(\env)}{P_{n+1}: \evalblock(\env, \SPass) \evalarrow \Continuing(\env)}\right)\\
-  V_{n+1}:& \evalloop(\env, \True, \None, \ETrue, \SPass) \evalarrow \Diverging
+  V_{n+1}:& \evalloop(\env, \True, \none, \ETrue, \SPass) \evalarrow \Diverging
   \end{array}
   }
 }{
-  V_n: \evalloop(\env, \True, \None, \ETrue, \SPass) \evalarrow \Diverging
+  V_n: \evalloop(\env, \True, \none, \ETrue, \SPass) \evalarrow \Diverging
 }
 \end{mathpar}
 
@@ -743,19 +767,19 @@ which visually looks like the following:
   \begin{array}{rc}
   E_{n+1}:& \evalexpr(\env, \ETrue) \evalarrow \ResultExpr(\nvbool(\vb), \env)\\
   B_{n+1}:& \vb = \True\\
-  T_{n+1}:& \ticklooplimit(\None) \evalarrow \None\\
+  T_{n+1}:& \ticklooplimit(\none) \evalarrow \none\\
   & \left(\inferrule{Q_{n+1}:\evalstmt(\env, \SPass)\evalarrow \Continuing(\env)}{P_{n+1}: \evalblock(\env, \SPass) \evalarrow \Continuing(\env)}\right)\\
   &
   \left(
   \inferrule{
     E_{n+2}\\ B_{n+2}\\ T_{n+2}\\ P_{n+2}\\ V_{n+2}\\ \inferrule{\vdots}{V_{n+2}}
   }{
-    V_{n+1}: \evalloop(\env, \True, \None, \ETrue, \SPass) \evalarrow \Diverging
+    V_{n+1}: \evalloop(\env, \True, \none, \ETrue, \SPass) \evalarrow \Diverging
   }
   \right)
   \end{array}
   }
 }{
-  V_n: \evalloop(\env, \True, \None, \ETrue, \SPass) \evalarrow \Diverging
+  V_n: \evalloop(\env, \True, \none, \ETrue, \SPass) \evalarrow \Diverging
 }
 \end{mathpar}

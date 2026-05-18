@@ -152,7 +152,8 @@ module Make (Conf : Config) = struct
   let atomic_pair_allowed _ _ = true
   module Mixed (SZ : ByteSize.S) : sig
     val build_semantics : test -> A.inst_instance_id -> (proc * branch) M.t
-    val spurious_setaf : A.V.v -> unit M.t
+    val can_unset_af_loc : event -> A.V.v option
+    val spurious_setaf : value:A.V.v -> location:A.V.v -> unit M.t
   end = struct
     module Mixed = M.Mixed (SZ)
 
@@ -166,7 +167,7 @@ module Make (Conf : Config) = struct
     and aexp = AArch64Explicit.Exp
     and areg = Access.REG
     and avir = Access.VIR
-    and apte = Access.PTE
+    and apte = Access.PTE DISide.Data
     let areg_std = (aneutral,aexp,Access.REG)
 
     (**************************************************************************)
@@ -332,7 +333,7 @@ module Make (Conf : Config) = struct
       | "REG" -> REG
       | "VIR" -> VIR
       | "PHY" -> PHY
-      | "PTE" -> PTE
+      | "PTE" -> PTE DISide.Data
       | "TLB" -> TLB
       | "TAG" -> TAG
       | "PHY_PTE" -> PHY_PTE
@@ -738,12 +739,12 @@ module Make (Conf : Config) = struct
       and ft =
         let open FaultType.AArch64 in
         match  Option.bind (V.as_scalar statuscode) ASLScalar.as_label with
-        | Some "Fault_AccessFlag" -> MMU AccessFlag
-        | Some "Fault_Translation" -> MMU Translation
-        | Some "Fault_Permission" -> MMU Permission
+        | Some "Fault_AccessFlag" -> MMU (DISide.Data, AccessFlag)
+        | Some "Fault_Translation" -> MMU (DISide.Data, Translation)
+        | Some "Fault_Permission" -> MMU (DISide.Data, Permission)
 (* NB: this fault should not occur, meaning that the current execution
    will be discarderd later. *)
-        | Some "Fault_Exclusive" -> MMU Exclusive
+        | Some "Fault_Exclusive" -> MMU (DISide.Data, Exclusive)
         | _ ->
           Warn.warn_always
             "data_abort, fault expected, found %s\n"
@@ -931,6 +932,7 @@ module Make (Conf : Config) = struct
       assert (V.equal i V.zero);
       M.addT !(snd ii_env) B.nextT
 
-    let spurious_setaf _ = assert false
+    include NoAF
+
   end
 end

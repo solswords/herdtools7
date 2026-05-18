@@ -170,12 +170,12 @@ def check_undefined_references_and_multiply_defined_labels():
                 file=sys.stderr,
             )
             num_errors += 1
-        # There are 3 known instances of "Warning", which are considered benign.
+        # There are 4 known instances of "Warning", which are considered benign.
         # Any others, that have not been detected earlier, thereby increasing
         # `num_errors` are caught here.
         if (
             num_errors == 0
-            and len(re.findall(r"warning", log_str, flags=re.IGNORECASE)) > 3
+            and len(re.findall(r"warning", log_str, flags=re.IGNORECASE)) > 4
         ):
             print(
                 f"ERROR: There are unrecognized instances of 'warning' in {log_filepath})",
@@ -666,8 +666,17 @@ def check_rules(filename: str) -> int:
             print(f"{filename} {rule_block.str()}: unable to determine rule type")
             num_errors += 1
             continue
+        has_render_call = any(
+            re.search(r"\\Render[A-Za-z]+", rule_block.file_lines[line_number])
+            for line_number in range(rule_block.begin, rule_block.end + 1)
+        )
         error_messages: List[str] = []
         for check in checks:
+            if has_render_call and check in [
+                check_rule_prose_formally_structure,
+                check_rule_case_consistency,
+            ]:
+                continue
             error_messages.extend(check(rule_block))
         if error_messages:
             error_messages_str = ", ".join(error_messages)
@@ -706,7 +715,6 @@ def spellcheck(reference_dictionary_path: str, latex_files: list[str]) -> int:
         r"\\begin{tabular}.*?\\end{tabular}",
         r"subsubsection",
         r"\\verb\|.*?\|",
-        r"\\lrmcomment{.*?}",
         r"\\stdlibfunc{.*?}",
         r"\\defref{.*?}",
         r"\\LexicalRuleDef{.*?}",
@@ -751,6 +759,7 @@ def spellcheck(reference_dictionary_path: str, latex_files: list[str]) -> int:
         r"\\RenderRelation{.*?}",
         r"\\RenderRelation\[.*?\]{.*?}",
         r"\\RenderRule{.*?}",
+        r"\\RenderProseAndFormally{.*?}",
         r"\\TERM{.*?}",
     ]
     extract_patterns = [

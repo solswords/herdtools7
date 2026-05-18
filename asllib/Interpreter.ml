@@ -632,7 +632,7 @@ module Make (B : Backend.S) (C : Config) = struct
               (fun () -> eval_expr_sef env1 e1)
               (fun () -> eval_expr_sef env1 e2)
           in
-          return_normal (v, env) |: SemanticsRule.ECondSimple
+          return_normal (v, env1)
         else
           choice_with_branch_effect env1 m_cond e_cond e1 e2 (fun (env, v) ->
               eval_expr env v)
@@ -1353,7 +1353,7 @@ module Make (B : Backend.S) (C : Config) = struct
     | None -> check_recurse_cutoff pending_calls
     | Some limit ->
         if limit < pending_calls then
-          fatal_from pos env Error.RecursionLimitReached
+          fatal_from pos env (Error.RecursionLimitReached C.error_handling_time)
         else check_recurse_cutoff pending_calls
 
   and tick_loop_limit loc env limit_opt =
@@ -1608,17 +1608,25 @@ module Make (B : Backend.S) (C : Config) = struct
     |: SemanticsRule.LEMultiAssign
   (* End *)
 
-  (** As [multi_assign], but checks that [les] and [monads] have the same
-      length. *)
+  (** [protected_multi_assign les ms] is [multi_assign les ms] if [les] and
+      [mes] have the same length. Otherwise if [ms] is a singleton, it performs
+      tuple reads to access the elements corresponding to [les]. Otherwise, it
+      raises a [BadArity] Error. *)
   and protected_multi_assign ver env pos les monads : env maybe_exception m =
-    if List.compare_lengths les monads != 0 then
-      fatal_from pos env
-      @@ Error.BadArity
-           ( C.error_handling_time,
-             "tuple construction",
-             List.length les,
-             List.length monads )
-    else multi_assign ver env les monads
+    if List.compare_lengths les monads = 0 then multi_assign ver env les monads
+    else
+      match monads with
+      | [ m ] ->
+          let n = List.length les in
+          let nmonads = List.init n (fun i -> m >>= B.get_index i) in
+          multi_assign ver env les nmonads
+      | _ ->
+          fatal_from pos env
+          @@ Error.BadArity
+               ( C.error_handling_time,
+                 "tuple construction",
+                 List.length les,
+                 List.length monads )
 
   (* Begin EvalSpec *)
   let run_typed_env env (static_env : StaticEnv.global) main_name (ast : AST.t)

@@ -127,7 +127,7 @@ let pp_annots a = match a with
 let pp_atom a =  pp_annots a
 
 let compare_atom a1 a2 =
-  Misc.list_compare String.compare a1 a2
+  List.compare String.compare a1 a2
 
 include MachMixed.No
 
@@ -272,7 +272,6 @@ include
       let is_symbolic _ = false
 
       let pp_reg = pp_reg
-      let pp_i _ = assert false
       let free_registers = allowed_for_symb
       type arch_atom = atom
       module Value = Value

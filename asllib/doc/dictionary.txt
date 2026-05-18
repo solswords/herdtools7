@@ -84,6 +84,7 @@ always
 ambiguous
 among
 amongst
+amount
 an
 analysis
 analyze
@@ -191,6 +192,8 @@ away
 axiom
 axiomatically
 back
+backend
+backends
 background
 backslash
 badly
@@ -251,6 +254,7 @@ bounded
 bounds
 braces
 bracketed
+bracketing
 branch
 branches
 brands
@@ -305,6 +309,7 @@ causes
 cell
 certain
 chance
+change
 changed
 changes
 changing
@@ -359,6 +364,7 @@ collections
 collectively
 colloquially
 column
+columns
 combination
 combinations
 combine
@@ -518,6 +524,7 @@ corresponds
 could
 counter
 counting
+counts
 coupled
 cover
 covered
@@ -526,6 +533,7 @@ create
 creates
 creating
 creation
+cross
 current
 currently
 custom
@@ -1298,6 +1306,7 @@ matches
 matching
 material
 mathematical
+matter
 matters
 maximal
 maximum
@@ -1319,6 +1328,7 @@ menhir
 mentioned
 merged
 merges
+messages
 meta
 might
 minimal
@@ -1505,6 +1515,7 @@ pair
 paired
 pairing
 pairs
+pairwise
 paragraph
 parallel
 parameter
@@ -1514,6 +1525,7 @@ parameters
 parametric
 parentheses
 parenthesis
+parenthesising
 parenthesized
 parenthesizing
 parlance
@@ -2063,6 +2075,7 @@ successful
 successfully
 successive
 successor
+succinct
 succinctly
 such
 sufficient
@@ -2190,8 +2203,10 @@ transitioning
 transitions
 transitive
 transitively
+translate
 translated
 translates
+translating
 translation
 transliteration
 traversing
@@ -2251,6 +2266,7 @@ understanding
 undertaken
 unevaluated
 unexpected
+uniformly
 uninitialized
 unintended
 union
@@ -2315,6 +2331,7 @@ various
 vector
 vectors
 verbatim
+verbose
 verification
 verifiers
 verifying

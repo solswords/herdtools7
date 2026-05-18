@@ -57,12 +57,14 @@ rule token = parse
     | "powerset_finite"     { POWERSET_FINITE }
     | "prose_application"   { PROSE_APPLICATION }
     | "prose_description"   { PROSE_DESCRIPTION }
+    | "prose_transition"    { PROSE_TRANSITION }
     | "relation"            { RELATION }
     | "render"              { RENDER }
     | "rule"                { RULE }
     | "semantics"           { SEMANTICS }
     | "short_circuit_macro" { SHORT_CIRCUIT_MACRO }
     | "then"                { THEN }
+    | "typecast"            { TYPECAST }
     | "typedef"             { TYPEDEF }
     | "typing"              { TYPING }
     | "variadic"            { VARIADIC }

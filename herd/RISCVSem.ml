@@ -289,7 +289,7 @@ module
               fun v -> M.op (tr_opi op) v (V.intToV k) >>=
                 fun v -> write_reg r1 v ii >>= B.next1T
           | RISCV.OpA (RISCV.LA,r1,lbl) ->
-              let v = ii.A.addr2v lbl in
+              let v = ii.A.addr2v ii.A.proc lbl in
               write_reg r1 v ii >>= B.next1T
           | RISCV.OpIW (op,r1,r2,k) ->
               read_reg_ord r2 ii >>= uxtw >>=
@@ -384,7 +384,7 @@ module
           | ins -> Warn.fatal "RISCV, instruction '%s' not handled" (RISCV.dump_instruction ins)
           end
 
-      let spurious_setaf _ = assert false
+      include NoAF
 
     end
 

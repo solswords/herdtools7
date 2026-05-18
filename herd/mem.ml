@@ -24,6 +24,7 @@
 
 module type CommonConfig = sig
   val verbose : int
+  val hexa : bool
   val optace : OptAce.t
   val unroll : int option
   val speedcheck : Speed.t
@@ -164,6 +165,7 @@ module Make(C:Config) (S:Sem.Semantics) : S with module S = S	=
     module VC = EM.VC
     module U = MemUtils.Make(S)
     module W = Warn.Make(C)
+    module I = A.CodeInstr
 
     let dbg = C.debug.Debug_herd.mem
     let morello = C.variant Variant.Morello
@@ -182,10 +184,14 @@ module Make(C:Config) (S:Sem.Semantics) : S with module S = S	=
       | None -> Opts.unroll_default A.arch
       | Some u -> u
 
-    let speedcheck =
+    let do_speedcheck =
       match C.speedcheck with
       | Speed.False -> false
       | Speed.True | Speed.Fast -> true
+
+    let do_optcheck test =
+      do_speedcheck ||
+      (C.check_filter && Option.is_some test.Test_herd.filter)
 
   let _profile = C.debug.Debug_herd.profile_mem
   let start_profile = if _profile then Sys.time else fun () -> 0.
@@ -302,14 +308,14 @@ module Make(C:Config) (S:Sem.Semantics) : S with module S = S	=
               | Some fh_code -> code@fh_code
               | None -> code in
             List.fold_left
-              (fun locs (_,ins) ->
+              (fun locs (_, (i : I.t)) ->
                 A.fold_addrs
                   (fun x ->
                     let loc = A.maybev_to_location x in
                     match loc with
                     | A.Location_global _ -> A.LocSet.add loc
                     | _ -> fun locs -> locs)
-                  locs ins)
+                  locs i.I.instr)
               locs code)
           locs
           test.Test_herd.start_points in
@@ -340,10 +346,6 @@ module Make(C:Config) (S:Sem.Semantics) : S with module S = S	=
       let procs = List.map (fun (p,_,_) -> p) starts in
       let labels_of_instr = test.Test_herd.entry_points in
       let exported_labels = S.get_exported_labels test in
-      let is_exported_label lbl =
-        Label.Full.Set.exists
-          (fun (_,lbl0) -> Misc.string_eq lbl lbl0)
-           exported_labels in
 
 (**********************************************************)
 (* In mode `-variant self` test init_state is changed:    *)
@@ -354,6 +356,81 @@ module Make(C:Config) (S:Sem.Semantics) : S with module S = S	=
 (* by several labels. Read and write events *must* use a  *)
 (* canonical location (label).                            *)
 (**********************************************************)
+
+      (* Creates a mapping:
+       * - from an integer of a herd7-internal representation for an address,
+       * - to a VA page_label+offset, where page_label is the label at the
+       *   beginning of page the address is on
+       *)
+      let a2ra =
+        let page_size = Pseudo.page_size in
+        let proc_size = Pseudo.proc_size in
+        let proc_of_addr a = (a / proc_size)-1 in
+        let pagestart_of_addr a =
+          let addr_part = a mod proc_size in
+          let proc_part = a - addr_part in
+          let page_within_proc =
+            (addr_part / page_size) in
+          proc_part + page_within_proc * page_size
+        in
+        let a2l = (* mapping from "addresses" to labels *)
+          let invert_map m =
+            Label.Map.fold (fun lbl addr acc -> IntMap.add addr lbl acc) m IntMap.empty in
+          invert_map prog in
+        let iaddrs = (* the list of all instruction addresses *)
+          let open Test_herd in
+          if self && kvm then
+            List.fold_left
+            (fun acc (_,code,fh_code) ->
+              let code = match fh_code with
+                | Some fh_code -> code@fh_code
+                | None -> code in
+              acc @ (List.map (fun (addr,_) -> addr) code))
+            [] starts
+          else [] in
+        List.fold_left (fun acc x ->
+            let a = pagestart_of_addr x in
+            match IntMap.find_opt a a2l with
+            | Some lbl -> (
+                let off = x - a in
+                if off < 0 then
+                  (* x has no representation in the form of page_label+offset *)
+                  acc
+                else begin
+                  let proc = proc_of_addr x in
+                  let a_virt = V.Val (Constant.mk_sym_virtual_label_with_offset proc lbl (off/4)) in
+                  IntMap.add x a_virt acc
+                end)
+            | None ->
+              if dbg then
+                Warn.warn_always
+                  "On P%d, the instruction with address %d is on a page that does not start with a labelled instruction, which means that its address will not be translated" (proc_of_addr x) (x mod proc_size) ;
+              acc
+          ) IntMap.empty iaddrs in
+
+      let addr2va addr = IntMap.find_opt addr a2ra in
+
+      let is_exported_label lbl =
+        Label.Full.Set.exists
+          (fun (_,lbl0) -> String.equal lbl lbl0)
+           exported_labels in
+
+      let is_on_exported_page a_v =
+        let exp_pages = S.get_exposed_codepages test in
+        match a_v with
+        | Some (A.V.Val c) -> begin
+          let this_lbl = c in
+          List.exists
+            (fun ttd_lbl ->
+              let this_triple = Constant.unmk_sym_virtual_label_with_offset this_lbl in
+              let ttd_triple = Constant.unmk_sym_virtual_label_with_offset ttd_lbl in
+              match (this_triple,ttd_triple) with
+              | (p1,s1,_),(p2,s2,_) ->
+                (Int.equal p1 p2) && (String.equal s1 s2)
+            ) exp_pages
+          end
+        | _ ->
+          false in
 
       (* lbls2i -- overwritable instructions, with labels          *)
       (* overwritable_labels -- the set of labels of instructions  *)
@@ -424,27 +501,48 @@ module Make(C:Config) (S:Sem.Semantics) : S with module S = S	=
         else fun v -> v in
 
       let test =
-        match lbls2i with
-        | [] -> test
-        | _::_ ->
-            let open Test_herd in
-            let init_state =
-              (* Change labels into their canonical representants *)
-              A.map_state norm_val test.init_state in
-            let init_state =
-              (* Add initialisation of overwritable instructions *)
+        let open Test_herd in
+        let init_state =
+          (* Change labels into their canonical representants *)
+          A.map_state norm_val test.init_state in
+        let init_state =
+          if self && kvm then
+            (* Add initialisation of instructions whose addresses
+             * may be remapped *)
               List.fold_left
-                (fun env (lbls,(proc,i)) ->
-                  match Label.norm lbls with
-                  | None -> assert false (* as lbls is non-empty *)
-                  | Some lbl ->
-                      let symb = Constant.mk_sym_virtual_label proc lbl in
-                      let loc = A.Location_global (A.V.cstToV symb)
-                      and v = A.V.instructionToV i in
-                      A.state_add env loc v)
-                init_state lbls2i
-            in
-            { test with init_state; } in
+              (fun env_ (_,code,fh_code) ->
+                let code = match fh_code with
+                  | Some fh_code -> code@fh_code
+                  | None -> code in
+                List.fold_left
+                  (fun env (addr,i) ->
+                    match addr2va addr with
+                    | Some va when (is_on_exported_page (addr2va addr)) -> begin
+                        let loc = A.Location_global va in
+                        let v = A.V.instructionToV i.I.instr in
+                        A.state_add env loc v
+                      end
+                    | Some _ | None -> env
+                  )
+                  env_ code)
+              init_state starts
+          else init_state in
+        let init_state =
+          match lbls2i with
+          | [] -> init_state
+          | _::_ ->
+            (* Add initialisation of overwritable instructions *)
+            List.fold_left
+              (fun env (lbls,(proc,i)) ->
+                match Label.norm lbls with
+                | None -> assert false (* as lbls is non-empty *)
+                | Some lbl ->
+                    let symb = Constant.mk_sym_virtual_label proc lbl in
+                    let loc = A.Location_global (A.V.cstToV symb)
+                    and v = A.V.instructionToV i.I.instr in
+                    A.state_add env loc v)
+              init_state lbls2i in
+        { test with init_state; } in
 
 (*****************************************************)
 (* Build events monad, _i.e._ run code in some sense *)
@@ -523,15 +621,19 @@ module Make(C:Config) (S:Sem.Semantics) : S with module S = S	=
                 | e -> raise e in
 
 (* Call instruction semantics proper *)
-        let wrap re_exec fetch_proc proc inst addr env m poi =
+        let wrap re_exec fetch_proc proc (code_instr : I.t) addr env m poi =
           profile "build semantics" @@ fun () ->
+        let static_poi = code_instr.I.static_poi in
+        let inst = code_instr.I.instr in
         let ii =
            { A.program_order_index = poi;
+             static_poi;
              proc = proc; fetch_proc; inst = inst;
              labels = labels_of_instr addr;
              lbl2addr = prog;
              addr = addr;
-             addr2v=addr2v proc;
+             addr2v=addr2v;
+             rel_addr = (addr2va addr);
              env = env;
              in_handler = re_exec;
            } in
@@ -545,9 +647,10 @@ module Make(C:Config) (S:Sem.Semantics) : S with module S = S	=
             (Label.Set.pp_str ","  Label.pp ii.A.labels) ;
         m ii in
 
-      let  sem_instr =  SM.build_semantics test in
-      let rec add_next_instr re_exec fetch_proc proc env seen addr inst nexts =
-        wrap re_exec fetch_proc proc inst addr env sem_instr >>> fun branch ->
+      let sem_instr =  SM.build_semantics test in
+      let rec add_next_instr re_exec fetch_proc proc env seen addr (code_instr : I.t) nexts =
+        wrap re_exec fetch_proc proc code_instr addr env sem_instr >>> fun branch ->
+          let inst = code_instr.I.instr in
           let { A.regs=env; lx_sz=szo; fh_code } = env in
           let env = A.kill_regs (A.killed inst) env
           and szo =
@@ -565,7 +668,7 @@ module Make(C:Config) (S:Sem.Semantics) : S with module S = S	=
                   bds env
             | _ -> env in
           next_instr
-            re_exec inst fetch_proc proc { A.regs=env; lx_sz=szo; fh_code}
+            re_exec code_instr fetch_proc proc { A.regs=env; lx_sz=szo; fh_code}
             seen addr nexts branch
 
       and add_code re_exec fetch_proc proc env seen nexts = match nexts with
@@ -619,7 +722,7 @@ module Make(C:Config) (S:Sem.Semantics) : S with module S = S	=
                else (* execute  again the same instruction *)
                  add_next_instr true fetch_proc proc env seen addr inst nexts
 
-      and next_instr re_exec inst fetch_proc proc env seen addr nexts b =
+      and next_instr re_exec (code_instr : I.t) fetch_proc proc env seen addr nexts b =
         match b with
       | S.B.Exit -> EM.unitcodeT true
       | S.B.Next _ ->
@@ -627,7 +730,7 @@ module Make(C:Config) (S:Sem.Semantics) : S with module S = S	=
       | S.B.Jump (tgt,_) ->
           add_tgt re_exec true proc env seen addr tgt
       | S.B.Fault (syscall,_) ->
-          add_fault re_exec inst fetch_proc proc env seen addr syscall nexts
+          add_fault re_exec code_instr fetch_proc proc env seen addr syscall nexts
       | S.B.FaultRet tgt ->
           add_tgt false true proc env seen addr tgt
       | S.B.CondJump (v,tgt) ->
@@ -680,32 +783,80 @@ module Make(C:Config) (S:Sem.Semantics) : S with module S = S	=
         let r,e = es.E.po in
         (r,E.EventRel.transitive_closure e) in
 
-      let af0 = (* locations with initial spurious update *)
+      let add_setaf =
         if
           match C.dirty with
           | None -> false
           | Some t -> t.DirtyBit.some_ha || t.DirtyBit.some_hd
-        then begin (* One spurious update per observed pte (final load) *)
-            if C.variant Variant.PhantomOnLoad then
-              let look_pt rloc k = match rloc with
-                | ConstrGen.Loc (A.Location_global (V.Val c as vloc))
-                when Constant.is_pt c -> vloc::k
-                | _ -> k in
-              A.RLocSet.fold look_pt test.Test_herd.observed []
-            else (* One spurious update per variable not accessed initially *)
-              let add_setaf0 k (loc,v) =
-                match loc with
-                | A.Location_global (V.Val c as vloc) ->
-                   if Constant.is_pt c then
-                     match v with
-                     | V.Val (Constant.PteVal p)
-                           when not (V.Cst.PteVal.is_af p) ->
-                        vloc::k
-                     | _ -> k
-                   else k
-                | _ -> k in
-              List.fold_left add_setaf0 [] env0
-        end else [] in
+        then
+          fun (_,es) ->
+            let evts = E.EventSet.filter E.is_mem es.E.events in
+            let inv_iico_data_atomics =
+              lazy begin
+                  let atms =
+                    E.EventSet.filter E.is_atomic evts in
+                  E.EventRel.restrict_domains_to_sets
+                    atms atms es.E.intra_causality_data
+                  |> E.EventRel.inverse
+              end in
+            let locs =
+              E.EventSet.fold
+                (fun e k ->
+                   match SM.can_unset_af_loc e with
+                   | None -> k
+                   | Some loc ->
+                       let v = Misc.as_some @@ E.written_of e in
+                       if dbg then
+                         Printf.eprintf
+                           "loc=%s,v=%s\n%!" (V.pp_v loc) (V.pp_v v) ;
+                       let write_loaded =
+                         (* Special case where the value stored
+                          * has just been read. In such a case,
+                          * no supplementary HW update is necessary.
+                          *)
+                         E.is_atomic e &&
+                           begin
+                             try
+                               E.EventRel.succs
+                                 (Lazy.force inv_iico_data_atomics) e
+                               |>
+                               E.EventSet.exists
+                                 (fun er ->
+                                   assert (E.is_load er);
+                                   match
+                                     E.global_loc_of er,
+                                     E.read_of er
+                                   with
+                                   | Some loc_r,Some v_r
+                                     ->
+                                      V.equal loc loc_r && V.equal v v_r
+                                   | _,_ -> false)
+                             with Not_found -> false
+                           end in
+                       if write_loaded then k else (loc,v)::k)
+                evts []
+              |> Misc.group (fun (loc1,_) (loc2,_) -> V.compare loc1 loc2) in
+            let om =
+              Misc.fold_subsets_cross_gen
+                (fun xs m ->
+                   List.fold_left
+                     (fun m (x,v) ->
+                       EM.(|||)
+                         (SM.spurious_setaf ~value:v ~location:x) m)
+                     m xs)
+                (EM.unitT ())
+                locs
+                (fun m1 o2 ->
+                   (* Without this trick, the execution with
+                      no spurious update will present twice. *)
+                   match o2 with
+                   | None -> Some m1
+                   | Some m2 -> Some (EM.altT m1 m2))
+                None in
+            match om with
+            | None -> EM.unitT ()
+            | Some m -> m
+        else fun _ -> EM.unitT () in
 
       let rec index xs i = match xs with
       | [] ->
@@ -719,11 +870,9 @@ module Make(C:Config) (S:Sem.Semantics) : S with module S = S	=
             { es with E.procs = procs; E.po = if do_deps then transitive_po es else es.E.po } in
           (i,vcl,es)::index xs (i+1) in
       let r =
-        Misc.fold_subsets_gen
-          (fun vloc -> EM.(|||) (SM.spurious_setaf vloc))
-          (EM.unitT ()) af0
-          (fun maf0 ->
-            EM.get_output (set_of_all_instr_events (EM.(|||) maf0)))
+        EM.get_output_check
+          add_setaf
+          (set_of_all_instr_events (EM.(|||) (EM.unitT ())))
           [] in
       let r = match C.maxphantom with
         | None -> r
@@ -766,27 +915,52 @@ and get_written e = match E.written_of e with
 (* Compute rfmap for registers *)
 (*******************************)
 
-let map_loc_find loc m =
-  try U.LocEnv.find loc m
-  with Not_found -> []
+(* Produce a set of event, structured by [U.is_before_strict], i.e. [po] and
+   [iico]. *)
+module EvtSetByPo (I : sig
+  val es : S.event_structure
+end) =
+struct
+  let is_before_strict = U.is_before_strict I.es
+
+  let ambiguous_po e1 e2 =
+    Warn.fatal "Ambiguous po for register %s: %s and %s are not ordered.\n%!"
+      (A.pp_location (get_loc e1))
+      (E.debug_event_str e1) (E.debug_event_str e2)
+
+  (* A note about ordering guarantees:
+     It is enough to have the check in [compare] to guarantee that if the order
+     is not total, i.e, if there are two or more elements that are
+     non-comparable, then [ambiguous_po] will be called.
+     Indeed, if two elements [a] and [b] are non comparable, then there is no
+     element [c] such that [a < c && c < b] (resp [b < c && c < a)], otherwise
+     by transitivity [a < b] (resp [b < a]). Then [a] and [b] must be stored
+     next to each other in a resulting set, and thus must have been compared to
+     produce the tree representation of that set.
+   *)
+  include Set.Make (struct
+    type t = E.event
+
+    let compare e1 e2 =
+      if is_before_strict e1 e2 then -1
+      else if is_before_strict e2 e1 then 1
+      else ambiguous_po e1 e2
+  end)
+
+  let find_last_before set e =
+    find_last_opt (fun e' -> is_before_strict e' e) set
+
+  let find_first_after e set =
+    find_first_opt (fun e' -> is_before_strict e e') set
+
+end
+
+let map_loc_find loc m = U.LocEnv.safe_find [] loc m
 
 let match_reg_events add_eq es csn =
   let loc_loads_stores = U.collect_reg_loads_stores es in
-  let is_before_strict = U.is_before_strict es in
-  let compare e1 e2 =
-    if is_before_strict e1 e2 then -1
-    else if is_before_strict e2 e1 then 1
-    else
-      let () =
-        Printf.eprintf "Not ordered stores %a and %a\n" E.debug_event e1
-          E.debug_event e2
-      in
-      assert false
-  in
-  let module StoreSet = Set.Make (struct
-    type t = E.event
-
-    let compare = compare
+  let module StoreSet = EvtSetByPo (struct
+    let es = es
   end) in
   let add wt rf (rfm, csn) = (S.RFMap.add wt rf rfm, add_eq rfm wt rf csn) in
   (* For all loads find the right store, the one "just before" the load *)
@@ -803,9 +977,8 @@ let match_reg_events add_eq es csn =
       (* Add the corresponding store for each load *)
       List.fold_left
         (fun k load ->
-          let f e = is_before_strict e load in
           let rf =
-            match StoreSet.find_last_opt f stores with
+            match StoreSet.find_last_before stores load with
             | Some store -> S.Store store
             | None -> S.Init
           in
@@ -846,26 +1019,43 @@ let get_rf_value test read =
     let debug_solver = C.debug.Debug_herd.solver > 0
 
     let wanted_final_value test =
+      let add_check loc v m =
+        A.LocMap.update loc
+          (function
+           | None -> Some v
+           | Some v0 ->
+               if A.V.equal v0 v then  Some v0
+               else
+                 Warn.user_error
+                   "Incompatible constraint on location %s (%s vs. %s)"
+                   (A.pp_location loc)
+                   (A.V.pp C.hexa v0)
+                   (A.V.pp C.hexa v))
+          m in
+      let rec loop acc =
+        let open ConstrGen in
+        function
+        | Atom (LV (Loc (A.Location_reg _|A.Location_global _ as loc), v)) ->
+            add_check loc v acc
+        | And li -> List.fold_left loop acc li
+        | Or [ x ] -> loop acc x
+        | _ -> acc in
+
       let map =
-        let rec loop acc =
-          let open ConstrGen in
-          function
-          | Atom (LV (Loc (A.Location_reg _ as loc), v)) -> A.LocMap.add loc v acc
-          | And li -> List.fold_left loop acc li
-          | Or [ x ] -> loop acc x
-          | _ -> acc
-        in
         match test.Test_herd.cond with
-        | ConstrGen.ExistsState prop -> loop A.LocMap.empty prop
-        | _ -> A.LocMap.empty
-      in
+        | ConstrGen.ExistsState prop when do_speedcheck ->
+            loop A.LocMap.empty prop
+        | _ -> A.LocMap.empty in
+      let map = match test.Test_herd.filter with
+        | Some p when C.check_filter -> loop map p
+        | _ -> map in
       fun loc -> A.LocMap.find_opt loc map
 
     (* Add the equations given by one read-from register pairing *)
     let add_eq_for_rf_reg test wanted_final_values es rfm wt rf csn =
       match wt with
       | S.Final loc -> (
-          if not speedcheck then csn
+          if not (do_optcheck test) then csn
           else
             match (wanted_final_values loc, rf) with
             | Some v_wanted, S.Store store ->
@@ -891,11 +1081,8 @@ let get_rf_value test read =
             let () = PP.show_es_rfm test es rfm in
             assert false)
 
-    let do_solve_regs test es csn =
+    let do_solve_regs test wanted_final_values es csn =
       profile "do_solve_regs" @@ fun () ->
-      let wanted_final_values =
-        if speedcheck then wanted_final_value test else Fun.const None
-      in
       try
         let rfm, csn =
           match_reg_events
@@ -916,7 +1103,7 @@ let get_rf_value test read =
 
     let solve_regs test es csn =
       profile "solve_regs" @@ fun () ->
-      match do_solve_regs test es csn with
+      match do_solve_regs test (Fun.const None) es csn with
       | Some (es, rfm, cns) as r ->
           if debug_solver && C.verbose > 0 then begin
             let module PP = Pretty.Make (S) in
@@ -1045,8 +1232,8 @@ let get_rf_value test read =
 
     let is_spec es e = E.EventSet.mem e es.E.speculated
 
-    let check_values solver_state store load =
-      if not speedcheck then true else
+    let check_values optcheck solver_state store load =
+      if not optcheck then true else
         let v_written = get_written store and v_read = get_read load in
         match VC.Hint.hint_solve_one solver_state v_read v_written with
         | VC.NoSolns -> false
@@ -1070,7 +1257,10 @@ let get_rf_value test read =
         | OptAce.Iico ->
            let iico = U.iico es in
            fun load store -> not (E.EventRel.mem (load,store) iico) in
-      let solver_state = if speedcheck then VC.Hint.make_solver_state cns else VC.Hint.make_solver_state [] in
+      let optcheck = do_optcheck test in
+      let solver_state =
+        if optcheck then VC.Hint.make_solver_state cns
+        else VC.Hint.make_solver_state [] in
       let m =
         E.EventSet.fold
           (fun store map_load ->
@@ -1080,7 +1270,7 @@ let get_rf_value test read =
                   compat_locs store load &&
                   check_speculation es store load &&
                   ok load store &&
-                  check_values solver_state store load
+                  check_values optcheck solver_state store load
                 then
                   load,S.Store store::stores
                 else c)
@@ -1112,7 +1302,7 @@ let get_rf_value test read =
          point, from the final condition of the test. There is then a check
          when constructing a rfm that the values are compatible.
       *)
-      if not do_deps && not asl && not speedcheck then begin
+      if not do_deps && not asl && not optcheck then begin
         List.iter
           (fun (load,stores) ->
             match stores with
@@ -1258,58 +1448,92 @@ let get_rf_value test read =
         Warn.warn_always "Candidate rejected for remaining equations.";
       res
 
-    let solve_mem_non_mixed test es rfm cns kont res =
+ let solve_mem_non_mixed test es rfm cns kont res =
+      (* The auxiliary functions *)
+      let is_to_codeloc e =
+        let open Constant in
+        match
+          Misc.seq_opt A.global (E.location_of e)
+        with
+        | Some (V.Var _) -> true
+        | Some (V.Val (Symbolic (Virtual {name=n;_}))) when Symbol.is_label n -> true
+        | Some (V.Val (Symbolic (Physical (s,_)))) when (s |> Symbol.of_string |> Symbol.is_label) -> true
+        | Some _|None -> false
+      in
+      let is_to_instr_ttd e =
+        let open Constant in
+        match
+          Misc.seq_opt A.global (E.location_of e)
+        with
+        | Some (V.Val (Symbolic (System (PTE,s)))) -> Misc.is_labelstr s
+        | Some _| None -> false
+      in
+      let get_imp_instr_rs es =
+        if not self then E.EventSet.empty
+        else E.EventSet.filter E.is_ifetch es.E.events
+      in
+      let get_instr_ws es =
+        if not self then E.EventSet.empty
+        else
+          E.EventSet.filter
+            (fun e -> E.is_mem_store e && is_to_codeloc e)
+            es.E.events
+      in
+      let get_imp_instr_ttd_rs es =
+        if not (self && kvm) then E.EventSet.empty
+        else
+          E.EventSet.filter
+            (fun e -> E.is_mem_load e && E.is_not_explicit e && is_to_instr_ttd e)
+            es.E.events
+      in
+      let get_instr_ttd_ws es =
+        if not (self && kvm) then E.EventSet.empty
+        else
+          E.EventSet.filter
+            (fun e -> E.is_mem_store e && is_to_instr_ttd e)
+            es.E.events
+      in
+      (* The actual logic *)
       let compat_locs = compatible_locs_mem in
-      if self then
-        let code_store e =
-          let open Constant in
-            E.is_mem_store e &&
-            match
-              Misc.seq_opt A.global (E.location_of e)
-            with
-            | Some (V.Var _) -> true
-            | Some (V.Val (Symbolic (Virtual {name=n;_}))) when Symbol.is_label n -> true
-            | Some _|None -> false
-        in
-        (* let code_access e =
-          match
-            Misc.seq_opt A.global (E.location_of e)
-          with
-          | Some (V.Val c) when Constant.is_label c -> true
-          | Some _|None -> false in *)
-        (* Select code accesses *)
-        let code_loads =
-          E.EventSet.filter E.is_ifetch es.E.events
-        and code_stores =
-          E.EventSet.filter code_store es.E.events in
-        let kont es rfm cns res =
-          (* We get here once code accesses are solved *)
-          let loads =  E.EventSet.filter E.is_mem_load es.E.events
-          and stores = E.EventSet.filter E.is_mem_store es.E.events in
-          let loads =
-            (* Remove code loads that are now solved *)
-            E.EventSet.diff loads code_loads in
+      let kont_rem_reads es rfm cns res = (* solve pending constraints and continue *)
+        let all_reads =  E.EventSet.filter E.is_mem_load es.E.events in
+        let rem_reads = E.EventSet.diff all_reads (get_imp_instr_rs es) in
+        let rem_reads = E.EventSet.diff rem_reads (get_imp_instr_ttd_rs es) in
+        let all_writes = E.EventSet.filter E.is_mem_store es.E.events in
+        if dbg then begin
+          eprintf "Loads : %a\n"E.debug_events rem_reads ;
+          eprintf "Stores: %a\n"E.debug_events all_writes
+        end ;
+        solve_mem_or_res test es rfm cns kont res
+          rem_reads all_writes compat_locs add_mem_eqs
+      in
+      let kont_ifetch_reads es rfm cns res = (* solve ifetch constraints and continue *)
+        if not self then kont_rem_reads es rfm cns res
+        else begin
           if dbg then begin
-            eprintf "Left loads : %a\n"E.debug_events loads ;
-            eprintf "All stores: %a\n"E.debug_events stores
-          end ;
-          solve_mem_or_res test es rfm cns kont res
-            loads stores compat_locs add_mem_eqs in
-        if dbg then begin
-            eprintf "Code loads : %a\n"E.debug_events code_loads ;
-            eprintf "Code stores: %a\n"E.debug_events code_stores
-          end ;
-        solve_mem_or_res test es rfm cns kont res
-          code_loads code_stores compat_locs add_mem_eqs
-      else
-        let loads = E.EventSet.filter E.is_mem_load es.E.events
-        and stores = E.EventSet.filter E.is_mem_store es.E.events in
-        if dbg then begin
-          eprintf "Loads : %a\n"E.debug_events loads ;
-          eprintf "Stores: %a\n"E.debug_events stores
-          end ;
-        solve_mem_or_res test es rfm cns kont res
-          loads stores compat_locs add_mem_eqs
+            eprintf "Instruction fetches : %a\n"
+              E.debug_events (get_imp_instr_rs es) ;
+            eprintf "Instruction writes  : %a\n"
+              E.debug_events (get_instr_ws es)
+          end;
+          solve_mem_or_res test es rfm cns kont_rem_reads res
+            (get_imp_instr_rs es) (get_instr_ws es) compat_locs add_mem_eqs
+        end
+      in
+      let kont_ifetch_ttd_reads es rfm cns res = (* solve vmsa+ifetch constraints and continue *)
+        if not (self && kvm) then kont_ifetch_reads es rfm cns res
+        else begin
+          if dbg then begin
+            eprintf "Implicit Instruction-TTD Reads : %a\n"
+              E.debug_events (get_imp_instr_ttd_rs es) ;
+            eprintf "Instruction-TTD Writes         : %a\n"
+              E.debug_events (get_instr_ttd_ws es)
+          end;
+          solve_mem_or_res test es rfm cns kont_ifetch_reads res
+            (get_imp_instr_ttd_rs es) (get_instr_ttd_ws es) compat_locs add_mem_eqs
+        end
+      in
+      kont_ifetch_ttd_reads es rfm cns res
 
 (*************************************)
 (* Mixed-size write-to-load matching *)
@@ -1669,40 +1893,74 @@ let get_rf_value test read =
         | _,_ -> k)
         rfm E.EventRel.empty
 
-(* Reconstruct load/store atomic pairs *)
+(*
+ * Reconstruct load/store atomic pairs,
+ *   By definition such a pair exists when the
+ * store precedes the load in generalised program order
+ * (_i.e._ the union of program order and of iico), and
+ * that there is no atomic effect to the same location
+ * in-between (w.r.t generalised po) the load and the store.
+ *   Computation proceeds as follows:
+ *   First, atomic events are grouped first by thread
+ * and then by location. Then, to each atomic load, we
+ * associate the closest generalised po successor store,
+ * by using a set of stores ordered by generalised po.
+ * We additionally check that no atomic load exists
+ * between the load and store. Notice that it is not possible
+ * to use a set of all atomic events (by a given thread and
+ * with a given location) ordered by po because some atomic loads
+ * may be unrelated.
+ *   Finally, such atomic pairs can be spurious, that is not performed
+ * by a specific thread. In that case, pairs are given
+ * simply by the intra causality data relation.
+ *)
 
     let make_atomic_load_store es =
-      let all = E.atomics_of es.E.events in
-      let atms = U.collect_atomics es in
-      U.LocEnv.fold
-        (fun _loc atms k ->
-          let atms =
-            List.filter
-              (fun e -> not (E.is_load e && E.is_store e))
-              atms in (* get rid of C RMW *)
-          let rs,ws = List.partition E.is_load atms in
-          List.fold_left
-            (fun k r ->
-              let exp = E.is_explicit r in
-              List.fold_left
-                (fun k w ->
-                  if
-                    S.atomic_pair_allowed r w &&
-                    U.is_before_strict es r w &&
-                    E.is_explicit w = exp &&
-                    not
-                      (E.EventSet.exists
-                         (fun e ->
-                           E.is_explicit e = exp &&
-                           U.is_before_strict es r e &&
-                           U.is_before_strict es e w)
-                         all)
-                  then E.EventRel.add (r,w) k
-                  else k)
-                k ws)
-            k rs)
-        atms E.EventRel.empty
-
+      let atms,spurious = U.collect_atomics es in
+      let module StoreSet = EvtSetByPo(struct let es = es end) in
+      let make_atomic_pairs es k =
+        let rs,ws = List.partition E.is_load es in
+        let ws = StoreSet.of_list ws
+        and intervening_read er ew =
+          List.exists
+            (fun e ->
+              StoreSet.is_before_strict er e
+              && StoreSet.is_before_strict e ew)
+            rs in
+        List.fold_left
+          (fun k er ->
+             match StoreSet.find_first_after er ws with
+             | Some ew ->
+                if
+                  S.atomic_pair_allowed er ew
+                  && not (intervening_read er ew)
+                 then
+                   E.EventRel.add (er,ew) k
+                 else k
+             | None -> k)
+          k rs in
+      let r1 =
+        List.map
+          (fun (_,m) ->
+           U.LocEnv.fold
+             (fun _loc es k ->
+                let exps,nexps = List.partition E.is_explicit es in
+                make_atomic_pairs exps @@ make_atomic_pairs nexps k)
+             m E.EventRel.empty)
+        atms |> E.EventRel.unions
+      and r2 =
+        let iico = es.E.intra_causality_data in
+        List.map
+          (fun e ->
+             if E.is_load e then
+               match
+                 E.EventRel.succs iico e |> E.EventSet.as_singleton
+               with
+               | None -> assert false (* spurious updates are by pairs *)
+               | Some w -> E.EventRel.singleton (e,w)
+             else E.EventRel.empty)
+          spurious |> E.EventRel.unions in
+      E.EventRel.union r1 r2
 
 (* Retrieve last store from rfmap *)
     let get_max_store _test _es rfm loc =
@@ -1758,7 +2016,7 @@ let get_rf_value test read =
 
     let pp_locations = A.LocSet.pp_str " " A.pp_location
 
-    let all_finals_non_mixed test es =
+    let all_finals_non_mixed test wanted_final_values es =
       let loc_stores = U.remove_spec_from_map es (U.collect_mem_stores es) in
       let loc_stores =
         if C.observed_finals_only then
@@ -1797,12 +2055,29 @@ let get_rf_value test read =
           if C.debug.Debug_herd.mem then begin
             eprintf "Observed locs: {%s}\n" (pp_locations observed_locs)
           end ;
-          U.LocEnv.fold
-            (fun loc ws k ->
-              if keep_observed_loc loc observed_locs then
-                U.LocEnv.add loc ws k
-              else k)
-            loc_stores U.LocEnv.empty
+          U.LocEnv.filter
+            (fun loc _ -> keep_observed_loc loc observed_locs)
+            loc_stores
+        else loc_stores in
+
+      let loc_stores =
+        if do_optcheck test then
+          U.LocEnv.filter_map
+            (fun loc evts ->
+               match wanted_final_values loc with
+               | None -> Some evts
+               | Some v0 ->
+                   let evts =
+                     List.filter
+                       (fun e ->
+                         match E.written_of e with
+                         | Some v1 -> V.equal v1 v0
+                         | None -> assert false)
+                       evts in
+                   match evts with
+                   | [] -> None
+                   | evts -> Some evts)
+            loc_stores
         else loc_stores in
 
       let possible_finals =
@@ -1855,7 +2130,7 @@ let get_rf_value test read =
         end)
 
 
-    let all_finals_mixed test es =
+    let all_finals_mixed test  es =
       assert  C.observed_finals_only ;
       let locs = S.observed_locations test in
       let locs =  A.LocSet.filter A.is_global locs in
@@ -1905,14 +2180,14 @@ let get_rf_value test read =
 
     let fold_left_left f = List.fold_left (List.fold_left f)
 
-    let all_finals test es =
+    let all_finals test wanted_final_values es =
       try
         if mixed && not C.debug.Debug_herd.mixed then
           all_finals_mixed test es
         else
-          all_finals_non_mixed test es
+          all_finals_non_mixed test wanted_final_values es
       with CannotSca ->
-        all_finals_non_mixed test es
+        all_finals_non_mixed test wanted_final_values es
 
     let some_same_rf_rmw rfm rmw =
       let loads = U.partition_events (E.EventRel.domain rmw) in
@@ -1927,7 +2202,8 @@ let get_rf_value test read =
           Misc.exists_pair S.read_from_equal rfs)
         loads
 
-    let fold_mem_finals test es rfm ofail atomic_load_store kont res =
+    let fold_mem_finals
+        test wanted_finals es rfm ofail atomic_load_store kont res =
       (* We can build those now *)
       let evts = es.E.events in
       let po_iico = U.po_iico es in
@@ -1936,7 +2212,7 @@ let get_rf_value test read =
       let store_load_vbf = store_load rfm
       and init_load_vbf = init_load es rfm in
 (* Now generate final stores *)
-      let possible_finals = all_finals test es in
+      let possible_finals = all_finals test wanted_finals es in
       if C.debug.Debug_herd.mem then begin
         eprintf "Possible finals:\n" ;
         List.iter
@@ -2178,7 +2454,7 @@ let get_rf_value test read =
                    Warn.user_error
                      "Instruction %s:%s cannot be overwritten"
                      (Label.pp lbl)
-                     (A.dump_instruction i)
+                     (A.dump_instruction i.I.instr)
               with
               | Not_found ->
                  Warn.user_error
@@ -2191,7 +2467,10 @@ let get_rf_value test read =
       ) stores
 
     let calculate_rf_with_cnstrnts test owls es cs kont res =
-      match do_solve_regs test es cs with
+      let wanted_final_values =
+        if do_optcheck test then wanted_final_value test
+        else Fun.const None in
+      match do_solve_regs test wanted_final_values es cs with
       | None -> res
       | Some (es,rfm,cs) ->
           if debug_solver && C.verbose > 0 then begin
@@ -2265,7 +2544,7 @@ let get_rf_value test read =
                       end ;
                       res
                       end else
-                      fold_mem_finals test es
+                      fold_mem_finals test wanted_final_values es
                         rfm ofail atomic_load_store kont res
                   else  res)
             res

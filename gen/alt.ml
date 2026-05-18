@@ -34,35 +34,20 @@ module type AltConfig = sig
   val wildcard : bool
 end
 
-module Make(C:Builder.S)
-    (O:AltConfig with type relax = C.R.relax and type fence = C.A.fence) :
-    sig
-      val gen : ?relax:C.R.relax list -> ?safe:C.R.relax list -> ?reject:C.R.relax list -> int -> unit
-    end
+module Filter
+    (C : Builder.S)
+    (O : sig
+      val cumul : C.A.fence list Config.cumul
+      val choice : check
+    end) =
+struct
+  let dbg = false
 
-    =
-  struct
-    let mixed = Variant_gen.is_mixed O.variant
-    let do_kvm = Variant_gen.is_kvm  O.variant
-    module D = DumpAll.Make(O) (C)
-    open C.E
-    open C.R
-
-    let dbg = false
-
-    module RelaxSet = C.R.Set
-
-    let is_int e = match get_ie e with
-    | Int -> true
-    | Ext -> false
-    | UnspecCom -> assert false
-
-    let is_ext e = not (is_int e)
-
-    let equal_fence f1 f2 = C.A.compare_fence f1 f2 = 0
+  open C.E
 
     let is_cumul =
       let open Config in
+      let equal_fence f1 f2 = C.A.compare_fence f1 f2 = 0 in
       match O.cumul with
       | Empty -> (fun _ -> false)
       | All -> (fun _ -> true)
@@ -83,8 +68,9 @@ module Make(C:Builder.S)
   Also notice that we are more tolerant for Rfi.
  *)
 (* Assuming Dp is safe *)
-    | Rf Int,Dp _ | Dp _,Rf Int -> true
-    | Dp (_,sd,_),Ws Int | Dp (_,sd,_),Fr Int ->
+    | (Rf Int|Po(Same,Dir W,Dir R)),Dp _
+    | Dp _,(Rf Int|Po(Same,Dir W,Dir R)) -> true
+    | Dp (_,sd,_),(Ws Int|Po(Same,Dir W,Dir W)|Fr Int|Po(Same,Dir R,Dir W)) ->
         not (po_safe sd (dir_src e1) (dir_tgt e2))
     | Po (sd1,_,_), Dp (_,sd2,_) ->
         not (po_safe sd1 (dir_src e1) (dir_tgt e1)) &&
@@ -118,12 +104,17 @@ module Make(C:Builder.S)
 (*
   Now accept some internal with internal composition
  *)
-      | (Ws Int|Rf Int|Fr Int|Insert _),(Dp (_,_,_)|Po (Diff,_,_))
-      | (Dp (_,_,_)|Po (Diff,_,_)),(Ws Int|Rf Int|Fr Int|Insert _)
+      | (Ws Int|Po(Same,Dir W,Dir W)
+        |Rf Int|Po(Same,Dir W,Dir R)
+        |Fr Int|Po(Same,Dir R,Dir W)|Insert _),(Dp (_,_,_)|Po (Diff,_,_))
+      | (Dp (_,_,_)|Po (Diff,_,_)),
+        (Ws Int|Po(Same,Dir W,Dir W)
+        |Rf Int|Po(Same,Dir W,Dir R)
+        |Fr Int|Po(Same,Dir R,Dir W)|Insert _)
       | Dp (_,Diff,_),Po (Diff,_,_)
       | Po (Diff,_,_),Dp (_,Diff,_)
-      | Rf Int,Po (Same,_,_)
-      | Po (Same,_,_),Rf Int
+      | (Rf Int|Po(Same,Dir W,Dir R)),Po (Same,_,_)
+      | Po (Same,_,_),(Rf Int|Po(Same,Dir W,Dir R))
       | (Rmw _,_)|(_,Rmw _) -> true
       | _,_ ->
           (* Reject other internal followed by internal sequences *)
@@ -210,25 +201,18 @@ module Make(C:Builder.S)
       begin match  C.E.get_ie e1, C.E.get_ie e2 with
       | Int,Int ->
           let cs = C.E.compact_sequence xs ys e1 e2 in
-          if O.verbose > 0 then eprintf "COMPACT %s,%s -> [%s] -> "
-            (C.E.pp_edge e1) (C.E.pp_edge e2)
-            (String.concat ","
-               (List.map (fun es -> C.R.pp_relax (C.R.ERS es)) cs)) ;
           let r =
             not
               (List.exists
                  (fun es -> C.R.Set.mem (C.R.ERS es) safes)
                  cs) in
-          if O.verbose > 0 then eprintf "%b\n" r ;
           r
       | _,_ -> true
       end
 
-
-
-    let iarg f = fun _ _ _ _ -> f
-
-    let choose c = match c with
+    let choose c =
+    let iarg f = fun _ _ _ _ -> f in
+    match c with
     | Sc -> fun _safes po_safe _xs _ys -> choice_sc po_safe
     | Default -> iarg choice_default
     | MixedCheck -> iarg choice_mixed
@@ -245,7 +229,24 @@ module Make(C:Builder.S)
     | (None,_)|(_,(Irr|NoDir)) -> true
     | Some a,(Dir d) -> C.A.applies_atom a d
 
-    let pair_ok safes po_safe xs ys e1 e2 = match e1.edge,e2.edge with
+    let rec hd_non_insert = function
+      | [] -> assert false
+      | [x] -> x
+      | x::xs ->
+          if C.E.is_insert_store x.C.E.edge then hd_non_insert xs
+          else x
+    let last_non_insert xs = hd_non_insert (List.rev xs)
+
+    (* Check whether relaxation list `xs` can precede relaxation list `ys`.
+       This uses the effective boundary edges of the two sequences,
+       ignoring insert/store pseudo-edges when necessary, and checks:
+       - whether the boundary edges are compatible via `Edge.can_precede`
+       - whether the mode-specific rule holds *)
+    let can_precede safes po_safe xs ys =
+      let e1 = last_non_insert xs in
+      let e2 = hd_non_insert ys in
+      C.E.can_precede e1 e2
+      && match e1.edge,e2.edge with
 (*
   First reject some of hb' ; hb'
  *)
@@ -266,53 +267,33 @@ module Make(C:Builder.S)
     | Fenced (f,_,_,_),Rf _ ->
         is_cumul f && choose O.choice safes po_safe xs ys e1 e2
     | _,_ -> choose O.choice safes po_safe xs ys e1 e2
+end
 
-    let check_mixed =
-      if mixed then
-        fun e1 e2 -> match  e1.edge,e2.edge with
-        | Id,Id -> false
-        | (_,Id)|(Id,_) -> true
-        | _,_ -> false
-      else fun _ _ -> true
+module Make(C:Builder.S)
+    (O:AltConfig with type relax = C.R.relax and type fence = C.A.fence) :
+    sig
+      val gen : ?relax:C.R.relax list -> ?safe:C.R.relax list -> ?reject:C.R.relax list -> int -> unit
+      val filter_check: relax:C.R.relax list -> safe:C.R.relax list -> C.E.edge list -> C.E.edge list -> bool
+    end
 
-    let rec hd_non_insert = function
-      | [] -> assert false
-      | [x] -> x
-      | x::xs ->
-          if C.E.is_insert_store x.C.E.edge then hd_non_insert xs
-          else x
-    let last_non_insert xs = hd_non_insert (List.rev xs)
+    =
+  struct
+    module D = DumpAll.Make(O) (C)
+    module FilterImpl = Filter(C)(O)
+    module RelaxSet = C.R.Set
+    open C.E
+    open C.R
 
-    let do_compat safes po_safe xs ys =
-      let x = Misc.last xs and y = List.hd ys in
-      let r =
-        C.E.can_precede x y
-        && check_mixed x y
-        && pair_ok safes po_safe xs ys x y
-        &&
-          begin
-            if do_kvm then
-              C.E.can_precede (hd_non_insert xs) (last_non_insert ys)
-            else true
-          end in
-      if O.verbose > 2 then begin
-        eprintf "do_compat '%s' '%s' = %b\n"
-          (C.E.pp_edges xs)
-          (C.E.pp_edges ys) r
-      end ;
-      r
+    let dbg = false
 
+    let is_int e = match get_ie e with
+    | Int -> true
+    | Ext -> false
+    | UnspecCom -> assert false
 
     let can_precede safes po_safe (_,xs) k = match k with
     | [] -> true
-    | (_,ys)::_ ->
-        do_compat safes po_safe xs ys &&
-        begin match k with
-        | (_,[{edge=Id;_}])::(_,y::_)::_ when mixed ->
-            let x = Misc.last xs in
-            C.E.can_precede x y
-        | _ -> true
-        end
+    | (_,ys)::_ -> FilterImpl.can_precede safes po_safe xs ys
 
     (* List.is_empty only supports for ocaml 5.1 afterwards *)
     let is_empty_list l = (l = [])
@@ -326,7 +307,7 @@ module Make(C:Builder.S)
              |> String.concat list_list_sep )
         |> String.concat list_sep
 
-    let edges_ofs rs =
+    let edges_of_relax_list rs =
       List.map (fun r -> (r, edges_of r)) rs
 
 (* Functional for recursive call of generators *)
@@ -370,18 +351,16 @@ module Make(C:Builder.S)
     let minint suff = c_minint 0 suff
 
 (* Prefix *)
-    let prefix_expanded = List.flatten (List.map C.R.expand_relax_seq O.prefix)
-
     let () =
       if O.verbose > 0 && O.prefix <> [] then begin
         eprintf "Prefixes:\n" ;
         List.iter
           (fun rs ->
             eprintf "  %s\n" (C.R.pp_relax_list rs))
-          prefix_expanded
+          O.prefix
       end
 
-    let prefixes = List.map edges_ofs prefix_expanded
+    let prefixes = List.map edges_of_relax_list O.prefix
 
     let rec mk_can_prefix = function
       | [] -> (fun _ _ -> true)
@@ -468,8 +447,8 @@ module Make(C:Builder.S)
 
     let zyva prefix aset relax safe reject n f =
 (*      let safes = C.R.Set.of_list safe in *)
-      let relax = edges_ofs relax in
-      let safe = edges_ofs safe in
+      let relax = edges_of_relax_list relax in
+      let safe = edges_of_relax_list safe in
       let po_safe = extract_po safe in
 
       (* ********************************** *)
@@ -713,14 +692,7 @@ module Make(C:Builder.S)
     let debug_rs chan rs =
       List.iter (fun r -> fprintf chan "%s\n" (pp_relax r)) rs
 
-    let secret_gen relax safe reject n =
-      let r_nempty = Misc.consp relax in
-      let relax = expand_relaxs C.ppo relax
-      and safe = expand_relaxs C.ppo safe
-      and reject = expand_relaxs C.ppo reject in
-      if Misc.nilp relax then if r_nempty then begin
-        Warn.fatal "relaxations provided in relaxlist could not be used to generate cycles"
-      end ;
+    let parse_input ~relax ~safe ~reject =
       if O.verbose > 0 then begin
         eprintf "** Relax0 **\n" ;
         debug_rs stderr relax ;
@@ -728,16 +700,21 @@ module Make(C:Builder.S)
         debug_rs stderr safe
       end ;
       let relax_set = C.R.Set.of_list relax
-      and safe_set = C.R.Set.of_list safe in
+      and safe_set = C.R.Set.of_list safe
+      and reject_set = C.R.Set.of_list reject in
       let relax = C.R.Set.elements relax_set
       and safe = C.R.Set.elements (C.R.Set.diff safe_set relax_set)
-(*      and reject = C.R.Set.elements reject_set *)in
+      and reject = C.R.Set.elements reject_set in
       if O.verbose > 0 then begin
         eprintf "** Relax **\n" ;
         debug_rs stderr relax ;
         eprintf "** Safe **\n" ;
         debug_rs stderr safe
       end ;
+      relax, safe, reject
+
+    let secret_gen relax safe reject n =
+      let relax,safe,reject = parse_input ~relax ~safe ~reject in
       do_gen relax safe reject n
 
 (**********************)
@@ -786,4 +763,10 @@ module Make(C:Builder.S)
       with e ->
         eprintf "Exc: '%s'\n" (Printexc.to_string e) ;
         raise e
+
+    let filter_check ~relax ~safe lhs rhs =
+      let safe,_,_ = parse_input ~relax ~safe ~reject:[] in
+      let safe_set = C.R.Set.of_list safe in
+      let po_safe = edges_of_relax_list safe |> extract_po in
+      FilterImpl.can_precede safe_set po_safe lhs rhs
   end

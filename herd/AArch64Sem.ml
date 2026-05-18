@@ -44,6 +44,7 @@ module Make
     let pac = C.variant Variant.Pac
     let const_pac_field = C.variant Variant.ConstPacField
     let fpac = C.variant Variant.FPac
+    let gcs = C.variant Variant.ShadowStack
 
     let check_kvm ins =
       if not kvm then
@@ -81,6 +82,12 @@ module Make
           "SME instruction %s requires -variant sme"
           (AArch64.dump_instruction inst)
 
+    let check_gcs inst =
+      if not gcs then
+        Warn.user_error
+          "GCS instruction %s requires -variant shadowstack"
+          (AArch64.dump_instruction inst)
+
 (* Barrier pretty print *)
     let barriers =
       let bs = AArch64Base.do_fold_dmb_dsb (fun h t -> h::t) []
@@ -105,7 +112,8 @@ module Make
     (* Semantics proper *)
     module Mixed(SZ:ByteSize.S) : sig
       val build_semantics : test -> A.inst_instance_id -> (proc * branch) M.t
-      val spurious_setaf : V.v -> unit M.t
+      val can_unset_af_loc : event -> V.v option
+      val spurious_setaf : value:V.v -> location:V.v -> unit M.t
     end = struct
 
       module Mixed = M.Mixed(SZ)
@@ -221,8 +229,7 @@ module Make
       let read_reg_addr_sz = read_reg_sz  Port.Addr
 
 (* Fetch of an instruction, i.e., a read from a label *)
-      let mk_fetch an loc v =
-        let ac = Access.VIR in (* Instruction fetch seen as ordinary, non PTE, access *)
+      let mk_fetch an ac loc v =
         Act.Access (Dir.R, loc, v, an, AArch64.nexp_ifetch, MachSize.Word, ac)
 
 (* Basic write, to register  *)
@@ -718,6 +725,7 @@ module Make
         valid_v : V.v;
         el0_v : V.v;
         tagged_v : V.v;
+        x_v : V.v;
       }
 
       let arch_op1 op = M.op1 (Op.ArchOp1 op)
@@ -727,18 +735,19 @@ module Make
       let extract_dbm v = arch_op1 AArch64Op.DBM v
       let extract_valid v = arch_op1 AArch64Op.Valid v
       let extract_el0 v = arch_op1 AArch64Op.EL0 v
+      let extract_x v = arch_op1 AArch64Op.X v
       let extract_oa v = arch_op1 AArch64Op.OA v
       let extract_tagged v = arch_op1 AArch64Op.Tagged v
 
-      let mextract_whole_pte_val an nexp a_pte iiid =
+      let mextract_whole_pte_val an nexp a_pte iiid domain =
         (M.do_read_loc Port.No
            (fun loc v ->
-             Act.Access (Dir.R,loc,v,an,nexp,quad,Access.PTE))
+             Act.Access (Dir.R,loc,v,an,nexp,quad,Access.PTE domain))
            (A.Location_global a_pte) iiid)
 
-      and write_whole_pte_val an explicit a_pte v iiid =
+      and write_whole_pte_val an explicit a_pte v iiid domain =
         M.do_write_loc
-          (mk_write quad an explicit Access.PTE v)
+          (mk_write quad an explicit (Access.PTE domain) v)
           (A.Location_global a_pte) iiid
 
 
@@ -747,42 +756,43 @@ module Make
         function
         | AF -> AArch64Op.SetAF
         | DB -> AArch64Op.SetDB
-        | IFetch|Other|AFDB -> assert false
+        | IFetch|Other|AFDB|GCS -> assert false
 
-      let do_test_and_set_bit combine cond set a_pte iiid =
+      let do_test_and_set_bit v combine cond set a_pte iiid domain =
         let nexp = AArch64Explicit.NExp set in
-        mextract_whole_pte_val Annot.X nexp a_pte iiid >>= fun pte_v ->
-        cond pte_v >>*= fun c ->
+        mextract_whole_pte_val Annot.X nexp a_pte iiid domain >>= fun pte_v ->
+        (M.eqT pte_v v >>| cond pte_v) >>*= fun ((),c) ->
         combine c
             (arch_op1 (op_of_set set) pte_v >>= fun v ->
-             write_whole_pte_val Annot.X nexp a_pte v iiid)
+             write_whole_pte_val Annot.X nexp a_pte v iiid domain)
             (M.unitT ())
 
-      let test_and_set_bit_succeeds cond =
-        do_test_and_set_bit (fun c m _ -> M.assertT c m) cond
+      let test_and_set_bit_succeeds v cond =
+        do_test_and_set_bit v (fun c m _ -> M.assertT c m) cond
 
       let bit_is_zero op v = arch_op1 op v >>= is_zero
       let bit_is_not_zero op v = arch_op1 op v >>= is_not_zero
       let m_op op m1 m2 = (m1 >>| m2) >>= fun (v1,v2) -> M.op op v1 v2
 
-      let do_set_bit an a_pte pte_v ii =
+      let do_set_bit an a_pte pte_v ii domain =
         let nexp = AArch64Explicit.NExp an in
         arch_op1 (op_of_set an) pte_v >>= fun v ->
-        write_whole_pte_val Annot.X nexp a_pte v (E.IdSome ii)
+        write_whole_pte_val Annot.X nexp a_pte v (E.IdSome ii) domain
 
-      let set_af = do_set_bit AArch64Explicit.AF
+      let set_af a_pte pte_v ii domain =
+        do_set_bit AArch64Explicit.AF a_pte pte_v ii domain
 
-      let set_afdb a_pte pte_v ii =
+      let set_afdb a_pte pte_v ii domain =
         let nexp = AArch64Explicit.NExp AArch64Explicit.AFDB in
         arch_op1 (AArch64Op.SetAF) pte_v >>= arch_op1 (AArch64Op.SetDB) >>= fun v ->
-        write_whole_pte_val Annot.X nexp a_pte v (E.IdSome ii)
+        write_whole_pte_val Annot.X nexp a_pte v (E.IdSome ii) domain
 
       let cond_af v =
         m_op Op.And
           (bit_is_zero AArch64Op.AF v) (bit_is_not_zero AArch64Op.Valid v)
 
-      let test_and_set_af_succeeds =
-        test_and_set_bit_succeeds cond_af AArch64Explicit.AF
+      let test_and_set_af_succeeds value =
+        test_and_set_bit_succeeds value cond_af AArch64Explicit.AF
 
       let mextract_pte_vals pte_v =
         (extract_oa pte_v >>|
@@ -791,9 +801,10 @@ module Make
         extract_af pte_v >>|
         extract_db pte_v >>|
         extract_dbm pte_v >>|
-        extract_tagged pte_v) >>=
-        (fun ((((((oa_v,el0_v),valid_v),af_v),db_v),dbm_v),tagged_v) ->
-          M.unitT {oa_v; af_v; db_v; dbm_v; valid_v; el0_v; tagged_v})
+        extract_tagged pte_v >>|
+        extract_x pte_v) >>=
+        (fun (((((((oa_v,el0_v),valid_v),af_v),db_v),dbm_v),tagged_v),x_v) ->
+          M.unitT {oa_v; af_v; db_v; dbm_v; valid_v; el0_v; tagged_v; x_v})
 
       let get_oa a_virt mpte =
         (M.op1 Op.Offset a_virt >>| mpte)
@@ -820,6 +831,54 @@ module Make
       let insert_commit_to_fault m1 m2 txt ii =
         if is_branching || morello then do_insert_commit_to_fault m1 m2 txt ii
         else m1 >>*= m2 (* Direct control dependency to fault *)
+
+
+(************)
+(* Branches *)
+(************)
+
+      let v2tgt =
+        let open Constant in
+        function
+        | M.A.V.Val (Symbolic (Virtual {name=Symbol.Label (_, lbl); _})) -> Some (B.Lbl lbl)
+        | M.A.V.Val (Concrete i) -> Some (B.Addr (M.A.V.Cst.Scalar.to_int i))
+        | _ -> None
+
+      let do_indirect_jump test bds i ii v =
+        match  v2tgt v with
+        | Some tgt ->
+          commit_bcc ii
+          >>= fun () -> M.unitT (B.Jump (tgt,bds))
+        | None ->
+           match v with
+           | M.A.V.Var(_) as v ->
+              let lbls = get_exported_labels test in
+              if Label.Full.Set.is_empty lbls  then begin
+                if C.variant Variant.Telechat then M.unitT () >>! B.Exit
+                else
+                  Warn.fatal "Could find no potential target for indirect branch %s \
+                    (potential targets are statically known labels)" (AArch64.dump_instruction i)
+                end
+              else
+                commit_bcc ii
+                >>= fun () -> B.indirectBranchT v lbls bds
+        | _ -> Warn.fatal
+            "illegal argument for the indirect branch instruction %s \
+            (must be a label)" (AArch64.dump_instruction i)
+
+      let get_link_addr test ii =
+        let lbl =
+          let a = ii.A.addr + 4 in
+          let lbls = test.Test_herd.entry_points a in
+          Label.norm lbls in
+        match lbl with
+        | Some l -> ii.A.addr2v ii.A.proc l
+        | None ->  V.intToV (ii.A.addr + 4)
+
+      let get_instr_label proc ii =
+        match Label.norm ii.A.labels with
+        | Some hd -> ii.A.addr2v proc hd
+        | None -> V.intToV ii.A.addr
 
 (******************)
 (* Checking flags *)
@@ -878,11 +937,6 @@ module Make
        * (ie non-pte2) mode.
        *)
        
-           
-      let get_instr_label ii =
-        match Label.norm ii.A.labels with
-        | Some hd -> ii.A.addr2v hd
-        | None -> V.intToV ii.A.addr
 
       let set_elr_el1 v ii =
         write_reg AArch64Base.elr_el1 v ii
@@ -891,20 +945,20 @@ module Make
 
       (* Emit fault event and set link register. *)
       let emit_fault a ma dir an ft msg ii =
-        let lbl_v = get_instr_label ii in
+        let lbl_v = get_instr_label ii.A.proc ii in
         insert_commit_to_fault ma
           (fun _ ->
              set_elr_el1 lbl_v ii
              >>|
-             mk_fault (Some a) dir an ii ft msg) None ii
+             mk_fault a dir an ii ft msg) None ii
         >>!  B.fault [AArch64Base.elr_el1, lbl_v]
 
       (* Specific fault when accessing PTE from EL0. *)
-      let mk_pte_fault a ma dir an ii =
+      let mk_pte_fault a ma dir an ii domain =
         let open FaultType.AArch64 in
-        let ft = Some (MMU Permission)
+        let ft = Some (MMU (domain, Permission))
         and msg = Some "EL0" in
-        emit_fault a ma dir an ft msg ii
+        emit_fault (Some a) ma dir an ft msg ii
 
       let an_xpte =
         let open Annot in
@@ -924,7 +978,7 @@ module Make
         | X|N -> N
         | NoRet|S|NTA -> N
 
-      let check_ptw proc dir updatedb is_tag a_virt ma an ii mdirect mok mfault =
+      let check_ptw proc dir updatedb is_tag a_virt ma an ii mdirect mok mfault domain =
 
         let is_el0  = List.exists (Proc.equal proc) TopConf.procs_user in
 
@@ -933,6 +987,12 @@ module Make
           if not ii.A.in_handler && is_el0 then
                fun pte_v -> m_op Op.Or (is_zero pte_v.el0_v) (m pte_v)
              else m in
+        let execute_check cond =
+          match domain with
+          | DISide.Instr ->
+              fun pte_v ->
+                m_op Op.Or (cond pte_v) (is_zero pte_v.x_v)
+          | _ -> cond in
 
         let open DirtyBit in
         let tthm = dirty.tthm proc
@@ -941,20 +1001,27 @@ module Make
         let ha = ha || hd in (* As far as we know hd => ha *)
         let mfault (_,ipte) m =
           let open FaultType.AArch64 in
+          let open DISide in
+          let transl_fault = M.unitT (Some (MMU (domain, Translation))) in
+          let perm_fault = M.unitT (Some (MMU (domain, Permission))) in
+          let af_fault = M.unitT (Some (MMU (domain, AccessFlag))) in
+          let perm =
+            match domain with
+            | Instr ->
+                (is_zero ipte.x_v) >>=
+                  fun x ->
+                    M.choiceT x perm_fault perm_fault
+            | _ -> perm_fault in
+          let af =
+            if ha then perm
+            else
+              (is_zero ipte.af_v) >>=
+                fun af ->
+                  M.choiceT af af_fault perm in
           (is_zero ipte.valid_v) >>=
-            (fun c ->
-              M.choiceT c
-                (M.unitT (Some (MMU Translation)))
-                (if ha then
-                   M.unitT (Some (MMU Permission))
-                 else begin
-                   (is_zero ipte.af_v) >>=
-                     (fun c ->
-                       M.choiceT c
-                         (M.unitT (Some (MMU AccessFlag)))
-                         (M.unitT (Some (MMU Permission))))
-                   end) >>=
-                fun t -> mfault (get_oa a_virt m) a_virt t)
+            fun v ->
+              M.choiceT v transl_fault af >>= fun t ->
+              mfault (get_oa a_virt m) a_virt t
         and mok (pte_v,ipte) a_pte m a =
           let m =
             let msg =
@@ -978,7 +1045,7 @@ module Make
                 (m >>**==
                    (fun _ ->
                      commit_pred_txt (Some txt) ii >>*=
-                       fun _ -> set a_pte pte_v ii)
+                       fun _ -> set a_pte pte_v ii domain)
                  >>== fun () -> M.unitT (pte_v,ipte))
                no in
             let add_setbits_db ipte m =
@@ -1013,7 +1080,7 @@ module Make
                   (* Ordinary non-explicit access *)
                   an_pte an,AArch64.nexp_annot in
               mextract_whole_pte_val
-                an nexp a_pte (E.IdSome ii) >>== fun pte_v ->
+                an nexp a_pte (E.IdSome ii) domain >>== fun pte_v ->
               (mextract_pte_vals pte_v) >>= fun ipte ->
               M.unitT ((pte_v,ipte),a_pte)
             end
@@ -1037,6 +1104,7 @@ module Make
               | Dir.W ->
                   fun pte_v ->
                     m_op Op.Or (cond_R pte_v) (is_zero pte_v.db_v) in
+              let cond = execute_check cond in
               check_cond cond
             else if (tthm && ha && not hd) then (* HW managment of AF *)
               let cond = match dir with (* Do not check AF *)
@@ -1044,6 +1112,7 @@ module Make
               | Dir.W ->
                   fun pte_v ->
                     m_op Op.Or (is_zero pte_v.valid_v) (is_zero pte_v.db_v) in
+              let cond = execute_check cond in
               check_cond cond
             else (* HW management of AF and DB *)
               let cond = match dir with (* Do not check AF *)
@@ -1055,17 +1124,19 @@ module Make
                       (is_zero pte_v.valid_v)
                       (m_op Op.And
                          (is_zero pte_v.db_v) (is_zero pte_v.dbm_v)) in
+              let cond = execute_check cond in
               check_cond cond)
           end in
         if pte2 then  mvirt
-        else
-          M.op1 Op.IsVirtual a_virt >>= fun cond ->
-          M.choiceT cond mvirt
+        else begin
+          let mdirect =
             (* Non-virtual accesses are disallowed from EL0.
                For instance, user code cannot access the page table. *)
-            (if is_el0 then mk_pte_fault a_virt ma dir an ii
-             else mdirect)
-
+            if is_el0 then mk_pte_fault a_virt ma dir an ii domain
+            else mdirect in
+          M.op1 Op.IsVirtual a_virt >>= fun cond ->
+          M.choiceT cond mvirt mdirect
+        end
 (* Read memory, return value read *)
       let do_read_mem_ret sz an anexp ac a ii =
         let m a =
@@ -1151,7 +1222,6 @@ module Make
 
 (* Page tables and TLBs *)
       let do_inv op a ii = inv_loc op (A.Location_global a) ii
-
 
 (************************)
 (* Conditions and flags *)
@@ -1360,9 +1430,8 @@ module Make
  *)
 
 (*  memtag faults *)
-
       let lift_fault_memtag mfault mm dir ii =
-        let lbl_v = get_instr_label ii in
+        let lbl_v = get_instr_label ii.A.proc ii in
         let open Precision in
           match C.mte_precision, dir with
           | (Synchronous, _)
@@ -1383,36 +1452,36 @@ module Make
 
 (* KVM mode *)
 
-      let some_ha = dirty.DirtyBit.some_ha || dirty.DirtyBit.some_hd
+      let can_be_pt v =
+        match V.as_constant v with
+        | None -> true
+        | Some c -> Constant.is_pt c
 
-      let fire_spurious_af dir a m =
-        if
-          some_ha &&
-            (let v = C.variant Variant.PhantomOnLoad in
-             match dir with Dir.W -> not v | Dir.R -> v)
-        then
-          (m >>|
-             M.altT (test_and_set_af_succeeds a E.IdSpurious) (M.unitT ())) >>=
-            fun (r,_) -> M.unitT r
-        else m
+      let can_af0 v =
+        (match V.as_constant v with
+        | Some (Constant.PteVal p) ->
+           p.AArch64PteVal.valid <> 0 &&  p.AArch64PteVal.af = 0
+        | _ -> true)
 
-      let lift_kvm dir updatedb mop ma an ii mphy =
-        let mfault ma a ft = emit_fault a ma dir an ft None ii in
+      let lift_kvm _tag dir updatedb mop ma an ii mphy branch domain =
+        let mfault ma a ft = emit_fault (Some a) ma dir an ft None ii in
         let maccess a ma =
           check_ptw ii.AArch64.proc dir updatedb false a ma an ii
-            ((let m = mop Access.PTE ma in
-              fire_spurious_af dir a m) >>= M.ignore >>= B.next1T)
+            (mop (Access.PTE domain) ma |> branch)
             mphy
-            mfault in
+            mfault
+            domain in
         M.delay_kont "6" ma (
           if pte2 then maccess
           else
              fun a ma ->
              match Act.access_of_location_std (A.Location_global a) with
-             | Access.VIR|Access.PTE when not (A.V.is_instrloc a) ->
+             | Access.VIR|Access.PTE _ when not (A.V.is_instrloc a) ->
+                 maccess a ma
+             | Access.VIR when (A.V.is_instrloc a) ->
                  maccess a ma
              | ac ->
-                 mop ac ma >>= M.ignore >>= B.next1T
+                 mop ac ma |> branch
         )
 
       let lift_memtag_phy dir mop ma an ii mphy =
@@ -1423,7 +1492,9 @@ module Make
           and mno mpte_t =
             let ma = M.para_bind_output_right mpte_t (fun _ -> mpte_d) in
             let ft = Some FaultType.AArch64.TagCheck in
-            let mm ma = ma >>= M.ignore >>= B.next1T in
+            let mm ma =
+              let branch = fun m -> m >>= M.ignore >>= B.next1T in
+              ma |> branch in
             let fault = lift_fault_memtag
                 (mk_fault (Some a_virt) dir an ii ft None) mm dir ii in
             fault ma >>! B.fault [] in
@@ -1442,28 +1513,29 @@ module Make
               let commit _ = commit_pred_txt None ii in
               ma >>= commit in
             let ma = M.para_bind_output_right ma (fun _ -> mpte_d) in
-            let lbl_v = get_instr_label ii in
+            let lbl_v = get_instr_label ii.A.proc ii in
             ma >>*= fun _ -> set_elr_el1 lbl_v ii >>| mk_fault (Some a) dir an ii ft None >>!
             B.fault [AArch64Base.elr_el1, lbl_v] in
           M.delay_kont "tag_ptw" ma @@ fun a ma ->
+          (* tag checks only apply to data *)
+          let domain = DISide.Data in
           let mdirect =
-            let m = mop Access.PTE ma in
-            fire_spurious_af dir a m >>= M.ignore >>= B.next1T in
+            mop (Access.PTE domain) ma >>= M.ignore >>= B.next1T in
           check_ptw ii.AArch64.proc Dir.R false true a ma an ii
             mdirect
             cond_check_tag
-            mfault in
+            mfault domain in
         fun mpte a_virt -> M.delay_kont "need_check_tag" mpte @@
           fun (_,ipte) mpte -> M.choiceT (ipte.tagged_v)
             (checked_op mpte a_virt) (mphy mpte a_virt)
 
-      let lift_memtag_virt mop ma dir an ii =
+      let lift_memtag_virt mop ma dir an ii branch =
         M.delay_kont "5" ma
           (fun a_virt ma  ->
              let mm = mop Access.VIR in
              let ft = Some FaultType.AArch64.TagCheck in
              delayed_check_tags a_virt None ma ii
-               (fun ma -> mm ma >>= M.ignore >>= B.next1T)
+               (fun ma -> mm ma |> branch)
                (lift_fault_memtag
                   (mk_fault (Some a_virt) dir an ii ft None) mm dir ii))
 
@@ -1474,8 +1546,9 @@ module Make
  *)
       let lift_pac_virt mop ma dir an ii =
         let mok ma = mop Access.VIR ma >>= M.ignore >>= B.next1T in
-        let lbl_v = get_instr_label ii in
-        let ft = Some (FaultType.AArch64.MMU FaultType.AArch64.Translation) in
+        let lbl_v = get_instr_label ii.A.proc ii in
+        let open FaultType.AArch64 in
+        let ft = Some (MMU (DISide.Data, Translation)) in
         let mfault ma a =
           do_insert_commit_to_fault ma
             (fun _ -> set_elr_el1 lbl_v ii >>| mk_fault (Some a) dir an ii ft None)
@@ -1495,7 +1568,7 @@ module Make
           M.choiceT virt (mcheck ma) (mok ma)
         )
 
-      let lift_morello mop perms ma mv dir an ii =
+      let lift_morello mop perms ma mv dir an ii branch =
         let mfault msg ma mv =
           let ft = None in (* FIXME *)
           do_insert_commit
@@ -1511,7 +1584,7 @@ module Make
                 check_morello_sealed a ma mv
                   (fun ma mv ->
                     check_morello_perms a ma mv perms
-                      (fun ma mv -> mok ma mv >>= M.ignore >>= B.next1T)
+                      (fun ma mv -> mok ma mv |> branch)
                       (mfault "CapPerms"))
                   (mfault "CapSeal"))
               (mfault "CapTag"))
@@ -1531,7 +1604,6 @@ module Make
         | None -> false
         | Some rB -> AArch64.reg_compare rA rB=0
 
-
 (*
 Arguments:
 - rA:         Base address register.
@@ -1544,10 +1616,15 @@ Arguments:
 - mv:         Value to be stored (for write operations), represented as the value in the monad.
 - an:         Annotation for the event structure.
 - ii:         Instruction metadata.
+- branch:     Determines control flow after the translated memory access:
+              typically next instruction for data accesses, or no change
+              when translating for instruction fetches.
+- domain:     Whether the translation is for data or instruction access.
 *)
-      let lift_memop rA dir updatedb checked mop perms ma mv an ii =
+      let do_lift_memop ?tag rA (* Base address register *)
+            dir updatedb checked mop perms ma mv an ii branch domain =
         if morello then
-          lift_morello mop perms ma mv dir an ii
+          lift_morello mop perms ma mv dir an ii branch
         else
           let mop = apply_mv mop mv in
           if kvm then
@@ -1557,24 +1634,29 @@ Arguments:
                 M.op1 Op.IsVirtual a_virt >>= fun c ->
                 M.choiceT c
                   (mop Access.PHY ma)
-                  (fire_spurious_af dir a_virt (mop Access.PHY_PTE ma))
-                >>= M.ignore >>= B.next1T
+                  (mop Access.PHY_PTE ma)
+                |> branch
               else
-                mop Access.PHY ma
-                >>= M.ignore >>= B.next1T in
+                mop Access.PHY ma |> branch in
             let mphy =
               if checked then lift_memtag_phy dir mop ma an ii mphy
               else mphy
             in
-            let m = lift_kvm dir updatedb mop ma an ii mphy in
+            let m = lift_kvm tag dir updatedb mop ma an ii mphy branch domain in
             (* M.short will add an iico_data only if memtag is enabled *)
             M.short (is_this_reg rA) (E.is_pred_txt (Some "color")) m
           else if pac then
             lift_pac_virt mop ma dir an ii
           else if checked then
-            lift_memtag_virt mop ma dir an ii
+            lift_memtag_virt mop ma dir an ii branch
           else
-            mop Access.VIR ma >>= M.ignore >>= B.next1T
+            mop Access.VIR ma |> branch
+
+      let lift_memop ?(tag = "") rA (* Base address register *)
+            dir updatedb checked mop perms ma mv an ii =
+        let domain = DISide.Data in
+        do_lift_memop ~tag rA dir updatedb checked mop perms ma mv an ii
+          (fun a -> a >>= M.ignore >>= B.next1T) domain
 
       (* Address translation instruction *)
       let do_at op rd ii =
@@ -1598,12 +1680,13 @@ Arguments:
             let ma = get_oa a_virt ma in
             mop Access.PHY ma >>= M.ignore >>= B.next1T in
         let ma = read_reg_ord rd ii in
+        let domain = DISide.Data in
         let maccess a ma =
           check_ptw ii.AArch64.proc dir false false a ma Annot.N ii
-            ((let m = mop Access.PTE ma in
-              fire_spurious_af dir a m) >>= M.ignore >>= B.next1T)
+            (mop (Access.PTE domain) ma >>= M.ignore >>= B.next1T)
             mphy
-            mfault in
+            mfault
+            domain in
         M.delay_kont "at::check_ptw" ma maccess
 
       let do_ldr rA sz an mop ma ii =
@@ -1614,7 +1697,7 @@ Arguments:
           if memtag && C.mte_store_only then
             ma >>= fun a -> loc_extract a
           else ma in
-        lift_memop rA Dir.R false checked
+        lift_memop ~tag:"LD" rA Dir.R false checked
           (fun ac ma _mv -> (* value fake here *)
             let open Precision in
             let memtag_sync =
@@ -1629,7 +1712,7 @@ Arguments:
 
 (* Generic store *)
       let do_str rA mop sz an ma mv ii =
-        lift_memop rA Dir.W true memtag
+        lift_memop ~tag:"ST" rA Dir.W true memtag
           (fun ac ma mv ->
             let open Precision in
             let memtag_sync = memtag && C.mte_precision = Synchronous in
@@ -1914,12 +1997,12 @@ Arguments:
 
       let str_simple sz rs rd m_ea ii =
         do_str rd
-          (fun ac a _ ii ->
-               M.data_input_next
-                 (read_reg_data_sz sz rs ii)
-                 (fun v -> do_write_mem sz Annot.N aexp ac a v ii))
+          (fun ac a v ii ->
+            M.data_input_next
+              (M.unitT v)
+              (fun v -> do_write_mem sz Annot.N aexp ac a v ii))
           sz Annot.N
-          m_ea  (M.unitT V.zero) ii
+          m_ea (read_reg_data_sz sz rs ii) ii
 
       let str sz rs rd e ii =
         let open AArch64Base in
@@ -1933,14 +2016,14 @@ Arguments:
                (read_reg_addr rd ii)
                (fun a_virt ma ->
                  do_str rd
-                   (fun ac a _ ii ->
+                   (fun ac a v ii ->
                      M.add a_virt (V.intToV k) >>= fun b -> write_reg rd b ii
                      >>|
                      M.data_input_next
-                       (read_reg_data_sz sz rs ii)
+                       (M.unitT v)
                        (fun v -> do_write_mem sz Annot.N aexp ac a v ii))
                    sz Annot.N
-                   ma (M.unitT V.zero) ii) in
+                   ma (read_reg_data_sz sz rs ii) ii) in
            if kvm then M.upOneRW (is_this_reg rd) m
            else m
         | Imm (k,PreIdx) ->
@@ -2037,9 +2120,9 @@ Arguments:
               (write_reg ResAddr V.zero ii)
               (fun v -> write_reg rr v ii)
               (mw an ac))
-              (to_perms "w" sz)
-              (read_reg_addr rd ii)
-              ms an ii
+          (to_perms "w" sz)
+          (read_reg_addr rd ii)
+          ms an ii
 
       let stxr sz t rr rs rd ii =
         do_stxr
@@ -2107,13 +2190,13 @@ Arguments:
           (rmw_to_read rmw)
           ii
 
-      let do_cas_fail do_wb sz an rn ma mv mop ii =
+      let do_cas_fail do_wb sz an rn ma mv mop tagcheck ii =
         let action checked ma =
           let do_action updatedb checked ma =
               (* Dir.W would force check for dbm bit:                  *)
               (* - if set then either update or not db bit per R_TXGHB *)
               (* - if unset raise Permission fault                     *)
-              lift_memop rn Dir.W updatedb checked mop (to_perms "rw" sz) ma mv an ii
+              lift_memop ~tag:"FAIL" rn Dir.W updatedb checked mop (to_perms "rw" sz) ma mv an ii
           in
           if do_wb then
             do_action true checked ma
@@ -2131,7 +2214,7 @@ Arguments:
           end
         in
 
-        if memtag && C.mte_store_only then
+        if tagcheck && C.mte_store_only then
           (* If FEAT_MTE_STORE_ONLY is implemented it is              *)
           (* CONSTRAINED UNPREDICTABLE whether the Tag Check          *)
           (* operation is performed.                                  *)
@@ -2150,18 +2233,18 @@ Arguments:
       let do_cas_fail_with_wb = do_cas_fail true
       let do_cas_fail_no_wb = do_cas_fail false
 
-      let do_cas sz an rn ma mv mop_success mop_fail_with_wb mop_fail_no_wb ii =
+      let do_cas sz an rn ma mv mop_success mop_fail_with_wb mop_fail_no_wb tagcheck ii =
         M.altT (
           (* CAS succeeds and generates an Explicit Write Effect *)
           (* there must be an update to the dirty bit of the TTD *)
-          lift_memop rn Dir.W true memtag mop_success (to_perms "rw" sz) ma mv an ii
+          lift_memop ~tag:"CAS" rn Dir.W true tagcheck mop_success (to_perms "rw" sz) ma mv an ii
         )( (* CAS fails *)
           M.altT (
             (* CAS generates an Explicit Write Effect              *)
-            do_cas_fail_with_wb sz an rn ma mv mop_fail_with_wb ii
+            do_cas_fail_with_wb sz an rn ma mv mop_fail_with_wb tagcheck ii
           )(
             (* CAS does not generate an Explicit Write Effect      *)
-            do_cas_fail_no_wb sz an rn ma mv mop_fail_no_wb ii
+            do_cas_fail_no_wb sz an rn ma mv mop_fail_no_wb tagcheck ii
           )
         )
 
@@ -2206,7 +2289,7 @@ Arguments:
         in
         let ma = read_reg_addr rn ii
         and mv = read_reg_data_sz sz rt ii in
-        do_cas sz an rn ma mv mop_success mop_fail_with_wb mop_fail_no_wb ii
+        do_cas sz an rn ma mv mop_success mop_fail_with_wb mop_fail_no_wb memtag ii
 
       let casp sz rmw rs1 rs2 rt1 rt2 rn ii =
         let an = rmw_to_read rmw in
@@ -2267,7 +2350,7 @@ Arguments:
         in
         let ma = read_reg_addr rn ii
         and mv = read_reg_data_sz sz rt1 ii >>> fun _ -> read_reg_data_sz sz rt2 ii in
-        do_cas sz an rn ma mv mop_success mop_fail_with_wb mop_fail_no_wb ii
+        do_cas sz an rn ma mv mop_success mop_fail_with_wb mop_fail_no_wb memtag ii
 
       (* Temporary morello variation of CAS *)
       let cas_morello sz rmw rs rt rn ii =
@@ -2299,7 +2382,7 @@ Arguments:
           (to_perms "rw" sz)
           (read_reg_addr rn ii)
           (read_reg_data_sz sz rt ii)
-          Dir.W (rmw_to_read rmw) ii
+          Dir.W (rmw_to_read rmw) ii (fun a -> a >>= M.ignore >>= B.next1T)
 
       let ldop op sz rmw rs rt rn ii =
         let open AArch64 in
@@ -3460,53 +3543,8 @@ Arguments:
 (* Instruction fetch *)
 (*********************)
 
-      let make_label_value proc lbl_str =
-        A.V.cstToV (Constant.mk_sym_virtual_label proc lbl_str)
-
-      let read_loc_instr a ii =
-        M.read_loc Port.No (mk_fetch Annot.N) a ii
-
-(************)
-(* Branches *)
-(************)
-
-      let v2tgt =
-        let open Constant in
-        function
-        | M.A.V.Val (Symbolic (Virtual {name=Symbol.Label (_, lbl); _})) -> Some (B.Lbl lbl)
-        | M.A.V.Val (Concrete i) -> Some (B.Addr (M.A.V.Cst.Scalar.to_int i))
-        | _ -> None
-
-      let do_indirect_jump test bds i ii v =
-        match  v2tgt v with
-        | Some tgt ->
-          commit_bcc ii
-          >>= fun () -> M.unitT (B.Jump (tgt,bds))
-        | None ->
-           match v with
-           | M.A.V.Var(_) as v ->
-              let lbls = get_exported_labels test in
-              if Label.Full.Set.is_empty lbls  then begin
-                if C.variant Variant.Telechat then M.unitT () >>! B.Exit
-                else
-                  Warn.fatal "Could find no potential target for indirect branch %s \
-                    (potential targets are statically known labels)" (AArch64.dump_instruction i)
-                end
-              else
-                commit_bcc ii
-                >>= fun () -> B.indirectBranchT v lbls bds
-        | _ -> Warn.fatal
-            "illegal argument for the indirect branch instruction %s \
-            (must be a label)" (AArch64.dump_instruction i)
-
-      let get_link_addr test ii =
-        let lbl =
-          let a = ii.A.addr + 4 in
-          let lbls = test.Test_herd.entry_points a in
-          Label.norm lbls in
-        match lbl with
-        | Some l -> ii.A.addr2v l
-        | None ->  V.intToV (ii.A.addr + 4)
+      let read_loc_instr a ac ii =
+        M.read_loc Port.No (mk_fetch Annot.N ac) a ii
 
 (*******************************)
 (* Pointer Authentication Code *)
@@ -3562,7 +3600,7 @@ Arguments:
         if pac then begin
           let (>>!) = M.(>>!) in
 
-          let lbl_v = get_instr_label ii in
+          let lbl_v = get_instr_label ii.A.proc ii in
           let mfault =
               set_elr_el1 lbl_v ii >>|
               mk_fault None Dir.R Annot.N ii
@@ -3591,6 +3629,371 @@ Arguments:
         M.op1 (Op.ArchOp1 AArch64Op.MakeCanonical) v >>= fun v ->
         write_reg_dest r v ii >>= fun v ->
         B.nextSetT r v
+
+(*************************)
+(* Guarded Control Stack *)
+(*************************)
+      module GCSSem = struct
+        let mk_fault action ft ii =
+          emit_fault None action Dir.R Annot.N (Some ft) None ii
+
+        let get_cap mask v =
+          M.op1 Op.Offset v >>= M.op Op.And mask
+
+        let set_cap cap mask v =
+          let invert = V.op1 Op.Inv mask in
+          M.op1 Op.Offset v >>= fun offset ->
+            (* Strip offset *)
+            M.op Op.Sub v offset >>|
+            (* Extract index *)
+            (M.op Op.And offset invert >>|
+              (* Make sure cap fits into mask *)
+              M.op Op.And cap mask >>= fun (index, cap) ->
+                (* Make new offset *)
+                M.op Op.Or index cap) >>= fun (v, offset) ->
+                (* Write it back *)
+                M.op Op.Add v offset
+
+        let reset_cap = set_cap V.zero
+        let make_valid = set_cap V.one (V.intToV 0xfff)
+        let make_inprogress = set_cap (V.intToV 0x5) (V.intToV 0x7)
+
+        let read ac an a ii = do_read_mem_ret quad an AArch64Explicit.(NExp GCS) ac a ii
+        and write ac an a v ii = do_write_mem quad an AArch64Explicit.(NExp GCS) ac a v ii
+      end
+
+
+      let gcsstr r1 r2 ii =
+        let an = Annot.N in
+        let mop ac a v = GCSSem.write ac an a v ii in
+        lift_memop r2 Dir.W true false
+        (fun ac ma mv ->
+          if is_branching && Access.is_physical ac then
+            M.bind_ctrldata_data ma mv (fun a v -> mop ac a v)
+          else
+            ma >>| mv >>= fun (a,v) -> mop ac a v
+        )
+        (to_perms "w" quad)
+        (read_reg_addr r2 ii)
+        (read_reg_data r1 ii)
+        an
+        ii
+
+      let gcspushm rs ii =
+        let open AArch64Base in
+        let an = Annot.N
+        and rA = SysReg GCSPR_EL1
+        and off = MachSize.nbytes quad in
+        let m =
+          read_reg_addr rA ii >>= fun addr ->
+            M.add addr (V.intToV (-off)) >>= fun a_virt ->
+            let mop ac a _v =
+                write_reg rA a_virt ii >>|
+                M.data_input_next
+                (read_reg_data rs ii)
+                (fun v -> GCSSem.write ac an a v ii)
+                >>= M.ignore >>= fun () -> B.nextSetT rA a_virt in
+            lift_memop rA Dir.W true false
+            (fun ac ma mv ->
+              if is_branching && Access.is_physical ac then
+                M.bind_ctrldata_data ma mv (fun a v -> mop ac a v)
+              else
+                ma >>| mv >>= fun (a,v) -> mop ac a v)
+            (to_perms "w" quad)
+            (M.unitT a_virt)
+            mzero
+            an
+            ii in
+        (* Value writen to GCSPR depends on previous read *)
+        let read e = (is_this_reg rA e) && (E.is_reg_load e ii.A.proc)
+        and write e = (is_this_reg rA e) && (E.is_reg_store e ii.A.proc) in
+        M.short read write m
+
+      let gcspopm rd ii =
+        let open AArch64Base in
+        let an = Annot.N
+        and rA = SysReg GCSPR_EL1
+        and off = MachSize.nbytes quad in
+        let m =
+        read_reg_addr rA ii >>= fun a_virt ->
+          let mop ac a =
+            let m = GCSSem.read ac an a ii >>= fun v ->
+              let commit = commit_pred_txt (Some "PCAligned") ii in
+              let mok =
+                let(>>*=) = M.bind_control_set_data_input_first in
+                commit >>*= fun () ->
+                  M.add a_virt (V.intToV off) >>= fun new_addr ->
+                    write_reg rd v ii >>|
+                    write_reg rA new_addr ii
+                    >>= M.ignore >>= B.next1T in
+              let mask = V.intToV 0x3 in
+               GCSSem.get_cap mask v >>= fun cap ->
+               M.delay_kont "gcspopm(fault)"
+               (M.op Op.Ne cap V.zero)
+               (fun nonzero action ->
+                 let open FaultType.AArch64 in
+                 let mno = GCSSem.mk_fault action (GCSCheck POPM) ii in
+                 let mok = action >>= fun _ -> mok in
+                 M.choiceT nonzero mno mok)
+            in
+            (* Write to Rd depends on read from Shadow Stack *)
+            M.short (E.is_mem_load) (is_this_reg rd) m in
+          lift_memop rA Dir.R false false
+          (fun ac ma _mv ->
+            if Access.is_physical ac then
+              M.bind_ctrldata ma (mop ac)
+            else
+              ma >>= mop ac)
+          (to_perms "r" quad)
+          (M.unitT a_virt)
+          mzero
+          an
+          ii in
+        (* Value writen to GCSPR depends on previous read *)
+        let read e = (is_this_reg rA e) && (E.is_reg_load e ii.A.proc)
+        and write e = (is_this_reg rA e) && (E.is_reg_store e ii.A.proc) in
+        M.short read write m
+
+      (*
+       * Basically copy of lift_memop which allows mop to drive control flow
+       * (handy for BL{R}/RET instructions with GCS enabled)
+       *)
+      let lift_shadow_stack dir updatedb mop ma mv an ii =
+        let domain = DISide.Data in
+        let mop = apply_mv mop mv in
+        if kvm then
+          let mphy ma a_virt =
+            let ma = get_oa a_virt ma in
+              mop Access.PHY ma
+          in
+          (* lift_kvm dir updatedb mop ma an ii mphy in *)
+          let mfault ma a ft = emit_fault (Some a) ma dir an ft None ii in
+          let maccess a ma =
+            check_ptw ii.AArch64.proc dir updatedb false a ma an ii
+            (mop (Access.PTE domain) ma)
+            mphy
+            mfault
+            domain in
+          M.delay_kont "shadow_stack"
+          ma
+          (fun a ma ->
+            match Act.access_of_location_std (A.Location_global a) with
+            | Access.VIR|Access.PTE _ when not (A.V.is_instrloc a) ->
+              maccess a ma
+            | ac ->
+              mop ac ma)
+        else
+          mop Access.VIR ma
+
+      let blop v_ret write_linkreg branch bop ii =
+        let open AArch64Base in
+        let an = Annot.N
+        and rA = SysReg GCSPR_EL1
+        and off = MachSize.nbytes quad in
+        read_reg_addr rA ii >>= fun addr -> M.add addr (V.intToV (-off)) >>= fun a_virt ->
+          let mop ac a v =
+            GCSSem.write ac an a v ii >>|
+            write_reg rA a_virt ii >>|
+            write_linkreg >>= M.ignore in
+          lift_shadow_stack Dir.W true
+          (fun ac ma mv ->
+            let m =
+              if is_branching && Access.is_physical ac then
+                M.bind_ctrldata_data ma mv (fun a v -> bop (mop ac a v) branch)
+              else
+                ma >>| mv >>= fun (a,v) -> bop (mop ac a v) branch
+            in
+            (* Value writen to GCSPR depends on previous read *)
+            let read e = (is_this_reg rA e) && (E.is_reg_load e ii.A.proc)
+            and write e = (is_this_reg rA e) && (E.is_reg_store e ii.A.proc) in
+            M.short read write m)
+          (M.unitT a_virt)
+          (M.unitT v_ret)
+          an
+          ii
+
+      let retop test i r ii =
+        let open AArch64Base in
+        let an = Annot.N
+        and rA = SysReg GCSPR_EL1
+        and off = MachSize.nbytes quad in
+        read_reg_addr rA ii >>= fun a_virt ->
+          lift_shadow_stack Dir.R false
+          (fun ac ma mv ->
+            let m =
+              mv >>|
+              (let(>>=) = if Access.is_physical ac then M.bind_ctrldata else (>>=) in
+                ma >>= fun addr ->
+                  GCSSem.read ac an addr ii) >>= fun (target,v) ->
+                    let commit =
+                      let cond = Printf.sprintf "target==%d:%s" ii.A.proc (A.pp_reg r) in
+                        commit_pred_txt (Some cond) ii in
+                    let mok =
+                      let(>>*=) = M.bind_control_set_data_input_first in
+                      commit >>*= fun () ->
+                        (M.add a_virt (V.intToV off) >>= fun new_addr ->
+                          write_reg rA new_addr ii) >>|
+                        do_indirect_jump test [] i ii target >>= fun (_, b) -> M.unitT b in
+                    M.delay_kont "ret(fault)"
+                    (M.op Op.Ne v target)
+                    (fun cond action ->
+                      let open FaultType.AArch64 in
+                      let mno = GCSSem.mk_fault action (GCSCheck PRET) ii in
+                      let mok = action >>= fun _ -> mok in
+                      M.choiceT cond mno mok)
+              in
+              (* Value writen to GCSPR depends on previous read *)
+              let read e = (is_this_reg rA e) && (E.is_reg_load e ii.A.proc)
+              and write e = (is_this_reg rA e) && (E.is_reg_store e ii.A.proc) in
+              let m = M.short read write m in
+              (* Branch depends on destination register (or LR) *)
+              M.short (is_this_reg r) (E.is_bcc) m)
+          (M.unitT a_virt)
+          (read_reg_ord r ii)
+          an
+          ii
+
+      let gcsss1 r ii =
+        let open AArch64Base in
+        let an = Annot.X
+        and rA = SysReg GCSPR_EL1 in
+        M.delay_kont "gcsss1"
+        (read_reg_addr r ii)
+        (fun incoming ma ->
+          (* Valid cap entry is expected *)
+          let cmpoperand = read_reg_data r ii >>= GCSSem.make_valid in (* incoming_pointer[63:12]:'000000000001' *)
+          let cond2 = Some "(data==cmpoperand)" in
+          let branch = commit_pred_txt cond2 ii in
+          let update data =
+             GCSSem.make_valid incoming >>= fun v ->
+              let(>>*=) = M.bind_control_set_data_input_first in
+              let mok =
+                branch >>*=
+                fun () -> write_reg rA incoming ii >>= fun () -> B.nextSetT rA incoming in
+              M.op Op.Eq data v >>= fun cond ->  (* if data == cmpoperand then                             *)
+              M.assertT cond mok >>= M.ignore   (*     SetCurrentGCSPointer(incoming_pointer[63:3]:'000'); *)
+          in
+          let fault data =
+             GCSSem.make_valid incoming >>= fun v ->
+              M.delay_kont "gcsss1(fault)"
+              (M.op Op.Ne data v)             (* if data != cmpoperand then                   *)
+              (fun cond action ->
+                let open FaultType.AArch64 in (*     GCSDataCheckException(GCSInstType_SS1);  *)
+                let mno = GCSSem.mk_fault action (GCSCheck SS1) ii in
+                M.assertT cond mno >>= M.ignore)
+          in
+          let branch a =
+            let cond1 = Some (Printf.sprintf "Valid([%s])" (V.pp_v a)) in
+            commit_pred_txt cond1 ii in
+          let shortcut =
+            let read_reg e =
+              let is_reg = is_this_reg r e
+              and is_load = E.is_reg_load e ii.A.proc in
+              is_reg && is_load
+            in
+            M.short read_reg (E.is_pred_txt cond2) in
+          let mop_fail_no_wb ac ma _ =
+            (* GCSSS1 fails, there is no Explicit Write Effect *)
+            let read_mem a = GCSSem.read ac an a ii in
+            let noact _ _ = M.mk_singleton_es Act.NoAction ii in
+            M.altT (
+              M.aarch64_cas_no (Access.is_physical ac) ma cmpoperand update read_mem noact branch M.neqT |> shortcut
+            )(
+              M.aarch64_cas_no (Access.is_physical ac) ma cmpoperand fault read_mem noact branch M.neqT |> shortcut
+            )
+          in
+          let mop_fail_with_wb ac ma _ =
+            (* GCSSS1 fails, there is an Explicit Write Effect writing back *)
+            (* the value that is already in memory                          *)
+            let read_mem a = GCSSem.read ac Annot.X a ii
+            and write_mem a v = GCSSem.write ac Annot.X a v ii in
+            M.altT(
+                M.aarch64_cas_no (Access.is_physical ac) ma cmpoperand update read_mem write_mem branch M.neqT |> shortcut
+              )(
+                M.aarch64_cas_no (Access.is_physical ac) ma cmpoperand fault read_mem write_mem branch M.neqT |> shortcut
+              )
+          in
+          let mop_success ac ma mv =
+            (* GCSSS1 succeeds, there is an Explicit Write Effect *)
+            (* mv is read new value from reg, not important       *)
+            (* as this code is not executed in morello mode       *)
+            (* In-progress cap entry should be stored if the comparison is successful *)
+            let operand = mv >>= GCSSem.make_inprogress (* outgoing_pointer[63:3]:'101' *)
+            and read_mem a = GCSSem.read ac Annot.X a ii
+            and write_mem a v = GCSSem.write ac Annot.X a v ii in
+           M.altT(
+             M.aarch64_cas_ok (Access.is_physical ac) ma cmpoperand operand update read_mem write_mem branch M.eqT |> shortcut
+            )(
+              M.aarch64_cas_ok (Access.is_physical ac) ma cmpoperand operand fault read_mem write_mem branch M.eqT |> shortcut
+            )
+          in
+          let mv = read_reg_data rA ii in
+          do_cas quad Annot.N r ma mv mop_success mop_fail_with_wb mop_fail_no_wb false ii)
+
+    let gcsss2 r ii =
+      let open AArch64Base in
+      let an = Annot.N
+      and rA = SysReg GCSPR_EL1
+      and off = MachSize.nbytes quad in
+      let m =
+      M.delay_kont "gcsss2"
+      (read_reg_addr rA ii)
+      (fun a_virt ma ->
+      let mop ac incoming =
+        let m = GCSSem.read ac Annot.A incoming ii >>= fun outgoing ->
+          let mask = V.intToV 0x7 in
+          GCSSem.get_cap mask outgoing >>= fun cap ->
+            let(>>*=) = M.bind_control_set_data_input_first in
+            let commit =
+              let cond = Printf.sprintf "InProgress([%s])" (V.pp_v incoming) in
+              commit_pred_txt (Some cond) ii in
+            let mok =
+              commit >>*= fun () ->
+                let mop ac a outgoing =
+                  (GCSSem.reset_cap mask outgoing >>= M.add (V.intToV (-off)) >>= fun v -> write_reg r v ii) >>|
+                   (M.add a_virt (V.intToV (off)) >>= fun new_addr ->
+                      write_reg rA new_addr ii) >>|
+                      (GCSSem.make_valid outgoing >>= fun outgoing_value -> GCSSem.write ac Annot.L a outgoing_value ii)
+                in
+                lift_memop r Dir.W true false
+                (fun ac ma mv ->
+                  if is_branching && Access.is_physical ac then
+                    M.bind_ctrldata_data ma mv (fun a v -> mop ac a v)
+                  else
+                    ma >>| mv >>= fun (a,v) -> mop ac a v)
+                (to_perms "w" quad)
+                (GCSSem.reset_cap mask outgoing >>= M.add (V.intToV (-off)))
+                (M.unitT outgoing)
+                an
+                ii in
+            let inprogress = V.intToV 0x5 in
+            M.delay_kont "gcsss2(fault)"
+            (M.op Op.Ne cap inprogress)
+            (fun notvalid action ->
+              let open FaultType.AArch64 in
+              let mno = GCSSem.mk_fault action (GCSCheck SS2) ii in
+              let mok = action >>= fun _ -> mok in
+              M.choiceT notvalid mno mok)
+          in
+        (* Register write and write to other stack depend on load from Shadow Stack *)
+        let store e = (E.is_mem_store e) || (is_this_reg r e) in
+        M.short (E.is_mem_load) store m in
+      lift_memop rA Dir.R false false
+      (fun ac ma _mv ->
+        if Access.is_physical ac then
+          M.bind_ctrldata ma (mop ac)
+        else
+          ma >>= mop ac)
+      (to_perms "r" quad)
+      ma
+      mzero
+      an
+      ii) in
+      (* Value writen to GCSPR depends on previous read *)
+      let read e = (is_this_reg rA e) && (E.is_reg_load e ii.A.proc)
+      and write e = (is_this_reg rA e) && (E.is_reg_store e ii.A.proc) in
+      M.short read write m
+
 
 (********************)
 (* Main entry point *)
@@ -3630,26 +4033,33 @@ Arguments:
            let v_ret = get_link_addr test ii in
            let write_linkreg = write_reg AArch64Base.linkreg v_ret ii in
            let branch () = M.unitT (B.Jump (tgt2tgt ii l,[AArch64Base.linkreg,v_ret])) in
-           M.bind_order write_linkreg branch
-
+           let bop a b = M.bind_order a b in
+           if gcs then
+            blop v_ret write_linkreg branch bop ii
+           else
+            bop write_linkreg branch
         | I_BR r as i ->
             read_reg_ord r ii >>= do_indirect_jump test [] i ii
-
         | I_BLR r as i ->
            let v_ret = get_link_addr test ii in
            let read_rn = read_reg_ord r ii in
            let branch = read_rn >>= do_indirect_jump test [AArch64Base.linkreg,v_ret] i ii in
            let write_linkreg = write_reg AArch64Base.linkreg v_ret ii in
-           write_linkreg >>| branch >>= fun (_, b) -> M.unitT b
+           let bop a b = a >>| b >>= fun (_, b) -> M.unitT b in
+           if gcs then
+            blop v_ret write_linkreg branch bop ii
+           else
+            bop write_linkreg branch
         | I_RET None when C.variant Variant.Telechat ->
            M.unitT B.Exit
         | I_RET ro as i ->
             let r = match ro with
             | None -> AArch64Base.linkreg
             | Some r -> r in
-            read_reg_ord r ii
-            >>= do_indirect_jump test [] i ii
-
+              if gcs then
+                retop test i r ii
+              else
+                read_reg_ord r ii >>= do_indirect_jump test [] i ii
         | I_ERET ->
            let eret_to_addr v =
               match v2tgt v with
@@ -4347,7 +4757,7 @@ Arguments:
               (to_perms "tw" MachSize.S128)
               (read_reg_addr rn ii)
               (read_reg_ord rt ii)
-              Dir.W Annot.N ii
+              Dir.W Annot.N ii (fun a -> a >>= M.ignore >>= B.next1T)
         | I_LDCT(rt,rn) ->
             check_morello inst ;
             (* NB: only 1 access implemented out of the 4 *)
@@ -4367,7 +4777,7 @@ Arguments:
               (read_reg_addr rn ii)
               mzero
               Dir.R Annot.N
-              ii
+              ii (fun a -> a >>= M.ignore >>= B.next1T)
         | I_UNSEAL(rd,rn,rm) ->
             check_morello inst ;
             !(begin
@@ -4409,10 +4819,10 @@ Arguments:
            begin
              match lbl with
              | Some lbl ->
-                let v = ii.A.addr2v lbl in
+                let v = ii.A.addr2v ii.A.proc lbl in
                 write_reg_dest r v ii >>= nextSet r
              | None ->
-                (* Delay error,  only a poor fix.
+                (* Delay error, only a poor fix.
                    A complete possible fix would be
                    having code addresses as values *)
                 M.failT
@@ -4520,6 +4930,10 @@ Arguments:
            >>= nextSet rd
         (* Barrier *)
         | I_FENCE b ->
+            begin match b with
+            | AArch64Base.GCSB -> check_gcs inst
+            | _ -> ()
+            end;
             !(create_barrier b ii)
               (* Conditional selection *)
         | I_CSEL (var,r1,r2,r3,c,op) ->
@@ -4647,7 +5061,7 @@ Arguments:
            let (>>!) = M.(>>!) in
            let ft = Some FaultType.AArch64.UndefinedInstruction in
            let m_fault = mk_fault None Dir.R Annot.N ii ft None in
-           let lbl_v = get_instr_label ii in
+           let lbl_v = get_instr_label ii.A.proc ii in
            m_fault >>| set_elr_el1 lbl_v ii
            >>! B.fault [AArch64Base.elr_el1, lbl_v]
 (* Pointer Anthentication Code `FEAT_Pauth2` *)
@@ -4657,6 +5071,22 @@ Arguments:
             do_aut key rd rn ii
         | I_XPACI r | I_XPACD r ->
             do_xpac r ii
+(* Guarded Control Stack *)
+        | I_GCSPOPM rd ->
+          check_gcs inst;
+          gcspopm rd ii
+        | I_GCSPUSHM rs ->
+          check_gcs inst;
+          gcspushm rs ii
+        | I_GCSSTR (r1,r2) ->
+          check_gcs inst;
+          gcsstr r1 r2 ii
+        | I_GCSSS1 r ->
+          check_gcs inst;
+          gcsss1 r ii
+        | I_GCSSS2 r ->
+          check_gcs inst;
+          gcsss2 r ii
 (*  Cannot handle *)
         (* | I_BL _|I_BLR _|I_BR _|I_RET _ *)
         | (I_STG _|I_ST2G _|I_STZG _|I_STZ2G _
@@ -4679,57 +5109,165 @@ Arguments:
             | _ -> k)
           test.Test_herd.init_state []
 
+      let get_instr_ptevals test =
+        let open Constant in
+        let open AArch64PteVal in
+        AArch64.state_fold
+          (fun _ v k ->
+            match v with
+            | V.Val (PteVal pte_v) -> begin
+              let lbl_opt =
+                pte_v.oa
+                |> OutputAddress.as_physical
+                |> fun o -> Option.bind o Misc.str_as_label in
+              match lbl_opt with
+              | Some lbl -> lbl::k
+              | None -> k
+              end
+            | _ -> k)
+          test.Test_herd.init_state []
+
+      let lift_fetch rA (* Base address register *)
+            dir updatedb
+            mop
+            perms ma mv an ii =
+        let domain = DISide.Instr in
+        do_lift_memop rA dir updatedb false mop perms ma mv an ii Fun.id domain
+
+(* Test all possible instructions, when appropriate *)
+      let mk_mop_fetch exposed_page exposed_label test ii =
+        let module InstrSet = AArch64.V.Cst.Instr.Set in
+        let relevant_pagelbls = get_instr_ptevals test in
+       
+        let default_cands =
+          InstrSet.empty
+          |> InstrSet.add ii.A.inst
+        in
+        let exposed_page_cands =
+          (* When an address can get remapped, consider the possibility of
+           * fetching instructions from other relevant pages *)
+          if exposed_page then
+            let offset = (ii.A.addr mod Pseudo.proc_size) mod Pseudo.page_size in
+            relevant_pagelbls
+            |> List.map (fun (_,lbl) ->
+                let base = Label.Map.find lbl test.Test_herd.program in
+                let cand_a = base + offset in
+                let cand_i = match IntMap.find cand_a test.Test_herd.code_segment with
+                | (_,(_,i)::_) -> i.A.CodeInstr.instr
+                (* this case means that we have found a relevant page, but it
+                does not have an instruction -- currently throws an error, but
+                a convention to assume NOP could be envisioned *)
+                | _ -> Warn.user_error "Instruction not found by the address %d" cand_a
+                in
+                cand_i)
+             |> InstrSet.of_list
+          else InstrSet.empty
+        in
+        let potentially_exposed_label =
+          (* When an address can get remapped, check if the possible remapped
+           * addresses needs the ifetch logic *)
+          let no_remap_case = exposed_label ii.A.addr in
+          if exposed_page then
+            let offset = (ii.A.addr mod Pseudo.proc_size) mod Pseudo.page_size in
+            relevant_pagelbls
+            |> List.map (fun (_,lbl) ->
+                let base = Label.Map.find lbl test.Test_herd.program in
+                let cand_a = base + offset in
+                exposed_label cand_a)
+            |> List.fold_left (fun acc a -> acc || a) no_remap_case
+          else no_remap_case
+        in
+        let exposed_label_cands =
+          (if potentially_exposed_label then
+            get_overwriting_instrs test
+            |> InstrSet.of_list (* optimization to consider only possible instruction overwrites *)
+            |> InstrSet.filter AArch64.can_overwrite (* for testing purposes *)
+          else InstrSet.empty)
+        in
+        let cands =
+          default_cands
+          |> InstrSet.union exposed_page_cands
+          |> InstrSet.union exposed_label_cands
+        in
+        (* Shadow default control sequencing operator *)
+        let(>>*=) = M.bind_control_set_data_input_first in
+        let mop ac a =
+          read_loc_instr (A.Location_global a) ac ii
+          >>= fun actual_val ->
+            InstrSet.fold
+              (fun inst k ->
+                M.op Op.Eq actual_val (V.instructionToV inst) >>==
+                fun cond -> M.choiceT cond
+                    (commit_pred_txt (Some "decode") ii >>*=
+                      fun () -> do_build_semantics test inst ii)
+                    k)
+              cands
+              begin
+              (* Anything else than a legit instruction is a failure *)
+                let (>>!) = M.(>>!) in
+                let m_fault = mk_fault None Dir.R Annot.N ii
+                    (Some FaultType.AArch64.UndefinedInstruction)
+                    None in
+                let lbl_v = get_instr_label ii.A.proc ii in
+                commit_pred_txt (Some "decode") ii
+                  >>*= fun () -> m_fault >>| set_elr_el1 lbl_v ii
+                  >>! B.Fault (false,[AArch64Base.elr_el1, lbl_v])
+              end in
+        fun ac ma _ -> (
+          if Access.is_physical ac then
+            M.bind_ctrldata ma (mop ac)
+          else
+            ma >>= mop ac
+        )
 
 (* Test all possible instructions, when appropriate *)
       let check_self test ii =
         let module InstrSet = AArch64.V.Cst.Instr.Set in
-        let inst = ii.A.inst in
-        let lbls = get_exported_labels test in
-        let is_exported =
+        let exp_pages = get_exposed_codepages test in
+        let is_on_exported_page =
+          match ii.A.rel_addr with
+          | Some (A.V.Val c) -> begin
+            let this_lbl = c in 
+            List.exists
+              (fun ttd_lbl ->
+                let this_triple = Constant.unmk_sym_virtual_label_with_offset this_lbl in
+                let ttd_triple = Constant.unmk_sym_virtual_label_with_offset ttd_lbl in
+                match (this_triple,ttd_triple) with
+                | (p1,s1,_),(p2,s2,_) ->
+                  (Misc.int_eq p1 p2) && (Misc.string_eq s1 s2)
+              ) exp_pages
+            end
+          | _ -> false
+        in
+
+        let lbl_exposed addr =
+          let labels = test.Test_herd.entry_points addr in
           Label.Set.exists
             (fun lbl ->
               Label.Full.Set.exists
                 (fun (_,lbl0) -> Misc.string_eq lbl lbl0)
-                lbls)
-            ii.A.labels in
-        if is_exported then
-          match Label.norm ii.A.labels with
-          | None -> assert false
-          | Some hd ->
-              let insts =
-                InstrSet.of_list
-                  (get_overwriting_instrs test) in
-              let insts =
-                InstrSet.add inst (InstrSet.filter AArch64.can_overwrite insts) in
-              (* Shadow default control sequencing operator *)
-              let(>>*=) = M.bind_control_set_data_input_first in
-              let a_v = make_label_value ii.A.fetch_proc hd in
-              let a = (* Normalised address of instruction *)
-                A.Location_global a_v in
-              read_loc_instr a ii
-                >>= fun actual_val ->
-                  InstrSet.fold
-                    (fun inst k ->
-                      M.op Op.Eq actual_val (V.instructionToV inst) >>==
-                      fun cond -> M.choiceT cond
-                          (commit_pred ii >>*=
-                            fun () -> do_build_semantics test inst ii)
-                          k)
-                    insts
-                    begin
-  (* Anything else than a legit instruction is a failure *)
-                      let (>>!) = M.(>>!) in
-                      let m_fault =
-                        mk_fault
-                          None Dir.R Annot.N ii
-                          (Some FaultType.AArch64.UndefinedInstruction)
-                          (Some "Invalid") in
-                      let lbl_v = get_instr_label ii in
-                      commit_pred ii
-                        >>*= fun () -> m_fault >>| set_elr_el1 lbl_v ii
-                        >>! B.fault [AArch64Base.elr_el1, lbl_v]
-                    end
-        else do_build_semantics test inst ii
+                (get_exported_labels test))
+            labels in
+
+        let needs_vmsa_for_ifetch = (* checks if the logic for VA remapping needed *)
+          kvm && self && is_on_exported_page in
+        let needs_ifetch = (* checks if the logic for instruction overwrite needed *)
+          (lbl_exposed ii.A.addr) && self in
+        if needs_ifetch || needs_vmsa_for_ifetch then
+          let mop_fetch = mk_mop_fetch is_on_exported_page lbl_exposed test ii in
+          let a_v =
+            if needs_vmsa_for_ifetch then begin
+              match ii.A.rel_addr with
+              | Some v -> v
+              | None -> Warn.fatal "Failure to identify the label corresponding to the start of a page holding the instruction %s by the address %d" (A.pp_instruction PPMode.Ascii ii.A.inst) ii.A.addr
+            end else get_instr_label ii.A.fetch_proc ii
+          in
+          lift_fetch AArch64.ZR Dir.R true
+            mop_fetch
+            (to_perms "r" MachSize.Word)
+          (M.unitT a_v) mzero Annot.N ii
+        else
+          do_build_semantics test ii.A.inst ii
 
       let build_semantics test ii =
         M.addT (A.next_po_index ii.A.program_order_index)
@@ -4738,7 +5276,21 @@ Arguments:
             else do_build_semantics test ii.A.inst ii
           end
 
-      let spurious_setaf v = test_and_set_af_succeeds v E.IdSpurious
+      let can_unset_af_loc e =
+        match E.access_of e with
+        | Some Access.(PTE _|PHY_PTE)
+          ->
+            begin
+              match E.location_of e,E.written_of e with
+              | Some (A.Location_global loc),Some v ->
+                  if E.is_explicit e && can_be_pt loc && can_af0 v then Some loc
+                  else None
+              | _ -> None
+            end
+        | _ -> None
+
+      let spurious_setaf ~value ~location =
+        test_and_set_af_succeeds value location E.IdSpurious DISide.Data
 
     end
 

@@ -1,4 +1,4 @@
-.PHONY: check-deps
+.DEFAULT_GOAL = all
 
 OS := $(shell uname)
 PREFIX=$$HOME
@@ -28,9 +28,9 @@ HERD_REGRESSION_TEST          = _build/default/internal/herd_regression_test.exe
 HERD_DIYCROSS_REGRESSION_TEST = _build/default/internal/herd_diycross_regression_test.exe
 HERD_CATALOGUE_REGRESSION_TEST = _build/default/internal/herd_catalogue_regression_test.exe
 HERD_ASSUMPTIONS_TEST		  = _build/default/internal/herd_assumptions_test.exe
-BENTO                         = _build/default/tools/bento.exe
 ASLREF                        = _build/default/asllib/aslref.exe
 CHECK_OBS                     = _build/default/internal/check_obs.exe
+
 all: build
 
 CATA_HERD_TEST_MODE := $(if $(ALL_TESTS), ,-fast)
@@ -48,11 +48,23 @@ build-release: Version.ml
 
 build: check-deps | just-build
 
-install:
+install-herdtools:
 	sh ./dune-install.sh $(PREFIX)
+
+build-aslref:
+	dune build -p aslref --profile $(DUNE_PROFILE)
+
+install-aslref:
+	# There are no lib files for aslref so we don't need dune-install.sh
+	dune install aslref --prefix $(PREFIX)
+
+install: install-herdtools
 
 uninstall:
 	sh ./dune-uninstall.sh $(PREFIX)
+
+uninstall-aslref:
+	dune uninstall aslref --prefix $(PREFIX)
 
 clean: dune-clean clean-asl-pseudocode clean-asldoc
 	rm -f Version.ml
@@ -66,6 +78,7 @@ versions: Version.ml
 
 # Dependencies.
 
+.PHONY: check-deps
 check-deps::
 	$(if $(shell which ocaml),,$(error "Could not find ocaml in PATH"))
 	$(if $(shell which menhir),,$(error "Could not find menhir in PATH; it can be installed with `opam install menhir`."))
@@ -258,11 +271,24 @@ test.self:
 		$(REGRESSION_TEST_MODE)
 	@ echo "herd7 AArch64 variant -self instructions tests: OK"
 
+test:: test.gcs
+test-local:: test.gcs
+test.gcs::
+	@ echo
+	$(HERD_REGRESSION_TEST) \
+		-j $(J) \
+		-herd-path $(HERD) \
+		-libdir-path ./herd/libdir \
+		-litmus-dir ./herd/tests/instructions/AArch64.gcs \
+		$(REGRESSION_TEST_MODE)
+	@ echo "herd7 AArch64 GCS instructions tests: OK"
+
 test:: test.kvm
 test-local:: test.kvm
 test.kvm:
 	@ echo
 	$(HERD_REGRESSION_TEST) \
+		-j $(J) \
 		-herd-path $(HERD) \
 		-libdir-path ./herd/libdir \
 		-litmus-dir ./herd/tests/instructions/AArch64.kvm \
@@ -613,6 +639,18 @@ ifetch-test:
 		$(REGRESSION_TEST_MODE)
 		@ echo "herd7 catalogue aarch64-ifetch tests: OK"
 
+cata-test:: x86_64-test
+x86_64-test:
+	@ echo
+	$(HERD_CATALOGUE_REGRESSION_TEST) \
+		-herd-timeout $(TIMEOUT) \
+		-j $(J) \
+		-herd-path $(HERD) \
+		-libdir-path ./herd/libdir \
+		-kinds-path catalogue/x86_64/kinds.txt \
+		-shelf-path catalogue/x86_64/shelf.py \
+		$(REGRESSION_TEST_MODE)
+		@ echo "herd7 catalogue x86_64 tests: OK"
 
 # Not in cata-test, too-long
 test-all:: vmsa-test
@@ -682,11 +720,30 @@ test.vmsa+mte:
 		$(REGRESSION_TEST_MODE)
 	@ echo "herd7 AArch64 VMSA+MTE instructions tests: OK"
 
+test:: test.vmsa+ifetch
+test-local:: test.vmsa+ifetch
+test.vmsa+ifetch:
+	@ echo
+	$(HERD_REGRESSION_TEST) \
+		-herd-path $(HERD) \
+		-libdir-path ./herd/libdir \
+		-litmus-dir ./herd/tests/instructions/AArch64.vmsa+ifetch \
+		-conf ./herd/tests/instructions/AArch64.vmsa+ifetch/vmsa+ifetch.cfg \
+		$(REGRESSION_TEST_MODE)
+	@ echo "herd7 AArch64 VMSA+ifetch instructions tests: OK"
+
 ### Diy tests, includes
+### - A `diyone7` generated syntax check
 ### - A `diy7` with `cycleonly` instance checks the cycle generations
 ### - Several `diycross7` + `herd7` instances, check if the generated litmus tests
 ###   are equivalent based on `herd7` result.
 diy-test:: | build
+diy-test:: diyone-basic-test
+diyone-basic-test:
+	@ echo
+	dune test gen/tests
+	@ echo "diy* basic test: OK"
+
 diy-test:: diy-baseline-cycleonly
 diy-baseline-cycleonly::
 	@ echo
@@ -962,18 +1019,16 @@ clean-asl-pseudocode:
 	@ $(MAKE) -C herd/libdir/asl-pseudocode clean
 
 .PHONY: asldoc
-asldoc: Version.ml
-	@ dune build -j $(J) --profile $(DUNE_PROFILE) $(BENTO) $(ASLREF)
-	@ $(MAKE) $(MFLAGS) -C asllib/doc all BENTO=$(CURDIR)/$(BENTO) ASLREF=$(CURDIR)/$(ASLREF)
+asldoc: build-aslref
+	@ $(MAKE) $(MFLAGS) -C asllib/doc all ASLREF=$(CURDIR)/$(ASLREF)
 
 .PHONY: clean-asldoc
 clean-asldoc:
 	@ $(MAKE) $(MFLAGS) -C asllib/doc clean
 
 .PHONY: type-check-asl
-type-check-asl: Version.ml
+type-check-asl: build-aslref
 	@ echo
-	@ dune build -j $(J) --profile $(DUNE_PROFILE) $(ASLREF)
 	@ $(MAKE) $(MFLAGS) -C herd/libdir/asl-pseudocode type-check ASLREF=$(CURDIR)/$(ASLREF)
 	@ echo "ASLRef type-checking of published Arm ASL code: OK"
 

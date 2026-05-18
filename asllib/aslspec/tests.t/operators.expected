@@ -8,16 +8,14 @@
 
 \newcommand\Bool[0]{ \hyperlink{type-Bool}{\textsf{Bool}} } % Generated from Bool
 \newcommand\N[0]{ \hyperlink{type-N}{\textsf{N}} } % Generated from N
-\newcommand\None[0]{ \hyperlink{constant-None}{\textsf{None}} } % Generated from None
 \newcommand\f[0]{ \hyperlink{relation-f}{\textit{f}} } % Generated from f
+\newcommand\none[0]{ \hyperlink{constant-none}{\textsf{none}} } % Generated from none
 
 % -------------------
 % Macros for elements
 % -------------------
 
-\DefineConstant{bot}{\texthypertarget{constant-bot}$\bot$} % EndDefineConstant
-
-\DefineConstant{None}{\texthypertarget{constant-None}$\None$} % EndDefineConstant
+\DefineConstant{none}{\texthypertarget{constant-none}$\none$} % EndDefineConstant
 
 \DefineConstant{empty_set}{\texthypertarget{constant-emptyset}$\emptyset$} % EndDefineConstant
 
@@ -40,9 +38,20 @@ The relation
 \]
 } % EndDefineRelation
 
-\DefineRule{f}{\begin{mathpar}
-\inferrule{ { { { \texttt{a}\intplus\texttt{b} } \equal \texttt{c} } } \\\\
+\DefineRule{f}{
+\begin{mathpar}
+\inferrule{ { { { \texttt{a}\intplus\texttt{b} } \equal \texttt{c} } } \hva\\
  { { \texttt{d} \eqdef { \ifthenelseop[H]{{ \texttt{a} \member \texttt{S} }}{\texttt{b}}{\texttt{c}} } } } }{
  { \f(\texttt{a}, \texttt{b}, \texttt{c}, \texttt{S}) \typearrow \texttt{d} } 
 }
-\end{mathpar}} % EndDefineRule
+\end{mathpar}
+} % EndDefineRule
+
+\DefineProse{f}{
+\AllApply
+  \begin{itemize}
+    \item the sum of \texttt{a} and \texttt{b} is equal to \texttt{c}
+    \item define \texttt{d} as: if \texttt{a} is in \texttt{S} then \texttt{b} else \texttt{c}
+    \item \textbf{the result is:} \texttt{d}.
+  \end{itemize}
+} % EndDefineProse

@@ -133,34 +133,11 @@ let pair_compare cmpx cmpy (x1,y1) (x2,y2) =
 
 let pair_eq eqx eqy (x1,y1) (x2,y2) =  eqx x1 x2 &&  eqy y1 y2
 
-let rec list_compare cmp xs ys = match xs,ys with
-  | [],[] -> 0
-  | [],_::_ -> -1
-  | _::_,[] -> 1
-  | x::xs,y::ys ->
-      begin match cmp x y with
-      | 0 -> list_compare cmp xs ys
-      | r -> r
-      end
-
-let rec list_eq eq xs ys = match xs,ys with
-  | [],[] -> true
-  | ([],_::_)|(_::_,[]) -> false
-  | x::xs,y::ys -> eq x y && list_eq eq xs ys
-
 let char_uppercase = Char.uppercase_ascii
 let lowercase = String.lowercase_ascii
 let uppercase = String.uppercase_ascii
 let capitalize = String.capitalize_ascii
 let uncapitalize = String.uncapitalize_ascii
-
-(** [string_starts_with ~prefix s] checks if string [s] starts with [prefix].
-  Normally available natively in Ocaml 4.13. *)
-let string_starts_with ~prefix s =
-  let prefix_len = String.length prefix in
-  let s_len = String.length s in
-  if prefix_len > s_len then false
-  else String.equal (String.sub s 0 prefix_len) prefix
 
 let to_c_name =
   let tr c = match c with
@@ -172,12 +149,6 @@ let to_c_name =
 let find_opt = List.find_opt
 let filter_map = List.filter_map
 let split_on_char = String.split_on_char
-
-let rec find_map f = function
-  | [] -> None
-  | x :: t ->
-      let res = f x in
-      if is_some res then res else find_map f t
 
 (********************)
 (* Position parsing *)
@@ -325,11 +296,24 @@ let nsplit n xs =
   let yss = do_rec xs (replicate n []) in
   List.map List.rev yss
 
-let rec group same xs = match xs with
-| [] -> []
-| x::xs ->
-    let xx,xs = List.partition (same x) xs in
-    (x::xx)::group same xs
+let group_sorted eq =
+  let rec do_rec x0 xs = match xs with
+    | [] -> [x0],[]
+    | x::xs ->
+        if eq x0 x then
+          let xs,xss = do_rec x xs in
+          x0::xs,xss
+        else
+          let xs,xss = do_rec x xs in
+          [x0],xs::xss in
+  function
+  | [] -> []
+  | x::xs ->
+      let xs,xss = do_rec x xs in
+      xs::xss
+
+let group cmp xs =
+  List.sort cmp xs |> group_sorted (fun x y -> cmp x y = 0)
 
 let group_iter same do_it xs =
   let xss = group same xs in
@@ -618,6 +602,16 @@ and go dir line (chans,ns as st) =
     | None -> next_iter st
   else Some (fconcat dir line,st)
 
+(*******************)
+(* Suffix genrator *)
+(*******************)
+
+let fold_suffix xs kont r =
+  let rec fold_rec r = function
+    | [] -> kont [] r
+    | _::ys as xs -> fold_rec (kont xs r) ys in
+  fold_rec r xs
+
 (********************)
 (* Subset generator *)
 (********************)
@@ -642,17 +636,32 @@ let fold_subsets xs kont r =
 (* cross product iteration *)
 (***************************)
 
-let fold_cross_gen add start xss kont r =
+(* Uttra generic, internal use *)
+let fold_cross_gen2 fold add start xss kont r =
  let rec fold_rec r ys xss = match xss with
   | [] -> kont ys r
   | xs::xss ->
-      List.fold_left
+      fold
         (fun r x -> fold_rec r (add x ys) xss)
         r xs in
  fold_rec r start (List.rev xss)
 
+let fold_cross_gen add start xss kont r =
+  fold_cross_gen2 List.fold_left  add start xss kont r
 
 let fold_cross xss = fold_cross_gen cons [] xss
+
+let fold_suffix_cross_gen madd start xss kont r =
+  let fold f r xs = fold_suffix xs (fun xs r -> f r xs) r in
+  fold_cross_gen2 fold madd start xss kont r
+
+let fold_suffix_cross xss = fold_suffix_cross_gen cons [] xss
+
+let fold_subsets_cross_gen  madd start xss kont r =
+  let fold f r xs = fold_subsets xs (fun xs r -> f r xs) r in
+  fold_cross_gen2 fold madd start xss kont r
+
+let fold_subsets_cross xss = fold_subsets_cross_gen cons [] xss
 
 (*******************)
 (* Simple bindings *)
@@ -747,6 +756,18 @@ let tr_physical = do_tr "phy_"
 let is_physical = is_prefix "phy_"
 let pp_physical = sprintf "PA(%s)"
 
+let is_labelstr s =
+  try
+    Scanf.sscanf s "%d:%s" (fun _ _ -> true)
+  with Scanf.Scan_failure _ ->
+    false
+
+let str_as_label s =
+  try
+    Scanf.sscanf s "%d:%s" (fun proc lblname -> Some (proc, lblname))
+  with Scanf.Scan_failure _ ->
+    None
+
 let add_valid = sprintf "valid_%s"
 let add_oa = sprintf "oa_%s"
 
@@ -822,3 +843,50 @@ let group_by_int get_key env =
        (IntMap.fold
           (fun _ env_p k -> List.rev env_p::k)
           m []))
+
+(************************************)
+(* Stdlib shims and other utilities *)
+(************************************)
+
+module List = struct
+  include List
+
+  let empty = []
+  let is_empty = function
+    | [] -> true
+    | _ -> false
+
+  let singleton x = [ x ]
+  let uniq ~eq l =
+    let rec uniq eq acc l =
+      match l with
+      | [] -> List.rev acc
+      | x :: xs when List.exists (eq x) xs -> uniq eq acc xs
+      | x :: xs -> uniq eq (x :: acc) xs
+    in
+    uniq eq [] l
+
+  module Syntax = struct
+    let (let*) = fun l f -> concat_map f l
+  end
+
+  let apply (fs : ('a -> 'b) list) (xs : 'a list) : 'b list =
+    let open Syntax in
+    let* f = fs in
+    let* x = xs in
+    [ f x ]
+end
+
+module Option = struct
+  include Option
+
+  let get_or_exn exn = function
+    | Some x -> x
+    | None -> raise exn
+
+  let apply f_opt x_opt =
+    let (let*) = Option.bind in
+    let* f = f_opt in
+    let* x = x_opt in
+    Some (f x)
+end

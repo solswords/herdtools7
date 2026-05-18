@@ -88,22 +88,18 @@ val pair_compare :
     ('a -> 'a -> int) -> ('b -> 'b -> int) -> 'a * 'b -> 'a * 'b -> int
 val pair_eq :
   ('a -> 'a -> bool) -> ('b -> 'b -> bool) -> 'a * 'b -> 'a * 'b -> bool
-val list_compare : ('a -> 'a -> int) -> 'a list -> 'a list -> int
-val list_eq : ('a -> 'a -> bool) -> 'a list -> 'a list -> bool
 
 val char_uppercase : char -> char
 val lowercase : string -> string
 val uppercase : string -> string
 val capitalize : string -> string
 val uncapitalize : string -> string
-val string_starts_with : prefix:string -> string -> bool
 
 (* strip characters to form a valid c variable/type/enum name *)
 val to_c_name : string -> string
 
 (* Backward compatibility *)
 val find_opt : ('a -> bool) -> 'a list -> 'a option
-val find_map : ('a -> 'b option) -> 'a list -> 'b option
 val split_on_char : char -> string -> string list
 val filter_map : ('a -> 'b option) -> 'a list -> 'b list
 (* Float pair (position) parsint *)
@@ -161,10 +157,10 @@ val nsplit : int -> 'a list -> 'a list list
    WARNING, correct only when duplicates are in sequence *)
 val rem_dups : ('a -> 'a -> bool) -> 'a list -> 'a list
 
-(* group elements, quadratic *)
-val group : ('a -> 'a -> bool) -> 'a list -> 'a list list
-val group_iter : ('a -> 'a -> bool) -> ('a -> 'a list -> unit) -> 'a list -> unit
-val group_iteri : ('a -> 'a -> bool) -> (int -> 'a -> 'a list -> unit) -> 'a list -> unit
+(* group elements, efficient*)
+val group : ('a -> 'a -> int) -> 'a list -> 'a list list
+val group_iter : ('a -> 'a -> int) -> ('a -> 'a list -> unit) -> 'a list -> unit
+val group_iteri : ('a -> 'a -> int) -> (int -> 'a -> 'a list -> unit) -> 'a list -> unit
 
 (* Check that f yields the same result on all list elements *)
 val check_same : ('a -> 'a -> bool) -> ('b -> 'a) -> 'b list -> 'a option
@@ -285,6 +281,20 @@ val fold_cross :  'a list list ->  ('a list -> 'b -> 'b) -> 'b -> 'b
 val fold_cross_gen :
     ('a -> 'b -> 'b) -> 'b -> 'a list list -> ('b -> 'c -> 'c) -> 'c -> 'c
 
+(* Similar, except that suffixes are selected *)
+
+val fold_suffix_cross : 'a list list -> ('a list list -> 'b -> 'b) -> 'b -> 'b
+
+val fold_suffix_cross_gen :
+  ('a list -> 'c -> 'c) -> 'c -> 'a list list -> ('c -> 'b -> 'b) -> 'b -> 'b
+
+(* Similar, except that subsets are selected *)
+
+val fold_subsets_cross : 'a list list -> ('a list list -> 'b -> 'b) -> 'b -> 'b
+
+val fold_subsets_cross_gen :
+  ('a list -> 'c -> 'c) -> 'c -> 'a list list -> ('c -> 'b -> 'b) -> 'b -> 'b
+
 (*******************)
 (* Simple bindings *)
 (*******************)
@@ -350,6 +360,8 @@ val pp_tagged : string -> int -> string
 val pp_tag : string -> string
 val add_tag : string -> string
 
+val is_labelstr : string -> bool
+val str_as_label : string -> (int * string) option
 (******************)
 (* Hash utilities *)
 (******************)
@@ -361,3 +373,35 @@ val mix : int -> int -> int -> int
 (*********************************)
 
 val group_by_int : ('k -> int option) -> ('k * 'v) list -> ('k * 'v) list list
+
+(************************************)
+(* Stdlib shims and other utilities *)
+(************************************)
+
+module List : sig
+  include module type of List
+
+  val apply : ('a -> 'b) t -> 'a t -> 'b t
+  val empty : 'a t
+  val concat_map : ('a -> 'b list) -> 'a list -> 'b list
+  val is_empty : 'a list -> bool
+  val singleton : 'a -> 'a t
+  (** [singleton x] returns the one-element list [[x]].
+      For compatibility with OCaml < 5.4. *)
+
+  val uniq : eq:('a -> 'a -> bool) -> 'a t -> 'a t
+  (** [uniq ~eq l] removes duplicates in [l] w.r.t the equality predicate [eq].
+      Complexity is quadratic in the length of the list, but the order
+      of elements is preserved. *)
+
+  module Syntax : sig
+    val (let*) : 'a list -> ('a -> 'b list) -> 'b list
+  end
+end
+
+module Option : sig
+  include module type of Option
+
+  val apply : ('a -> 'b) t -> 'a t -> 'b t
+  val get_or_exn : exn -> 'a option -> 'a
+end

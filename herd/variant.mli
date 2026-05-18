@@ -68,8 +68,6 @@ type t =
   | NoPteBranch
 (* Pte-Squared: all accesses through page table, including PT accesses *)
   | PTE2
-(* Generate extra spurious updates based upon load on pte. *)
-  | PhantomOnLoad
 (* Optimise Rf enumeration leading to rmw *)
   | OptRfRMW
 (* Allow some constrained unpredictable, behaviours.
@@ -82,6 +80,9 @@ type t =
 (* CacheType features *)
   | DIC
   | IDC
+(* Shadow stack
+   AArch64: Guarded Control Stack *)
+  | ShadowStack
 (* Have cat interpreter to optimise generation of co's *)
   | CosOpt
 (* Test something *)

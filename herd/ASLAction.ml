@@ -112,6 +112,10 @@ module Make (C: Config) (A : S) = struct
   (**************************************)
   (* Access to sub_components of events *)
   (**************************************)
+  let access_of = function
+    | Access (_,_,_,_,(_,_,a)) -> Some a
+    | Fault _|Barrier _|Branching _|CutOff _|NoAction
+      -> None
 
   let value_of =
     function
@@ -196,7 +200,7 @@ module Make (C: Config) (A : S) = struct
       -> assert false
 
   let is_pte_access = function
-    | Access (_,_,_,_,(_,_,Access.PTE)) -> true
+    | Access (_,_,_,_,(_,_,Access.PTE _)) -> true
     | Access _|Fault _|Branching _|Barrier _|CutOff _|NoAction
       -> false
 

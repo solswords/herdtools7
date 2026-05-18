@@ -22,6 +22,7 @@ module type S = sig
   val pp : t -> string (* Pretty print *)
   val parse : MiscParser.fault_type -> t
   val compare : t -> t -> int
+  val matches : t -> t -> bool
 end
 
 module type AArch64Sig = sig
@@ -31,8 +32,19 @@ module type AArch64Sig = sig
     | Permission  (* db: 0 *)
     | Exclusive   (* memattr <> sharedWB *)
 
+  type gcs_t =
+    | PRET
+    | POPM
+    | PRETAA
+    | PRETAB
+    | SS1
+    | SS2
+    | POPCX
+    | POPX
+
   type t =
-    | MMU of mmu_t
+    | MMU of DISide.t * mmu_t
+    | GCSCheck of gcs_t
     | TagCheck
     | UndefinedInstruction
     | SupervisorCall
