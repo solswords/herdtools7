@@ -1591,7 +1591,8 @@
          :t_enum (t_enum (mergesort x.elts))
          :t_tuple (t_tuple (tuple-type-normalize x.types))
          :t_array (array_index-case x.index
-                    :arraylength_expr (t_array x.index (ty-normalize x.type))
+                    :arraylength_expr (t_array (arraylength_expr (int-literal-expr-normalize x.index.length))
+                                               (ty-normalize x.type))
                     :arraylength_enum (t_array (arraylength_enum x.index.name
                                                                  (mergesort x.index.elts))
                                                (if (consp x.index.elts)
@@ -1637,6 +1638,7 @@
         (record-type-normalize (cdr keys) fields))))
   ///
   (verify-guards ty-normalize)
+  
 
   (local (defthm key-ord-values-whe-emptyp
            (implies (omap::emptyp x)
