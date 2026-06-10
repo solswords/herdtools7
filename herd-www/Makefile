@@ -1,5 +1,5 @@
 CAT2HTML7=$(if $(shell which cat2html7), cat2html7, ../_build/default/tools/cat2html.exe)
-AARCH64_BOOKS= aarch64 aarch64-ifetch aarch64-mixed aarch64-MTE aarch64-MTE-mixed aarch64-VMSA aarch64-ETS2 aarch64-faults
+AARCH64_BOOKS= aarch64 aarch64-ifetch aarch64-mixed aarch64-MTE aarch64-MTE-mixed aarch64-VMSA aarch64-ETS2 aarch64-faults aarch64-readers-guide
 BOOKS= $(AARCH64_BOOKS) bpf x86 linux
 WWW_CATALOGUE=www/catalogue
 HERD_CATALOGUE=../catalogue
@@ -34,15 +34,21 @@ $(WWW_CATALOGUE)/$1/:
 .PHONY:: $(WWW_CATALOGUE)/$1/
 endef
 tst:
+# 	generate_names.ml returns pairs of source and destination paths
+# 	for the dependencies required to run herd in the browser (eg.
+# 	files inside the directories in CATINCLUDES and ARM_ARM_RELEASES).
+# 	They are separated by tabs for robustness, hence the IFS override.
+# 	This also applies to the weblib target, which also performs the copies.
 	ocaml generate_names.ml -norec $(ENV_PAIRS) $(CATINCLUDES) | \
-	while read a b; do echo "rel=($$a), src=($$b)" ; done
+	while IFS="$$(printf '\t')" read -r dest src; do \
+		echo "dest=($$dest), src=($$src)" ; done
 weblib:
 	@echo '** INSTALL ' $(WWW_LIB) && mkdir -p $(WWW_LIB)
 	@ocaml generate_names.ml -norec $(ENV_PAIRS) $(CATINCLUDES) | \
-		while IFS="$$(printf '\t')" read -r rel src; do \
-			mkdir -p "$(WWW_LIB)/$$(dirname "$$rel")" && \
-			cp "$$src" "$(WWW_LIB)/$$rel" && \
-			$(CAT2HTML7) "$(WWW_LIB)/$$rel" ; \
+		while IFS="$$(printf '\t')" read -r dest src; do \
+			mkdir -p "$(WWW_LIB)/$$(dirname "$$dest")" && \
+			cp "$$src" "$(WWW_LIB)/$$dest" && \
+			$(CAT2HTML7) "$(WWW_LIB)/$$dest" ; \
 		done
 	@find $(WWW_LIB) -type d -exec cp ./cat.css {}/cat.css \;
 

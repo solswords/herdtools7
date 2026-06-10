@@ -83,6 +83,7 @@ open C.R
   let parse_argument_list input_argument_list =
     List.map parse_argument input_argument_list
     |> List.flatten
+    |> remove_invalid_relaxes
 
   module AltConfig = struct
     include O
@@ -194,6 +195,7 @@ let () =
   | None -> ()
   | Some s -> exec_conf s
   end;
+  Config.validate_variant ();
   Config.valid_stdout_flag false ;
 
   let cpp = match !Config.arch with `CPP -> true  |  _ -> false in
@@ -315,7 +317,11 @@ let () =
             ( Code.pp_check Co.choice )
         )
     | _ -> (* The common path to generate tests *)
-      M.go !Config.size reject relax safe;
+      if !Config.unfold_only then
+        printf "***relax***\n%s\n***safe***\n%s\n***reject***\n%s\n"
+        (Builder.R.pp_relax_list relax) (Builder.R.pp_relax_list safe) (Builder.R.pp_relax_list reject)
+      else
+        M.go !Config.size reject relax safe;
     exit 0
   with
   | Misc.Fatal msg ->

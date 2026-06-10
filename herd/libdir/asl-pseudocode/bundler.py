@@ -159,8 +159,8 @@ def header_of_tree(root: Element, o_path: Optional[Path] = None) -> str:
         post_header.append("")
 
     elif root_type == "register":
-        reg_short_name = read_reg_name(root, "reg_short_name")
-        reg_long_name = read_reg_name(root, "reg_long_name", default=reg_short_name)
+        reg_short_name = root.find("reg_short_name").text
+        reg_long_name = read_reg_longname(root)
         titles = [
             reg_long_name
             + " ("
@@ -275,10 +275,12 @@ def read_text_in_nodes(root, path) -> [str]:
     return ["".join(n.itertext()) for n in root.findall(path)]
 
 
-def read_reg_name(reg_root: Element, path: str, default: str = "") -> str:
+def read_reg_longname(reg_root: Element) -> str:
     """Read a register name, tolerating missing name nodes in Arm XML."""
-    name = reg_root.findtext(path, default=default)
-    return default if name is None else name
+    name = reg_root.findtext("reg_long_name")
+    if name is None:
+        return reg_root.findtext("reg_short_name")
+    return name
 
 
 def read_execute(root) -> str:
@@ -1157,7 +1159,7 @@ def generate_array_accessors(
     use_array_variable: bool,
     variable_prefix: str,
 ) -> list[str]:
-    accessor_name = sanitise_to_asl_name(reg_name.replace(to_replace, ""))
+    accessor_name = reg_name.replace(to_replace, "")
 
     if use_array_variable:
         return [
@@ -1170,8 +1172,7 @@ def generate_array_accessors(
         ]
 
     variable_names = [
-        variable_prefix + sanitise_to_asl_name(RE_VARIABLE_ARRAY.sub(str(i), reg_name))
-        for i in range(reg_min, reg_max + 1)
+        variable_prefix + reg_name.replace(to_replace, str(i)) for i in range(reg_min, reg_max + 1)
     ]
 
     getter_case_body = "\n".join(
@@ -1252,10 +1253,7 @@ def build_global_variable_declarations(
             accessor_names = [reg_name]
 
         declarations.extend(
-            (
-                f"var {variable_prefix}{variable_name}: {type_name};"
-                for variable_name in accessor_names
-            )
+            (f"var {variable_prefix}{variable_name}: {type_name};" for variable_name in accessor_names)
         )
         declarations.extend(
             (
@@ -1274,7 +1272,7 @@ def build_global_variable_declarations(
 def is_implementation_defined_register(reg_root: Element) -> bool:
     """Returns True if the register described by the Elements is implementation defined and thus should be ignored."""
     assert reg_root.tag == "register"
-    reg_long_name = read_reg_name(reg_root, "reg_long_name")
+    reg_long_name = read_reg_longname(reg_root)
     return reg_long_name.startswith(IMPLEMENTATION_DEFINED_STRING)
 
 
@@ -1311,10 +1309,10 @@ def process_one_reg(
     assert reg_root.tag == "register"
     res: list[str] = []
 
-    reg_name = read_reg_name(reg_root, "reg_short_name")
+    reg_name = reg_root.find("reg_short_name").text
     _logger.debug("Processing register %s.", reg_name)
 
-    reg_long_name = read_reg_name(reg_root, "reg_long_name", default=reg_name)
+    reg_long_name = read_reg_longname(reg_root)
     title = reg_long_name + " (" + reg_name + ")"
     res.append(f"// {title:^74}\n{SEPARATOR_LINE}")
 
