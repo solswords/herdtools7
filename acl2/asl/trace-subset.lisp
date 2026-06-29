@@ -746,6 +746,7 @@
 (def-trace-subset-x pattern_desc)
 (def-trace-subset-x pattern)
 (def-trace-subset-x patternlist)
+(def-trace-subset-x pattern_list_and_kind)
 (def-trace-subset-x slice)
 (def-trace-subset-x slicelist)
 (def-trace-subset-x call)
@@ -806,7 +807,7 @@
          :e_enumarray (trace-subset-expr-p x.value)
          :e_arbitrary (trace-subset-ty-p x.type)
          :e_pattern (and (trace-subset-expr-p x.expr)
-                         (trace-subset-pattern-p x.pattern))
+                         (trace-subset-pattern_list_and_kind-p x.pattern))
          :otherwise t))
   :hints(("Goal" :in-theory (enable trace-subset-expr_desc-p
                                     trace-subset-expr-p
@@ -815,7 +816,7 @@
                                     trace-subset-slicelist-p
                                     trace-subset-named_exprlist-p
                                     trace-subset-exprlist-p
-                                    trace-subset-pattern-p
+                                    trace-subset-pattern_list_and_kind-p
                                     ;; traced-callsigs-fnnames-in-terms-of-all-callsigs
                                     )
           :expand ((all-callsigs-expr_desc x))))
@@ -860,14 +861,11 @@
 (defthmd trace-subset-pattern_desc-p-decomp
   (iff (trace-subset-pattern_desc-p x)
        (pattern_desc-case x
-         :pattern_any (trace-subset-patternlist-p x.patterns)
          :pattern_geq (trace-subset-expr-p x.expr)
          :pattern_leq (trace-subset-expr-p x.expr)
-         :pattern_not (trace-subset-pattern-p x.pattern)
          :pattern_range (and (trace-subset-expr-p x.lower)
                              (trace-subset-expr-p x.upper))
          :pattern_single (trace-subset-expr-p x.expr)
-         :pattern_tuple (trace-subset-patternlist-p x.patterns)
          :otherwise t))
   :hints(("Goal" :in-theory (enable trace-subset-patternlist-p
                                     trace-subset-pattern-p
@@ -893,6 +891,15 @@
   :hints(("Goal" :in-theory (enable trace-subset-patternlist-p
                                     trace-subset-pattern-p)
           :expand ((all-callsigs-patternlist x))))
+  :rule-classes :definition)
+
+(defthmd trace-subset-pattern_list_and_kind-p-decomp
+  (iff (trace-subset-pattern_list_and_kind-p x)
+       (b* (((pattern_list_and_kind x)))
+         (trace-subset-patternlist-p x.patterns)))
+  :hints(("Goal" :in-theory (enable trace-subset-patternlist-p
+                                    trace-subset-pattern_list_and_kind-p)
+          :expand ((all-callsigs-pattern_list_and_kind x))))
   :rule-classes :definition)
 
 (defthmd trace-subset-slice-p-decomp
@@ -2522,6 +2529,7 @@ asl-interpreter-mutual-recursion-*t) for overview."
                   ((ty-p x) (trace-subset-ty-p x))
                   ((pattern-p x) (trace-subset-pattern-p x))
                   ((patternlist-p x) (trace-subset-patternlist-p x))
+                  ((pattern_list_and_kind-p x) (trace-subset-pattern_list_and_kind-p x))
                   ((exprlist-p x) (trace-subset-exprlist-p x))
                   ((lexpr-p x) (trace-subset-lexpr-p x))
                   ((lexprlist-p x) (trace-subset-lexprlist-p x))
@@ -2578,12 +2586,14 @@ asl-interpreter-mutual-recursion-*t) for overview."
              (:add-hyp (trace-subset-fnname-p name)))
             ((:fnname eval_expr_list-*t)
              (:add-keyword :hints ('(:expand ((:free (tracespec2) (trace-subset-exprlist-p e)))))))
-            ((or (:fnname eval_pattern-any-*t)
-                 (:fnname eval_pattern_tuple-*t))
-             (:add-keyword :hints ('(:expand ((:free (tracespec2) (trace-subset-patternlist-p p)))))))
             ((:fnname eval_pattern-*t)
              (:add-keyword :hints ('(:expand ((:free (tracespec2) (trace-subset-pattern-p p))
                                               (:free (tracespec2) (trace-subset-pattern_desc-p (pattern->desc p))))))))
+            
+            ((:fnname eval_pattern_list_and_kind-*t)
+             (:add-keyword :hints ('(:expand ((:free (tracespec2) (trace-subset-pattern_list_and_kind-p p)))))))
+            ((:fnname eval_pattern_list-*t)
+             (:add-keyword :hints ('(:expand ((:free (tracespec2) (trace-subset-patternlist-p p)))))))
             ((:fnname resolve-ty-*t)
              (:add-keyword :hints ('(:expand ((:free (tracespec2) (trace-subset-ty-p x))
                                               (:free (tracespec2) (trace-subset-type_desc-p (ty->desc x)))

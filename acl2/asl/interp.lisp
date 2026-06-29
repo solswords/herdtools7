@@ -1931,7 +1931,9 @@ evaluation of @('e_arbitrary') expressions."
                                                         (local-env->storage (env->local env))
                                                         pos)))
            :pattern_single (b* (((evoo (expr_result v1)) (eval_expr env desc.expr)))
-                             (evo-return (init-backtrace (eval_binop :eq val v1.val) pos)))))
+                             (evo-return (init-backtrace (eval_binop :eq val v1.val)
+                                                         (local-env->storage (env->local env))
+                                                         pos))))))
 
      (define eval_pattern_list ((env env-p)
                                 (val val-p)
