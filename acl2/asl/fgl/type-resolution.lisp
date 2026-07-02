@@ -327,7 +327,7 @@
                (:t_string (v_string (v_string->val x)))
                (:t_bool (v_bool (and (v_bool->val x) t)))
                (:T_ENUM (let* ((elts ty.desc.elts)
-                               (rev-elts (acl2::rev elts))
+                               (rev-elts (acl2::rev (mergesort elts)))
                                (val (v_label->val x))
                                (ignore (fgl::trigger-constraints
                                         ;; Why do we skip the first element? see above.
