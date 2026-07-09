@@ -1939,8 +1939,7 @@
              new-x)
       :hints ('(:expand ((:free (ty) <call>)
                          (ty-normalize ty)
-                         (:free (x) (record-type-normalize-top x))
-                         (:free (x ty) (enumarray-type-fix-val nil x ty)))))
+                         (:free (x) (record-type-normalize-top x)))))
       :fn ty-fix-val)
     (defret <fn>-of-ty-normalize
       (equal (tuple-type-fix-val x (tuple-type-normalize types))
@@ -1953,11 +1952,6 @@
              new-x)
       :hints ('(:expand ((:free (len ty) <call>))))
       :fn array-type-fix-val)
-    (defret <fn>-of-ty-normalize
-      (equal (enumarray-type-fix-val keys x (ty-normalize ty))
-             new-x)
-      :hints ('(:expand ((:free (ty) <call>))))
-      :fn enumarray-type-fix-val)
     (defret <fn>-of-ty-normalize
       (implies (and ;; (typed_identifierlist-satisfiable fields)
                     (no-duplicatesp-equal (typed_identifierlist->names fields)))

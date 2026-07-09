@@ -32,6 +32,7 @@
 (include-book "oslib/date" :dir :system)
 (include-book "centaur/fty/top" :dir :system)
 (include-book "fgl/asl-fgl-top")
+(include-book "find")
 (defttag :manual-info)
 
 (value-triple (acl2::tshell-ensure))
