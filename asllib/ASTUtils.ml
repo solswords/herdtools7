@@ -297,9 +297,6 @@ let rec expr_equal eq e1 e2 =
   | E_GetArray (e11, e21), E_GetArray (e12, e22) ->
       expr_equal eq e11 e12 && expr_equal eq e21 e22
   | E_GetArray _, _ | _, E_GetArray _ -> false
-  | E_GetEnumArray (e11, e21), E_GetEnumArray (e12, e22) ->
-      expr_equal eq e11 e12 && expr_equal eq e21 e22
-  | E_GetEnumArray _, _ | _, E_GetEnumArray _ -> false
   | E_GetField (e1', f1), E_GetField (e2', f2) ->
       String.equal f1 f2 && expr_equal eq e1' e2'
   | E_GetField _, _ | _, E_GetField _ -> false
@@ -313,7 +310,7 @@ let rec expr_equal eq e1 e2 =
       Int.equal i1 i2 && expr_equal eq e1' e2'
   | E_GetItem _, _ | _, E_GetItem _ -> false
   | E_Pattern (e1', p1), E_Pattern (e2', p2) ->
-      expr_equal eq e1' e2' && pattern_equal eq p1 p2
+      expr_equal eq e1' e2' && pattern_matcher_equal eq p1 p2
   | E_Pattern _, _ -> false
   | E_Record (s1, fields1), E_Record (s2, fields2) ->
       type_equal eq s1 s2
@@ -329,10 +326,6 @@ let rec expr_equal eq e1 e2 =
   | E_Array { length = l1; value = v1 }, E_Array { length = l2; value = v2 } ->
       expr_equal eq l1 l2 && expr_equal eq v1 v2
   | E_Array _, _ | _, E_Array _ -> false
-  | ( E_EnumArray { labels = l1; value = v1 },
-      E_EnumArray { labels = l2; value = v2 } ) ->
-      List.equal String.equal l1 l2 && expr_equal eq v1 v2
-  | E_EnumArray _, _ | _, E_EnumArray _ -> false
   | E_ATC (e1, t1), E_ATC (e2, t2) -> expr_equal eq e1 e2 && type_equal eq t1 t2
   | E_ATC _, _ | _, E_ATC _ -> false
   | E_Unop (o1, e1), E_Unop (o2, e2) -> o1 = o2 && expr_equal eq e1 e2
@@ -367,15 +360,6 @@ and constraint_equal eq c1 c2 =
 and constraints_equal eq cs1 cs2 =
   cs1 == cs2 || List.equal (constraint_equal eq) cs1 cs2
 
-and array_length_equal eq l1 l2 =
-  match (l1, l2) with
-  | ArrayLength_Expr e1, ArrayLength_Expr e2 -> expr_equal eq e1 e2
-  | ArrayLength_Enum (enum1, _), ArrayLength_Enum (enum2, _) ->
-      String.equal enum1 enum2
-  | ArrayLength_Enum (_, _), ArrayLength_Expr _
-  | ArrayLength_Expr _, ArrayLength_Enum (_, _) ->
-      false
-
 and type_equal eq t1 t2 =
   t1.desc == t2.desc
   ||
@@ -391,7 +375,7 @@ and type_equal eq t1 t2 =
   | T_Bits (w1, bf1), T_Bits (w2, bf2) ->
       bitwidth_equal eq w1 w2 && bitfields_equal eq bf1 bf2
   | T_Array (l1, t1), T_Array (l2, t2) ->
-      array_length_equal eq l1 l2 && type_equal eq t1 t2
+      expr_equal eq l1 l2 && type_equal eq t1 t2
   | T_Named s1, T_Named s2 -> String.equal s1 s2
   | T_Enum li1, T_Enum li2 ->
       (* TODO: order of fields? *) List.equal String.equal li1 li2
@@ -435,17 +419,22 @@ and pattern_equal eq p1 p2 =
   ||
   match (p1.desc, p2.desc) with
   | Pattern_All, Pattern_All -> true
-  | Pattern_Any li1, Pattern_Any li2 | Pattern_Tuple li1, Pattern_Tuple li2 ->
-      List.equal (pattern_equal eq) li1 li2
   | Pattern_Geq e1, Pattern_Geq e2
   | Pattern_Leq e1, Pattern_Leq e2
   | Pattern_Single e1, Pattern_Single e2 ->
       expr_equal eq e1 e2
   | Pattern_Mask m1, Pattern_Mask m2 -> Bitvector.mask_equal m1 m2
-  | Pattern_Not p1, Pattern_Not p2 -> pattern_equal eq p1 p2
   | Pattern_Range (e11, e12), Pattern_Range (e21, e22) ->
       expr_equal eq e11 e21 && expr_equal eq e12 e22
   | _ -> false
+
+and pattern_kind_equal pk1 pk2 =
+  match (pk1, pk2) with
+  | Positive, Positive | Negative, Negative -> true
+  | _ -> false
+
+and pattern_matcher_equal eq (ps1, pk1) (ps2, pk2) =
+  List.equal (pattern_equal eq) ps1 ps2 && pattern_kind_equal pk1 pk2
 
 let qualifier_equal (q1 : func_qualifier option) q2 = Option.equal ( = ) q1 q2
 let var_ x = E_Var x |> add_dummy_annotation
@@ -517,7 +506,6 @@ let expr_of_lexpr : lexpr -> expr =
     | LE_Var x -> E_Var x
     | LE_Slice (le, args) -> E_Slice (map_desc aux le, args)
     | LE_SetArray (le, e) -> E_GetArray (map_desc aux le, e)
-    | LE_SetEnumArray (le, e) -> E_GetEnumArray (map_desc aux le, e)
     | LE_SetField (le, x) -> E_GetField (map_desc aux le, x)
     | LE_SetFields (le, x, _) -> E_GetFields (map_desc aux le, x)
     | LE_SetCollectionFields (x, fields, _) -> E_GetCollectionFields (x, fields)
@@ -544,14 +532,13 @@ let slice_as_single = function
 let default_t_bits = T_Bits (E_Var "-" |> add_dummy_annotation, [])
 
 let default_array_ty =
-  let len = ArrayLength_Expr (E_Var "-" |> add_dummy_annotation) in
+  let len = E_Var "-" |> add_dummy_annotation in
   let ty = T_Named "-" |> add_dummy_annotation in
   T_Array (len, ty)
 
 let identifier_of_decl d =
   match d.desc with
-  | D_Func { name; _ } | D_GlobalStorage { name; _ } | D_TypeDecl (name, _, _)
-    ->
+  | D_Func { name; _ } | D_GlobalStorage { name; _ } | D_TypeDecl (name, _) ->
       name
   | D_Pragma _ -> assert false
 
@@ -571,7 +558,7 @@ let set_decl_name name d =
   map_annotated d @@ function
   | D_Func f -> D_Func { f with name }
   | D_GlobalStorage f -> D_GlobalStorage { f with name }
-  | D_TypeDecl (_name, e, ty) -> D_TypeDecl (name, e, ty)
+  | D_TypeDecl (_name, e) -> D_TypeDecl (name, e)
   | D_Pragma _ as d -> d
 
 let patch_with_backup ~src ~patches =
@@ -616,7 +603,6 @@ let rec subst_expr substs e =
           call_type;
         }
   | E_GetArray (e1, e2) -> E_GetArray (tr e1, tr e2)
-  | E_GetEnumArray (e1, e2) -> E_GetEnumArray (tr e1, tr e2)
   | E_GetField (e, x) -> E_GetField (tr e, x)
   | E_GetFields (e, fields) -> E_GetFields (tr e, fields)
   | E_GetCollectionFields _ -> failwith "No collection should be used here"
@@ -629,8 +615,6 @@ let rec subst_expr substs e =
   | E_Tuple es -> E_Tuple (List.map tr es)
   | E_Array { length; value } ->
       E_Array { length = tr length; value = tr value }
-  | E_EnumArray { enum; labels; value } ->
-      E_EnumArray { enum; labels; value = tr value }
   | E_ATC (e, t) -> E_ATC (tr e, t)
   | E_Arbitrary _ -> e.desc
   | E_Unop (op, e) -> E_Unop (op, tr e)
@@ -641,10 +625,8 @@ let rec is_simple_expr e =
   | E_Var _ | E_Literal _ | E_Arbitrary _ | E_GetCollectionFields _ -> true
   | E_Array { length = e1; value = e2 }
   | E_GetArray (e1, e2)
-  | E_GetEnumArray (e1, e2)
   | E_Binop (_, e1, e2) ->
       is_simple_expr e1 && is_simple_expr e2
-  | E_EnumArray { value = e }
   | E_ATC (e, _)
   | E_GetFields (e, _)
   | E_GetField (e, _)
@@ -709,7 +691,6 @@ let rename_locals map_name ast =
     | E_Slice (e1, slices) -> E_Slice (map_e e1, map_slices slices)
     | E_Cond (e1, e2, e3) -> E_Cond (map_e e1, map_e e2, map_e e3)
     | E_GetArray (e1, e2) -> E_GetArray (map_e e1, map_e e2)
-    | E_GetEnumArray (e1, e2) -> E_GetEnumArray (map_e e1, map_e e2)
     | E_GetField (e1, f) -> E_GetField (map_e e1, f)
     | E_GetFields (e1, li) -> E_GetFields (map_e e1, li)
     | E_GetCollectionFields (x, li) -> E_GetCollectionFields (map_name x, li)
@@ -718,9 +699,7 @@ let rename_locals map_name ast =
     | E_Tuple li -> E_Tuple (map_es li)
     | E_Array { length; value } ->
         E_Array { length = map_e length; value = map_e value }
-    | E_EnumArray { enum; labels; value } ->
-        E_EnumArray { enum; labels; value = map_e value }
-    | E_Pattern (e1, p) -> E_Pattern (map_e e1, map_pattern p)
+    | E_Pattern (e1, p) -> E_Pattern (map_e e1, map_pattern_matcher p)
   (* End *)
   and map_es li = List.map map_e li
   and map_slices slices = List.map map_slice slices
@@ -742,7 +721,7 @@ let rename_locals map_name ast =
     | T_Int (WellConstrained (cs, p)) -> T_Int (WellConstrained (map_cs cs, p))
     | T_Bits (e, bitfields) -> T_Bits (map_e e, bitfields)
     | T_Tuple li -> T_Tuple (List.map map_t li)
-    | T_Array (index, elem_ty) -> T_Array (map_array_index index, map_t elem_ty)
+    | T_Array (length, elem_ty) -> T_Array (map_e length, map_t elem_ty)
     | T_Collection li -> T_Collection (List.map (fun (f, t) -> (f, map_t t)) li)
     | T_Record li -> T_Record (List.map (fun (f, t) -> (f, map_t t)) li)
     | T_Exception li -> T_Exception (List.map (fun (f, t) -> (f, map_t t)) li)
@@ -797,7 +776,6 @@ let rename_locals map_name ast =
     | LE_Var x -> LE_Var (map_name x)
     | LE_Slice (le1, slices) -> LE_Slice (map_le le1, map_slices slices)
     | LE_SetArray (le1, i) -> LE_SetArray (map_le le1, map_e i)
-    | LE_SetEnumArray (le, i) -> LE_SetEnumArray (map_le le, map_e i)
     | LE_SetField (le1, f) -> LE_SetField (map_le le1, f)
     | LE_SetFields (le1, fl, annot) -> LE_SetFields (map_le le1, fl, annot)
     | LE_SetCollectionFields _ as le -> le (* No collection is local *)
@@ -833,23 +811,16 @@ let rename_locals map_name ast =
   and map_pattern p =
     map_annotated p @@ function
     | Pattern_All -> Pattern_All
-    | Pattern_Any pl -> Pattern_Any (List.map map_pattern pl)
     | Pattern_Geq p_e -> Pattern_Geq (map_e p_e)
     | Pattern_Leq p_e -> Pattern_Leq (map_e p_e)
     | Pattern_Mask _ -> p.desc
-    | Pattern_Not sub_p -> Pattern_Not (map_pattern sub_p)
     | Pattern_Range (e1, e2) -> Pattern_Range (map_e e1, map_e e2)
     | Pattern_Single p_e -> Pattern_Single (map_e p_e)
-    | Pattern_Tuple pl -> Pattern_Tuple (List.map map_pattern pl)
+  and map_pattern_matcher (ps, pk) = (List.map map_pattern ps, pk)
   (* End *)
   (* Begin RenameCatcher *)
   and map_catcher (opt_exn_name, exn_ty, when_stmt) =
     (Option.map map_name opt_exn_name, map_t exn_ty, map_s when_stmt)
-  (* End *)
-  (* Begin RenameLocalsArrayIndex *)
-  and map_array_index = function
-    | ArrayLength_Enum _ as i -> i
-    | ArrayLength_Expr e_length -> ArrayLength_Expr (map_e e_length)
   (* End *)
   (* Begin RenameLocals *)
   and map_decl d =

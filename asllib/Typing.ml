@@ -687,12 +687,6 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
     | `STR_CONCAT | `BIC ->
         false
 
-  (* Begin TypeOfArrayLength *)
-  let type_of_array_length ~loc = function
-    | ArrayLength_Enum (s, _) -> T_Named s |> add_pos_from ~loc
-    | ArrayLength_Expr _ -> integer |: TypingRule.TypeOfArrayLength
-  (* End *)
-
   (* Begin ApplyBinopTypes *)
   let rec apply_binop_types ~loc env op t1 t2 : ty =
     let () =
@@ -818,19 +812,6 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
   let check_var_not_in_genv ~loc genv x () =
     if is_global_undefined x genv then () |: TypingRule.CheckVarNotInGEnv
     else fatal_from ~loc (Error.AlreadyDeclaredIdentifier x)
-  (* End *)
-
-  (* Begin GetVariableEnum *)
-  let get_variable_enum' env e =
-    match e.desc with
-    | E_Var x -> (
-        match IMap.find_opt x env.global.declared_types with
-        | Some (t, _) -> (
-            match (Types.make_anonymous env t).desc with
-            | T_Enum labels -> Some (x, labels)
-            | _ -> None)
-        | None -> None)
-    | _ -> None
   (* End *)
 
   (* Begin CheckIsNotCollection *)
@@ -1359,25 +1340,13 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
         let ses = SES.unions sess in
         (T_Tuple tys' |> here, ses) |: TypingRule.TTuple
     (* Begin TArray *)
-    | T_Array (index, t) ->
-        let t', ses_t = annotate_type ~loc env t
-        and index', ses_index =
-          match index with
-          | ArrayLength_Expr e -> (
-              match get_variable_enum' env e with
-              | Some (s, labels) -> (ArrayLength_Enum (s, labels), SES.empty)
-              | None ->
-                  let e', ses =
-                    annotate_symbolic_constrained_integer ~loc env e
-                  in
-                  (ArrayLength_Expr e', ses))
-          | ArrayLength_Enum (_, _) ->
-              assert
-                (* Enumerated indices only exist in the typed AST. *)
-                false
+    | T_Array (e_length, t_elem) ->
+        let annot_t_elem, ses_t = annotate_type ~loc env t_elem
+        and annot_length, ses_length =
+          annotate_symbolic_constrained_integer ~loc env e_length
         in
-        let ses = SES.union ses_t ses_index in
-        (T_Array (index', t') |> here, ses) |: TypingRule.TArray
+        let ses = SES.union ses_t ses_length in
+        (T_Array (annot_length, annot_t_elem) |> here, ses) |: TypingRule.TArray
     (* Begin TStructuredDecl *)
     | T_Record fields | T_Exception fields | T_Collection fields -> (
         let+ () =
@@ -1504,20 +1473,6 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
     (* Begin PAll *)
     | Pattern_All -> (p, SES.empty) |: TypingRule.PAll
     (* End *)
-    (* Begin PAny *)
-    | Pattern_Any li ->
-        let new_li, sess = list_map_split (annotate_pattern ~loc env t) li in
-        let ses =
-          (* They can't be conflicting because they are statically evaluable *)
-          SES.unions sess
-        in
-        (Pattern_Any new_li |> here, ses) |: TypingRule.PAny
-    (* End *)
-    (* Begin PNot *)
-    | Pattern_Not q ->
-        let new_q, ses = annotate_pattern ~loc env t q in
-        (Pattern_Not new_q |> here, ses) |: TypingRule.PNot
-    (* End *)
     (* Begin PSingle *)
     | Pattern_Single e ->
         let t_e, e', ses = annotate_expr env e in
@@ -1595,29 +1550,15 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
           check_type_satisfies ~loc env t t_m
         in
         (p, SES.empty) |: TypingRule.PMask
-    (* End *)
-    (* Begin PTuple *)
-    | Pattern_Tuple li -> (
-        let t_struct = Types.get_structure env t in
-        match t_struct.desc with
-        | T_Tuple ts when List.compare_lengths li ts != 0 ->
-            fatal_from ~loc
-              (Error.BadArity
-                 ( Static,
-                   "pattern matching on tuples",
-                   List.length li,
-                   List.length ts ))
-        | T_Tuple ts ->
-            let new_li, sess =
-              List.map2 (annotate_pattern ~loc env) ts li |> List.split
-            in
-            let ses =
-              SES.unions
-                (* They can't be conflicting because they are static *) sess
-            in
-            (Pattern_Tuple new_li |> here, ses) |: TypingRule.PTuple
-        | _ -> conflict ~loc [ T_Tuple [] ] t
-        (* End *))
+  (* End *)
+
+  and annotate_pattern_matcher ~loc env t (ps, pk) =
+    let new_ps, sess = list_map_split (annotate_pattern ~loc env t) ps in
+    let ses =
+      (* They can't be conflicting because they are statically evaluable *)
+      SES.unions sess
+    in
+    ((new_ps, pk), ses)
 
   (* Begin AnnotateCall *)
   and annotate_call ~loc env (call_info : call) =
@@ -2140,10 +2081,10 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
                 (T_Bits (w, []) |> here, E_Slice (e'', slices') |> here, ses)
                 |: TypingRule.ESlice
             (* End *)
-            | T_Array (size, ty') when e'.version = V0 -> (
+            | T_Array (_, ty') when e'.version = V0 -> (
                 match slices with
                 | [ Slice_Single e_index ] ->
-                    annotate_get_array ~loc env (size, ty') (e'', ses1, e_index)
+                    annotate_get_array ~loc env ty' (e'', ses1, e_index)
                 | _ -> conflict ~loc [ integer'; default_t_bits ] t_e')
             (* Begin ESliceError *)
             | _ ->
@@ -2348,7 +2289,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
         let t_e2, e2, ses_e = annotate_expr env e1 in
         let pat', ses_pat =
           best_effort (pat, SES.empty) (fun _ ->
-              annotate_pattern ~loc env t_e2 pat)
+              annotate_pattern_matcher ~loc env t_e2 pat)
         in
         let ses =
           SES.union ses_pat ses_e
@@ -2362,27 +2303,19 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
         let t_base, e_base', ses_base = annotate_expr env e_base in
         let t_anon_base = Types.make_anonymous env t_base in
         match t_anon_base.desc with
-        | T_Array (size, t_elem) ->
-            annotate_get_array ~loc env (size, t_elem)
-              (e_base', ses_base, e_index)
+        | T_Array (_, t_elem) ->
+            annotate_get_array ~loc env t_elem (e_base', ses_base, e_index)
         | _ -> conflict ~loc [ default_array_ty ] t_base |: TypingRule.EGetArray
         )
     (* End *)
-    | E_GetItem _ | E_EnumArray _ | E_GetEnumArray _ | E_GetCollectionFields _
-      ->
-        assert false
+    | E_GetItem _ | E_GetCollectionFields _ -> assert false
 
   (* Begin AnnotateGetArray *)
-  and annotate_get_array ~loc env (size, t_elem) (e_base, ses_base, e_index) =
+  and annotate_get_array ~loc env t_elem (e_base, ses_base, e_index) =
     let t_index', e_index', ses_index = annotate_expr env e_index in
-    let wanted_t_index = type_of_array_length ~loc size in
-    let+ () = check_type_satisfies ~loc env t_index' wanted_t_index in
+    let+ () = check_type_satisfies ~loc env t_index' integer in
     let ses = ses_non_conflicting_union ~loc ses_index ses_base in
-    let new_e =
-      match size with
-      | ArrayLength_Enum _ -> E_GetEnumArray (e_base, e_index')
-      | ArrayLength_Expr _ -> E_GetArray (e_base, e_index')
-    in
+    let new_e = E_GetArray (e_base, e_index') in
     (t_elem, new_e |> add_pos_from ~loc, ses) |: TypingRule.AnnotateGetArray
   (* End *)
 
@@ -2483,12 +2416,9 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
     | T_Tuple li ->
         let exprs = List.map (base_value_v1 ~loc env) li in
         E_Tuple exprs |> here
-    | T_Array (index, ty) -> (
+    | T_Array (length, ty) ->
         let value = base_value_v1 ~loc env ty in
-        match index with
-        | ArrayLength_Enum (enum, labels) ->
-            E_EnumArray { enum; labels; value } |> here
-        | ArrayLength_Expr length -> E_Array { length; value } |> here)
+        E_Array { length; value } |> here
   (* End *)
 
   let rec base_value_v0 ~loc env t : expr =
@@ -2511,12 +2441,9 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
             fields
         in
         E_Record (t, fields) |> here
-    | T_Array (length, ty) -> (
+    | T_Array (length, ty) ->
         let value = base_value_v0 ~loc env ty in
-        match length with
-        | ArrayLength_Enum (enum, labels) ->
-            E_EnumArray { enum; labels; value } |> here
-        | ArrayLength_Expr length -> E_Array { length; value } |> here)
+        E_Array { length; value } |> here
     | T_Named _id ->
         let t = Types.make_anonymous env t in
         base_value_v0 ~loc env t
@@ -2529,18 +2456,12 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
     | V1 -> base_value_v1 ~loc env e
 
   (* Begin AnnotateSetArray *)
-  let annotate_set_array ~loc env (size, t_elem) rhs_ty
-      (e_base, ses_base, e_index) =
+  let annotate_set_array ~loc env t_elem rhs_ty (e_base, ses_base, e_index) =
     let+ () = check_type_satisfies ~loc env rhs_ty t_elem in
     let t_index', e_index', ses_index = annotate_expr env e_index in
-    let wanted_t_index = type_of_array_length ~loc:e_base size in
-    let+ () = check_type_satisfies ~loc env t_index' wanted_t_index in
+    let+ () = check_type_satisfies ~loc env t_index' integer in
     let ses = ses_non_conflicting_union ~loc ses_base ses_index in
-    let new_le =
-      match size with
-      | ArrayLength_Enum _ -> LE_SetEnumArray (e_base, e_index')
-      | ArrayLength_Expr _ -> LE_SetArray (e_base, e_index')
-    in
+    let new_le = LE_SetArray (e_base, e_index') in
     (new_le |> add_pos_from ~loc, ses) |: TypingRule.AnnotateSetArray
   (* End *)
 
@@ -2621,11 +2542,11 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
             in
             let ses = ses_non_conflicting_union ~loc ses1 ses_slices in
             (LE_Slice (le2, slices_annotated) |> here, ses |: TypingRule.LESlice)
-        | T_Array (size, t) when le.version = V0 -> (
+        | T_Array (_, t) when le.version = V0 -> (
             match slices with
             | [ Slice_Single e_index ] ->
                 let le2, ses2 = annotate_lexpr env le1 t_le1 in
-                annotate_set_array ~loc:le env (size, t) t_e (le2, ses2, e_index)
+                annotate_set_array ~loc:le env t t_e (le2, ses2, e_index)
             | _ -> invalid_expr (expr_of_lexpr le1))
         | _ -> conflict ~loc:le1 [ default_t_bits ] t_le1
         (* End *))
@@ -2644,6 +2565,8 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
              let+ () = check_type_satisfies ~loc env t_e t in
              ( LE_SetField (le2, field) |> here,
                ses |: TypingRule.LESetStructuredField )
+         (* End *)
+         (* Begin LESetCollectionField *)
          | T_Collection fields ->
              let collection_var_name =
                match le2.desc with LE_Var x -> x | _ -> assert false
@@ -2658,7 +2581,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
              ( LE_SetCollectionFields
                  (collection_var_name, [ field ], [ (0, n) ])
                |> here,
-               ses |: TypingRule.LESetStructuredField )
+               ses |: TypingRule.LESetCollectionField )
          (* End *)
          (* Begin LESetBitField *)
          | T_Bits (_, bitfields) ->
@@ -2757,15 +2680,12 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
         let t_base, _, _ = expr_of_lexpr e_base |> annotate_expr env in
         let t_anon_base = Types.make_anonymous env t_base in
         match t_anon_base.desc with
-        | T_Array (size, t_elem) ->
+        | T_Array (_, t_elem) ->
             let e_base', ses_base = annotate_lexpr env e_base t_base in
-            annotate_set_array ~loc env (size, t_elem) t_e
-              (e_base', ses_base, e_index)
+            annotate_set_array ~loc env t_elem t_e (e_base', ses_base, e_index)
         | _ -> conflict ~loc [ default_array_ty ] t_base)
     (* End *)
-    | LE_SetFields (_, _, _ :: _) | LE_SetEnumArray _ | LE_SetCollectionFields _
-      ->
-        assert false
+    | LE_SetFields (_, _, _ :: _) | LE_SetCollectionFields _ -> assert false
 
   (* Begin CheckCanBeInitializedWith *)
   let can_be_initialized_with env s t =
@@ -3221,7 +3141,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
     and ses_filtered =
       let ty_name = match ty'.desc with T_Named s -> s | _ -> assert false in
       SES.filter_thrown_exceptions
-        (fun s -> not (Types.subtypes_names env s ty_name))
+        (fun s -> not (String.equal s ty_name))
         ses_in
     in
     let ses = SES.union ses_block ses_ty in
@@ -3402,8 +3322,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
           let ses = SES.union ses_call ses_e in
           Some (S_Call call |> here, ses)
         else None
-    | LE_SetArray _ | LE_SetEnumArray _ | LE_SetCollectionFields _ ->
-        assert false
+    | LE_SetArray _ | LE_SetCollectionFields _ -> assert false
 
   (** [func_sig_types f] returns a list of the types in the signature [f]. The
       return type is first, followed by the argument types in order. *)
@@ -3950,7 +3869,7 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
   (* End *)
 
   (* Begin DeclareType *)
-  let declare_type ~loc name ty s genv =
+  let declare_type ~loc name ty genv =
     let () =
       if false then Format.eprintf "Declaring type %s of %a@." name PP.pp_ty ty
     in
@@ -3958,51 +3877,25 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
     let+ () = check_var_not_in_genv ~loc genv name in
     let env = with_empty_local genv in
     let t1, ses_t = annotate_type ~decl:true ~loc:(to_pos ty) env ty in
-    let env1, t2, s' =
-      match s with
-      (* AnnotateExtraFields( *)
-      | None -> (env, t1, None)
-      | Some (super, extra_fields) ->
-          let+ () =
-           fun () ->
-            if Types.subtype_satisfies env t1 (T_Named super |> here) then ()
-            else conflict ~loc [ T_Named super ] t1
-          in
-          let new_ty =
-            if extra_fields = [] then t1
-            else
-              match IMap.find_opt super genv.declared_types with
-              | Some ({ desc = T_Record fields; _ }, _) ->
-                  T_Record (fields @ extra_fields) |> here
-              | Some ({ desc = T_Exception fields; _ }, _) ->
-                  T_Exception (fields @ extra_fields) |> here
-              | Some _ -> conflict ~loc [ T_Record []; T_Exception [] ] t1
-              | None -> undefined_identifier ~loc super
-          and env = add_subtype name super env in
-          (* the extra_fields have already been incorporated into new_ty,
-             so we produce an empty list instead here *)
-          (env, new_ty, Some (super, []))
-      (* AnnotateExtraFields) *)
-    in
     let time_frame =
       if SES.is_pure ses_t then TimeFrame.Constant else TimeFrame.Execution
     in
-    let env2 = add_type name t2 time_frame env1 in
+    let env1 = add_type name t1 time_frame env in
     let new_tenv =
-      match t2.desc with
+      match t1.desc with
       | T_Enum ids ->
           let t = T_Named name |> here in
           (* DeclareEnumLabels( *)
-          let declare_one env2 label =
-            declare_const ~loc label t (L_Label label) env2
+          let declare_one env1 label =
+            declare_const ~loc label t (L_Label label) env1
           in
-          let genv3 = List.fold_left declare_one env2.global ids in
+          let genv3 = List.fold_left declare_one env1.global ids in
           (* DeclareEnumLabels) *)
-          { env2 with global = genv3 }
-      | _ -> env2
+          { env1 with global = genv3 }
+      | _ -> env1
     in
     let () = if false then Format.eprintf "Declared %s.@." name in
-    (new_tenv.global, t2, s')
+    (new_tenv.global, t1)
   (* End *)
 
   (* Begin DeclareGlobalStorage *)
@@ -4127,9 +4020,9 @@ module Annotate (C : ANNOTATE_CONFIG) : S = struct
           let gsd', new_genv = declare_global_storage ~loc gsd genv in
           let new_d = D_GlobalStorage gsd' |> here in
           (new_d, new_genv) |: TypingRule.TypecheckDecl
-      | D_TypeDecl (x, ty, s) ->
-          let new_genv, ty', s' = declare_type ~loc x ty s genv in
-          let new_d = D_TypeDecl (x, ty', s') |> here in
+      | D_TypeDecl (x, ty) ->
+          let new_genv, ty' = declare_type ~loc x ty genv in
+          let new_d = D_TypeDecl (x, ty') |> here in
           (new_d, new_genv) |: TypingRule.TypecheckDecl
       (* End *)
       | D_Pragma _ -> assert false

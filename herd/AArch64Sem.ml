@@ -1031,24 +1031,6 @@ module Make
         and msg = Some "EL0" in
         emit_fault (Some a) ma dir an ft msg ii
 
-      let an_xpte =
-        let open Annot in
-        function
-        | A|XA -> XA
-        | Q|XQ -> XQ
-        | L|XL -> XL
-        | X|N  -> X
-        | NoRet|S|NTA -> X (* Does it occur? *)
-
-      let an_pte =
-        let open Annot in
-        function
-        | A|XA -> A
-        | Q|XQ -> Q
-        | L|XL -> L
-        | X|N -> N
-        | NoRet|S|NTA -> N
-
       (* Return if a PAC field is canonical *)
       let check_canonical a =
         M.op1 (Op.ArchOp1 AArch64Op.MakeCanonical) a >>= is_eq a
@@ -1148,12 +1130,12 @@ module Make
               let kont _ = M.op1 Op.PTELoc a_virt >>= fun a_pte ->
                   let an,nexp =
                     if hd then (* Atomic accesses, tagged with updated bits *)
-                      an_xpte an,AArch64Explicit.NExp AArch64Explicit.AFDB
+                      Annot.X,AArch64Explicit.NExp AArch64Explicit.AFDB
                     else if ha then
-                      an_xpte an,AArch64Explicit.NExp AArch64Explicit.AF
+                      Annot.X,AArch64Explicit.NExp AArch64Explicit.AF
                     else
                       (* Ordinary non-explicit access *)
-                      an_pte an,AArch64.nexp_annot in
+                      Annot.N,AArch64.nexp_annot in
                   mextract_whole_pte_val
                     an nexp a_pte (E.IdSome ii) domain >>== fun pte_v ->
                   (mextract_pte_vals pte_v) >>= fun ipte ->
@@ -2007,9 +1989,10 @@ Arguments:
               let open AArch64 in
               let open Annot in
               match tnt with
-              | Pa -> N
-              | PaN -> NTA
-              | PaI -> Q in
+              | (`PaIQ) -> Q
+              | (`PaA) -> A
+              | (`Pa) -> N
+              | (`PaN) -> NTA in
             let open AArch64 in
             match md with
             | Idx ->
@@ -2045,12 +2028,12 @@ Arguments:
             (struct
               let read_mem = do_read_mem_op sxtw_op
             end) in
-        LDPSW.ldp AArch64.Pa MachSize.Word
+        LDPSW.ldp AArch64.(`Pa) MachSize.Word
 
       let ldxp sz t rd1 rd2 rs ii =
         let open AArch64 in
         let open Annot in
-        let an = match t with XP -> X | AXP -> XA in
+        let an = match t with XP -> EX | AXP -> EXA in
         do_ldr rs sz an
           (fun ac a ->
             read_mem_reserve sz an aexp ac rd1 a ii >>||
@@ -2063,17 +2046,17 @@ Arguments:
       and ldar sz t rd rs ii =
         let open AArch64 in
         let an = match t with
-        | XX -> Annot.X
+        | XX -> Annot.EX
         | AA -> Annot.A
-        | AX -> Annot.XA
+        | AX -> Annot.EXA
         | AQ -> Annot.Q in
         do_ldr rs sz an
           (fun ac a ->
             let read =
               match t with
-              | XX -> read_mem_reserve sz Annot.X
+              | XX -> read_mem_reserve sz Annot.EX
               | AA -> read_mem_acquire sz
-              | AX -> read_mem_reserve sz Annot.XA
+              | AX -> read_mem_reserve sz Annot.EXA
               | AQ -> read_mem_acquire_pc sz in
             read aexp ac rd a ii)
           (read_reg_addr rs ii)  ii
@@ -2151,15 +2134,15 @@ Arguments:
           let open AArch64 in
           let open Annot in
           match tnt with
-          | Pa -> N
-          | PaN -> NTA
-          | PaI -> L in
+          | (`PaIL) | (`PaL) -> L
+          | (`Pa) -> N
+          | (`PaN) -> NTA in
         match md with
         | AArch64.Idx ->
             let (>>|) =
               match tnt with
-              | AArch64.(Pa|PaN) -> (>>|)
-              | AArch64.PaI -> M.seq_mem in
+              | AArch64.(`Pa|`PaN|`PaL) -> (>>|)
+              | AArch64.(`PaIL) -> M.seq_mem in
             let (>>>) = M.data_input_next in
             do_str rd
               (fun ac a _ ii ->
@@ -2184,8 +2167,8 @@ Arguments:
       and do_stxr ms mw sz t rr rd ii  =
         let open AArch64Base in
         let an = match t with
-          | YY -> Annot.X
-          | LY -> Annot.XL in
+          | YY -> Annot.EX
+          | LY -> Annot.EXL in
         lift_memop rd Dir.W true memtag
           (fun ac ma mv ->
             let must_fail =

@@ -28,18 +28,6 @@ open ASTUtils
 let _warn = false
 let _dbg = false
 
-let rec subtypes_names env s1 s2 =
-  if String.equal s1 s2 then true
-  else
-    match IMap.find_opt s1 StaticEnv.(env.global.subtypes) with
-    | None -> false
-    | Some s1' -> subtypes_names env s1' s2
-
-let subtypes env t1 t2 =
-  match (t1.desc, t2.desc) with
-  | T_Named s1, T_Named s2 -> subtypes_names env s1 s2
-  | _ -> false
-
 module type S = sig
   module B : Backend.S
   module IEnv : Env.S with type v = B.value and module Scope = B.Scope
@@ -668,16 +656,6 @@ module Make (B : Backend.S) (C : Config) = struct
         let* v = B.get_index i_index v_array in
         return_normal (v, new_env) |: SemanticsRule.EGetArray
     (* End *)
-    (* Begin EvalEGetEnumArray *)
-    | E_GetEnumArray (e_array, e_index) ->
-        let*^ m_array, env1 = eval_expr env e_array in
-        let*^ m_index, new_env = eval_expr env1 e_index in
-        let* v_array = m_array and* v_index = m_index in
-        (* an enumerated array is represented by a record value. *)
-        let label = B.v_to_label v_index in
-        let* v = B.get_field label v_array in
-        return_normal (v, new_env) |: SemanticsRule.EGetEnumArray
-    (* End *)
     (* Begin EvalEGetTupleItem *)
     | E_GetItem (e_tuple, index) ->
         let** v_tuple, new_env = eval_expr env e_tuple in
@@ -731,13 +709,6 @@ module Make (B : Backend.S) (C : Config) = struct
         let* v = B.create_vector (List.init n_length (Fun.const v_value)) in
         return_normal (v, new_env) |: SemanticsRule.EArray
     (* End *)
-    (* Begin EvalEEnumArray *)
-    | E_EnumArray { labels; value = e_value } ->
-        let** v_value, new_env = eval_expr env e_value in
-        let field_inits = List.map (fun l -> (l, v_value)) labels in
-        let* v = B.create_record field_inits in
-        return_normal (v, new_env) |: SemanticsRule.EEnumArray
-    (* End *)
     (* Begin EvalEArbitrary *)
     | E_Arbitrary t ->
         (* The call to [eval_expr_sef] is safe because Typing.annotate_type
@@ -747,9 +718,9 @@ module Make (B : Backend.S) (C : Config) = struct
         return_normal (v, env) |: SemanticsRule.EArbitrary
     (* End *)
     (* Begin EvalEPattern *)
-    | E_Pattern (e, p) ->
+    | E_Pattern (e, matcher) ->
         let** v1, new_env = eval_expr env e in
-        let* v = eval_pattern env e v1 p in
+        let* v = eval_pattern_matcher env v1 matcher in
         return_normal (v, new_env) |: SemanticsRule.EPattern
     (* End *)
     (* Begin EvalEGetCollectionFields *)
@@ -912,18 +883,6 @@ module Make (B : Backend.S) (C : Config) = struct
         in
         eval_lexpr ver re_array env2 m1 |: SemanticsRule.LESetArray
     (* End *)
-    (* Begin EvalLESetEnumArray *)
-    | LE_SetEnumArray (re_array, e_index) ->
-        let*^ rm_array, env1 = expr_of_lexpr re_array |> eval_expr env in
-        let*^ m_index, env2 = eval_expr env1 e_index in
-        let m1 =
-          let* v = m and* v_index = m_index and* rv_array = rm_array in
-          (* an enumerated array is represented by a record value. *)
-          let label = B.v_to_label v_index in
-          B.set_field label v rv_array
-        in
-        eval_lexpr ver re_array env2 m1 |: SemanticsRule.LESetEnumArray
-    (* End *)
     (* Begin EvalLESetField *)
     | LE_SetField (re_record, field_name) ->
         let*^ rm_record, env1 = expr_of_lexpr re_record |> eval_expr env in
@@ -1043,74 +1002,63 @@ module Make (B : Backend.S) (C : Config) = struct
   (* Evaluation of Patterns *)
   (* ---------------------- *)
 
-  (** [eval_pattern env pos v p] determines if [v] matches the pattern [p]. *)
-  and eval_pattern env pos v : pattern -> B.value m =
-    let true_ = B.v_of_literal (L_Bool true) |> return in
-    let false_ = B.v_of_literal (L_Bool false) |> return in
-    let disjunction = big_op false_ (B.binop `BOR)
-    and conjunction = big_op true_ (B.binop `BAND) in
+  (** [eval_pattern_matcher env v ps pk] evaluates a list of patterns [ps]
+      against a value [v] and a pattern kind [pk]. *)
+  and eval_pattern_matcher env v (ps, pk) =
+    (* Begin EvalPatternMatcher *)
+    let bs = List.map (eval_pattern env v) ps in
+    let* disjunction = big_op m_false (B.binop `BOR) bs in
+    match pk with
+    | Positive -> return disjunction |: SemanticsRule.PatternMatcher
+    | Negative -> B.unop BNOT disjunction |: SemanticsRule.PatternMatcher
+  (* End *)
+
+  (** [eval_pattern env v p] determines if [v] matches the pattern [p]. *)
+  and eval_pattern env v p : B.value m =
     (* The calls to [eval_expr_sef] are justified since annotate_pattern
        checks that all expressions on which a type depends are statically
        evaluable, i.e. side-effect-free. *)
-    fun p ->
-      match p.desc with
-      (* Begin EvalPAll *)
-      | Pattern_All -> true_ |: SemanticsRule.PAll
-      (* End *)
-      (* Begin EvalPAny *)
-      | Pattern_Any ps ->
-          let bs = List.map (eval_pattern env pos v) ps in
-          disjunction bs |: SemanticsRule.PAny
-      (* End *)
-      (* Begin EvalPGeq *)
-      | Pattern_Geq e ->
-          let* v1 = eval_expr_sef env e in
-          B.binop `GE v v1 |: SemanticsRule.PGeq
-      (* End *)
-      (* Begin EvalPLeq *)
-      | Pattern_Leq e ->
-          let* v1 = eval_expr_sef env e in
-          B.binop `LE v v1 |: SemanticsRule.PLeq
-      (* End *)
-      (* Begin EvalPNot *)
-      | Pattern_Not p1 ->
-          let* b1 = eval_pattern env pos v p1 in
-          B.unop BNOT b1 |: SemanticsRule.PNot
-      (* End *)
-      (* Begin EvalPRange *)
-      | Pattern_Range (e1, e2) ->
-          let* b1 =
-            let* v1 = eval_expr_sef env e1 in
-            B.binop `GE v v1
-          and* b2 =
-            let* v2 = eval_expr_sef env e2 in
-            B.binop `LE v v2
-          in
-          B.binop `BAND b1 b2 |: SemanticsRule.PRange
-      (* End *)
-      (* Begin EvalPSingle *)
-      | Pattern_Single e ->
-          let* v1 = eval_expr_sef env e in
-          B.binop `EQ v v1 |: SemanticsRule.PSingle
-      (* End *)
-      (* Begin EvalPMask *)
-      | Pattern_Mask m ->
-          let bv bv = L_BitVector bv |> B.v_of_literal in
-          let m_set = Bitvector.mask_set m
-          and m_unset = Bitvector.mask_unset m in
-          let m_specified = Bitvector.logor m_set m_unset in
-          let* nv = B.unop NOT v in
-          let* v_set = B.binop `AND (bv m_set) v
-          and* v_unset = B.binop `AND (bv m_unset) nv in
-          let* v_set_or_unset = B.binop `OR v_set v_unset in
-          B.binop `EQ v_set_or_unset (bv m_specified) |: SemanticsRule.PMask
-      (* End *)
-      (* Begin EvalPTuple *)
-      | Pattern_Tuple ps ->
-          let n = List.length ps in
-          let* vs = List.init n (fun i -> B.get_index i v) |> sync_list in
-          let bs = List.map2 (eval_pattern env pos) vs ps in
-          conjunction bs |: SemanticsRule.PTuple
+    match p.desc with
+    (* Begin EvalPAll *)
+    | Pattern_All -> m_true |: SemanticsRule.PAll
+    (* End *)
+    (* Begin EvalPGeq *)
+    | Pattern_Geq e ->
+        let* v1 = eval_expr_sef env e in
+        B.binop `GE v v1 |: SemanticsRule.PGeq
+    (* End *)
+    (* Begin EvalPLeq *)
+    | Pattern_Leq e ->
+        let* v1 = eval_expr_sef env e in
+        B.binop `LE v v1 |: SemanticsRule.PLeq
+    (* End *)
+    (* Begin EvalPRange *)
+    | Pattern_Range (e1, e2) ->
+        let* b1 =
+          let* v1 = eval_expr_sef env e1 in
+          B.binop `GE v v1
+        and* b2 =
+          let* v2 = eval_expr_sef env e2 in
+          B.binop `LE v v2
+        in
+        B.binop `BAND b1 b2 |: SemanticsRule.PRange
+    (* End *)
+    (* Begin EvalPSingle *)
+    | Pattern_Single e ->
+        let* v1 = eval_expr_sef env e in
+        B.binop `EQ v v1 |: SemanticsRule.PSingle
+    (* End *)
+    (* Begin EvalPMask *)
+    | Pattern_Mask m ->
+        let bv bv = L_BitVector bv |> B.v_of_literal in
+        let m_set = Bitvector.mask_set m and m_unset = Bitvector.mask_unset m in
+        let m_specified = Bitvector.logor m_set m_unset in
+        let* nv = B.unop NOT v in
+        let* v_set = B.binop `AND (bv m_set) v
+        and* v_unset = B.binop `AND (bv m_unset) nv in
+        let* v_set_or_unset = B.binop `OR v_set v_unset in
+        B.binop `EQ v_set_or_unset (bv m_specified) |: SemanticsRule.PMask
+  (* End *)
 
   (* End *)
   (* Evaluation of Local Declarations *)
@@ -1270,7 +1218,7 @@ module Make (B : Backend.S) (C : Config) = struct
     (* Begin EvalSTry *)
     | S_Try (s1, catchers, otherwise_opt) ->
         let s_m = eval_block env s1 in
-        eval_catchers env catchers otherwise_opt s_m |: SemanticsRule.STry
+        eval_catchers catchers otherwise_opt s_m |: SemanticsRule.STry
     (* End *)
     (* Begin EvalSDecl *)
     | S_Decl (_ldk, ldi, _ty_opt, Some e_init) ->
@@ -1427,14 +1375,15 @@ module Make (B : Backend.S) (C : Config) = struct
 
   (* Evaluation of Catchers *)
   (* ---------------------- *)
-  and eval_catchers env catchers otherwise_opt s_m : stmt_eval_type =
+  and eval_catchers catchers otherwise_opt s_m : stmt_eval_type =
     (* [catcher_matches t c] returns true if the catcher [c] match the raised
        exception type [t]. *)
     (* Begin EvalFindCatcher *)
-    let catcher_matches =
-      let static_env = { StaticEnv.empty with global = env.global.static } in
-      fun v_ty (_e_name, e_ty, _stmt) ->
-        subtypes static_env v_ty e_ty |: SemanticsRule.FindCatcher
+    let catcher_matches v_ty (_e_name, e_ty, _stmt) =
+      match (v_ty.desc, e_ty.desc) with
+      | T_Named s1, T_Named s2 ->
+          String.equal s1 s2 |: SemanticsRule.FindCatcher
+      | _ -> false
       (* End *)
     in
     (* Main logic: *)

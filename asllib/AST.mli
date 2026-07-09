@@ -158,13 +158,7 @@ type expr_desc =
   | E_Cond of expr * expr * expr
   | E_GetArray of expr * expr
       (** [E_GetArray base index] Represents an access to an array given by the
-          expression [base] at index [index]. When this node appears in the
-          untyped AST, the index may either be integer-typed or
-          enumeration-typed. When this node appears in the typed AST, the index
-          can only be integer-typed. *)
-  | E_GetEnumArray of expr * expr
-      (** Access an array with an enumeration index. This constructor is only
-          part of the typed AST. *)
+          expression [base] at index [index]. The index is integer-typed. *)
   | E_GetField of expr * identifier
   | E_GetFields of expr * identifier list
   | E_GetCollectionFields of identifier * identifier list
@@ -174,34 +168,23 @@ type expr_desc =
   | E_Tuple of expr list
   | E_Array of { length : expr; value : expr }
       (** Initial value for an array of size [length] and of content [value] at
-          each array cell.
-
-          This expression constructor is only part of the typed AST, i.e. it is
-          only built by the type-checker, not any parser. *)
-  | E_EnumArray of { enum : identifier; labels : identifier list; value : expr }
-      (** Initial value for an array where the index is the enumeration [enum],
-          which declares the list of labels [labels], and the content of each
-          cell is given by [value]. [enum] is only used for pretty-printing.
-
-          This expression constructor is only part of the typed AST, i.e. it is
-          only built by the type-checker, not any parser. *)
+          each array cell. *)
   | E_Arbitrary of ty
-  | E_Pattern of expr * pattern
+  | E_Pattern of expr * pattern_matcher
 
 and expr = expr_desc annotated
 
 and pattern_desc =
   | Pattern_All
-  | Pattern_Any of pattern list
   | Pattern_Geq of expr
   | Pattern_Leq of expr
   | Pattern_Mask of Bitvector.mask
-  | Pattern_Not of pattern
   | Pattern_Range of expr * expr (* lower -> upper, included *)
   | Pattern_Single of expr
-  | Pattern_Tuple of pattern list
 
 and pattern = pattern_desc annotated
+and pattern_kind = Positive | Negative
+and pattern_matcher = pattern list * pattern_kind
 
 (** Slices define lists of indices into arrays and bitvectors. *)
 and slice =
@@ -242,7 +225,7 @@ and type_desc =
   | T_Bool
   | T_Enum of identifier list
   | T_Tuple of ty list
-  | T_Array of array_index * ty
+  | T_Array of expr * ty
   | T_Record of field list
   | T_Exception of field list
   | T_Collection of field list
@@ -280,13 +263,6 @@ and bitfield =
   | BitField_Type of identifier * slice list * ty
       (** A name, its corresponding slice and the type of the bitfield. *)
 
-(** The type of indexes for an array. *)
-and array_index =
-  | ArrayLength_Expr of expr
-      (** An integer expression giving the length of the array. *)
-  | ArrayLength_Enum of identifier * identifier list
-      (** An enumeration name and its list of labels. *)
-
 and field = identifier * ty
 (** A field of a record-like structure. *)
 
@@ -308,13 +284,7 @@ type lexpr_desc =
   | LE_Slice of lexpr * slice list
   | LE_SetArray of lexpr * expr
       (** [LE_SetArray base index] represents a write to an array given by the
-          expression [base] at index [index]. When this node appears in the
-          untyped AST, the index may either be integer-typed or
-          enumeration-typed. When this node appears in the typed AST, the index
-          can only be integer-typed. *)
-  | LE_SetEnumArray of lexpr * expr
-      (** Represents a write to an array with an enumeration index. This
-          constructor is only part of the typed AST. *)
+          expression [base] at index [index]. *)
   | LE_SetField of lexpr * identifier
   | LE_SetFields of lexpr * identifier list * (int * int) list
       (** [LE_SetFields (le, fields, _)] unpacks the various fields. Third
@@ -388,7 +358,13 @@ type stmt_desc =
           AST level hints. *)
 
 and stmt = stmt_desc annotated
-and case_alt_desc = { pattern : pattern; where : expr option; stmt : stmt }
+
+and case_alt_desc = {
+  pattern : pattern_matcher annotated;
+  where : expr option;
+  stmt : stmt;
+}
+
 and case_alt = case_alt_desc annotated
 
 and catcher = identifier option * ty * stmt
@@ -456,7 +432,7 @@ type global_decl = {
 type decl_desc =
   | D_Func of func
   | D_GlobalStorage of global_decl
-  | D_TypeDecl of identifier * ty * (identifier * field list) option
+  | D_TypeDecl of identifier * ty
   | D_Pragma of identifier * expr list
       (** A global pragma, as an explicit node to be used by tools which need
           AST level hints. *)
