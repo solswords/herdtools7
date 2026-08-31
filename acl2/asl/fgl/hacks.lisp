@@ -424,10 +424,10 @@
                   (trace-free-ty-timeframe-imap-p
                    (static_env_global->declared_types static-env))
                   (EQUAL (val-kind val) :v_real)
-                  (equal upbound (<= (ilog2-safe-clock (abs val.val)) (expt 2 128)))
-                  (syntaxp (progn$ (cw "upbound: ~x0~%" upbound)
-                                   t))
-                  upbound
+                  ;; (equal upbound (<= (ilog2-safe-clock (abs val.val)) (expt 2 128)))
+                  ;; (syntaxp (progn$ (cw "upbound: ~x0~%" upbound)
+                  ;;                  t))
+                  ;; upbound
                   )
              (equal (eval-rounddown-*t ENV nil (list val))
                     (b* (((mv res ?new-orac ?trace)
@@ -477,10 +477,11 @@
                   (trace-free-ty-timeframe-imap-p
                    (static_env_global->declared_types static-env))
                   (EQUAL (val-kind val) :v_real)
-                  (equal upbound (<= (ilog2-safe-clock (abs val.val)) (expt 2 128)))
-                  (syntaxp (progn$ (cw "upbound: ~x0~%" upbound)
-                                   t))
-                  upbound)
+                  ;; (equal upbound (<= (ilog2-safe-clock (abs val.val)) (expt 2 128)))
+                  ;; (syntaxp (progn$ (cw "upbound: ~x0~%" upbound)
+                  ;;                  t))
+                  ;; upbound
+                  )
              (equal (eval-roundup-*t ENV nil (list val))
                     (b* (((mv res ?new-orac ?trace)
                           (fgl::fgl-hide
