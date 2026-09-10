@@ -954,7 +954,8 @@
          :hints(("Goal" :use ((:instance omap::in-values-when-assoc
                                (a k) (m x) (b (omap::lookup k x))))
                  :in-theory (enable omap::lookup
-                                    set::in-to-member)))))
+                                    set::in-to-member
+                                    omap::values)))))
 
 (local (defthm ty-satisfied-of-member-when-array-type-satisfied
          (implies (and (array-type-satisfied lst ty)
