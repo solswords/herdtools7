@@ -488,7 +488,7 @@
              (mv `(let ,bindings
                     (fgl::conditionalize
                      ,freevar
-                     (fgl::fgl-hide (,terminates . ,nonkey-formals))
+                     (,terminates . ,nonkey-formals)
                      (,fn ,@nonkey-formals :clk (,clock . ,nonkey-formals))))
                  (+ 1 varcount))))
           ((and (consp (car body)) (equal (caar body) '(when (zp clk))))
@@ -602,3 +602,64 @@
                             (std::get-defines-alist (w state))))))
              (w state))))))
 
+
+
+
+;; In some of our rewrite rules, we want to leave the clock of the call in the LHS free
+;; but have the assumption that it terminates with that clock (and without tracespec).
+;; This then implies that it it terminates and that the clock is big enough.
+
+(define eval_subprogram-*t-terminating-call ((env env-p)
+                                             (name identifier-p)
+                                             (vparams vallist-p)
+                                             (vargs vallist-p)
+                                             &key
+                                             ((clk natp) 'clk)
+                                             (orac 'orac)
+                                             ((pos posn-p) 'pos)
+                                             ((static-env static_env_global-p) 'static-env))
+  (b* ((res (non-exec (mv-nth 0 (eval_subprogram-*t
+                                 env name vparams vargs
+                                 :tracespec (make-tracespec))))))
+    (not (termination-error-p res)))
+  ///
+  (fgl::def-fgl-rewrite eval_subprogram-*t-when-terminating-call
+    (implies (and (equal new-clk (eval_subprogram-*t-clock env name vparams vargs))
+                  (syntaxp (not (equal clk new-clk)))
+                  (eval_subprogram-*t-terminating-call
+                   env name vparams vargs))
+             (equal (eval_subprogram-*t env name vparams vargs)
+                    (fgl::conditionalize
+                     __terminates
+                     (eval_subprogram-*t-terminates env name vparams vargs)
+                     (eval_subprogram-*t env name vparams vargs
+                                         :clk new-clk))))
+    :hints(("Goal" :in-theory (acl2::e/d* (fgl::conditionalize1
+                                           eval_subprogram-*t-terminates
+                                           eval_Subprogram-*t-normalizes-clock-when-terminates)
+                                          (asl-*t-equals-original-rules)))))
+
+  (fgl::remove-fgl-rewrite eval_subprogram-*t-terminating-call)
+
+  (fgl::def-fgl-rewrite eval_subprogram-*t-terminating-call-when-terminates-same-clock
+    (implies (eval_subprogram-*t-terminates env name vparams vargs)
+             (eval_subprogram-*t-terminating-call
+              env name vparams vargs :clk (eval_subprogram-*t-clock env name vparams vargs)))
+    :hints(("Goal" :in-theory (enable eval_subprogram-*t-terminates)))))
+
+
+
+
+
+;; Suppose we have functions fa, ga, fb, gb.  Ga calls fa, and analogously gb
+;; calls fb.  We can rewrite fb -> fa if they both terminate.  We want to show
+;; that we can rewrite gb -> ga if they both terminate.  The call of fb inside
+;; gb rewrites to the same call of fa that is inside ga.  Since we're assuming
+;; the calls of ga and gb terminate, this implies the calls of fb and fa
+;; terminate.
+
+;; The problem is that at the point where we get to the call of fb inside gb,
+;; we know that the call of fb terminates, but we don't know that the call of
+;; fa that we want to rewrite it to also terminates, at least until we rewrite
+;; the call of ga.  If the fb->fa rewrite needs to know that they both
+;; terminate, then how do we get that information? 

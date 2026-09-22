@@ -187,16 +187,6 @@
 
 
 
-#!fgl
-(define interp-st-pathcond-to-cube (interp-st)
-  :returns (cube satlink::lit-listp)
-  (stobj-let ((pathcond (interp-st->pathcond interp-st))
-              (constraint-pathcond (interp-st->constraint interp-st)))
-             (cube)
-             (pathcond-to-cube pathcond (pathcond-to-cube constraint-pathcond nil))
-             cube))
-
-
 (defmacro define-interp-st-run-ctrex-non-guarded ()
   '(skip-proofs
     #!fgl
