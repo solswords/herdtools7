@@ -232,6 +232,11 @@
   (implies (and (fgl::bind-fn-annotation annot 'eval_subprogram-*t-fn)
                 ;; make sure this call hasn't already been printed
                 (not (printed-annotation-index annot))
+                ;; debugging for cases where we're never printing anything
+                ;; (fgl::bind-var dummy (fgl::syntax-interp (b* (((mv res &) (fgl::reference-ctrex-check-path-condition-satisfied fgl::interp-st)))
+                ;;                                            (cw "pathcond satisfied: ~x0~%lits:~%"
+                ;;                                                res (fgl::reference-ctrex-debug-path-condition fgl::interp-st))
+                ;;                                            t)))
                 (fgl::bind-var in-pathcond (fgl::reference-ctrex-pathcond-check))
                 ;; make sure there is a previous call
                 ;; (outermost call needs to be rewrittten by save-oracle-on-outermost-eval_subprogram-*t)
