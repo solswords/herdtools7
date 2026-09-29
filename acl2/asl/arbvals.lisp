@@ -23,7 +23,8 @@
 (in-package "ASL")
 
 (include-book "interp")
-(local (include-book "interp-mods"))
+(include-book "interp-mods")
+(include-book "clause-processors/pseudo-term-fty" :dir :system)
 (local (std::add-default-post-define-hook :fix))
 
 ;; Our ASL interpreter currently models ARBITRARY values by passing an
@@ -171,10 +172,11 @@
 ;; Lookup an address in an arbmap, returning an object of a given type.
 (define arbmap-lookup ((key arbaddr-p) (ty ty-p) (map arbmap-p))
   :guard (ty-resolved-p ty)
-  :returns (res val-p)
-  (ec-call (ty-fix-val (cdr (hons-assoc-equal (arbaddr-fix key)
-                                              (arbmap-fix map)))
-                       ty))
+  :returns (res (iff (val-p res) res))
+  (and (ty-satisfiable ty)
+       (ec-call (ty-fix-val (cdr (hons-assoc-equal (arbaddr-fix key)
+                                                   (arbmap-fix map)))
+                            ty)))
   ///
   (defret arbmap-lookup-satisfies-type
     (implies (ty-satisfiable ty)
@@ -782,6 +784,9 @@
                      ,acl2::rest-expr))))
 
 
+;; These "-special" forms are used only in custom definitions below for cases
+;; where the current arboffset shouldn't be rebound to its sum with the form's
+;; arguments.
 (acl2::def-b*-binder evoo-*a-special
   :body
   `(b* (((evbind-nonrec-*a evoo-*a-tmp) . ,acl2::forms) ;; don't rebind arboffset
@@ -916,7 +921,7 @@
 (defconst *e_cond-*a-def*
   '(b* (((evoo-*a (expr_result test)) (eval_expr-*a env desc.test))
         ((evo-*a choice) (val-case test.val
-                           :v_bool (ev_normal test.val)
+                           :v_bool (ev_normal test.val.val)
                            :otherwise (ev_error "bad test in e_cond" test.val (list pos)))))
      (if choice
          (evtailcall-*a (eval_expr-*a test.env desc.then))
@@ -926,7 +931,7 @@
 (defconst *s_cond-*a-def*
   '(b* (((evoo-*a (expr_result test)) (eval_expr-*a env s.test))
         ((evo-*a choice) (val-case test.val
-                           :v_bool (ev_normal test.val)
+                           :v_bool (ev_normal test.val.val)
                            :otherwise (ev_error "Non-boolean test result in s_cond" s.test (list pos)))))
      (if choice
          (evtailcall-*a (eval_block-*a test.env s.then))
@@ -968,14 +973,14 @@
         (arboffset (make-arbaddr-offset))
         (internal-arbaddr (cons (arbaddr-component-repeat loop-idx loop-iter) arbaddr))
         ((evs-*a env1) (eval_block-*a env s.body :arbaddr internal-arbaddr)))
-     (evtailcall-*a (eval_loop-*a env1 nil limit2 s.test s.body))))
+     (evtailcall-*a (eval_loop-*a env1 nil limit2 s.test s.body :loop-iter 1))))
 
 (defconst *t_named-*a-def*
   '(b* ((decl_types (static_env_global->declared_types
                      (global-env->static (env->global env))))
         (look (hons-assoc-equal ty.name decl_types))
         ((unless look)
-         (evo_error-*a "Camed type not found" (ty-fix x)
+         (evo_error-*a "Named type not found" (ty-fix x)
                        (list pos)))
         ((when (zp clk))
          (evo_error-*a "Clock ran out resolving named type"
@@ -1134,18 +1139,18 @@
              (& (cons (replace-function-bodies (car x) alist)
                       (replace-function-bodies (cdr x) alist)))))))
 
-(local (defun replace-case-bodies (x alist)
-         (if (atom x)
-             x
-           (case-match x
-             ((key & . rest)
-              (let ((look (assoc key alist)))
-                (if look
-                    `(,key ,(cdr look) . ,(replace-case-bodies rest alist))
-                  (cons (replace-case-bodies (car x) alist)
-                        (replace-case-bodies (cdr x) alist)))))
-             (& (cons (replace-case-bodies (car x) alist)
-                      (replace-case-bodies (cdr x) alist)))))))
+(defun replace-case-bodies (x alist)
+  (if (atom x)
+      x
+    (case-match x
+      ((key & . rest)
+       (let ((look (assoc key alist)))
+         (if look
+             `(,key ,(cdr look) . ,(replace-case-bodies rest alist))
+           (cons (replace-case-bodies (car x) alist)
+                 (replace-case-bodies (cdr x) alist)))))
+      (& (cons (replace-case-bodies (car x) alist)
+               (replace-case-bodies (cdr x) alist))))))
 
 (local (defconst *asl-*a-xdoc*
          '(:parents (asl-interpreter-functions)
@@ -1229,7 +1234,7 @@ recursion has an analogous function in this version, suffixed with
           (form (add-define-xdoc
                  "Arbvals version of @(see <NAME>); see @(see asl-interpreter-mutual-recursion-*a) for overview."
                  form))
-          ;; Substitute function names with their -*t suffixed forms.
+          ;; Substitute function names with their -*a suffixed forms.
           (form (sublis *eval-arbvals-substitution* form))
           ;; Remove orac from returns
           (form (remove-orac-from-returns form))
@@ -1613,6 +1618,14 @@ recursion has an analogous function in this version, suffixed with
            (arbaddr-in-scope key arbaddr arboffset scope))
   :hints(("Goal" :in-theory (enable arbaddr-in-scope))))
 
+(defthm arbaddr-in-scope-when-in-narrower-scope
+  (implies (and (arbaddr-in-scope key arbaddr arboffset1 scope1)
+                (arbaddr-offset-lte arboffset arboffset1)
+                (arbaddr-offset-lte scope1 scope))
+           (arbaddr-in-scope key arbaddr arboffset scope))
+  :hints (("goal" :use ((:instance arbaddr-in-scope-when-scope-lte))
+           :in-theory (disable arbaddr-in-scope-when-scope-lte))))
+
 (defthm arbvals-equiv-in-scope-left
   (implies (and (arbvals-equiv-in-scope arbmap1 arbmap2 arbaddr arboffset scope)
                 (arbaddr-offset-lte scope1 scope))
@@ -1784,14 +1797,14 @@ recursion has an analogous function in this version, suffixed with
 
 
 
-(defthm arbaddr-in-for-scope-when-in-scope-while
+(defthm arbaddr-in-for-scope-when-in-scope
   (implies (and (arbaddr-in-scope addr (cons (arbaddr-component-for loop-idx loop-iter)
                                              arbaddr) offset scope)
                 is_while)
            (arbaddr-in-for-scope addr arbaddr loop-iter loop-idx))
   :hints(("Goal" :in-theory (enable arbaddr-in-scope arbaddr-in-for-scope))))
 
-(defthm arbvals-equiv-in-scope-when-equiv-in-for-scope-while
+(defthm arbvals-equiv-in-scope-when-equiv-in-for-scope
   (implies (and (arbvals-equiv-in-for-scope arbmap arbmap1 arbaddr loop-iter loop-idx)
                 is_while)
            (arbvals-equiv-in-scope arbmap arbmap1
@@ -1972,60 +1985,61 @@ recursion has an analogous function in this version, suffixed with
 
 (local (in-theory (disable (tau-system))))
 
-(local (defthm maybe-stmt-arbaddr-offset-when-exists
-         (implies x
-                  (equal (maybe-stmt-arbaddr-offset x)
-                         (stmt-arbaddr-offset x)))
-         :hints(("Goal" :expand ((maybe-stmt-arbaddr-offset x))))))
+(defthm maybe-stmt-arbaddr-offset-when-exists
+  (implies x
+           (equal (maybe-stmt-arbaddr-offset x)
+                  (stmt-arbaddr-offset x)))
+  :hints(("Goal" :expand ((maybe-stmt-arbaddr-offset x))
+          :in-theory (enable maybe-stmt-some->val))))
 
-(local (defthm maybe-expr-arbaddr-offset-when-exists
-         (implies x
-                  (equal (maybe-expr-arbaddr-offset x)
-                         (expr-arbaddr-offset x)))
-         :hints(("Goal" :expand ((maybe-expr-arbaddr-offset x))
-                 :in-theory (enable maybe-expr-some->val)))))
+(defthm maybe-expr-arbaddr-offset-when-exists
+  (implies x
+           (equal (maybe-expr-arbaddr-offset x)
+                  (expr-arbaddr-offset x)))
+  :hints(("Goal" :expand ((maybe-expr-arbaddr-offset x))
+          :in-theory (enable maybe-expr-some->val))))
 
 
-(local (defmacro expand-hint-for-arboffset (form)
-         (let ((offset-form (arboffset-for-form-fn form)))
-           (if (eq (car form) 'arbaddr-offset-sum)
-               nil
-             `'(:expand (,offset-form))))))
+(defmacro expand-hint-for-arboffset (form)
+  (let ((offset-form (arboffset-for-form-fn form)))
+    (if (eq (car form) 'arbaddr-offset-sum)
+        nil
+      `'(:expand (,offset-form)))))
 
-(local (defthm constraint_kind-arbaddr-offset-special
-         (equal (CONSTRAINT_KIND-ARBADDR-OFFSET
-                 (WELLCONSTRAINED
-                  (LIST (CONSTRAINT_EXACT (EXPR (E_VAR (PARAMETRIZED->NAME X))
-                                                '((FNAME . "<none>")
-                                                  (LNUM . 0)
-                                                  (BOL . 0)
-                                                  (CNUM . 0)))))
-                  '(:PRECISION_FULL)))
-                (make-arbaddr-offset))
-         :hints(("Goal" :in-theory (enable constraint_kind-arbaddr-offset
-                                           int_constraintlist-arbaddr-offset
-                                           int_constraint-arbaddr-offset
-                                           expr-arbaddr-offset
-                                           expr-arbaddr-offset-aux
-                                           expr_desc-arbaddr-offset)))))
+(defthm constraint_kind-arbaddr-offset-special
+  (equal (CONSTRAINT_KIND-ARBADDR-OFFSET
+          (WELLCONSTRAINED
+           (LIST (CONSTRAINT_EXACT (EXPR (E_VAR (PARAMETRIZED->NAME X))
+                                         '((FNAME . "<none>")
+                                           (LNUM . 0)
+                                           (BOL . 0)
+                                           (CNUM . 0)))))
+           '(:PRECISION_FULL)))
+         (make-arbaddr-offset))
+  :hints(("Goal" :in-theory (enable constraint_kind-arbaddr-offset
+                                    int_constraintlist-arbaddr-offset
+                                    int_constraint-arbaddr-offset
+                                    expr-arbaddr-offset
+                                    expr-arbaddr-offset-aux
+                                    expr_desc-arbaddr-offset))))
 
-(local (defthm arbaddr-in-scope-of-arb
-         (implies (and (arbaddr-offset-lte offset0 offset1)
-                       (arbaddr-offset-lte (arbaddr-offset-sum
-                                            (make-arbaddr-offset
-                                             :arboffset 1)
-                                            offset1)
-                                           offset2))
-                  (arbaddr-in-scope (cons (arbaddr-component-arb
-                                           (arbaddr-offset->arboffset
-                                            offset1))
-                                          arbaddr)
-                                    arbaddr offset0 offset2))
-         :hints(("Goal" :in-theory (enable arbaddr-in-scope
-                                           arbaddr-last-nonbase-component
-                                           arbaddr-offset-lte
-                                           arbaddr-offset-sum
-                                           arbaddr-offset-lte-component)))))
+(defthm arbaddr-in-scope-of-arb
+  (implies (and (arbaddr-offset-lte offset0 offset1)
+                (arbaddr-offset-lte (arbaddr-offset-sum
+                                     (make-arbaddr-offset
+                                      :arboffset 1)
+                                     offset1)
+                                    offset2))
+           (arbaddr-in-scope (cons (arbaddr-component-arb
+                                    (arbaddr-offset->arboffset
+                                     offset1))
+                                   arbaddr)
+                             arbaddr offset0 offset2))
+  :hints(("Goal" :in-theory (enable arbaddr-in-scope
+                                    arbaddr-last-nonbase-component
+                                    arbaddr-offset-lte
+                                    arbaddr-offset-sum
+                                    arbaddr-offset-lte-component))))
 
 (defthm exprlist-arbaddr-offset-of-named_exprlist->exprs
   (equal (exprlist-arbaddr-offset (named_exprlist->exprs x))
@@ -2035,19 +2049,54 @@ recursion has an analogous function in this version, suffixed with
                                     named_exprlist-arbaddr-offset
                                     named_exprlist->exprs))))
 
+(defun mk-conses (args)
+  (if (atom args)
+      ''nil
+    `(cons ,(car args) ,(mk-conses (cdr args)))))
+
+(defun ota-call-syntax-from-*a-form (call)
+  (b* (((cons a-fn args) call)
+       (ota-fn (intern-in-package-of-symbol
+                (concatenate 'string
+                             (subseq (symbol-name a-fn)
+                                     0 (- (length (symbol-name a-fn)) 5))
+                             "*OTA-FN")
+                a-fn))
+       (args-without (remove-equal 'arbmap args)))
+    `(cons ',ota-fn ,(mk-conses args-without))))
+
+(defun ota-bind-free-look-for-appended-match (arg pattern)
+  (case-match arg
+    (('binary-append sub1 sub2)
+     (or (ota-bind-free-look-for-appended-match sub1 pattern)
+         (ota-bind-free-look-for-appended-match sub2 pattern)))
+    (('mv-nth ''2 sub)
+     (and (acl2::prefixp pattern sub) `(mv-nth '2 ,sub)))
+    (& nil)))
+
+(defmacro ota-call-bind-free (call)
+  (let ((form (ota-call-syntax-from-*a-form call)))
+    `(bind-free (let ((match (ota-bind-free-look-for-appended-match arbmap ,form)))
+                  (and match
+                       (not (equal match arbmap))
+                       `((arbmap1 . ,match))))
+                (arbmap1))))
 
 (encapsulate nil
   (local (in-theory (disable equal-of-ev_normal
                             equal-of-ev_throwing
                             equal-of-ev_error
                             equal-of-continuing
-                            equal-of-returning)))
+                            equal-of-returning
+                            ;; floor mod ??
+                            (tau-system))))
   (with-output
     :evisc (:gag-mode (evisc-tuple 3 4 nil nil))
     (std::defret-mutual-generate <fn>-when-arbvals-equiv-in-scope
       :rules (((not (or (:fnname eval_subprogram-*a)
                         (:fnname eval_loop-*a)
                         (:fnname eval_for-*a)))
+               
                (:add-hyp (arbvals-equiv-in-scope arbmap arbmap1 arbaddr arboffset
                                                  (arbaddr-offset-sum arboffset (arboffset-for-form <call>)))))
               ((:fnname eval_subprogram-*a)
@@ -2059,6 +2108,7 @@ recursion has an analogous function in this version, suffixed with
               ((:fnname eval_for-*a)
                (:add-hyp (arbvals-equiv-in-for-scope arbmap arbmap1 arbaddr
                                                      loop-iter loop-idx)))
+              (t (:add-hyp (ota-call-bind-free <call>)))
               (t
                (:add-concl (equal res
                                   (let ((arbmap arbmap1)) <call>))))

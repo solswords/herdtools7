@@ -119,6 +119,15 @@
       (& (cons (add-define-formals new-formals (car x))
                (add-define-formals new-formals (cdr x)))))))
 
+(defun remove-define-formals (removed-formals x)
+  (if (atom x)
+      x
+    (case-match x
+      (('define name formals . rest)
+       `(define ,name ,(set-difference-equal formals removed-formals) . ,rest))
+      (& (cons (remove-define-formals removed-formals (car x))
+               (remove-define-formals removed-formals (cdr x)))))))
+
 
 (defun add-define-to-defines (def x)
   (if (atom x)
