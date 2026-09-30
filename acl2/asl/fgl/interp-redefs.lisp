@@ -176,6 +176,8 @@
                   (b* ((pos (expr->pos_start e))
                        ((e_arbitrary e) (expr->desc e))
                        ((mv (evo ty) orac) (resolve-ty env e.type))
+                       ((unless (ty-satisfiable ty))
+                        (evo_error "DE_AET: " e (list pos)))
                        ((mv val orac) (ty-oracle-val ty orac))
                        ((unless (val-p val))
                         (evo_error "DE_AET: " e (list pos))))
@@ -191,6 +193,9 @@
                        (env (env-replace-static static-env env))
                        ((evoo-*t ty)
                         (resolve-ty-*t env desc.type))
+                       ((unless (ty-satisfiable ty))
+                        (evo_error-*t "DE_AET: "
+                                       desc (list pos)))
                        ((mv val orac) (ty-oracle-val ty orac))
                        ((unless (val-p val))
                         (evo_error-*t "DE_AET: "
@@ -209,6 +214,8 @@
                        (env (env-replace-static static-env env))
                        ((evoo-*tef _condvar-0 ty)
                         (resolve-ty-*t env desc.type))
+                       ((unless (ty-satisfiable ty))
+                        (evo_error-*t "DE_AET: " desc (list pos)))
                        ((mv val orac) (ty-oracle-val ty orac))
                        ((unless (val-p val))
                         (evo_error-*t "DE_AET: "

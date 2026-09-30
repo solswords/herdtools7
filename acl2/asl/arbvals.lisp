@@ -2070,6 +2070,8 @@ recursion has an analogous function in this version, suffixed with
     (('binary-append sub1 sub2)
      (or (ota-bind-free-look-for-appended-match sub1 pattern)
          (ota-bind-free-look-for-appended-match sub2 pattern)))
+    (('cons & sub)
+     (ota-bind-free-look-for-appended-match sub pattern))
     (('mv-nth ''2 sub)
      (and (acl2::prefixp pattern sub) `(mv-nth '2 ,sub)))
     (& nil)))
