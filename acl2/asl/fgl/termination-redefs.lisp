@@ -27,13 +27,6 @@
 (include-book "arrays")
 (include-book "imaps")
 
-
-(defconsts *trace-interp-fns*
-  (std::collect-names-from-guts
-   (std::defines-guts->gutslist
-     (cdr (assoc 'asl-interpreter-mutual-recursion-*t
-                 (std::get-defines-alist (w state)))))))
-
 (local (in-theory (acl2::e/d* (interp-*t-terminates-functions
                                  fgl::conditionalize1
                                  ev_error->desc-when-wrong-kind

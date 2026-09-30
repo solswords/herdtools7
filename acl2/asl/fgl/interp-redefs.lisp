@@ -1199,3 +1199,12 @@ implementations do.</p>"
   :hints (("Goal" :in-theory (e/d (bitops::part-install-in-terms-of-logapp)
                                   (logapp bitops::part-install)))))
 
+
+
+
+
+(defconsts *trace-interp-fns*
+  (std::collect-names-from-guts
+   (std::defines-guts->gutslist
+     (cdr (assoc 'asl-interpreter-mutual-recursion-*t
+                 (std::get-defines-alist (w state)))))))
