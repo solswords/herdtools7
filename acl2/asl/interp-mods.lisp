@@ -206,3 +206,28 @@
       (('define !name . &) x)
       (& (or (find-define name (car x))
              (find-define name (cdr x)))))))
+
+(defun replace-function-bodies (x alist)
+  (if (atom x)
+      x
+    (case-match x
+      (('define name . rest)
+       (let ((look (assoc name alist)))
+         (if look
+             `(define ,name ,@(butlast rest 1) ,(cdr look))
+           x)))
+      (& (cons (replace-function-bodies (car x) alist)
+               (replace-function-bodies (cdr x) alist))))))
+
+(defun replace-case-bodies (x alist)
+  (if (atom x)
+      x
+    (case-match x
+      ((key & . rest)
+       (let ((look (assoc key alist)))
+         (if look
+             `(,key ,(cdr look) . ,(replace-case-bodies rest alist))
+           (cons (replace-case-bodies (car x) alist)
+                 (replace-case-bodies (cdr x) alist)))))
+      (& (cons (replace-case-bodies (car x) alist)
+               (replace-case-bodies (cdr x) alist))))))
