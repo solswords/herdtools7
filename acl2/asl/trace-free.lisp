@@ -2422,7 +2422,9 @@
   :hints (("Goal"
            :expand ((:free (tracespec) (eval_subprogram-*t env fn vparams vargs))
                     (find-call-tracespec fn pos '(nil nil nil nil)))
-           :in-theory (enable call-interior-tracespec
-                              eval_subprogram-*t1-equals-original
-                              maybe-call-tracespec->interior-tracespec
-                              maybe-call-tracespec->empty-tracespec))))
+           :in-theory (e/d (call-interior-tracespec
+                            eval_subprogram-*t1-equals-original
+                            maybe-call-tracespec->interior-tracespec
+                            maybe-call-tracespec->empty-tracespec)
+                           (eval_subprogram-*t-without-trace-independent-of-pos)))))
+

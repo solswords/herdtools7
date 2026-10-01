@@ -91,16 +91,6 @@
 ;;                           :ev_error)
 ;;                         (equal (ev_error->desc (mv-nth 0 (eval_expr-*t env e))) "Trace abort"))))))
 
-(make-event
- `(defthm eval_subprogram-*t-without-trace-independent-of-pos
-    (implies (and (syntaxp (not (equal pos '',*dummy-position*)))
-                  (tracespec-emptyp tracespec))
-             (equal (eval_subprogram-*t env name vparams vargs)
-                    (eval_subprogram-*t env name vparams vargs :pos *dummy-position*)))
-    :hints(("Goal" :expand ((:free (pos) (eval_subprogram-*t env name vparams vargs)))
-            :in-theory (enable call-trace-output
-                               call-abort-after)))))
-
 (local (defthmd error-when-termination-error-p
          (implies (termination-error-p x)
                   (equal (eval_result-kind x) :ev_error))

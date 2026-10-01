@@ -1264,3 +1264,13 @@ versions @(see eval_subprogram-*t1) and @(see eval_stmt-*t1).</p>")))
       :hints ((vl::big-mutrec-default-hint 'eval_expr-*t-fn id nil world))
       :mutual-recursion asl-interpreter-mutual-recursion-*t)))
 
+
+(make-event
+ `(defthm eval_subprogram-*t-without-trace-independent-of-pos
+    (implies (and (syntaxp (not (equal pos '',*dummy-position*)))
+                  (tracespec-emptyp tracespec))
+             (equal (eval_subprogram-*t env name vparams vargs)
+                    (eval_subprogram-*t env name vparams vargs :pos *dummy-position*)))
+    :hints(("Goal" :expand ((:free (pos) (eval_subprogram-*t env name vparams vargs)))
+            :in-theory (enable call-trace-output
+                               call-abort-after)))))
