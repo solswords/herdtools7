@@ -16,7 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         arch:
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             make-test-target: litmus-x86_64-test X86_64_PREFIX=''
           - os: ubuntu-24.04-arm
             make-test-target: litmus-aarch64-test
@@ -27,18 +27,16 @@ jobs:
 
     steps:
       - name: Checkout tree
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
-      - name: Set-up OCaml ${{ matrix.ocaml-compiler }}
-        uses: ocaml/setup-ocaml@v3
+      - name: Set up OCaml and dependencies
+        uses: ./.github/actions/setup-opam
         with:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
+          with-test-dependencies: "false"
 
       - name: Install qemu
         run: sudo apt update && sudo apt install qemu-system -qq
-
-      - name: Install opam dependencies
-        run: opam install . --deps-only
 
       - name: Build local dependencies
         run: |

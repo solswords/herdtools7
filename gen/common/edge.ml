@@ -37,6 +37,7 @@ module type S = sig
   type value = Value.v
 
   val pp_atom : atom -> string
+  val pp_atom_separate : atom -> string list
   val tr_value : atom option -> value -> value
   val overwrite_value : value -> atom option -> value -> value
   val extract_value : value -> atom option -> value
@@ -50,7 +51,7 @@ module type S = sig
 
 (* edge proper *)
   type tedge =
-    | Rf of ie | Fr of ie | Ws of ie
+    | Communication of com * ie
     | Po of sd*extr*extr | Fenced of fence*sd*extr*extr
     | Dp of dp*sd*extr
     | Leave of com (* Leave thread *)
@@ -69,6 +70,7 @@ module type S = sig
   val is_insert_store : tedge -> bool
   val is_non_pseudo : tedge -> bool
   val is_dp_addr : tedge -> bool
+  val is_dp_data : tedge -> bool
   val compute_rmw : RMW.rmw -> value -> value -> value
   val is_valid_rmw : RMW.rmw list -> bool
 
@@ -91,12 +93,14 @@ module type S = sig
   val parse_atoms : string list -> atom option list
   val get_access_atom: atom option -> MachMixed.t option
 
+  val equal_edge_atoms : edge -> edge -> bool
+
   val parse_fence : string -> fence
   val parse_edge_annotations : string -> (atom option * atom option) option
   val parse_edge : string -> edge
   val parse_edges : string -> edge list
 
-  val pp_edges : edge list -> string
+  val pp_edges : ?separate:bool -> edge list -> string
 
 (* Get source and target event direction,
    Returning Irr means that a Read OR a Write is acceptable,
@@ -209,6 +213,7 @@ and module RMW = A.RMW = struct
   let is_valid_rmw = RMW.is_valid_rmw
 
   let pp_atom = A.pp_atom
+  let pp_atom_separate = A.pp_atom_separate
   let tr_value = A.tr_value
   let overwrite_value = A.overwrite_value
   let extract_value = A.extract_value
@@ -228,7 +233,7 @@ and module RMW = A.RMW = struct
 
 (* edge proper *)
   type tedge =
-    | Rf of ie | Fr of ie | Ws of ie
+    | Communication of com * ie
     | Po of sd*extr*extr | Fenced of fence*sd*extr*extr
     | Dp of dp*sd*extr
     | Leave of com
@@ -243,27 +248,31 @@ and module RMW = A.RMW = struct
 
   let is_id = function
     | Id -> true
-    | Store|Insert _|Hat|Rmw _|Rf _|Fr _|Ws _|Po (_, _, _)
+    | Store|Insert _|Hat|Rmw _|Communication _|Po (_, _, _)
     | Fenced (_, _, _, _)|Dp (_, _, _)|Leave _|Back _|Node _ -> false
 
   let is_insert_store = function
     | Store|Insert _ -> true
-    | Id|Hat|Rmw _|Rf _|Fr _|Ws _|Po (_, _, _)
+    | Id|Hat|Rmw _|Communication _|Po (_, _, _)
     | Fenced (_, _, _, _)|Dp (_, _, _)|Leave _|Back _|Node _ -> false
 
   let is_node = function
     | Node _ -> true
-    | Id|Hat|Rmw _|Rf _|Fr _|Ws _|Po (_, _, _)
+    | Id|Hat|Rmw _|Communication _|Po (_, _, _)
     | Fenced (_, _, _, _)|Dp (_, _, _)|Leave _|Back _|Insert _
     | Store -> false
 
   let is_non_pseudo = function
     | Store|Insert _ |Id|Node _-> false
-    | Hat|Rmw _|Rf _|Fr _|Ws _|Po (_, _, _)
+    | Hat|Rmw _|Communication _|Po (_, _, _)
     | Fenced (_, _, _, _)|Dp (_, _, _)|Leave _|Back _ -> true
 
   let is_dp_addr = function
     |Dp (dp, _, _) -> F.is_addr dp
+    |_ -> false
+
+  let is_dp_data = function
+    |Dp (dp, _, _) -> F.is_data dp
     |_ -> false
 
   type edge = { edge: tedge;  a1:atom option; a2: atom option; }
@@ -285,13 +294,16 @@ and module RMW = A.RMW = struct
   | _, None, None -> ""
   | _, _, _ -> sprintf "%s%s" (pp_atom_option a1) (pp_atom_option a2)
 
+  let pp_communication_compat compat com ie =
+    let com = match com with
+    | Co when compat -> "Ws"
+    | _ -> pp_com com in
+    match ie with
+    | UnspecCom -> com
+    | _ -> sprintf "%s%s" com (pp_ie ie)
+
   let pp_tedge_compat compat = function
-    | Rf UnspecCom -> sprintf "Rf"
-    | Fr UnspecCom -> sprintf "Fr"
-    | Ws UnspecCom -> if compat then sprintf "Ws" else sprintf "Co"
-    | Rf ie -> sprintf "Rf%s" (pp_ie ie)
-    | Fr ie -> sprintf "Fr%s" (pp_ie ie)
-    | Ws ie -> if compat then sprintf "Ws%s" (pp_ie ie) else sprintf "Co%s" (pp_ie ie)
+    | Communication (com,ie) -> pp_communication_compat compat com ie
     | Po (UnspecLoc,Irr,Irr) -> "Po"
     | Po (sd,e1,e2) ->
       sprintf "Po%s%s%s" (pp_sd sd) (pp_extr e1) (pp_extr e2)
@@ -317,14 +329,12 @@ and module RMW = A.RMW = struct
       "{edge=%s, a1=%s, a2=%s}"
       (pp_tedge e.edge) (pp_atom_option e.a1) (pp_atom_option e.a2)
 
-  let pp_edge_compat compat e =
+  let pp_edge e =
     let edge = match e.edge with
     | Id -> ""
-    | _ -> pp_tedge_compat compat e.edge in
+    | _ -> pp_tedge e.edge in
     let annotation = pp_annotations e.edge e.a1 e.a2 in
     edge ^ annotation
-
-  let pp_edge e = pp_edge_compat false e
 
   let compare_atomo = Option.compare A.compare_atom
 
@@ -344,17 +354,18 @@ and module RMW = A.RMW = struct
 let pp_dp_default tag sd e = sprintf "%s%s%s" tag (pp_sd sd) (pp_extr e)
 
   let do_dir_tgt_com = function
-    | CRf -> Dir R
-    | CWs|CFr -> Dir W
+    | Rf -> Dir R
+    | Co|Fr -> Dir W
 
  and do_dir_src_com = function
-   | CRf|CWs -> Dir W
-   | CFr -> Dir R
+   | Rf|Co -> Dir W
+   | Fr -> Dir R
 
   let do_dir_tgt e = match e with
   | Po(_,_,e)| Fenced(_,_,_,e)|Dp (_,_,e) -> e
-  | Rf _| Hat -> Dir R
-  | Ws _|Fr _|Rmw _  -> Dir W
+  | Hat -> Dir R
+  | Rmw _  -> Dir W
+  | Communication (c, _)
   | Leave c|Back c -> do_dir_tgt_com c
   | Id -> NoDir
   | Insert _ -> NoDir
@@ -364,8 +375,8 @@ let pp_dp_default tag sd e = sprintf "%s%s%s" tag (pp_sd sd) (pp_extr e)
 
   and do_dir_src e = match e with
   | Po(_,e,_)| Fenced(_,_,e,_) -> e
-  | Dp _|Fr _|Hat|Rmw _ -> Dir R
-  | Ws _|Rf _ -> Dir W
+  | Dp _|Hat|Rmw _ -> Dir R
+  | Communication(c, _)
   | Leave c|Back c -> do_dir_src_com c
   | Id -> NoDir
   | Insert _ -> NoDir
@@ -374,19 +385,17 @@ let pp_dp_default tag sd e = sprintf "%s%s%s" tag (pp_sd sd) (pp_extr e)
 
   let do_loc_sd e = match e with
   | Po (sd,_,_) | Fenced (_,sd,_,_) | Dp (_,sd,_) -> sd
-  | Insert _|Store|Node _|Fr _|Ws _|Rf _|Hat|Rmw _|Id|Leave _|Back _ -> Same
+  | Insert _|Store|Node _|Communication _|Hat|Rmw _|Id|Leave _|Back _ -> Same
 
   let do_is_diff e = Code.is_diff_loc @@ do_loc_sd e
 
 let fold_tedges_compat f r =
-  let r = fold_ie wildcard (fun ie -> f (Ws ie)) r in
+  let r = fold_ie wildcard (fun ie -> f (Communication (Co,ie))) r in
   let r = RMW.fold_rmw_compat (fun rmw -> f (Rmw rmw)) r
   in r
 
 let fold_tedges f r =
-  let r = fold_ie wildcard (fun ie -> f (Rf ie)) r in
-  let r = fold_ie wildcard (fun ie -> f (Fr ie)) r in
-  let r = fold_ie wildcard (fun ie -> f (Ws ie)) r in
+  let r = fold_com (fun com r -> fold_ie wildcard (fun ie -> f (Communication (com,ie))) r) r in
   let r = RMW.fold_rmw wildcard (fun rmw -> f (Rmw rmw)) r in
   let r = fold_sd_extr_extr wildcard (fun sd e1 e2 r -> f (Po (sd,e1,e2)) r) r in
   let r = F.fold_all_fences (fun fe -> f (Insert fe)) r in
@@ -397,15 +406,8 @@ let fold_tedges f r =
         fold_sd_extr_extr wildcard
           (fun sd e1 e2 -> f (Fenced (fe,sd,e1,e2)))) r in
   let r =
-    F.fold_dpr
-      (fun dp -> fold_sd wildcard (fun sd -> f (Dp (dp,sd,Dir R)))) r in
-  let r =
-    F.fold_dpw
-      (fun dp -> fold_sd wildcard (fun sd -> f (Dp (dp,sd,Dir W)))) r in
-  let r =
-    if wildcard then F.fold_dpw
-      (fun dp -> fold_sd wildcard (fun sd -> f (Dp (dp,sd,Irr)))) r
-    else r in
+    F.fold_dp
+      (fun dp -> fold_sd_extr wildcard (fun sd e -> f (Dp (dp,sd,e)))) r in
   let r = f Id r in
   let r = f (Node R) (f (Node W) r) in
   let r = f Hat r in
@@ -422,6 +424,34 @@ let fold_tedges f r =
     | Some a1,Some a2 -> A.overlap_atoms a1 a2
 
   let get_access_atom = A.get_access_atom
+
+  let equal_atomo = Option.equal (fun a1 a2 -> A.compare_atom a1 a2 = 0)
+
+  let equal_tedge lhs rhs = match lhs,rhs with
+  | Communication (c1,ie1),Communication (c2,ie2) ->
+      Code.equal_com c1 c2 && Code.equal_ie ie1 ie2
+  | Po (sd1,e11,e12),Po (sd2,e21,e22) ->
+      Code.equal_sd sd1 sd2 && Code.equal_extr e11 e21 &&
+      Code.equal_extr e12 e22
+  | Fenced (f1,sd1,e11,e12),Fenced (f2,sd2,e21,e22) ->
+      F.compare_fence f1 f2 = 0 && Code.equal_sd sd1 sd2 &&
+      Code.equal_extr e11 e21 && Code.equal_extr e12 e22
+  | Dp (dp1,sd1,e1),Dp (dp2,sd2,e2) ->
+      F.equal_dp dp1 dp2 && Code.equal_sd sd1 sd2 && Code.equal_extr e1 e2
+  | Leave c1,Leave c2
+  | Back c1,Back c2 -> Code.equal_com c1 c2
+  | Id,Id
+  | Store,Store
+  | Hat,Hat -> true
+  | Insert f1,Insert f2 -> F.compare_fence f1 f2 = 0
+  | Node d1,Node d2 -> Code.equal_extr (Dir d1) (Dir d2)
+  | Rmw rmw1,Rmw rmw2 -> RMW.equal_rmw rmw1 rmw2
+  | (Communication _|Po _|Fenced _|Dp _|Leave _|Back _|Id
+    |Insert _|Store|Node _|Hat|Rmw _),_ -> false
+
+  let equal_edge_atoms lhs rhs =
+    equal_tedge lhs.edge rhs.edge &&
+    equal_atomo lhs.a1 rhs.a1 && equal_atomo lhs.a2 rhs.a2
 
   let same_access_atoms a1 a2 =
     Misc.opt_eq MachMixed.equal (get_access_atom a1) (get_access_atom a2)
@@ -544,10 +574,10 @@ let fold_tedges f r =
     if do_self && instr_atom != None then
       iter_ie
         (fun ie ->
-           add_lxm_edge (sprintf "Iff%s" (pp_ie ie)) { a1=None; a2=instr_atom; edge=(Rf ie); } ;
-           add_lxm_edge (sprintf "Irf%s" (pp_ie ie)) { a1=None; a2=instr_atom; edge=(Rf ie); } ;
-           add_lxm_edge (sprintf "Fif%s" (pp_ie ie)) { a1=instr_atom; a2=None; edge=(Fr ie); } ;
-           add_lxm_edge (sprintf "Ifr%s" (pp_ie ie)) { a1=instr_atom; a2=None; edge=(Fr ie); });
+           add_lxm_edge (sprintf "Iff%s" (pp_ie ie)) { a1=None; a2=instr_atom; edge=(Communication (Rf,ie)); } ;
+           add_lxm_edge (sprintf "Irf%s" (pp_ie ie)) { a1=None; a2=instr_atom; edge=(Communication (Rf,ie)); } ;
+           add_lxm_edge (sprintf "Fif%s" (pp_ie ie)) { a1=instr_atom; a2=None; edge=(Communication (Fr,ie)); } ;
+           add_lxm_edge (sprintf "Ifr%s" (pp_ie ie)) { a1=instr_atom; a2=None; edge=(Communication (Fr,ie)); });
     ()
 
   let fold_pp_edges f =
@@ -596,6 +626,28 @@ let fold_tedges f r =
     | Some (annotation, "") -> Some annotation
     | _ -> None
 
+  let check_invalid_annotation input =
+    let annotation =
+      let len = String.length input in
+      if len > 2 && input.[1] = '.' then String.sub input 2 (len - 2)
+      else input in
+    let len = String.length annotation in
+    if do_mixed && len > 1 then
+      let size = match annotation.[0] with
+        | 'b' -> Some MachSize.Byte
+        | 'h' -> Some MachSize.Short
+        | 'w' -> Some MachSize.Word
+        | 'q' -> Some MachSize.Quad
+        | 's' -> Some MachSize.S128
+        | _ -> None in
+      match size,int_of_string_opt (String.sub annotation 1 (len - 1)) with
+      | Some size,Some offset when offset mod MachSize.nbytes size <> 0 ->
+          sprintf
+            "Misaligned mixed-size annotation %s: offset %d is not aligned to the %d-byte access size"
+            input offset (MachSize.nbytes size)
+      | _,_ -> input
+    else input
+
   (* Parse two edge annotations, for example `AL`. *)
   let parse_edge_annotations string =
     match lookup_atom_prefix string with
@@ -616,7 +668,9 @@ let fold_tedges f r =
     let parse_annotation_only () =
       match parse_annotation input with
       | Some annotation -> annotation_edge annotation
-      | None -> Warn.fatal "Bad edge: %s" input in
+      | None ->
+          let message = check_invalid_annotation input in
+          Warn.user_error "Bad edge: %s" message in
     match lookup_edge_prefix input with
     | None -> parse_annotation_only ()
     | Some (edge, "") -> edge
@@ -632,20 +686,38 @@ let fold_tedges f r =
   let parse_edges s =
     pre_parse_string s |> List.map parse_edge
 
-  let pp_edges es = String.concat " " (List.map pp_edge es)
+  (* Separating annotations produces a cycle description that can be passed
+     back to diyone7, even when several annotations have been merged. *)
+  let pp_edges ?(separate=false) es =
+    if separate then
+      List.concat_map
+        (fun e ->
+          (* An instruction annotation cannot stand alone, so edges touching
+             an instruction access must keep their composite spelling. *)
+          if A.is_ifetch e.a1 || A.is_ifetch e.a2 then [pp_edge e]
+          else
+            let edge = match e.edge with Id -> [] | _ -> [pp_tedge e.edge] in
+            let annotations = match e.a2 with
+            | None -> []
+            | Some atom when A.compare_atom atom A.default_atom = 0 -> []
+            | Some atom -> pp_atom_separate atom in
+            edge@annotations)
+        es
+      |> String.concat " "
+    else String.concat " " (List.map pp_edge es)
 
   let do_set_tgt d e = match e  with
   | Po(sd,src,_) -> Po (sd,src,Dir d)
   | Fenced(f,sd,src,_) -> Fenced(f,sd,src,Dir d)
   | Dp (dp,sd,_) -> Dp (dp,sd,Dir d)
-  | Rf _ | Hat
-  | Insert _|Store|Id|Node _|Ws _|Fr _|Rmw _|Leave _|Back _-> e
+  | Communication _ | Hat
+  | Insert _|Store|Id|Node _|Rmw _|Leave _|Back _-> e
 
   and do_set_src d e = match e with
   | Po(sd,_,tgt) -> Po(sd,Dir d,tgt)
   | Fenced(f,sd,_,tgt) -> Fenced(f,sd,Dir d,tgt)
-  | Fr _|Hat|Dp _
-  | Insert _|Store|Id|Node _|Ws _|Rf _|Rmw _|Leave _|Back _ -> e
+  | Communication _|Hat|Dp _
+  | Insert _|Store|Id|Node _|Rmw _|Leave _|Back _ -> e
 
   let set_tgt d e = { e with edge = do_set_tgt d e.edge ; }
   and set_src d e = { e with edge = do_set_src d e.edge ; }
@@ -655,7 +727,7 @@ let fold_tedges f r =
 
   let get_ie e = match e.edge with
   | Id |Po _|Dp _|Fenced _|Rmw _ -> Int
-  | Rf ie|Fr ie|Ws ie -> ie
+  | Communication (_,ie) -> ie
   | Leave _|Back _|Hat -> Ext
   | Insert _|Store|Node _ -> Int
 
@@ -681,17 +753,17 @@ let fold_tedges f r =
       end
 
   let is_ext e = match e.edge with
-  | Rf Ext|Fr Ext|Ws Ext
+  | Communication (_,Ext)
   | Leave _|Back _ -> true
   | _ -> false
 
   let is_com e = match e.edge with
-  | Rf _|Fr _|Ws _|Leave _|Back _| Hat -> true
+  | Communication _|Leave _|Back _| Hat -> true
   | _ -> false
 
   let is_fetch e = match e.edge with
-  | Rf _ -> is_ifetch e.a2
-  | Fr _ -> is_ifetch e.a1
+  | Communication (Rf,_) -> is_ifetch e.a2
+  | Communication (Fr,_) -> is_ifetch e.a1
   | _ -> is_ifetch e.a1 || ( loc_sd e = Same && is_ifetch e.a2)
 
   let compat_atoms a1 a2 = match merge_atoms a1 a2 with
@@ -703,7 +775,15 @@ let fold_tedges f r =
   | _,None -> true
   | Some a1,Some a2 -> compat_atoms a1 a2
 
-  let can_precede x y = can_precede_dirs  x y && can_precede_atoms x y
+  let can_precede_dp_data_read x y = match x.edge with
+  | Dp (dp,_,Dir R) when F.is_data dp ->
+      begin match y.edge with Rmw _ -> true | _ -> false end
+  | _ -> true
+
+  let can_precede x y =
+    can_precede_dirs x y &&
+    can_precede_atoms x y &&
+    can_precede_dp_data_read x y
 
 (*************************************************************)
 (* Expansion of irrelevant direction specifications in edges *)
@@ -725,25 +805,18 @@ let fold_tedges f r =
     expand_dir e1
       (fun d1 -> expand_dir e2 (fun d2 -> f d1 d2))
 
-  let expand_dp_dir dp sd f acc = match sd with
-  | Dir _|NoDir -> f sd acc
-  | Irr ->
-    let expand_dir_list = F.expand_dp_dir dp in
-    List.fold_left (fun acc sd -> f (Dir sd) acc) acc expand_dir_list
-
   let do_expand_edge e f acc =
     match e.edge with
     | Insert _|Store|Id|Node _
     | Hat |Leave _|Back _
       -> f e acc
-    | Rf com -> expand_com com ( fun new_com -> f {e with edge = Rf(new_com)}) acc
-    | Fr com -> expand_com com ( fun new_com -> f {e with edge = Fr(new_com)}) acc
-    | Ws com -> expand_com com ( fun new_com -> f {e with edge = Ws(new_com)}) acc
+    | Communication (com,ie) ->
+        expand_com ie (fun new_ie -> f {e with edge=Communication (com,new_ie)}) acc
     | Rmw rmw ->
         let expand_rmw_list = A.RMW.expand_rmw rmw in
         List.fold_left ( fun acc new_rmw -> f {e with edge=Rmw(new_rmw);} acc) acc expand_rmw_list
     | Dp (dp,sd,expr) ->
-      expand_dp_dir dp expr (fun new_expr ->
+      expand_dir expr (fun new_expr ->
         expand_loc sd ( fun new_sd -> f {e with edge=Dp(dp,new_sd,new_expr);})) acc
     | Po(sd,e1,e2) ->
         expand_dir2 e1 e2 (fun d1 d2 ->
@@ -804,6 +877,9 @@ let fold_tedges f r =
       | Some _,None -> Some(e1, set_a1 e2 a1)
       | Some a1,Some a2 ->
         match merge_atoms a1 a2 with
+        | None when is_id e1.edge && is_id e2.edge ->
+            Warn.fatal "Incompatible annotations %s and %s"
+              (pp_atom a1) (pp_atom a2)
         | None -> None
         | Some _ as a ->
           Some(set_a2 e1 a,set_a1 e2 a) in
@@ -877,7 +953,9 @@ let fold_tedges f r =
           (pp_edge e) in
     (* Check `Id` edge are all pseudo annotation *)
     let check_pseudo_id e =
-      if is_id e.edge then
+      if is_id e.edge && (is_ifetch e.a1 || is_ifetch e.a2) then
+        Warn.fatal "Standalone instruction access annotation is not supported"
+      else if is_id e.edge then
         Warn.fatal "Invalid extra annotation %s" (pp_edge e) in
     List.iter (fun e -> check_mixed e; check_pseudo_id e) es;
     (* Match annotations between non-insert edges *)
@@ -959,22 +1037,22 @@ let fold_tedges f r =
 
 
   let varatom es f r =
-    let rec var_rec ves es r = match es with
-    | [] -> f (resolve_edges (List.rev ves)) r
+    let rec var_rec ves es k = match es with
+    | [] -> f (List.rev ves) k
     | e::es ->
         var_fence e
-          (fun e r -> match e.a1 with
-          | Some _ -> var_rec (e::ves) es r
+          (fun e k -> match e.a1 with
+          | Some _ -> var_rec (e::ves) es k
           | None ->
               begin match dir_src e with
               | Dir d ->
                   A.varatom_dir d
-                    (fun a r -> var_rec ({e with a1=a}::ves)  es r)
-                    r
-              | NoDir ->  var_rec (e::ves) es r
+                    (fun a k -> var_rec ({e with a1=a}::ves)  es k)
+                    k
+              | NoDir ->  var_rec (e::ves) es k
               | Irr ->  assert false (* resolved at this step *)
               end)
-          r in
+          k in
     var_rec [] es r
 
 
@@ -1028,9 +1106,10 @@ let fold_tedges f r =
     [plain_edge (Po (seq_sd e1 e2,dir_src e1,dir_tgt e2))]::k
 
   let com e1 e2 k = match e1.edge,e2.edge with
-  | Ws _,Ws _
-  | Fr _,Ws _ -> [e1]::k
-  | Rf _,Fr _ -> [plain_edge (Ws Int)]::k
+  | Communication (Co,_),Communication (Co,_)
+  | Communication (Fr,_),Communication (Co,_) -> [e1]::k
+  | Communication (Rf,_),Communication (Fr,_) ->
+      [plain_edge (Communication (Co,Int))]::k
   | _,_ -> k
 
   let compact_sequence xs ys e1 e2 =

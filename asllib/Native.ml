@@ -128,9 +128,9 @@ module NativeBackend (C : Config) = struct
   let v_exception li = v_record li
   let non_tuple_exception v = mismatch_type v [ T_Tuple [] ]
 
-  let bad_index i n =
-    mismatch_type (v_of_int i)
-      [ integer_range' zero_expr (expr_of_int (n - 1)) ]
+  let bad_index start length =
+    Error.fatal_unknown_pos
+      (Error.BadIndex { handling_time = C.error_handling_time; start; length })
 
   let doesnt_have_fields_exception v =
     mismatch_type v [ T_Record []; T_Exception []; T_Collection [] ]
@@ -182,7 +182,9 @@ module NativeBackend (C : Config) = struct
           Slice_Length (expr_of_int start, expr_of_int length))
         positions
     in
-    Error.(fatal_unknown_pos (BadSlices (C.error_handling_time, slices, 0)))
+    Error.(
+      fatal_unknown_pos
+        (BadSlices (NegativeStartOrLength (C.error_handling_time, slices))))
 
   let slices_to_positions positions =
     List.map
@@ -281,7 +283,8 @@ module NativeBackend (C : Config) = struct
           if Z.gt i Z.zero then [ L_Int (Z.log2 i |> Z.of_int) |> nv_literal ]
           else
             Error.fatal_unknown_pos
-            @@ Error.BadPrimitiveArgument ("FloorLog2", "greater than 0")
+            @@ Error.BadPrimitiveArgument
+                 (C.error_handling_time, "FloorLog2", "greater than 0")
       | [ v ] -> mismatch_type v [ integer' ]
       | li ->
           Error.fatal_unknown_pos
@@ -311,14 +314,14 @@ module NativeBackend (C : Config) = struct
     let round_towards_zero = wrap_real_to_int "RoundTowardsZero" truncate
 
     let primitives =
-      let e_var x = E_Var x |> add_dummy_annotation in
+      let e_var x = E_Var x |> add_dummy_pos in
       let eoi i = expr_of_int i in
       let binop = ASTUtils.binop in
       let minus_one e = binop `SUB e (eoi 1) in
       let pow_2 = binop `POW (eoi 2) in
       let neg e = E_Unop (NEG, e) |> add_pos_from e in
       (* [t_bits "N"] is the bitvector type of length [N]. *)
-      let t_bits x = T_Bits (e_var x, []) |> add_dummy_annotation in
+      let t_bits x = T_Bits (e_var x, []) |> add_dummy_pos in
       (* [p ~parameters ~args ~returns name f] declares a primtive named [name]
          with body [f], and signature specified by [parameters] [args] and
          [returns]. *)
@@ -402,7 +405,7 @@ let rec unknown_of_aggregate_type unknown_of_singular_type ~eval_expr_sef ty =
           let n = Z.to_int n in
           if n >= 0 then
             NV_Vector (List.init n (fun _ -> unknown_of_type t_elem))
-          else Error.(fatal_from ty (UnsupportedExpr (Dynamic, e_length)))
+          else Error.(fatal_from ty (ArbitraryEmptyType ty))
       | _ -> (* Bad types *) assert false)
   | T_Record fields | T_Exception fields ->
       fields
@@ -459,7 +462,12 @@ module DeterministicBackend = struct
     deterministic_unknown_of_type ~eval_expr_sef ty
 end
 
-module NativeConfig (I : Instrumentation.SEMINSTR) = struct
+module NativeConfig
+    (I : Instrumentation.SEMINSTR)
+    (S : sig
+      val out_buffer : Buffer.t option
+    end) =
+struct
   let unroll = 0
   let recursive_unroll _ = None
   let error_handling_time = Error.Dynamic
@@ -468,35 +476,56 @@ module NativeConfig (I : Instrumentation.SEMINSTR) = struct
   let display_call_stack_on_error = false
   let track_symbolic_path = false
   let bit_clear_optimisation = false
+  let out_buffer = S.out_buffer
 
   module Instr = I
 end
 
+module UseStdout = struct
+  let out_buffer = None
+end
+
 module DeterministicInterpreter (I : Instrumentation.SEMINSTR) =
-  Interpreter.Make (DeterministicBackend) (NativeConfig (I))
+  Interpreter.Make (DeterministicBackend) (NativeConfig (I) (UseStdout))
 
 module DeterministicInterpreterNoInstr =
   DeterministicInterpreter (Instrumentation.SemanticsNoInstr)
-
-module DeterministicInterpreterSingleSetInstr =
-  DeterministicInterpreter (Instrumentation.SemanticsSingleSetInstr)
+(** Fast path for interpretation: no instrumentation and no custom output *)
 
 let exit_value = function
   | NV_Literal (L_Int i) -> i |> Z.to_int
   | v -> mismatch_type v [ integer' ]
 
-let interpret ?instrumentation static_env main_name ast =
-  match instrumentation with
-  | Some true ->
-      let module B = Instrumentation.SemanticsSingleSetBuffer in
-      B.reset ();
-      let res =
-        DeterministicInterpreterSingleSetInstr.run_typed static_env main_name
-          ast
-      in
-      (exit_value res, B.get ())
-  | Some false | None ->
+let interpret ?(instrumentation = false) ?out_buffer static_env main_name ast =
+  match (instrumentation, out_buffer) with
+  | false, None ->
       let res =
         DeterministicInterpreterNoInstr.run_typed static_env main_name ast
       in
       (exit_value res, [])
+  | false, Some buf ->
+      let module Interpret =
+        Interpreter.Make
+          (DeterministicBackend)
+          (NativeConfig
+             (Instrumentation.SemanticsNoInstr)
+             (struct
+               let out_buffer = Some buf
+             end))
+      in
+      let res = Interpret.run_typed static_env main_name ast in
+      (exit_value res, [])
+  | true, _ ->
+      let module B = Instrumentation.SemanticsSingleSetBuffer in
+      B.reset ();
+      let module Interpret =
+        Interpreter.Make
+          (DeterministicBackend)
+          (NativeConfig
+             (Instrumentation.SemanticsSingleSetInstr)
+             (struct
+               let out_buffer = out_buffer
+             end))
+      in
+      let res = Interpret.run_typed static_env main_name ast in
+      (exit_value res, B.get ())

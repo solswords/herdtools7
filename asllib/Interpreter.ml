@@ -66,6 +66,7 @@ module type Config = sig
   val display_call_stack_on_error : bool
   val track_symbolic_path : bool
   val bit_clear_optimisation : bool
+  val out_buffer : Buffer.t option
 end
 
 module Make (B : Backend.S) (C : Config) = struct
@@ -111,7 +112,7 @@ module Make (B : Backend.S) (C : Config) = struct
       let pp_stack fmt stack =
         let stack = List.rev stack in
         let pp_call fmt call =
-          if is_dummy_annotated call then pp_print_string fmt call.desc
+          if is_dummy_pos call then pp_print_string fmt call.desc
           else
             fprintf fmt "@[<2>%s@ (called@ at@ %a)@]" call.desc PP.pp_pos call
         in
@@ -121,7 +122,7 @@ module Make (B : Backend.S) (C : Config) = struct
         let spath = List.rev spath in
         let pp_choice fmt choice =
           let open IEnv in
-          if is_dummy_annotated choice.location then
+          if is_dummy_pos choice.location then
             fprintf fmt "%s<-%B" choice.description choice.decision
           else
             fprintf fmt "@[<2>%s<-%B@ decided@ at@ %a@]" choice.description
@@ -373,7 +374,7 @@ module Make (B : Backend.S) (C : Config) = struct
     |> Hashtbl.of_seq
 
   let primitive_decls =
-    List.map (fun (f, _) -> D_Func f |> add_dummy_annotation) B.primitives
+    List.map (fun (f, _) -> D_Func f |> add_dummy_pos) B.primitives
 
   let () =
     if false then
@@ -395,14 +396,7 @@ module Make (B : Backend.S) (C : Config) = struct
   let v_to_int ~loc v =
     match B.v_to_z v with
     | Some z when Z.fits_int z -> Z.to_int z
-    | Some z ->
-        Printf.eprintf
-          "Overflow in asllib: cannot convert back to 63-bit integer the \
-           integer %a.\n\
-           %!"
-          Z.output z;
-        fatal_from_no_env loc
-          Error.(UnsupportedExpr (C.error_handling_time, loc))
+    | Some z -> fatal_from_no_env loc (Error.ImplementationIntegerOverflow z)
     | None ->
         fatal_from_no_env loc (MismatchType (B.debug_value v, [ integer' ]))
 
@@ -529,7 +523,9 @@ module Make (B : Backend.S) (C : Config) = struct
         let* b = is_val_of_type e1 env v t in
         (if b then return_normal (v, new_env)
          else
-           fatal_from e1 env (Error.MismatchType (B.debug_value v, [ t.desc ])))
+           fatal_from e1 env
+             (Error.ATCExecutionFailure
+                (C.error_handling_time, B.debug_value v, t)))
         |: SemanticsRule.ATC
     (* End *)
     (* Begin EvalEVar *)
@@ -704,7 +700,8 @@ module Make (B : Backend.S) (C : Config) = struct
         let () =
           if n_length < 0 then
             fatal_from e_length env
-              (Error.NegativeArrayLength (e_length, n_length))
+              (Error.NegativeArrayLength
+                 (C.error_handling_time, e_length, n_length))
         in
         let* v = B.create_vector (List.init n_length (Fun.const v_value)) in
         return_normal (v, new_env) |: SemanticsRule.EArray
@@ -1163,7 +1160,8 @@ module Make (B : Backend.S) (C : Config) = struct
         let*= env2, b = choice ~pos:s env1 v true false in
         if b then return_continue env2
         else
-          fatal_from e env2 @@ Error.AssertionFailed e |: SemanticsRule.SAssert
+          fatal_from e env2 @@ Error.AssertionFailed (C.error_handling_time, e)
+          |: SemanticsRule.SAssert
     (* End *)
     (* Begin EvalSWhile *)
     | S_While (e, e_limit_opt, body) ->
@@ -1200,8 +1198,8 @@ module Make (B : Backend.S) (C : Config) = struct
             |> Option.some
         in
         let*> env3 =
-          eval_for loop_msg undet env2 index_name limit_opt start_v dir end_v
-            body
+          eval_for ~loc:s loop_msg undet env2 index_name limit_opt start_v dir
+            end_v body
         in
         let env4 = if undet then IEnv.tick_pop env3 else env3 in
         IEnv.remove_local index_name env4
@@ -1239,14 +1237,21 @@ module Make (B : Backend.S) (C : Config) = struct
               e_list
               (pp_print_list ~pp_sep:pp_print_space pp_value)
               v_list
-          else (
-            List.map B.debug_value v_list |> String.concat "" |> print_string;
-            if newline then print_newline () else ())
+          else
+            let output = List.map B.debug_value v_list |> String.concat "" in
+            match C.out_buffer with
+            | None ->
+                print_string output;
+                if newline then print_newline ()
+            | Some buf ->
+                Buffer.add_string buf output;
+                if newline then Buffer.add_string buf "\n"
         in
         return_continue new_env |: SemanticsRule.SPrint
     (* End *)
     | S_Pragma _ -> assert false
-    | S_Unreachable -> fail_from s env Error.UnreachableReached
+    | S_Unreachable ->
+        fail_from s env (Error.UnreachableReached C.error_handling_time)
 
   (* Evaluation of Blocks *)
   (* -------------------- *)
@@ -1310,7 +1315,7 @@ module Make (B : Backend.S) (C : Config) = struct
     | Some limit ->
         let new_limit = Z.pred limit in
         if Z.sign new_limit >= 0 then return (Some new_limit)
-        else fatal_from loc env Error.LoopLimitReached
+        else fatal_from loc env (Error.LoopLimitReached C.error_handling_time)
 
   (* Begin EvalLoop *)
   and eval_loop loc is_while env limit_opt e_cond body : stmt_eval_type =
@@ -1341,8 +1346,8 @@ module Make (B : Backend.S) (C : Config) = struct
   (* Evaluation of for loops *)
   (* ----------------------- *)
   (* Begin EvalFor *)
-  and eval_for loop_msg undet env index_name limit_opt v_start dir v_end body :
-      stmt_eval_type =
+  and eval_for ~loc loop_msg undet env index_name limit_opt v_start dir v_end
+      body : stmt_eval_type =
     (* Evaluate the condition: "has the for loop terminated?" *)
     let cond_m =
       let comp_for_dir = match dir with Up -> `LT | Down -> `GT in
@@ -1360,11 +1365,11 @@ module Make (B : Backend.S) (C : Config) = struct
     (* Continuation in the positive case. *)
     let loop env =
       let loop_desc = ("for loop", body) in
+      let* next_limit_opt = tick_loop_limit loc env limit_opt in
       bind_maybe_unroll loop_desc undet (eval_block env body) @@ fun env1 ->
-      let* next_limit_opt = tick_loop_limit body env limit_opt in
       let*| v_step, env2 = step env1 index_name v_start dir in
-      eval_for loop_msg undet env2 index_name next_limit_opt v_step dir v_end
-        body
+      eval_for ~loc loop_msg undet env2 index_name next_limit_opt v_step dir
+        v_end body
     in
     (* Real logic: if the condition holds, we continue to the next
        loop iteration, otherwise we loop. *)

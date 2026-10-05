@@ -26,41 +26,67 @@ open AST
 
 type error_handling_time = Static | Dynamic
 
+type bad_slices =
+  | Empty  (** ASLv0 syntax may produce an empty slice list. *)
+  | NonPositiveLength of { slice : slice; length : int }
+      (** Converting a slice to positions during typing requires a positive
+          length. *)
+  | OutOfBitvectorBounds of slice list * int
+  | NegativeStartOrLength of error_handling_time * slice list
+      (** Native slicing permits a zero length, but requires non-negative starts
+          and lengths. *)
+
 type error_desc =
   | ReservedIdentifier of string
   | BadField of string * ty
   | MissingField of string list * ty
-  | BadSlices of error_handling_time * slice list * int
-  | BadSlice of slice
-  | EmptySlice
+  | BadSlices of bad_slices
+  | BadIndex of {
+      handling_time : error_handling_time;
+      start : int;
+      length : int;
+    }
+  | BadTupleIndex of { index : int; length : int }
   | TypeInferenceNeeded
   | UndefinedIdentifier of error_handling_time * identifier
   | MismatchedCallType of {
-      error_handling_time : error_handling_time;
       subprogram_name : string;
       expected_call_type : subprogram_type;
       found_call_type : subprogram_type;
     }
   | BadArity of error_handling_time * identifier * int * int
+      (** [BadArity (time, name, expected, provided)] is raised when there is an
+          arity mismatch detected during evaluation when it should have been
+          detected at type-checking: a subprogram or primitive receives the
+          wrong number of arguments, a tuple assignment receives the wrong
+          number of values from a subprogram call, or an entry point returns the
+          wrong number of values. *)
+  | BadCallArity of { name : identifier; expected : int; actual : int }
+  | BadTupleArity of { expected : int; actual : int }
   | BadParameterArity of error_handling_time * version * identifier * int * int
   | UnsupportedBinop of error_handling_time * binop * literal * literal
   | UnsupportedUnop of error_handling_time * unop * literal
-  | UnsupportedExpr of error_handling_time * expr
-  | UnsupportedTy of error_handling_time * ty
+  | StaticEvaluationFailure of expr
+  | ImplementationIntegerOverflow of Z.t
   | InvalidExpr of expr
   | MismatchType of string * type_desc list
-  | NotYetImplemented of string
+  | ATCExecutionFailure of error_handling_time * string * ty
   | ConflictingTypes of type_desc list * ty
-  | AssertionFailed of expr
+  | TypeSatisfactionFailure of { expected : ty; actual : ty }
+  | AssertionFailed of error_handling_time * expr
   | CannotParse of string option
-  | UnknownSymbol of string
+  | BadBinopPriority of string
+  | AllDiscardLocalDeclaration
+  | NonFunctionBuiltinDeclaration
+  | UnknownSymbol of { symbol : string; alternative : string option }
   | NoCallCandidate of string * ty list
   | BadTypesForBinop of binop * ty * ty
-  | CircularDeclarations of string
   | ImpureExpression of expr * SideEffect.SES.t
       (** used for fine-grained analysis *)
   | MismatchedPurity of string  (** Used for coarse-grained analysis *)
-  | UnreconcilableTypes of ty * ty
+  | MismatchedBitvectorWidths of ty * ty
+  | NoCommonAncestor of ty * ty
+  | CollectionBaseNotVariable of expr
   | AssignToImmutable of string
   | AssignToTupleElement of lexpr
   | AlreadyDeclaredIdentifier of string
@@ -77,17 +103,17 @@ type error_desc =
   | ParameterWithoutDecl of identifier
   | BadParameterDecl of identifier * identifier list * identifier list
       (** name, expected, actual *)
+  | BadParameterExpr of expr
+  | BadParameterType of ty
   | BaseValueEmptyType of ty
   | ArbitraryEmptyType of ty
   | BaseValueNonSymbolic of ty * expr
-  | SettingIntersectingSlices of bitfield list
   | SetterWithoutCorrespondingGetter of func
   | NonReturningFunction of identifier
   | NoreturnViolation of identifier
   | ConflictingSideEffects of SideEffect.t * SideEffect.t
-  | UnexpectedATC
-  | UnreachableReached
-  | LoopLimitReached
+  | UnreachableReached of error_handling_time
+  | LoopLimitReached of error_handling_time
   | RecursionLimitReached of error_handling_time
   | EmptyConstraints
   | UnexpectedPendingConstrained
@@ -99,18 +125,17 @@ type error_desc =
     }
   | ExpectedSingularType of ty
   | ExpectedNamedType of ty
-  | ConfigTimeBroken of expr * SideEffect.SES.t
   | ConstantTimeBroken of expr * SideEffect.SES.t
   | MultipleWrites of identifier
   | UnexpectedInitialisationThrow of
       ty * identifier (* Exception type and global storage element name. *)
-  | NegativeArrayLength of expr * int
+  | NegativeArrayLength of error_handling_time * expr * int
   | MultipleImplementations of func annotated * func annotated
   | NoOverrideCandidate
   | TooManyOverrideCandidates of func annotated list
   | PrecisionLostDefining
   | UnexpectedCollection
-  | BadPrimitiveArgument of identifier * string
+  | BadPrimitiveArgument of error_handling_time * identifier * string
   | NoEntryPoint
   | ObsoleteSyntax of (Format.formatter -> unit)
 
@@ -126,7 +151,7 @@ let fatal_from pos e = fatal (ASTUtils.add_pos_from pos e)
 let fatal_here pos_start pos_end e =
   fatal (ASTUtils.annotated e pos_start pos_end ASTUtils.default_version)
 
-let fatal_unknown_pos e = fatal (ASTUtils.add_dummy_annotation e)
+let fatal_unknown_pos e = fatal (ASTUtils.add_dummy_pos e)
 let intercept f () = try Ok (f ()) with ASLException e -> Error e
 
 type warning_desc =
@@ -150,92 +175,189 @@ type warning_desc =
 
 type warning = warning_desc annotated
 
-let error_label = function
-  | ReservedIdentifier _ -> "ReservedIdentifier"
-  | BadField _ -> "BadField"
-  | BadPattern _ -> "BadPattern"
-  | MissingField _ -> "MissingField"
-  | BadSlices _ -> "BadSlices"
-  | BadSlice _ -> "BadSlice"
-  | EmptySlice -> "EmptySlice"
-  | TypeInferenceNeeded -> "TypeInferenceNeeded"
-  | UndefinedIdentifier _ -> "UndefinedIdentifier"
-  | MismatchedCallType _ -> "MismatchedCallType"
-  | BadArity _ -> "BadArity"
-  | BadParameterArity _ -> "BadParameterArity"
-  | UnsupportedBinop _ -> "UnsupportedBinop"
-  | UnsupportedUnop _ -> "UnsupportedUnop"
-  | UnsupportedExpr _ -> "UnsupportedExpr"
-  | UnsupportedTy _ -> "UnsupportedTy"
-  | InvalidExpr _ -> "InvalidExpr"
-  | MismatchType _ -> "MismatchType"
-  | NotYetImplemented _ -> "NotYetImplemented"
-  | ConflictingTypes _ -> "ConflictingTypes"
-  | AssertionFailed _ -> "AssertionFailed"
-  | CannotParse _ -> "CannotParse"
-  | UnknownSymbol _ -> "UnknownSymbol"
-  | NoCallCandidate _ -> "NoCallCandidate"
-  | BadTypesForBinop _ -> "BadTypesForBinop"
-  | CircularDeclarations _ -> "CircularDeclarations"
-  | ImpureExpression _ -> "ImpureExpression"
-  | MismatchedPurity _ -> "MismatchedPurity"
-  | UnreconcilableTypes _ -> "UnreconcilableTypes"
-  | AssignToImmutable _ -> "AssignToImmutable"
-  | AssignToTupleElement _ -> "AssignToTupleElement"
-  | AlreadyDeclaredIdentifier _ -> "AlreadyDeclaredIdentifier"
-  | BadReturnStmt _ -> "BadReturnStmt"
-  | UnexpectedSideEffect _ -> "UnexpectedSideEffect"
-  | UncaughtException _ -> "UncaughtException"
-  | OverlappingSlices _ -> "OverlappingSlices"
-  | BadLDI _ -> "BadLDI"
-  | BadRecursiveDecls _ -> "BadRecursiveDecls"
-  | UnrespectedParserInvariant -> "UnrespectedParserInvariant"
-  | BadATC _ -> "BadATC"
-  | ConstrainedIntegerExpected _ -> "ConstrainedIntegerExpected"
-  | ParameterWithoutDecl _ -> "ParameterWithoutDecl"
-  | BadParameterDecl _ -> "BadParameterDecl"
-  | BaseValueEmptyType _ -> "BaseValueEmptyType"
-  | ArbitraryEmptyType _ -> "ArbitraryEmptyType"
-  | BaseValueNonSymbolic _ -> "BaseValueNonSymbolic"
-  | SettingIntersectingSlices _ -> "SettingIntersectingSlices"
-  | SetterWithoutCorrespondingGetter _ -> "SetterWithoutCorrespondingGetter"
-  | NonReturningFunction _ -> "NonReturningFunction"
-  | NoreturnViolation _ -> "NoreturnViolation"
-  | UnexpectedATC -> "UnexpectedATC"
-  | UnreachableReached -> "UnreachableReached"
-  | LoopLimitReached -> "LoopLimitReached"
-  | RecursionLimitReached _ -> "RecursionLimitReached"
-  | EmptyConstraints -> "EmptyConstraints"
-  | UnexpectedPendingConstrained -> "UnexpectedPendingConstrained"
-  | BitfieldsDontAlign _ -> "BitfieldsDontAlign"
-  | ExpectedSingularType _ -> "ExpectedSingularType"
-  | ExpectedNamedType _ -> "ExpectedNamedType"
-  | ConflictingSideEffects _ -> "ConflictingSideEffects"
-  | ConfigTimeBroken _ -> "ConfigTimeBroken"
-  | ConstantTimeBroken _ -> "ConstantTimeBroken"
-  | MultipleWrites _ -> "MultipleWrites"
-  | UnexpectedInitialisationThrow _ -> "UnexpectedInitialisationThrow"
-  | NegativeArrayLength _ -> "NegativeArrayLength"
-  | MultipleImplementations _ -> "ClashingImplementations"
-  | NoOverrideCandidate -> "NoOverrideCandidate"
-  | TooManyOverrideCandidates _ -> "TooManyOverrideCandidates"
-  | PrecisionLostDefining -> "PrecisionLostDefining"
-  | UnexpectedCollection -> "UnexpectedCollection"
-  | BadPrimitiveArgument _ -> "BadPrimitiveArgument"
-  | NoEntryPoint -> "NoEntryPoint"
-  | ObsoleteSyntax _ -> "ObsoleteSyntax"
+module ErrorCode = struct
+  type build =
+    | LE  (** Lexical *)
+    | PE  (** Parse *)
+    | RI  (** Reserved identifier *)
+    | BOP  (** Binary operation priority *)
+    | BD  (** Bad declaration *)
 
-let warning_label = function
-  | NoLoopLimit -> "NoLoopLimit"
-  | IntervalTooBigToBeExploded _ -> "IntervalTooBigToBeExploded"
-  | ConstraintSetPairToBigToBeExploded _ -> "ConstraintSetPairToBigToBeExploded"
-  | RemovingValuesFromConstraints _ -> "RemovingValuesFromConstraints"
-  | NoRecursionLimit _ -> "NoRecursionLimit"
-  | PragmaUse _ -> "PragmaUse"
-  | UnexpectedImplementation -> "UnexpectedImplementation"
-  | MissingOverride -> "MissingOverride"
+  type typing =
+    | UI  (** Undefined identifier *)
+    | IAD  (** Identifier already declared *)
+    | AIM  (** Assign to immutable *)
+    | TSF  (** Type satisfaction failure *)
+    | LCA  (** Lowest common ancestor *)
+    | NBV  (** No base value *)
+    | TAF  (** Type assertion failure *)
+    | SEF  (** Static evaluation failure *)
+    | BO  (** Bad operands *)
+    | UT  (** Unexpected type *)
+    | BTI  (** Bad tuple index *)
+    | BS  (** Bad slices *)
+    | BF  (** Bad field *)
+    | BSPD  (** Bad subprogram declaration *)
+    | BD  (** Bad declaration *)
+    | BC  (** Bad call *)
+    | SEV  (** Side effect violation *)
+    | OE  (** Overriding error *)
+    | PLD  (** Declaration with an imprecise type *)
 
-open struct
+  type dynamic =
+    | UNR  (** Unreachable *)
+    | DAF  (** Assertion failure *)
+    | TAF  (** Type assertion failure *)
+    | AET  (** Arbitrary empty type *)
+    | BO  (** Bad operands *)
+    | LE  (** Limit exceeded *)
+    | UE  (** Uncaught exception *)
+    | BI  (** Bad index *)
+    | OSA  (** Overlapping slice assignment *)
+    | NAL  (** Negative array length *)
+    | NEP  (** No entry point *)
+
+  type t = Build of build | Typing of typing | Dynamic of dynamic
+
+  (* TODO: consider using ppx to derive strings *)
+
+  let build_to_string : build -> string = function
+    | LE -> "LE"
+    | PE -> "PE"
+    | RI -> "RI"
+    | BOP -> "BOP"
+    | BD -> "BD"
+
+  let typing_to_string : typing -> string = function
+    | UI -> "UI"
+    | IAD -> "IAD"
+    | AIM -> "AIM"
+    | TSF -> "TSF"
+    | LCA -> "LCA"
+    | NBV -> "NBV"
+    | TAF -> "TAF"
+    | SEF -> "SEF"
+    | BO -> "BO"
+    | UT -> "UT"
+    | BTI -> "BTI"
+    | BS -> "BS"
+    | BF -> "BF"
+    | BSPD -> "BSPD"
+    | BD -> "BD"
+    | BC -> "BC"
+    | SEV -> "SEV"
+    | OE -> "OE"
+    | PLD -> "PLD"
+
+  let dynamic_to_string : dynamic -> string = function
+    | UNR -> "UNR"
+    | DAF -> "DAF"
+    | TAF -> "TAF"
+    | AET -> "AET"
+    | BO -> "BO"
+    | LE -> "LE"
+    | UE -> "UE"
+    | BI -> "BI"
+    | OSA -> "OSA"
+    | NAL -> "NAL"
+    | NEP -> "NEP"
+
+  let to_string = function
+    | Build b -> "BE_" ^ build_to_string b
+    | Typing t -> "TE_" ^ typing_to_string t
+    | Dynamic d -> "DE_" ^ dynamic_to_string d
+
+  let of_error e =
+    match e.desc with
+    (********** Errors that correspond to error codes **********)
+    | ReservedIdentifier _ -> Some (Build RI)
+    | BadBinopPriority _ -> Some (Build BOP)
+    | AllDiscardLocalDeclaration | NonFunctionBuiltinDeclaration ->
+        Some (Build BD)
+    | UnknownSymbol _ -> Some (Build LE)
+    | CannotParse _ | ObsoleteSyntax _ | MultipleWrites _ -> Some (Build PE)
+    | BadField _ | MissingField _ -> Some (Typing BF)
+    | BadTupleIndex _ -> Some (Typing BTI)
+    | BadPattern _ | BadTypesForBinop _
+    | UnsupportedUnop (Static, _, _)
+    | UnsupportedBinop (Static, _, _, _) ->
+        Some (Typing BO)
+    | BadSlices
+        ( Empty | NonPositiveLength _ | OutOfBitvectorBounds _
+        | NegativeStartOrLength (Static, _) )
+    | OverlappingSlices (_, Static)
+    | BitfieldsDontAlign _ ->
+        Some (Typing BS)
+    | UndefinedIdentifier (Static, _) -> Some (Typing UI)
+    | TypeSatisfactionFailure _ -> Some (Typing TSF)
+    | ConflictingTypes _ | AssignToTupleElement _ | ConstrainedIntegerExpected _
+    | UnexpectedPendingConstrained | ExpectedSingularType _
+    | ExpectedNamedType _ | UnexpectedCollection | MismatchedBitvectorWidths _
+    | CollectionBaseNotVariable _ ->
+        Some (Typing UT)
+    | MismatchedCallType _ | BadCallArity _
+    | BadParameterArity (Static, _, _, _, _)
+    | NoCallCandidate _ ->
+        Some (Typing BC)
+    | BadTupleArity _ -> Some (Typing UT)
+    | UnsupportedUnop (Dynamic, _, _) | UnsupportedBinop (Dynamic, _, _, _) ->
+        Some (Dynamic BO)
+    | AssertionFailed (Dynamic, _) | BadPrimitiveArgument (Dynamic, _, _) ->
+        Some (Dynamic DAF)
+    | ImpureExpression _ | MismatchedPurity _ -> Some (Typing SEV)
+    | AssignToImmutable _ -> Some (Typing AIM)
+    | AlreadyDeclaredIdentifier _ -> Some (Typing IAD)
+    | BadReturnStmt _ | BadParameterDecl _ | BadParameterExpr _
+    | BadParameterType _ | NonReturningFunction _ | NoreturnViolation _ ->
+        Some (Typing BSPD)
+    | UncaughtException _ | UnexpectedInitialisationThrow _ -> Some (Dynamic UE)
+    | OverlappingSlices (_, Dynamic) -> Some (Dynamic OSA)
+    | BadLDI _ | BadRecursiveDecls _ -> Some (Typing BD)
+    | BadATC _ -> Some (Typing TAF)
+    | ATCExecutionFailure (Dynamic, _, _) -> Some (Dynamic TAF)
+    | BaseValueEmptyType _ | BaseValueNonSymbolic _ -> Some (Typing NBV)
+    | ArbitraryEmptyType _ -> Some (Dynamic AET)
+    | UnreachableReached Dynamic -> Some (Dynamic UNR)
+    | LoopLimitReached Dynamic | RecursionLimitReached Dynamic ->
+        Some (Dynamic LE)
+    | NegativeArrayLength (Dynamic, _, _) -> Some (Dynamic NAL)
+    | MultipleImplementations _ | NoOverrideCandidate
+    | TooManyOverrideCandidates _ ->
+        Some (Typing OE)
+    | PrecisionLostDefining -> Some (Typing PLD)
+    | NoEntryPoint -> Some (Dynamic NEP)
+    | RecursionLimitReached Static
+    | UnreachableReached Static
+    | LoopLimitReached Static
+    | NegativeArrayLength (Static, _, _)
+    | AssertionFailed (Static, _)
+    | ATCExecutionFailure (Static, _, _)
+    | BadIndex { handling_time = Static }
+    | BadPrimitiveArgument (Static, _, _)
+    | StaticEvaluationFailure _ ->
+        Some (Typing SEF)
+    | BadIndex { handling_time = Dynamic } -> Some (Dynamic BI)
+    | BadSlices (NegativeStartOrLength (Dynamic, _)) -> Some (Dynamic BI)
+    | NoCommonAncestor _ (* LCA failures *) -> Some (Typing LCA)
+    (********** Errors without specification codes **********)
+    (* Implementation limitations are not ASL errors. *)
+    | ImplementationIntegerOverflow _ -> None
+    (********** Should not happen **********)
+    (* e.g. skipped type-checking, ASL0, internal option or invariant *)
+    | MismatchType _ (* Skipped type-checking or violated typing invariant *) ->
+        None
+    | EmptyConstraints (* An internal invariant *) -> None
+    | TypeInferenceNeeded
+    | UndefinedIdentifier (Dynamic, _)
+    | BadArity _
+    | BadParameterArity (Dynamic, _, _, _, _)
+    | InvalidExpr _ | UnexpectedSideEffect _ | UnrespectedParserInvariant
+    | ParameterWithoutDecl _ | SetterWithoutCorrespondingGetter _
+    | ConflictingSideEffects _ | ConstantTimeBroken _ ->
+        None
+end
+
+module PrintContext = struct
   (* Straight out of stdlib v5.2 *)
   let with_open filename continuation =
     let chan = open_in filename in
@@ -294,7 +416,7 @@ open struct
     and end_cnum = e.pos_end.pos_cnum
     and start_bol = e.pos_start.pos_bol
     and end_bol = e.pos_end.pos_bol in
-    if ASTUtils.is_dummy_annotated e then None
+    if ASTUtils.is_dummy_pos e then None
     else if String.equal filename end_filename && Sys.file_exists filename then
       let lines = fetch_lines ~start_bol ~end_bol filename in
       let lines =
@@ -309,6 +431,8 @@ open struct
     else None
 end
 
+(** TODO: separate ASLv0 diagnostics, unchecked-execution failures, and internal
+    invariant violations from ASL errors. *)
 module PPrint = struct
   open Format
   open PP
@@ -316,82 +440,123 @@ module PPrint = struct
   let pp_comma_list pp_elt f li =
     pp_print_list ~pp_sep:(fun f () -> fprintf f ",@ ") pp_elt f li
 
-  let pp_type_desc f ty = pp_ty f (ASTUtils.add_dummy_annotation ty)
+  let pp_type_desc f ty = pp_ty f (ASTUtils.add_dummy_pos ty)
 
-  let fprintf_err f kind =
-    kdprintf (fun msg -> fprintf f "@[<hov 2>ASL %s error:@ %t@]" kind msg)
+  module ErrorKind = struct
+    type t = Lexical | Parse | Static | Typing | Dynamic | Internal
 
-  let lexical = "Lexical"
-  let parse = "Grammar"
-  let static = "Static"
-  let typing = "Type"
-  let dynamic = "Dynamic"
-  let internal = "Internal"
+    let to_string = function
+      | Lexical -> "Lexical"
+      | Parse -> "Grammar"
+      | Static -> "Static"
+      | Typing -> "Type"
+      | Dynamic -> "Dynamic"
+      | Internal -> "Internal"
 
-  let error_handling_time_to_string = function
-    | Static -> static
-    | Dynamic -> dynamic
+    let of_error_handling_time : error_handling_time -> t = function
+      | Static -> Static
+      | Dynamic -> Dynamic
+
+    let matches_code (code : ErrorCode.t) (kind : t) =
+      match (code, kind) with
+      | Typing _, (Typing | Static)
+      | Build _, (Lexical | Parse | Static)
+      | Dynamic _, Dynamic ->
+          true
+      | _ -> false
+  end
+
+  let fprintf_err f kind code_opt =
+    let pp_code fmt code = fprintf fmt " (%s)" (ErrorCode.to_string code) in
+    let () =
+      match code_opt with
+      | Some code -> assert (ErrorKind.matches_code code kind)
+      | None -> ()
+    in
+    kdprintf (fun msg ->
+        fprintf f "@[<hov 2>ASL %s error%a:@ %t@]" (ErrorKind.to_string kind)
+          (pp_print_option pp_code) code_opt msg)
 
   let pp_error_desc f e =
-    let pp_err s fmt = fprintf_err f s fmt in
+    let pp_err s fmt = fprintf_err f s (ErrorCode.of_error e) fmt in
     match e.desc with
-    | ReservedIdentifier id -> pp_err lexical "%S is a reserved keyword." id
+    | ReservedIdentifier id -> pp_err Lexical "%S is a reserved keyword." id
     | UnsupportedBinop (t, op, v1, v2) ->
         pp_err
-          (error_handling_time_to_string t)
+          (ErrorKind.of_error_handling_time t)
           "Illegal application of operator %s for values@ %a@ and %a."
           (binop_to_string op) pp_literal v1 pp_literal v2
     | UnsupportedUnop (t, op, v) ->
         pp_err
-          (error_handling_time_to_string t)
+          (ErrorKind.of_error_handling_time t)
           "Illegal application of operator %s for value@ %a."
           (unop_to_string op) pp_literal v
-    | UnsupportedExpr (t, e) ->
-        pp_err
-          (error_handling_time_to_string t)
-          "Unsupported expression %a." pp_expr e
-    | UnsupportedTy (t, ty) ->
-        pp_err (error_handling_time_to_string t) "Unsupported type %a." pp_ty ty
-    | InvalidExpr e -> fprintf_err f typing "invalid expression %a." pp_expr e
+    | StaticEvaluationFailure e ->
+        pp_err Typing
+          "Static evaluation of expression %a did not successfully produce a \
+           literal."
+          pp_expr e
+    | ImplementationIntegerOverflow z ->
+        pp_err Internal "Integer %a exceeds aslref implementation limits."
+          Z.pp_print z
+    | InvalidExpr e -> pp_err Typing "invalid expression %a." pp_expr e
     | MismatchType (v, [ ty ]) ->
-        pp_err dynamic "Mismatch type:@ value %s does not belong to type %a." v
+        pp_err Dynamic "Mismatch type:@ value %s does not belong to type %a." v
           pp_type_desc ty
     | MismatchType (v, li) ->
-        pp_err dynamic
+        pp_err Dynamic
           "Mismatch type:@ value %s@ does not subtype any of those types:@ %a" v
           (pp_comma_list pp_type_desc)
           li
+    | ATCExecutionFailure (t, v, ty) ->
+        pp_err
+          (ErrorKind.of_error_handling_time t)
+          "Value %s@ does@ not@ satisfy@ the@ asserted@ type@ @[%a@]." v pp_ty
+          ty
     | BadField (s, ty) ->
-        pp_err typing "There is no field '%s'@ on type %a." s pp_ty ty
+        pp_err Typing "There is no field '%s'@ on type %a." s pp_ty ty
     | MissingField (fields, ty) ->
-        pp_err typing
+        pp_err Typing
           "Fields mismatch for creating a value of type %a@ -- Passed fields \
            are:@ %a"
           pp_ty ty
           (pp_print_list ~pp_sep:pp_print_space pp_print_string)
           fields
-    | EmptySlice ->
+    | BadSlices Empty ->
         assert (e.version = V0);
-        pp_err static
+        pp_err Static
           "cannot slice with empty slicing operator. This might also be due to \
            an incorrect getter/setter invocation."
-    | BadSlices (t, slices, length) ->
+    | BadSlices (OutOfBitvectorBounds (slices, length)) ->
+        pp_err Static
+          "Slice selection %a includes a position outside the bounds of a \
+           bitvector of length %d."
+          pp_slice_list slices length
+    | BadSlices (NegativeStartOrLength (t, slices)) ->
         pp_err
-          (error_handling_time_to_string t)
-          "Cannot extract from bitvector of length %d slice %a." length
+          (ErrorKind.of_error_handling_time t)
+          "Slice %a is invalid: its start and length must be non-negative."
           pp_slice_list slices
-    | BadSlice slice -> pp_err static "invalid slice %a." pp_slice slice
+    | BadSlices (NonPositiveLength { slice; length }) ->
+        pp_err Static
+          "Slice %a has length %d; but the length of this slice must be at \
+           least 1."
+          pp_slice slice length
+    | BadIndex { handling_time; start; length } ->
+        pp_err
+          (ErrorKind.of_error_handling_time handling_time)
+          "Index %d is outside the valid range 0..%d." start (length - 1)
+    | BadTupleIndex { index; length } ->
+        pp_err Typing "Tuple index %d is outside the valid range 0..%d." index
+          (length - 1)
     | TypeInferenceNeeded ->
-        pp_err internal "Interpreter blocked. Type inference needed."
+        pp_err Internal "Interpreter blocked. Type inference needed."
     | UndefinedIdentifier (t, s) ->
-        pp_err (error_handling_time_to_string t) "Undefined identifier:@ '%s'" s
+        pp_err
+          (ErrorKind.of_error_handling_time t)
+          "Undefined identifier:@ '%s'" s
     | MismatchedCallType
-        {
-          error_handling_time = t;
-          subprogram_name = s;
-          expected_call_type;
-          found_call_type;
-        } ->
+        { subprogram_name = s; expected_call_type; found_call_type } ->
         let call_type_description call_type =
           match call_type with
           | ST_Function -> "function"
@@ -399,109 +564,135 @@ module PPrint = struct
           | ST_Setter -> "setter"
           | ST_Procedure -> "procedure"
         in
-        pp_err
-          (error_handling_time_to_string t)
+        pp_err Static
           "Mismatched call type for subprogram '%s': expected a %s and found a \
            %s."
           s
           (call_type_description expected_call_type)
           (call_type_description found_call_type)
-    | BadArity (t, name, expected, provided) ->
+    | BadArity (t, name, expected, actual) ->
         pp_err
-          (error_handling_time_to_string t)
+          (ErrorKind.of_error_handling_time t)
           "Arity error while calling '%s':@ %d arguments expected and %d \
            provided."
-          name expected provided
+          name expected actual
+    | BadCallArity { name; expected; actual } ->
+        pp_err Typing
+          "Call to %S has incorrect argument arity:@ expected %d argument(s); \
+           provided %d."
+          name expected actual
+    | BadTupleArity { expected; actual } ->
+        pp_err Typing
+          "Tuple arity mismatch:@ expected %d element(s); provided %d." expected
+          actual
     | BadParameterArity (t, version, name, expected, provided) -> (
         match (t, version) with
         | Static, V0 ->
             pp_err
-              (error_handling_time_to_string t)
+              (ErrorKind.of_error_handling_time t)
               "Could not infer all parameters while calling '%s':@ %d \
                parameters expected and %d inferred"
               name expected provided
         | _ ->
             pp_err
-              (error_handling_time_to_string t)
+              (ErrorKind.of_error_handling_time t)
               "Arity error while calling '%s':@ %d parameters expected and %d \
                provided"
               name expected provided)
-    | NotYetImplemented s -> pp_err internal "Not yet implemented: %s" s
     | ConflictingTypes ([ expected ], provided) ->
-        pp_err typing "a subtype of@ %a@ was expected,@ provided %a."
+        pp_err Typing "a subtype of@ %a@ was expected,@ provided %a."
           pp_type_desc expected pp_ty provided
     | ConflictingTypes (expected, provided) ->
-        pp_err typing "%a does@ not@ subtype@ any@ of:@ %a." pp_ty provided
+        pp_err Typing "%a does@ not@ subtype@ any@ of:@ %a." pp_ty provided
           (pp_comma_list pp_type_desc)
           expected
-    | AssertionFailed e -> pp_err dynamic "Assertion failed:@ %a." pp_expr e
+    | TypeSatisfactionFailure { expected; actual } ->
+        pp_err Typing "a subtype of@ %a@ was expected,@ provided %a." pp_ty
+          expected pp_ty actual
+    | AssertionFailed (t, e) ->
+        pp_err
+          (ErrorKind.of_error_handling_time t)
+          "Assertion failed:@ %a." pp_expr e
     | CannotParse s -> (
         match s with
-        | None -> pp_err parse "Cannot parse."
-        | Some s -> pp_err parse "Cannot parse.@ %a" pp_print_text s)
-    | UnknownSymbol s ->
-        let codes = List.map Char.code (List.of_seq (String.to_seq s)) in
+        | None -> pp_err Parse "Cannot parse."
+        | Some s -> pp_err Parse "Cannot parse.@ %a" pp_print_text s)
+    | BadBinopPriority message -> pp_err Parse "%a" pp_print_text message
+    | AllDiscardLocalDeclaration ->
+        pp_err Parse "%a" pp_print_text
+          "A local declaration must declare at least one name."
+    | NonFunctionBuiltinDeclaration ->
+        pp_err Parse "Only subprogram declarations may be marked as builtins."
+    | UnknownSymbol { symbol; alternative } ->
+        let codes = List.map Char.code (List.of_seq (String.to_seq symbol)) in
         let not_printable code = code < 33 || code > 126 in
         if List.exists not_printable codes then
-          pp_err lexical "Unknown symbol (ASCII code point(s): %a)."
+          pp_err Lexical "Unknown symbol (ASCII code point(s): %a)."
             (pp_comma_list pp_print_int)
             codes
-        else pp_err lexical "Unknown symbol."
+        else
+          let pp_alternative fmt alt = fprintf fmt "@ Did you mean %S?" alt in
+          pp_err Lexical "Unknown symbol %S.%a" symbol
+            (pp_print_option pp_alternative)
+            alternative
     | NoCallCandidate (name, types) ->
-        pp_err typing
+        pp_err Typing
           "No subprogram declaration matches the invocation:@ %s(%a)." name
           (pp_comma_list pp_ty) types
     | BadTypesForBinop (op, t1, t2) ->
-        pp_err typing "Illegal application of operator %s on types@ %a@ and %a."
+        pp_err Typing "Illegal application of operator %s on types@ %a@ and %a."
           (binop_to_string op) pp_ty t1 pp_ty t2
-    | CircularDeclarations x ->
-        pp_err dynamic
-          "ASL Evaluation error: circular definition of constants, including \
-           %S."
-          x
     | ImpureExpression (e, ses) ->
-        pp_err typing
+        pp_err Typing
           "a pure expression was expected,@ found %a,@ which@ produces@ the@ \
            following@ side-effects:@ %a."
           pp_expr e SideEffect.SES.pp_print ses
     | MismatchedPurity s ->
-        pp_err typing "expected@ a@ %s@ expression/subprogram." s
-    | UnreconcilableTypes (t1, t2) ->
-        pp_err typing
+        pp_err Typing "expected@ a@ %s@ expression/subprogram." s
+    | MismatchedBitvectorWidths (t1, t2) ->
+        pp_err Typing "bitvector types %a and %a must have equal widths." pp_ty
+          t1 pp_ty t2
+    | NoCommonAncestor (t1, t2) ->
+        pp_err Typing
           "cannot@ find@ a@ common@ ancestor@ to@ those@ two@ types@ %a@ and@ \
            %a."
           pp_ty t1 pp_ty t2
+    | CollectionBaseNotVariable e ->
+        pp_err Typing
+          "collection fields can only be accessed through a variable;@ \
+           provided base: %a."
+          pp_expr e
     | AssignToImmutable x ->
-        pp_err typing "cannot@ assign@ to@ immutable@ storage@ %S." x
+        pp_err Typing "cannot@ assign@ to@ immutable@ storage@ %S." x
     | AssignToTupleElement tuple_e ->
-        pp_err typing "cannot@ assign@ to@ the@ (immutable)@ tuple@ value@ %a."
+        pp_err Typing "cannot@ assign@ to@ the@ (immutable)@ tuple@ value@ %a."
           pp_lexpr tuple_e
     | AlreadyDeclaredIdentifier x ->
-        pp_err typing "cannot@ declare@ already@ declared@ element@ %S." x
+        pp_err Typing "cannot@ declare@ already@ declared@ element@ %S." x
     | BadReturnStmt None ->
-        pp_err typing "cannot return something from a procedure."
-    | UnexpectedSideEffect s -> pp_err dynamic "Unexpected side-effect: %s." s
-    | UncaughtException s -> pp_err dynamic "Uncaught exception: %s." s
+        pp_err Typing "cannot return something from a procedure."
+    | UnexpectedSideEffect s -> pp_err Dynamic "Unexpected side-effect: %s." s
+    | UncaughtException s -> pp_err Dynamic "Uncaught exception: %s." s
     | OverlappingSlices (slices, t) ->
         pp_err
-          (error_handling_time_to_string t)
+          (ErrorKind.of_error_handling_time t)
           "overlapping slices@ @[%a@]." pp_slice_list slices
     | BadLDI ldi ->
-        pp_err typing "Unsupported declaration:@ @[%a@]." pp_local_decl_item ldi
+        pp_err Typing "Unsupported declaration:@ @[%a@]." pp_local_decl_item ldi
     | BadRecursiveDecls decls ->
-        pp_err typing "multiple recursive declarations:@ @[%a@]."
+        pp_err Typing "multiple recursive declarations:@ @[%a@]."
           (pp_comma_list (fun f -> fprintf f "%S"))
           decls
-    | UnrespectedParserInvariant -> pp_err typing "Parser invariant broke."
+    | UnrespectedParserInvariant -> pp_err Typing "Parser invariant broke."
     | ConstrainedIntegerExpected t ->
-        pp_err typing "constrained@ integer@ expected,@ provided@ %a." pp_ty t
+        pp_err Typing "constrained@ integer@ expected,@ provided@ %a." pp_ty t
     | ParameterWithoutDecl s ->
-        pp_err typing
+        pp_err Typing
           "explicit@ parameter@ %S@ does@ not@ have@ a@ corresponding@ \
            defining@ argument."
           s
     | BadParameterDecl (name, expected, actual) ->
-        pp_err typing
+        pp_err Typing
           "incorrect@ parameter@ declaration@ for@ %S,@ expected@ @[{%a}@]@ \
            but@ @[{%a}@]@ provided"
           name
@@ -509,117 +700,119 @@ module PPrint = struct
           expected
           (pp_comma_list pp_print_string)
           actual
+    | BadParameterExpr e ->
+        pp_err Typing
+          "Expression %a is not permitted in a subprogram signature." pp_expr e
+    | BadParameterType ty ->
+        pp_err Typing "Type %a is not permitted in a subprogram signature."
+          pp_ty ty
     | ArbitraryEmptyType t ->
-        pp_err dynamic "ARBITRARY of empty type %a." pp_ty t
+        pp_err Dynamic "ARBITRARY of empty type %a." pp_ty t
     | BaseValueEmptyType t ->
-        pp_err typing "base value of empty type %a." pp_ty t
+        pp_err Typing "base value of empty type %a." pp_ty t
     | BaseValueNonSymbolic (t, e) ->
-        pp_err typing
+        pp_err Typing
           "base@ value@ of@ type@ %a@ cannot@ be@ symbolically@ reduced@ \
            since@ it@ consists@ of@ %a."
           pp_ty t pp_expr e
     | BadATC (t1, t2) ->
-        pp_err typing
+        pp_err Typing
           "cannot@ perform@ Asserted@ Type@ Conversion@ on@ %a@ by@ %a." pp_ty
           t1 pp_ty t2
-    | SettingIntersectingSlices bitfields ->
-        pp_err typing "setting@ intersecting@ bitfields@ [%a]." pp_bitfields
-          bitfields
     | SetterWithoutCorrespondingGetter func ->
         let ret, args =
           match func.args with
           | (_, ret) :: args -> (ret, List.map snd args)
           | _ -> assert false
         in
-        pp_err typing
+        pp_err Typing
           "setter@ \"%s\"@ does@ not@ have@ a@ corresponding@ getter@ of@ \
            signature@ @[@[%a@]@ ->@ %a@]."
           func.name (pp_comma_list pp_ty) args pp_ty ret
-    | UnexpectedATC -> pp_err typing "unexpected ATC."
     | BadPattern (p, t) ->
-        pp_err typing "Erroneous@ pattern@ %a@ for@ expression@ of@ type@ %a."
+        pp_err Typing "Erroneous@ pattern@ %a@ for@ expression@ of@ type@ %a."
           pp_pattern p pp_ty t
-    | UnreachableReached -> pp_err dynamic "unreachable reached."
+    | UnreachableReached t ->
+        pp_err (ErrorKind.of_error_handling_time t) "unreachable reached."
     | NonReturningFunction name ->
-        pp_err typing "not all control flow paths of the function %S@ %a." name
+        pp_err Typing "not all control flow paths of the function %S@ %a." name
           pp_print_text
           "are guaranteed to either return, raise an exception, or invoke \
            unreachable"
     | NoreturnViolation name ->
-        pp_err typing "the@ function %S@ %a." name pp_print_text
+        pp_err Typing "the@ function %S@ %a." name pp_print_text
           "is qualified with noreturn but may return on some control flow path"
     | RecursionLimitReached t ->
-        pp_err (error_handling_time_to_string t) "recursion limit reached."
-    | LoopLimitReached -> pp_err dynamic "loop limit reached."
+        pp_err (ErrorKind.of_error_handling_time t) "recursion limit reached."
+    | LoopLimitReached t ->
+        pp_err (ErrorKind.of_error_handling_time t) "loop limit reached."
     | ConflictingSideEffects (s1, s2) ->
-        pp_err typing "conflicting side effects %a and %a" SideEffect.pp_print
+        pp_err Typing "conflicting side effects %a and %a" SideEffect.pp_print
           s1 SideEffect.pp_print s2
-    | ConfigTimeBroken (e, ses) ->
-        pp_err typing
-          "expected@ config-time@ expression,@ got@ %a,@ which@ produces@ the@ \
-           following@ side-effects:@ %a."
-          pp_expr e SideEffect.SES.pp_print ses
     | ConstantTimeBroken (e, ses) ->
-        pp_err typing
+        pp_err Typing
           "expected@ constant-time@ expression,@ got@ %a,@ which@ produces@ \
            the@ following@ side-effects:@ %a."
           pp_expr e SideEffect.SES.pp_print ses
     | BadReturnStmt (Some t) ->
-        pp_err typing
+        pp_err Typing
           "cannot@ return@ nothing@ from@ a@ function,@ an@ expression@ of@ \
            type@ %a@ is@ expected."
           pp_ty t
     | EmptyConstraints ->
-        pp_err typing
+        pp_err Typing
           "a well-constrained integer cannot have empty constraints."
     | ExpectedSingularType t ->
-        pp_err typing "%a@ %a." pp_print_text "expected singular type, found"
+        pp_err Typing "%a@ %a." pp_print_text "expected singular type, found"
           pp_ty t
     | ExpectedNamedType t ->
-        pp_err typing "%a@ %a." pp_print_text "expected a named type, found"
+        pp_err Typing "%a@ %a." pp_print_text "expected a named type, found"
           pp_ty t
     | UnexpectedPendingConstrained ->
-        pp_err typing "a pending constrained integer is illegal here."
+        pp_err Typing "a pending constrained integer is illegal here."
     | BitfieldsDontAlign
         { field1_absname; field2_absname; field1_absslices; field2_absslices }
       ->
-        pp_err typing
+        pp_err Typing
           "bitfields `%s` and `%s` are in the same scope but define different \
            slices of the containing bitvector type: %s and %s, respectively."
           field1_absname field2_absname field1_absslices field2_absslices
     | UnexpectedInitialisationThrow (exception_ty, global_storage_element_name)
       ->
-        pp_err dynamic
+        pp_err Dynamic
           "unexpected@ exception@ %a@ thrown@ during@ the@ evaluation@ of@ \
            the@ initialisation@ of@ the global@ storage@ element@ %S."
           pp_ty exception_ty global_storage_element_name
     | PrecisionLostDefining ->
-        pp_err typing
+        pp_err Typing
           "type@ used@ to@ define@ storage@ item@ is@ the@ result@ of@ \
            precision@ loss."
-    | NegativeArrayLength (e_length, length) ->
-        pp_err dynamic
-          "array@ length@ expression@ %a@ has@ negative@ length@a: %i." pp_expr
+    | NegativeArrayLength (t, e_length, length) ->
+        pp_err
+          (ErrorKind.of_error_handling_time t)
+          "array@ length@ expression@ %a@ has@ negative@ length:@ %i." pp_expr
           e_length length
-    | MultipleWrites id -> pp_err parse "multiple@ writes@ to@ %S." id
+    | MultipleWrites id -> pp_err Parse "multiple@ writes@ to@ %S." id
     | MultipleImplementations (impl1, impl2) ->
-        pp_err typing
+        pp_err Typing
           "multiple@ overlapping@ `implementation`@ functions@ for@ %s:@ %a"
           impl1.desc.name (pp_print_list pp_pos) [ impl1; impl2 ]
     | NoOverrideCandidate ->
-        pp_err typing "no `impdef` for `implementation` function."
-    | UnexpectedCollection -> pp_err typing "unexpected collection."
+        pp_err Typing "no `impdef` for `implementation` function."
+    | UnexpectedCollection -> pp_err Typing "unexpected collection."
     | TooManyOverrideCandidates impdefs ->
-        pp_err typing
+        pp_err Typing
           "multiple@ `impdef`@ candidates@ for@ `implementation`:@ %a"
           (pp_print_list pp_pos) impdefs
-    | BadPrimitiveArgument (name, reason) ->
-        pp_err dynamic "%s (primitive) expected an argument %s" name reason
+    | BadPrimitiveArgument (t, name, reason) ->
+        pp_err
+          (ErrorKind.of_error_handling_time t)
+          "%s (primitive) expected an argument %s" name reason
     | NoEntryPoint ->
-        pp_err dynamic "%a" pp_print_text
+        pp_err Dynamic "%a" pp_print_text
           "no entrypoint supplied. Have you defined `func main() => integer`, \
            or did you mean to pass `--no-exec`?"
-    | ObsoleteSyntax fmt -> pp_err parse "Obsolete syntax:@ @[%t@]" fmt
+    | ObsoleteSyntax fmt -> pp_err Parse "Obsolete syntax:@ @[%t@]" fmt
 
   let fprintf_warn f =
     kdprintf (fun msg -> fprintf f "@[ASL Warning:@ %t@]" msg)
@@ -661,8 +854,8 @@ module PPrint = struct
           "Missing `implementation` for `impdef` function."
 
   let pp_pos_begin f pos =
-    match display_error_context pos with
-    | None when ASTUtils.is_dummy_annotated pos -> ()
+    match PrintContext.display_error_context pos with
+    | None when ASTUtils.is_dummy_pos pos -> ()
     | None -> fprintf f "@[<h>%a:@]@ " pp_pos pos
     | Some ctx -> fprintf f "@[<h>%a:@]@ %s@ " pp_pos pos ctx
 
@@ -671,7 +864,7 @@ module PPrint = struct
   let pp_warning f e =
     fprintf f "@[<v 0>%a%a@]" pp_pos_begin e pp_warning_desc e
 
-  let error_desc_to_string = asprintf "%a" pp_error_desc
+  let error_desc_to_string e = asprintf "%a" pp_error_desc e
 
   let desc_to_string_inf pp_desc =
     asprintf "%a" @@ fun f e ->
@@ -683,56 +876,158 @@ end
 
 include PPrint
 
-let escape s =
-  let b = Buffer.create (String.length s) in
-  String.iter
-    (function
-      | '"' ->
-          Buffer.add_char b '"';
-          Buffer.add_char b '"'
-      | c -> Buffer.add_char b c)
-    s;
-  Buffer.contents b
+module CSV = struct
+  let error_label = function
+    | ReservedIdentifier _ -> "ReservedIdentifier"
+    | BadField _ -> "BadField"
+    | BadPattern _ -> "BadPattern"
+    | MissingField _ -> "MissingField"
+    | BadSlices _ -> "BadSlices"
+    | BadIndex _ -> "BadIndex"
+    | BadTupleIndex _ -> "BadTupleIndex"
+    | TypeInferenceNeeded -> "TypeInferenceNeeded"
+    | UndefinedIdentifier _ -> "UndefinedIdentifier"
+    | MismatchedCallType _ -> "MismatchedCallType"
+    | BadArity _ -> "BadArity"
+    | BadCallArity _ -> "BadCallArity"
+    | BadTupleArity _ -> "BadTupleArity"
+    | BadParameterArity _ -> "BadParameterArity"
+    | UnsupportedBinop _ -> "UnsupportedBinop"
+    | UnsupportedUnop _ -> "UnsupportedUnop"
+    | StaticEvaluationFailure _ -> "StaticEvaluationFailure"
+    | ImplementationIntegerOverflow _ -> "ImplementationIntegerOverflow"
+    | InvalidExpr _ -> "InvalidExpr"
+    | MismatchType _ -> "MismatchType"
+    | ATCExecutionFailure _ -> "ATCExecutionFailure"
+    | ConflictingTypes _ -> "ConflictingTypes"
+    | TypeSatisfactionFailure _ -> "TypeSatisfactionFailure"
+    | AssertionFailed _ -> "AssertionFailed"
+    | CannotParse _ -> "CannotParse"
+    | BadBinopPriority _ -> "BadBinopPriority"
+    | AllDiscardLocalDeclaration -> "AllDiscardLocalDeclaration"
+    | NonFunctionBuiltinDeclaration -> "NonFunctionBuiltinDeclaration"
+    | UnknownSymbol _ -> "UnknownSymbol"
+    | NoCallCandidate _ -> "NoCallCandidate"
+    | BadTypesForBinop _ -> "BadTypesForBinop"
+    | ImpureExpression _ -> "ImpureExpression"
+    | MismatchedPurity _ -> "MismatchedPurity"
+    | MismatchedBitvectorWidths _ -> "MismatchedBitvectorWidths"
+    | NoCommonAncestor _ -> "NoCommonAncestor"
+    | CollectionBaseNotVariable _ -> "CollectionBaseNotVariable"
+    | AssignToImmutable _ -> "AssignToImmutable"
+    | AssignToTupleElement _ -> "AssignToTupleElement"
+    | AlreadyDeclaredIdentifier _ -> "AlreadyDeclaredIdentifier"
+    | BadReturnStmt _ -> "BadReturnStmt"
+    | UnexpectedSideEffect _ -> "UnexpectedSideEffect"
+    | UncaughtException _ -> "UncaughtException"
+    | OverlappingSlices _ -> "OverlappingSlices"
+    | BadLDI _ -> "BadLDI"
+    | BadRecursiveDecls _ -> "BadRecursiveDecls"
+    | UnrespectedParserInvariant -> "UnrespectedParserInvariant"
+    | BadATC _ -> "BadATC"
+    | ConstrainedIntegerExpected _ -> "ConstrainedIntegerExpected"
+    | ParameterWithoutDecl _ -> "ParameterWithoutDecl"
+    | BadParameterDecl _ -> "BadParameterDecl"
+    | BadParameterExpr _ -> "BadParameterExpr"
+    | BadParameterType _ -> "BadParameterType"
+    | BaseValueEmptyType _ -> "BaseValueEmptyType"
+    | ArbitraryEmptyType _ -> "ArbitraryEmptyType"
+    | BaseValueNonSymbolic _ -> "BaseValueNonSymbolic"
+    | SetterWithoutCorrespondingGetter _ -> "SetterWithoutCorrespondingGetter"
+    | NonReturningFunction _ -> "NonReturningFunction"
+    | NoreturnViolation _ -> "NoreturnViolation"
+    | UnreachableReached _ -> "UnreachableReached"
+    | LoopLimitReached _ -> "LoopLimitReached"
+    | RecursionLimitReached _ -> "RecursionLimitReached"
+    | EmptyConstraints -> "EmptyConstraints"
+    | UnexpectedPendingConstrained -> "UnexpectedPendingConstrained"
+    | BitfieldsDontAlign _ -> "BitfieldsDontAlign"
+    | ExpectedSingularType _ -> "ExpectedSingularType"
+    | ExpectedNamedType _ -> "ExpectedNamedType"
+    | ConflictingSideEffects _ -> "ConflictingSideEffects"
+    | ConstantTimeBroken _ -> "ConstantTimeBroken"
+    | MultipleWrites _ -> "MultipleWrites"
+    | UnexpectedInitialisationThrow _ -> "UnexpectedInitialisationThrow"
+    | NegativeArrayLength _ -> "NegativeArrayLength"
+    | MultipleImplementations _ -> "ClashingImplementations"
+    | NoOverrideCandidate -> "NoOverrideCandidate"
+    | TooManyOverrideCandidates _ -> "TooManyOverrideCandidates"
+    | PrecisionLostDefining -> "PrecisionLostDefining"
+    | UnexpectedCollection -> "UnexpectedCollection"
+    | BadPrimitiveArgument _ -> "BadPrimitiveArgument"
+    | NoEntryPoint -> "NoEntryPoint"
+    | ObsoleteSyntax _ -> "ObsoleteSyntax"
 
-let pp_csv pp_desc label =
-  let pos_in_line pos = Lexing.(pos.pos_cnum - pos.pos_bol) in
-  fun f pos ->
-    Printf.fprintf f "\"%s\",%d,%d,%d,%d,%s,\"%s\""
-      (escape pos.pos_start.pos_fname)
-      pos.pos_start.pos_lnum
-      (pos_in_line pos.pos_start)
-      pos.pos_end.pos_lnum (pos_in_line pos.pos_end) (label pos.desc)
-      (desc_to_string_inf pp_desc pos |> escape)
+  let warning_label = function
+    | NoLoopLimit -> "NoLoopLimit"
+    | IntervalTooBigToBeExploded _ -> "IntervalTooBigToBeExploded"
+    | ConstraintSetPairToBigToBeExploded _ ->
+        "ConstraintSetPairToBigToBeExploded"
+    | RemovingValuesFromConstraints _ -> "RemovingValuesFromConstraints"
+    | NoRecursionLimit _ -> "NoRecursionLimit"
+    | PragmaUse _ -> "PragmaUse"
+    | UnexpectedImplementation -> "UnexpectedImplementation"
+    | MissingOverride -> "MissingOverride"
 
-let pp_error_csv f e = pp_csv pp_error_desc error_label f e
-let pp_warning_csv f w = pp_csv pp_warning_desc warning_label f w
+  let escape s =
+    let b = Buffer.create (String.length s) in
+    String.iter
+      (function
+        | '"' ->
+            Buffer.add_char b '"';
+            Buffer.add_char b '"'
+        | c -> Buffer.add_char b c)
+      s;
+    Buffer.contents b
 
-let pp_gnu pp_desc =
-  let pos_in_line pos = Lexing.(pos.pos_cnum - pos.pos_bol) in
-  fun f pos ->
-    Printf.fprintf f "aslref: %s:%d:%d: %s" pos.pos_start.pos_fname
-      pos.pos_start.pos_lnum
-      (pos_in_line pos.pos_start)
-      (desc_to_string_inf pp_desc pos)
+  let pp_csv pp_desc label =
+    let pos_in_line pos = Lexing.(pos.pos_cnum - pos.pos_bol) in
+    fun f pos ->
+      Printf.fprintf f "\"%s\",%d,%d,%d,%d,%s,\"%s\""
+        (escape pos.pos_start.pos_fname)
+        pos.pos_start.pos_lnum
+        (pos_in_line pos.pos_start)
+        pos.pos_end.pos_lnum (pos_in_line pos.pos_end) (label pos.desc)
+        (desc_to_string_inf pp_desc pos |> escape)
+
+  let pp_error f e = pp_csv pp_error_desc error_label f e
+  let pp_warning f w = pp_csv pp_warning_desc warning_label f w
+end
+
+module GNU = struct
+  let pp pp_desc =
+    let pos_in_line pos = Lexing.(pos.pos_cnum - pos.pos_bol) in
+    fun f pos ->
+      Printf.fprintf f "aslref: %s:%d:%d: %s" pos.pos_start.pos_fname
+        pos.pos_start.pos_lnum
+        (pos_in_line pos.pos_start)
+        (desc_to_string_inf pp_desc pos)
+end
 
 type output_format = HumanReadable | CSV | GNU
 
 module type ERROR_PRINTER_CONFIG = sig
   val output_format : output_format
+  val err_buffer : Buffer.t option
 end
 
 module ErrorPrinter (C : ERROR_PRINTER_CONFIG) = struct
+  let err_formatter =
+    match C.err_buffer with
+    | None -> Format.err_formatter
+    | Some buf -> Format.formatter_of_buffer buf
+
   let eprintln e =
     match C.output_format with
-    | HumanReadable -> Format.eprintf "@[<2>%a@]@." pp_error e
-    | CSV -> Printf.eprintf "%a\n" pp_error_csv e
-    | GNU -> Printf.eprintf "%a\n" (pp_gnu pp_error_desc) e
+    | HumanReadable -> Format.fprintf err_formatter "@[<2>%a@]@." pp_error e
+    | CSV -> Printf.eprintf "%a\n" CSV.pp_error e
+    | GNU -> Printf.eprintf "%a\n" (GNU.pp pp_error_desc) e
 
   let warn w =
     match C.output_format with
     | HumanReadable -> Format.eprintf "@[<2>%a@]@." pp_warning w
-    | CSV -> Printf.eprintf "%a\n" pp_warning_csv w
-    | GNU -> Printf.eprintf "%a\n" (pp_gnu pp_warning_desc) w
+    | CSV -> Printf.eprintf "%a\n" CSV.pp_warning w
+    | GNU -> Printf.eprintf "%a\n" (GNU.pp pp_warning_desc) w
 
   let warn_from ~loc w = ASTUtils.add_pos_from loc w |> warn
 end

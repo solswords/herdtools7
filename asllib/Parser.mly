@@ -88,24 +88,22 @@ let check_is_associative ~loc (op : AST.binop) =
   | _ ->
       Error.(
         fatal_from loc
-          (CannotParse
-             (Some
-                (Format.sprintf
-                   "Binary operator `%s` is not associative - parenthesise to \
-                    disambiguate."
-                   (PP.binop_to_string op)))))
+          (BadBinopPriority
+             (Format.sprintf
+                "Binary operator `%s` is not associative - parenthesise to \
+                 disambiguate."
+                (PP.binop_to_string op))))
 
 
 let check_not_same_prec loc op op' =
   if prec op = prec op' then
     Error.(
       fatal_from loc
-        (CannotParse
-           (Some
-              (Format.sprintf
-                 "Operators `%s` and `%s` have the same priority - parenthesise \
-                  to disambiguate."
-                 (PP.binop_to_string op) (PP.binop_to_string op')))))
+        (BadBinopPriority
+           (Format.sprintf
+              "Operators `%s` and `%s` have the same priority - parenthesise \
+               to disambiguate."
+              (PP.binop_to_string op) (PP.binop_to_string op'))))
 
 let check_not_binop_same_prec op e =
   match e.desc with
@@ -167,7 +165,7 @@ let some(x) == ~ = x ; <Some>
 let terminated_by(x, y) == terminated(y, x)
 
 (* Position annotation *)
-let annotated(x) == desc = x; { { desc; pos_start=$symbolstartpos; pos_end=$endpos; version } }
+let annotated(x) == desc = x; { { desc; pos_start=$symbolstartpos; pos_end=$endpos; version; ty_opt=None } }
 
 (* ------------------------------------------------------------------------- *)
 (* List handling *)
@@ -439,7 +437,7 @@ let access :=
 
 let basic_lexpr :=
   | base=annotated(IDENTIFIER); ~=access;
-    { ( base, {access; slices=add_dummy_annotation ~version []} ) }
+    { ( base, {access; slices=add_dummy_pos ~version []} ) }
   | base=annotated(IDENTIFIER); ~=access; slices=annotated(slices);
     { ( base, {access; slices} ) }
 
@@ -479,7 +477,7 @@ let decl_item :=
   | vs=plist2(discard_or_identifier) ; {
       if List.for_all is_local_ignored vs then
         Error.fatal_here $startpos $endpos @@
-          Error.CannotParse (Some "A local declaration must declare at least one name.")
+          Error.AllDiscardLocalDeclaration
       else LDI_Tuple vs
     }
 
@@ -554,7 +552,7 @@ let stmt :=
       | ~=local_decl_keyword; ~=decl_item; ~=ty_opt; EQ; ~=some(expr); < S_Decl   >
       | le=lexpr; EQ; e=expr;                                < S_Assign >
       | call=annotated(call); ~=setter_access; EQ; rhs=expr;
-        { desugar_setter call { access=setter_access; slices=add_dummy_annotation ~version [] } rhs }
+        { desugar_setter call { access=setter_access; slices=add_dummy_pos ~version [] } rhs }
       | call=annotated(call); ~=setter_access; slices=annotated(slices); EQ; rhs=expr;
         { desugar_setter call { access=setter_access; slices } rhs }
       | call=annotated(call); DOT; flds=bracketed(clist2(IDENTIFIER)); EQ; rhs=expr;
@@ -734,7 +732,7 @@ let opn [@internal true] := body=stmt_list0; EOF;
             parameters = [];
             body = SB_ASL body;
             return_type =
-              Some (T_Int UnConstrained |> add_dummy_annotation ~version);
+              Some (T_Int UnConstrained |> add_dummy_pos ~version);
             subprogram_type = ST_Function;
             recurse_limit = None;
             qualifier = None;

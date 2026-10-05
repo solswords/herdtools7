@@ -10,8 +10,21 @@ Deferred to execution ATCs
   File atcs1.asl, line 2, characters 11 to 12:
     let x = (3 as integer {42});
              ^
-  ASL Dynamic error: Mismatch type:
-    value 3 does not belong to type integer {42}.
+  ASL Dynamic error (DE_TAF): Value 3 does not satisfy the asserted type
+    integer {42}.
+  [1]
+
+Static evaluation ATCs
+  $ cat >atcs-static.asl <<EOF
+  > constant X = 2 as integer {1};
+  > EOF
+
+  $ aslref --no-exec atcs-static.asl
+  File atcs-static.asl, line 1, characters 13 to 14:
+  constant X = 2 as integer {1};
+               ^
+  ASL Static error (TE_SEF): Value 2 does not satisfy the asserted type
+    integer {1}.
   [1]
 
 Bad structure ATCs
@@ -26,8 +39,8 @@ Bad structure ATCs
   File atcs2.asl, line 2, characters 11 to 23:
     let x = (3 as boolean);
              ^^^^^^^^^^^^
-  ASL Type error: cannot perform Asserted Type Conversion on integer {3} by
-    boolean.
+  ASL Type error (TE_TAF): cannot perform Asserted Type Conversion on
+    integer {3} by boolean.
   [1]
 
 ATCs on other types
@@ -64,7 +77,8 @@ ATCs on other types
   File atcs5.asl, line 5, characters 10 to 20:
     let y = x as myty2;
             ^^^^^^^^^^
-  ASL Type error: cannot perform Asserted Type Conversion on myty by myty2.
+  ASL Type error (TE_TAF): cannot perform Asserted Type Conversion on myty by
+    myty2.
   [1]
 
   $ cat > atcs6.asl <<EOF
@@ -79,8 +93,8 @@ ATCs on other types
   File atcs6.asl, line 3, characters 11 to 25:
     let x = ((42, Zeros{4}) as myty);
              ^^^^^^^^^^^^^^
-  ASL Dynamic error: Mismatch type:
-    value [42, 0x0] does not belong to type (integer {0..10}, bits(4)).
+  ASL Dynamic error (DE_TAF): Value [42, 0x0] does not satisfy the asserted
+    type (integer {0..10}, bits(4)).
   [1]
 
   $ cat > atcs7.asl <<EOF

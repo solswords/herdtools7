@@ -88,6 +88,10 @@ val pair_compare :
     ('a -> 'a -> int) -> ('b -> 'b -> int) -> 'a * 'b -> 'a * 'b -> int
 val pair_eq :
   ('a -> 'a -> bool) -> ('b -> 'b -> bool) -> 'a * 'b -> 'a * 'b -> bool
+val tuple4_compare :
+  ('a -> 'a -> int) -> ('b -> 'b -> int)
+  -> ('c -> 'c -> int) -> ('d -> 'd -> int)
+  -> 'a * 'b * 'c * 'd -> 'a * 'b * 'c * 'd -> int
 
 val char_uppercase : char -> char
 val lowercase : string -> string
@@ -157,13 +161,26 @@ val nsplit : int -> 'a list -> 'a list list
    WARNING, correct only when duplicates are in sequence *)
 val rem_dups : ('a -> 'a -> bool) -> 'a list -> 'a list
 
-(* group elements, efficient*)
+(*****************************)
+(* Group elements, efficient *)
+(*****************************)
+
+(* On already sorted lists, function is equality,
+   equal elements must follow each other. *)
+val group_sorted : ('a -> 'a -> bool) -> 'a list -> 'a list list
+
+(* On any list, function is compare function *)
 val group : ('a -> 'a -> int) -> 'a list -> 'a list list
 val group_iter : ('a -> 'a -> int) -> ('a -> 'a list -> unit) -> 'a list -> unit
 val group_iteri : ('a -> 'a -> int) -> (int -> 'a -> 'a list -> unit) -> 'a list -> unit
 
 (* Check that f yields the same result on all list elements *)
 val check_same : ('a -> 'a -> bool) -> ('b -> 'a) -> 'b list -> 'a option
+
+(* [doubleton_fold f k_) [x_1;..;x_n] k_0]
+   computes  [(f  (f (... (f (f k_0 x_1 x_2) x_1 x_3)) ...) x_{n-1} x_n))]
+   for all i,j where i in [1..n], j in [1..n], i < j *)
+val doubleton_fold : ('b -> 'a -> 'a -> 'b) -> 'b -> 'a list -> 'b
 
 (* Lift boolean connectors to predicates *)
 val (|||) : ('a -> bool) -> ('a -> bool) -> 'a -> bool
@@ -404,4 +421,10 @@ module Option : sig
 
   val apply : ('a -> 'b) t -> 'a t -> 'b t
   val get_or_exn : exn -> 'a option -> 'a
+end
+
+module Result : sig
+  module Syntax : sig
+    val (let*) : ('a, 'e) result -> ('a -> ('b, 'e) result) -> ('b, 'e) result
+  end
 end

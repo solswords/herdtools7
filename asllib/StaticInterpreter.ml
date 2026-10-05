@@ -37,6 +37,10 @@ module InterpConf = struct
   let display_call_stack_on_error = false
   let track_symbolic_path = false
   let bit_clear_optimisation = false
+
+  (** Printing is considered impure by the type system, so we do not expect to
+      statically interpret print statements - no need to capture output. *)
+  let out_buffer = None
 end
 
 module SB = Native.StaticBackend
@@ -44,7 +48,7 @@ module SI = Interpreter.Make (Native.StaticBackend) (InterpConf)
 
 let eval_from ~loc env e =
   try SI.eval_expr env e
-  with Error.(ASLException exn) when is_dummy_annotated exn ->
+  with Error.(ASLException exn) when is_dummy_pos exn ->
     Error.fatal_from loc exn.desc
 
 (* Begin StaticEval *)
@@ -63,7 +67,7 @@ let static_eval (senv : SEnv.env) (e : expr) : literal =
   | SI.Normal (Native.NV_Literal l, _env) ->
       l |: Instrumentation.TypingRule.StaticEval
   | SI.Normal _ | SI.Throwing _ | SI.Cutoff ->
-      Error.fatal_from e (UnsupportedExpr (Static, e))
+      Error.fatal_from e (StaticEvaluationFailure e)
 (* End *)
 
 let static_eval_to_int env e =

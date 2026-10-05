@@ -157,6 +157,7 @@ module Make (O:Config) (E:Edge.S) :
   let do_sve = O.variant Variant_gen.SVE
   let do_sme = O.variant Variant_gen.SME
   let do_no_fault = O.variant Variant_gen.NoFault
+  let do_store_only = O.variant Variant_gen.StoreOnly
 
   type fence = E.fence
   type edge = E.edge
@@ -259,7 +260,7 @@ module Make (O:Config) (E:Edge.S) :
       ( if e.rmw then "rmw" else "" )
       ( match debug_vec e.cell with | "" -> "" | s -> "cell=[" ^ s ^"] ")
       (debug_val e.v) (debug_tag e) (debug_morello e) (debug_vector e)
-      ( match e.check_fault with | Some (_,b) -> sprintf "%b" b | None -> "none" )
+      ( match e.check_fault with | Some (n,b) -> sprintf "%s:%b" n b | None -> "none" )
       ( match e.check_value with | Some b -> sprintf "%b" b | None -> "none" )
 
   let debug_edge = E.pp_edge
@@ -442,9 +443,26 @@ let find_non_pseudo_prev m = find_edge_prev non_pseudo m
         | None-> k)
     m StringMap.empty
 
+  (* Map a size annotation to the cell index.
+     Return the residual annotation after selecting the cell,
+     - `w4` over `int32_t` selects cell 1, (1, None)
+     - `w4` over `int64_t` and `fullmixed` selects cell 0, but keep the atom
+        for the mixed access (0, Some `w4`) *)
+  let split_access_atom atom =
+    match E.get_access_atom atom with
+    | Some (_,o) ->
+        let cell_idx = o / MachSize.nbytes O.naturalsize in
+        let atom = if cell_idx = 0 then atom else None in
+        cell_idx,atom
+    | None -> 0,atom
+
   let is_pair n = match n.evt.loc with
       | Data loc ->
-         if E.is_pair n.edge then Some loc
+         if E.is_pair n.edge ||
+            match E.get_access_atom n.evt.atom with
+            | Some (sz,_) -> sz = O.naturalsize
+            | None -> false
+         then Some loc
          else None
       | Code _ -> None
 
@@ -488,7 +506,7 @@ let diff_loc e = Code.is_diff_loc @@ E.loc_sd e
 let same_proc e = E.get_ie e = Int
 let diff_proc e = E.get_ie e = Ext
 let int_com e = match e.E.edge with
-  | E.Rf Int|E.Fr Int|E.Ws Int -> true
+  | E.Communication (_,Int) -> true
   | _ -> false
 
 
@@ -534,7 +552,8 @@ module CoSt = struct
   let update_cell_on_write st n =
     let e = n.evt in match e.bank with
     | Ord|Pair -> begin
-       let old = st.co_cell.(0) in
+       let idx,atom = split_access_atom e.atom in
+       let old = st.co_cell.(idx) in
        let co_cell = Array.copy st.co_cell in
        let cell2 =
          match n.prev.edge.E.edge with
@@ -545,7 +564,7 @@ module CoSt = struct
        begin
          match e.bank with
          | Ord ->
-            co_cell.(0) <- E.overwrite_value old e.atom cell2
+            co_cell.(idx) <- E.overwrite_value old atom cell2
          | Pair -> (* No Rmw for pairs *)
             let width = Value.from_int ((Value.to_int e.v) - 1) in
             co_cell.(0) <- E.overwrite_value old e.atom width;
@@ -572,25 +591,22 @@ module CoSt = struct
     Some ( (Label.next_label "L"), (Value.can_fault dir pte_val) )
 
   (* Helper function returns a fresh label and a boolean for if it should fault,
-     if a fault check is need. Otherwise return `None`. *)
+     if a fault check is needed. Otherwise return `None`. *)
   let fault_update st dir =
     let unset_check_fault st = {st with check_fault = NoDir } in
     let pte_val = get_pte_value st in
-    match () with
-    | _ when (st.check_fault = NoDir || do_no_fault) -> None,unset_check_fault st
-      (* Need to check fault *)
-    | _ when do_kvm ->
-      let fault,check_fault = match dir,st.check_fault with
-      | _,NoDir -> None,NoDir
-      | (R|W),Irr | W,Dir W | R,Dir R -> label_pte_fault dir pte_val,NoDir
-      | W,Dir R -> None,Dir R
-      | R,Dir W -> None,Dir W in
-      fault,{st with check_fault}
-      (* In variants `memtag` and `morello`, the cycles are constructed such that
-         no fault occurs *)
-    | _ when do_memtag || do_morello ->
-      Some ((Label.next_label "L"), false),unset_check_fault st
-    |_ -> None,unset_check_fault st
+    match st.check_fault,dir with
+    | _,_ when do_no_fault -> None,unset_check_fault st
+    | NoDir,_ -> None,st
+    | Irr,(R|W) | Dir W,W | Dir R,R when do_kvm ->
+        label_pte_fault dir pte_val,unset_check_fault st
+    | Dir R,W | Dir W,R when do_kvm ->
+        None,st
+    | _,R when do_store_only ->
+        None,st
+    | _,_ when do_memtag || do_morello ->
+      Some ((Label.next_label "L"), false),st
+    | _,_ -> None,unset_check_fault st
 
   let implicit_pte_update st dir =
     match Value.implicitly_set_pteval dir st.machine_feature st.pte_value with
@@ -728,7 +744,7 @@ let remove_store n0 =
     begin
       let p = find_non_pseudo_prev m.prev in
       match p.edge.E.edge with
-      | (E.Rf Ext | E.Fr Ext) ->
+      | (E.Communication (Rf,Ext) | E.Communication (Fr,Ext)) ->
         Warn.fatal "Insert pseudo edge %s appears after external communication edge %s"
         (E.pp_edge m.edge) (E.pp_edge p.edge)
       | _ -> ()
@@ -838,6 +854,12 @@ let by_loc xvs =
   |> group
 
 let check_cycle c =
+  fold
+    (fun n () ->
+      if E.is_dp_data n.edge.E.edge && n.next.evt.dir = Some R &&
+         not n.next.evt.rmw then
+        Warn.fatal "Data dependency to a read must be followed by an RMW")
+    c () ;
   (* Collect all the rmw edges, organise by location
      and then check if all the rmw edges per locations are valid *)
   fold ( fun n lst ->
@@ -850,7 +872,7 @@ let check_cycle c =
       | None -> "" in
       let loc = match n.evt.loc with
       | Data s -> Data (s ^ access_suffix)
-      | _ -> assert false in
+      | Code _ -> Warn.fatal "RMW edge on a code location is not possible" in
       (loc,rmw)::lst
     | _ -> lst
   ) c []
@@ -915,7 +937,9 @@ let check_cycle c =
     if v = n.evt.v then
       Warn.fatal "Updated value remains the same. An issue should be reported.";
     let st = CoSt.implicit_pte_update st W in
-    n.evt <- { n.evt with v = tr_value n.evt v; } ;
+    let idx,_ = split_access_atom n.evt.atom in
+    let v = if idx = 0 then tr_value n.evt v else v in
+    n.evt <- { n.evt with v; } ;
     (* Writing Ord resets morello tag *)
     let st = CoSt.set_co st CapaTag evt_null.ctag in
     let e,st = CoSt.update_cell_on_write st n in
@@ -961,7 +985,7 @@ let check_cycle c =
           | Data _ ->
             let bank = n.evt.bank in
             begin match bank with
-            | Instr -> Warn.fatal "instruction annotation to data bank not possible?"
+            | Instr -> Warn.fatal "instruction annotation on a data location is not possible"
             | Ord ->
               let st = set_write_val_ord st n in
               let check_fault, st =
@@ -1151,18 +1175,18 @@ let set_dep_v nss =
 (* TODO: this is wrong for Store CR's: consider Rfi Store PosRR *)
 let set_read_individual_v n cell check_value =
   let e = n.evt in
-  let v = E.extract_value cell.(0) e.atom in
+  let idx,atom = split_access_atom e.atom in
+  let v = E.extract_value cell.(idx) atom in
 (* eprintf "SET READ: cell=0x%x, v=0x%x\n" cell v ; *)
-  let e = { e with v=v; check_value } in
+  let e = { e with v=v; cell=[|v|]; check_value } in
   n.evt <- e
 (* eprintf "AFTER %a\n" debug_node n *)
 
 let set_read_pair_v n cell check_value =
   let e = n.evt in
-  let v0 = E.extract_value cell.(0) e.atom |> Value.to_int
-  and v1 =  E.extract_value cell.(1) e.atom |> Value.to_int in
-  let v = v0 + v1 |> Value.from_int in
-  let e = { e with v=v; check_value } in
+  let v0 = E.extract_value cell.(0) e.atom
+  and v1 = E.extract_value cell.(1) e.atom in
+  let e = { e with v=v0; cell=[|v0;v1|]; check_value } in
   n.evt <- e
 
 (* Assume all the events are for the same location,
@@ -1191,8 +1215,17 @@ let do_set_read_v init =
             if do_morello then None, st
             (* because `rmw` is treated as both read and write,
                we should assign label to this read event.
-               Here we assume write is stronger than read. *)
-            else if n.evt.rmw then CoSt.fault_update st W
+               Here we assume write is stronger than read, except for LxSx,
+               whose load and store are checked separately. Allocate both
+               labels here so their order follows the instruction order. *)
+            else if n.evt.rmw then
+              match n.edge.E.edge with
+              | E.Rmw rmw when not (E.RMW.is_one_instruction rmw) ->
+                  let check_fault,st = CoSt.fault_update st R in
+                  let write_check_fault,st = CoSt.fault_update st W in
+                  n.next.evt <- {n.next.evt with check_fault=write_check_fault};
+                  check_fault,st
+              | _ -> CoSt.fault_update st W
             else CoSt.fault_update st R in
           n.evt <- { n.evt with check_fault };
           st
@@ -1331,6 +1364,7 @@ let do_set_read_v init =
 (* zyva... *)
 
 let finish n =
+  Label.reset ();
   let st = (0,0),Env.empty in
 (* Set locations *)
   let sd,n =
@@ -1611,7 +1645,7 @@ let merge_changes n nss =
     let k = IntSet.empty in
     let k = if e.proc >= 0 then IntSet.add e.proc k else k in
     let k = match n.edge.E.edge with
-    | E.Rf _ -> IntSet.add n.next.evt.proc k
+    | E.Communication (Rf,_) -> IntSet.add n.next.evt.proc k
     | _ -> k in
     k
 

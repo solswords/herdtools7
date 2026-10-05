@@ -53,6 +53,7 @@ type runopts =
      hexa : bool ;
      int32 : bool ;
      faulttype : bool ;
+     datafault : bool ;
    }
 
 let default_runopts =
@@ -82,7 +83,8 @@ let default_runopts =
    hexa = false;
    int32 = true;
    faulttype = true;
- }
+   datafault = true;
+}
 
 let runopts = default_runopts
 
@@ -104,6 +106,12 @@ let options =
       (delay_ro (fun b ro -> { ro with faulttype = b})),
     sprintf
       "<bool> consider fault types, default %b" default_runopts.faulttype);
+   (CheckName.datafault_key,
+    Arg.Bool
+      (delay_ro (fun b ro -> { ro with datafault = b})),
+    (sprintf
+       "<bool> all MMU fault are from data, default %b"
+       default_runopts.datafault));
    ("-big", Arg.Bool (fun b -> acceptBig := b),
     sprintf
       " <bool> do not discard test with many states, default %b" !acceptBig);
@@ -282,6 +290,7 @@ module type Config = sig
   val int32 : bool
   val acceptBig : bool
   val faulttype : bool
+  val datafault : bool
 end
 
 module Verbose = struct let verbose = !verb end
@@ -351,6 +360,7 @@ module Config = struct
   let int32 = runopts.int32
   let acceptBig = !acceptBig
   let faulttype = runopts.faulttype
+  let datafault = runopts.datafault
 end
 
 (************)
@@ -716,7 +726,7 @@ let dump_file s name = Misc.output_protect (dump_chan s) name
             include Matrix.NoAdd
           end) in
       let m = B.build keys ts in
-      if show_kinds then
+      if not quiet && show_kinds then
         dump ts "Revalidation" true
           (List.map (fun t -> 1,pp_name t.name) ts) []
           keys
@@ -734,8 +744,7 @@ let dump_file s name = Misc.output_protect (dump_chan s) name
       else
         dump ts "Revalidation" true
           (List.map (fun t -> 1,pp_name t.name) ts) []
-          keys m ;
-      output_char chan '\n'
+          keys m
 
 
 (************)

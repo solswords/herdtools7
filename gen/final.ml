@@ -118,7 +118,7 @@ module Make : functor (O:Config) -> functor (C:ArchRun.S) ->
           let e = m.C.C.edge in
           let open C.E in
           match e.edge with
-          | Rf _ | Fr _ | Ws _ | Hat
+          | Communication _ | Hat
           | Back _|Leave _ -> true
           | Rmw rmw -> RMW.show_rmw_reg rmw
           | Po _ | Fenced _ | Dp _ ->
@@ -178,11 +178,12 @@ module Make : functor (O:Config) -> functor (C:ArchRun.S) ->
             | Code.CapaTag
             | Code.CapaSeal
             | Code.Ord
-            | Code.Pair
             | Code.Instr
             | Code.Pte
               ->
                 Some (I evt.C.C.v)
+            | Code.Pair ->
+                Some (I evt.C.C.cell.(0))
             | Code.VecReg _->
                let v0 =
                  match evt.C.C.vecreg with
@@ -216,6 +217,10 @@ module Make : functor (O:Config) -> functor (C:ArchRun.S) ->
                      |> Code.add_vector O.hexa ) ) vs
                 | _ -> assert false
                 end
+             | Code.Pair ->
+                Array.to_list evt.C.C.cell
+                |> List.tl
+                |> List.map (fun v -> I v)
              | _ -> [] in
            let m = C.C.EventMap.add n.C.C.evt (C.A.of_reg p r) m in
            let fs =

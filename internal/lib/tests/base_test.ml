@@ -17,52 +17,6 @@
 (** Tests for the Base modules. *)
 
 let tests = [
-  "Base.Fun.protect calls both f and finally", (fun () ->
-    let called_f = ref false in
-    let called_finally = ref false in
-
-    Base.Fun.protect
-      ~finally:(fun () -> called_finally := true)
-      (fun () -> called_f := true) ;
-
-    if not !called_f then
-      Test.fail "did not call f" ;
-
-    if not !called_finally then
-      Test.fail "did not call finally"
-  );
-  "Base.Fun.protect calls finally before re-raising exception", (fun () ->
-    let called_finally = ref false in
-
-    let raised_exception =
-      try
-        Base.Fun.protect
-          ~finally:(fun () -> called_finally := true)
-          (fun () -> if true then raise Not_found ; ()) ;
-        false
-      with Not_found -> true
-    in
-
-    if not raised_exception then
-      Test.fail "did not re-raise exception" ;
-
-    if not !called_finally then
-      Test.fail "did not call finally"
-  );
-  "Base.Fun.protect wraps exceptions raised by finally", (fun () ->
-    let raised_exception =
-      try
-        Base.Fun.protect
-          ~finally:(fun () -> raise Not_found)
-          (fun () -> ()) ;
-        false
-      with Base.Fun.Finally_raised Not_found -> true
-    in
-
-    if not raised_exception then
-      Test.fail "did not wrap & re-raise exception" ;
-  );
-
   "Base.List.compare", (fun () ->
     let tests = [
       [], [], 0 ;
@@ -92,6 +46,35 @@ let tests = [
       (fun (xs, expected) ->
         let actual = Base.List.to_ocaml_string Base.String.to_ocaml_string xs in
         if String.compare actual expected <> 0 then
+          Test.fail (Printf.sprintf "expected %s, got %s" expected actual)
+      )
+      tests
+  );
+
+  "Base.List.split_when", (fun () ->
+    let tests = [
+      (([], (fun _ -> true)), ([], [])) ;
+      ((['a'; 'b'; 'c'], (Char.equal 'a')), ([], ['a'; 'b'; 'c'])) ;
+      ((['a'; 'b'; 'c'], (Char.equal 'b')), (['a'], ['b'; 'c'])) ;
+      ((['a'; 'b'; 'c'], (Char.equal 'c')), (['a'; 'b'], ['c'])) ;
+      ((['a'; 'b'; 'c'], (Char.equal 'd')), (['a'; 'b'; 'c'], [])) ;
+    ] in
+
+    let tuple_to_string a_str b_str (a, b) =
+      Printf.sprintf "(%s, %s)" (a_str a) (b_str b)
+    in
+
+    let charlist_to_string = Base.List.to_ocaml_string (String.make 1) in
+    let result_to_string =
+      tuple_to_string charlist_to_string charlist_to_string
+    in
+
+    List.iter
+      (fun ((xs, p), expected) ->
+        let actual = Base.List.split_when p xs in
+        if not (actual = expected)  then
+          let expected = result_to_string expected in
+          let actual = result_to_string actual in
           Test.fail (Printf.sprintf "expected %s, got %s" expected actual)
       )
       tests

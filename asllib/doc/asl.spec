@@ -105,10 +105,10 @@ typedef Strings
   (Identifier)
 ;
 
-constant new_line : Strings
+constant line_feed : Strings
 {
-  "the string for a new line",
-  math_macro = \vnewline,
+  "the string consisting of the line feed character",
+  math_macro = \linefeed,
 };
 
 constant main : Identifier
@@ -1338,8 +1338,8 @@ ast stmt { "statement" } =
   { "the \trystatementterm{} with statement given by {statement},
     list of \catchersterm{} given by {catchers},
     and optional \otherwisecaseterm{} statement given by {otherwise}" }
-  | S_Print(arguments: list0(expr), newline: Bool)
-  { "the \printstatementterm{} with list of arguments given by {arguments} and newline choice given by {newline}" }
+  | S_Print(arguments: list0(expr), add_line_feed: Bool)
+  { "the \printstatementterm{} with list of arguments given by {arguments} and add-line-feed flag given by {add_line_feed}" }
   | S_Pragma(pragma_name: Identifier, arguments: list0(expr))
   { "the \pragmastatementterm{} for the pragma name given by {pragma_name} and list of arguments given by {arguments}" }
   | S_Unreachable
@@ -2617,6 +2617,12 @@ typing relation annotate_expr(tenv: static_envs, e: expr) -> (t: ty, new_e: expr
           TypeError(TE_BF);
         }
       }
+      case collection_bad_base {
+        L = label_T_Collection;
+        e2 != E_Var(_);
+        --
+        TypeError(TE_UT);
+      }
     }
 
     case bitfield {
@@ -2702,6 +2708,12 @@ typing relation annotate_expr(tenv: static_envs, e: expr) -> (t: ty, new_e: expr
       --
       (T_Bits(e_slice_width, empty_list), E_GetCollectionFields(base_collection_name, fields), ses_base)
       { math_layout = [_, [_] ] };
+    }
+    case collection_bad_base {
+      make_anonymous(tenv, t_base_annot) -> T_Collection(_);
+      e_base_annot != E_Var(_);
+      --
+      TypeError(TE_UT);
     }
     case error {
       make_anonymous(tenv, t_base_annot) -> t_base_annot_anon;
@@ -3578,6 +3590,13 @@ typing relation annotate_lexpr(tenv: static_envs, le: lexpr, t_e: ty) ->
      --
      (LE_SetCollectionFields(base_name, le_fields, slices), ses_base)
      { math_layout = [_, [_] ] };
+   }
+
+   case collection_bad_base {
+     t_base_anon =: T_Collection(_);
+     le_base != LE_Var(_);
+     --
+     TypeError(TE_UT);
    }
 
    case error {
@@ -5177,8 +5196,7 @@ typing relation annotate_pattern(tenv: static_envs, t: ty, p: pattern) ->
     case bits {
       ast_label(t_struct) = label_T_Bits;
       te_check(ast_label(t_struct) = ast_label(t_e_struct), TE_BO) -> True;
-      check_bits_equal_width(tenv, t_struct, t_e_struct) -> b;
-      te_check(b, TE_BO) -> True;
+      check_bits_equal_width(tenv, t_struct, t_e_struct) -> True;
       --
       (Pattern_Single(e'), ses);
     }
@@ -8358,7 +8376,8 @@ typing function check_implementations_unique(impls: list0(func)) ->
 
   case non_empty {
     impls =: match_cons(h, t);
-    INDEX(i, t: signatures_match(h, t[i]) -> False);
+    INDEX(i, t: signatures_match(h, t[i]) -> matches[i]);
+    te_check(not_single(list_or(matches)), TE_OE) -> True;
     check_implementations_unique(t) -> True;
     --
     True;
@@ -8384,7 +8403,7 @@ typing function signatures_match(func1: func, func2: func) ->
   )
   { (_, [_]) };
   --
-  True;
+  match;
 ;
 
 typing function process_overrides(impdefs: list0(func), impls: list0(func)) ->
@@ -9148,9 +9167,17 @@ semantics relation build_genv(tenv: static_envs, typed_spec: spec) -> (new_env: 
  prose_transition = "building the \environmentterm{} and \executiongraphterm{} from {typed_spec} starting in the context of {tenv} yields",
 } =
   env := (tenv, empty_denv);
-  eval_globals(typed_spec, (env, empty_graph)) -> (new_env, new_g) | DynErrorConfig(), DivergingConfig();
-  --
-  (new_env, new_g);
+  case normal {
+    eval_globals(typed_spec, (env, empty_graph)) -> (new_env, new_g) | DynErrorConfig(), DivergingConfig();
+    --
+    (new_env, new_g);
+  }
+
+  case throwing {
+    eval_globals(typed_spec, (env, empty_graph)) -> Throwing(_, _, _, _) | DynErrorConfig(), DivergingConfig();
+    --
+    DynamicError(DE_UE);
+  }
 ;
 
 //////////////////////////////////////////////////
@@ -9369,7 +9396,7 @@ typing relation annotate_stmt(tenv: static_envs, s: stmt) ->
   }
 
   case SPrint {
-    s =: S_Print(args, newline);
+    s =: S_Print(args, add_line_feed);
     INDEX(i, args : annotate_expr(tenv, args[i]) -> (tys[i], args'[i], sess[i]));
     INDEX(i, args : is_singular(tenv, tys[i]) -> are_singular_arg_types[i]);
     te_check(list_and(are_singular_arg_types), TE_UT) -> True;
@@ -9377,7 +9404,7 @@ typing relation annotate_stmt(tenv: static_envs, s: stmt) ->
     inherent_effects := make_set(GlobalEffect(SE_Impure), LocalEffect(SE_Impure));
     ses := union(args_effects, inherent_effects);
     --
-    (S_Print(args', newline), tenv, ses);
+    (S_Print(args', add_line_feed), tenv, ses);
   }
 
   case SUnreachable {
@@ -9906,7 +9933,7 @@ semantics relation eval_stmt(env: envs, s: stmt) ->
    case println {
      s =: S_Print(e_list, True);
      eval_stmt(env, S_Print(e_list, False)) -> Continuing(g, env1);
-     output_to_console(env1, nvstring(new_line)) -> new_env;
+     output_to_console(env1, nvstring(line_feed)) -> new_env;
      --
      Continuing(g, new_env);
    }
@@ -9944,9 +9971,9 @@ semantics function output_to_console(env: envs, v: native_value) -> (new_env: en
 
 semantics function literal_to_string(l: literal) -> (s: Strings)
 {
-  "converts a literal {l} to a printable string {s}",
-  prose_application = "{l} as a printable string",
-  prose_transition = "converting {l} to a printable string yields",
+  "converts a literal {l} to its string representation {s}.",
+  prose_application = "the string representation of {l}",
+  prose_transition = "converting {l} to its string representation yields",
 }; // This function is defined by a table in LaTeX; no rule needed.
 
 semantics function lexpr_is_var(le: lexpr) -> (res: Bool)
@@ -11420,15 +11447,19 @@ typing function paramsofty(tenv: static_envs, ty: ty) ->
   case other {
     or(
       ast_label(ty) in make_set(label_T_Array, label_T_Bool, label_T_Named, label_T_Real, label_T_String),
-      is_unconstrained_integer(ty),
-      is_parameterized_integer(ty)
+      is_unconstrained_integer(ty)
     ) { [_] };
     --
     empty_list;
   }
 
   case error {
-    binary_or(ast_label(ty) = label_T_Enum, is_structured(ty));
+    or(
+      ast_label(ty) = label_T_Enum,
+      is_structured(ty),
+      ty = T_Int(PendingConstrained),
+      is_parameterized_integer(ty)
+    );
     --
     TypeError(TE_BSPD);
   }
@@ -11467,6 +11498,12 @@ typing function params_of_expr(tenv: static_envs, e: expr) ->
     concat(ids1, ids2);
   }
 
+  case e_literal {
+    e =: E_Literal(_);
+    --
+    empty_list;
+  }
+
   case e_tuple {
     e =: E_Tuple(es);
     es =: make_singleton_list(e1);
@@ -11484,8 +11521,15 @@ typing function params_of_expr(tenv: static_envs, e: expr) ->
     concat(ids0, concat(ids1, ids2));
   }
 
+  case e_tuple_error {
+    e =: E_Tuple(es);
+    list_len(es) != one;
+    --
+    TypeError(TE_BSPD);
+  }
+
   case other {
-    ast_label(e) not_in make_set(label_E_Binop, label_E_Tuple, label_E_Unop, label_E_Var);
+    ast_label(e) not_in make_set(label_E_Binop, label_E_Cond, label_E_Literal, label_E_Tuple, label_E_Unop, label_E_Var);
     --
     TypeError(TE_BSPD);
   }

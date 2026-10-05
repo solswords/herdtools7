@@ -49,6 +49,8 @@ type args = {
   no_stdlib0 : bool;
   v0_use_split_chunks : bool;
   version_eac1 : bool;
+  capture_output : (Buffer.t * Buffer.t) option;
+      (** Capture stdout/stderr (respectively) into the supplied buffers. *)
 }
 
 let default_args =
@@ -73,13 +75,14 @@ let default_args =
     no_stdlib0 = false;
     v0_use_split_chunks = false;
     version_eac1 = false;
+    capture_output = None;
   }
 
-exception Exit of int
+(** Run ASLRef with the supplied arguments, and returns the exit code from the
+    program.
 
-(** Run ASLRef with the supplied arguments. This function never returns: it
-    raises an [Exit] exception containing ASLRef's exit code. *)
-let run_with (args : args) : unit =
+    @raise Error.ASLException *)
+let run (args : args) : int =
   let parser_config =
     let v0_use_split_chunks = args.v0_use_split_chunks in
     let version_eac1 = args.version_eac1 in
@@ -87,25 +90,10 @@ let run_with (args : args) : unit =
     { v0_use_split_chunks; version_eac1 }
   in
 
-  let or_exit f =
-    if Printexc.backtrace_status () then f ()
-    else
-      match Error.intercept f () with
-      | Ok res -> res
-      | Error e ->
-          let module EP = Error.ErrorPrinter (struct
-            let output_format = args.output_format
-          end) in
-          EP.eprintln e;
-          raise (Exit 1)
-  in
-
   let extra_main =
     match args.opn with
     | None -> []
-    | Some fname ->
-        or_exit @@ fun () ->
-        Builder.from_file ~ast_type:`Opn ~parser_config `ASLv1 fname
+    | Some fname -> Builder.from_file ~ast_type:`Opn ~parser_config `ASLv1 fname
   in
 
   let ast =
@@ -120,7 +108,7 @@ let run_with (args : args) : unit =
       | NormalV0 | NormalV1 -> List.rev_append this_ast ast
       | PatchV1 | PatchV0 -> ASTUtils.patch ~src:ast ~patches:this_ast
     in
-    or_exit @@ fun () -> List.fold_right folder args.files []
+    List.fold_right folder args.files []
   in
 
   let ast = List.rev_append extra_main ast in
@@ -168,9 +156,11 @@ let run_with (args : args) : unit =
 
     let use_conflicting_side_effects_extension =
       args.use_conflicting_side_effects_extension
+
+    let err_buffer = Option.map snd args.capture_output
   end in
   let module T = Annotate (C) in
-  let typed_ast, static_env = or_exit @@ fun () -> T.type_check_ast ast in
+  let typed_ast, static_env = T.type_check_ast ast in
 
   let () =
     if args.print_serialized_typed then
@@ -204,9 +194,10 @@ let run_with (args : args) : unit =
   let exit_code, used_rules =
     if args.exec then
       let instrumentation = if args.show_rules then true else false in
-      or_exit @@ fun () ->
       let main_name = T.find_main static_env in
-      Native.interpret ~instrumentation static_env main_name typed_ast
+      let out_buffer = Option.map fst args.capture_output in
+      Native.interpret ~instrumentation ?out_buffer static_env main_name
+        typed_ast
     else (0, [])
   in
 
@@ -217,4 +208,16 @@ let run_with (args : args) : unit =
         (pp_print_list ~pp_sep:pp_print_cut Instrumentation.SemanticsRule.pp)
         used_rules
   in
-  raise (Exit exit_code)
+  exit_code
+
+(** Run ASLRef with the supplied arguments, and returns the exit code from the
+    program. Return error code 1 if an ASLException is raised. *)
+let safe_run args : int =
+  try run args
+  with Error.ASLException e ->
+    let module EP = Error.ErrorPrinter (struct
+      let output_format = args.output_format
+      let err_buffer = Option.map snd args.capture_output
+    end) in
+    EP.eprintln e;
+    1

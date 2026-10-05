@@ -18,12 +18,15 @@ REGRESSION_TEST_MODE = test
 DUNE_PROFILE = release
 
 DIY                           = _build/install/default/bin/diy7
+DIYONE                        = _build/install/default/bin/diyone7
 DIYCROSS                      = _build/install/default/bin/diycross7
 DIYMICROENUM                  = _build/install/default/bin/diymicroenum7
 HERD                          = _build/install/default/bin/herd7
+HERD_LIB_DIR                  = ./herd/libdir
 LITMUS                        = _build/install/default/bin/litmus7
 LITMUS_LIB_DIR                = $(PWD)/litmus/libdir
 DIY_REGRESSION_TEST           = _build/default/internal/diy_regression_test.exe
+DIYONE_TEST                   = _build/default/internal/diyone_test.exe
 HERD_REGRESSION_TEST          = _build/default/internal/herd_regression_test.exe
 HERD_DIYCROSS_REGRESSION_TEST = _build/default/internal/herd_diycross_regression_test.exe
 HERD_CATALOGUE_REGRESSION_TEST = _build/default/internal/herd_catalogue_regression_test.exe
@@ -49,22 +52,21 @@ build-release: Version.ml
 build: check-deps | just-build
 
 install-herdtools:
-	sh ./dune-install.sh $(PREFIX)
+	dune install herdtools7 --prefix=$(PREFIX)
 
 build-aslref:
 	dune build -p aslref --profile $(DUNE_PROFILE)
 
 install-aslref:
-	# There are no lib files for aslref so we don't need dune-install.sh
-	dune install aslref --prefix $(PREFIX)
+	dune install aslref --prefix=$(PREFIX)
 
 install: install-herdtools
 
 uninstall:
-	sh ./dune-uninstall.sh $(PREFIX)
+	dune uninstall herdtools7 --prefix=$(PREFIX)
 
 uninstall-aslref:
-	dune uninstall aslref --prefix $(PREFIX)
+	dune uninstall aslref --prefix=$(PREFIX)
 
 clean: dune-clean clean-asl-pseudocode clean-asldoc
 	rm -f Version.ml
@@ -105,7 +107,7 @@ test.aarch64assumptions:
 	@ echo
 	$(HERD_ASSUMPTIONS_TEST) \
 		-herd-path $(HERD) \
-		-libdir-path ./herd/libdir \
+		-libdir-path $(HERD_LIB_DIR) \
 		-dirs-and-confs-path ./dirs-and-confs.txt \
 		-assumptions-path ./tools/libdir/aarch64assumptions.cat
 	@ echo "cat2table AArch64 assumptions: OK"
@@ -119,7 +121,7 @@ test.herd.inst.%:
 		-j $(J) \
 		$(NOHASH) \
 		-herd-path $(HERD) \
-		-libdir-path ./herd/libdir \
+		-libdir-path $(HERD_LIB_DIR) \
 		-litmus-dir ./herd/tests/instructions/$* \
 		-conf ./herd/tests/instructions/$*/ci.cfg \
 		$(REGRESSION_TEST_MODE)
@@ -158,7 +160,7 @@ test.herd-asl.inst.%: asl-pseudocode
 	$(HERD_REGRESSION_TEST) \
 		-j $(J) \
 		-herd-path $(HERD) \
-		-libdir-path ./herd/libdir \
+		-libdir-path $(HERD_LIB_DIR) \
 		-litmus-dir ./herd/tests/instructions/$* \
 		-conf ./herd/tests/instructions/$*/asl.cfg \
 		-checkstates \
@@ -185,7 +187,7 @@ test.aarch64.asl.with.vmsa: asl-pseudocode
 	$(HERD_REGRESSION_TEST) \
 		-j $(J) \
 		-herd-path $(HERD) \
-		-libdir-path ./herd/libdir \
+		-libdir-path $(HERD_LIB_DIR) \
 		-litmus-dir ./herd/tests/instructions/AArch64 \
 		-conf ./herd/tests/instructions/AArch64/asl-with-vmsa.cfg \
 		-checkstates \
@@ -199,7 +201,7 @@ test-aarch64-asl: asl-pseudocode
 	$(HERD_REGRESSION_TEST) \
 		-j $(J) \
 		-herd-path $(HERD) \
-		-libdir-path ./herd/libdir \
+		-libdir-path $(HERD_LIB_DIR) \
 		-litmus-dir ./herd/tests/instructions/AArch64.ASL \
 		-conf ./herd/tests/instructions/AArch64.ASL/asl.cfg \
 		$(REGRESSION_TEST_MODE)
@@ -211,7 +213,7 @@ test-aarch64-asl-with-vmsa: asl-pseudocode
 	$(HERD_REGRESSION_TEST) \
 		-j $(J) -checkstates  \
 		-herd-path $(HERD) \
-		-libdir-path ./herd/libdir \
+		-libdir-path $(HERD_LIB_DIR) \
 		-litmus-dir ./herd/tests/instructions/AArch64.ASL \
 		-conf ./herd/tests/instructions/AArch64.ASL/asl-with-vmsa.cfg \
 		$(REGRESSION_TEST_MODE)
@@ -224,7 +226,7 @@ test-aarch64-noasl:
 	$(HERD_REGRESSION_TEST) \
 		-j $(J) \
 		-herd-path $(HERD) \
-		-libdir-path ./herd/libdir \
+		-libdir-path $(HERD_LIB_DIR) \
 		-litmus-dir ./herd/tests/instructions/AArch64.ASL \
 		-conf ./herd/tests/instructions/AArch64.ASL/noasl.cfg \
 		$(REGRESSION_TEST_MODE)
@@ -237,7 +239,7 @@ test-aarch64-noasl-mixed:
 	$(HERD_REGRESSION_TEST) \
 		-j $(J) \
 		-herd-path $(HERD) \
-		-libdir-path ./herd/libdir \
+		-libdir-path $(HERD_LIB_DIR) \
 		-litmus-dir ./herd/tests/instructions/AArch64.ASL \
 		-conf ./herd/tests/instructions/AArch64.ASL/noasl-mixed.cfg \
 		$(REGRESSION_TEST_MODE)
@@ -264,7 +266,7 @@ test.herd.cata.%:
 		-j $(J) \
 		-herd-path $(HERD) \
 		-herd-timeout $(TIMEOUT) \
-		-libdir-path ./herd/libdir \
+		-libdir-path $(HERD_LIB_DIR) \
 		-kinds-path catalogue/$*/tests/kinds.txt \
 		-shelf-path catalogue/$*/ci-shelf.py \
 		$(REGRESSION_TEST_MODE)
@@ -281,9 +283,26 @@ cata-test:: test.herd.cata.aarch64-cas
 cata-test-all:: test.herd.cata.aarch64-VMSA
 cata-test:: test.herd.cata.aarch64-ETS2
 cata-test:: test.herd.cata.aarch64-ETS3
+cata-test:: test.herd.cata.aarch64-readers-guide
+cata-test-all:: test.herd.cata.aarch64-VMSA+MTE
 
 cata-test:: test.herd.cata.bpf
 cata-test:: test.herd.cata.x86_64
+
+test.herd.cata-extended.%:
+	@ echo
+	$(HERD_REGRESSION_TEST) \
+		-j $(J) \
+		$(NOHASH) \
+		-herd-path $(HERD) \
+		-libdir-path $(HERD_LIB_DIR) \
+		-litmus-dir  catalogue/$*/tests \
+		-conf catalogue/$*/cfgs/ci.cfg \
+		$(REGRESSION_TEST_MODE)
+	@ echo "herd7 catalogue extended $* tests: OK"
+
+cata-test-all:: test.herd.cata-extended.aarch64-BBM
+cata-test:: test.herd.cata-extended.linux
 
 test.herd-mixed.cata.%:
 	@ echo
@@ -291,7 +310,7 @@ test.herd-mixed.cata.%:
 		-j $(J) \
 		-herd-path $(HERD) \
 		-herd-timeout $(TIMEOUT) \
-		-libdir-path ./herd/libdir \
+		-libdir-path $(HERD_LIB_DIR) \
 		-kinds-path catalogue/$*/tests/kinds.txt \
 		-shelf-path catalogue/$*/ci-shelf.py \
 		-variant mixed \
@@ -310,7 +329,7 @@ test.herd-asl.cata.%: asl-pseudocode
 		-variant strict \
 		-herd-path $(HERD) \
 		-herd-timeout $(TIMEOUT) \
-		-libdir-path ./herd/libdir \
+		-libdir-path $(HERD_LIB_DIR) \
 		-kinds-path catalogue/$*/tests/kinds.txt \
 		-shelf-path catalogue/$*/ci-shelf.py \
 		-conf-path catalogue/$*/cfgs/asl.cfg \
@@ -328,14 +347,33 @@ test-all-asl:: test.herd-asl.cata.aarch64-VMSA
 ### Diy tests, includes
 ### - A `diyone7` generated syntax check
 ### - A `diy7` with `cycleonly` instance checks the cycle generations
-### - Several `diycross7` + `herd7` instances, check if the generated litmus tests
-###   are equivalent based on `herd7` result.
+### - Individual `diyone7` generation tests for each supported variant
 diy-test:: | build
 diy-test:: diyone-basic-test
 diyone-basic-test:
 	@ echo
 	dune test gen/tests
 	@ echo "diy* basic test: OK"
+
+diy-test:: diy-default-cycleonly
+diy-default-cycleonly::
+	@ echo
+	$(DIY_REGRESSION_TEST) \
+		-diy-path $(DIY) \
+		-conf ./gen/tests/default.conf \
+		-expected ./gen/tests/default.cycle.expected \
+		$(REGRESSION_TEST_MODE)
+	@ echo "diy7 default configuration test: OK"
+
+diy-test:: diy-uni-cycleonly
+diy-uni-cycleonly::
+	@ echo
+	$(DIY_REGRESSION_TEST) \
+		-diy-path $(DIY) \
+		-conf ./gen/tests/uni.conf \
+		-expected ./gen/tests/uni.cycle.expected \
+		$(REGRESSION_TEST_MODE)
+	@ echo "diy7 uni configuration test: OK"
 
 diy-test:: diy-baseline-cycleonly
 diy-baseline-cycleonly::
@@ -359,218 +397,30 @@ diy-ifetch-cycleonly::
 		$(REGRESSION_TEST_MODE)
 	@ echo "diy7 ifetch configuration test: OK"
 
-LDS:="Amo.Cas,Amo.LdAdd,Amo.LdClr,Amo.LdEor,Amo.LdSet"
-LDSPLUS:="LxSx",$(LDS)
-
 diy-test:: diy-test-aarch64
 diy-test-aarch64:
 	@ echo
-	$(HERD_DIYCROSS_REGRESSION_TEST) \
-		-herd-path $(HERD) \
-		-diycross-path $(DIYCROSS) \
-		-libdir-path ./herd/libdir \
-		-expected-dir ./gen/tests/AArch64 \
-		-diycross-arg -arch \
-		-diycross-arg AArch64 \
-		-diycross-arg 'A,L,P' \
-		-diycross-arg 'Pod**,Fenced**,DSB.SYd**,ISBd**,[Amo.Cas,Pod**],[Amo.Swp,Pod**],[Amo.StAdd,Pod**],[LxSx,Pod**]' \
-		-diycross-arg 'Rfe,Fre,Coe' \
-		-diycross-arg 'DpAddrdR,DpAddrdW,DpDatadW,CtrldR,CtrldW,DpAddrCseldR,DpAddrCseldW,DpDataCseldW,DpCtrlCseldR,DpCtrlCseldW,[DpCtrldR,ISB],[DpCtrldW,ISB]' \
-		-diycross-arg 'Rfe,Fre,Coe,Hat' \
+	$(DIYONE_TEST) \
+		-diyone-path $(DIYONE) \
+		./gen/tests/AArch64 \
+		./gen/tests/AArch64.mixed \
+		./gen/tests/AArch64.MTE \
+		./gen/tests/AArch64.vmsa \
+		./gen/tests/AArch64.ifetch \
+		./gen/tests/AArch64.morello \
+		./gen/tests/AArch64.vector \
+		./gen/tests/AArch64.store \
 		$(REGRESSION_TEST_MODE)
-	@ echo "herd7 AArch64 diycross7 tests: OK"
-
-diy-test:: diy-test-mixed
-diy-test-mixed::
-	@ echo
-	$(HERD_DIYCROSS_REGRESSION_TEST) \
-		-j $(J) \
-		-herd-path $(HERD) \
-		-diycross-path $(DIYCROSS) \
-		-libdir-path ./herd/libdir \
-		-expected-dir ./gen/tests/AArch64.mixed \
-		-conf ./gen/tests/AArch64.mixed/mixed.cfg \
-		-diycross-arg -ua \
-		-diycross-arg 0 \
-		-diycross-arg -obs \
-		-diycross-arg oo \
-		-diycross-arg -arch \
-		-diycross-arg AArch64 \
-		-diycross-arg -variant \
-		-diycross-arg mixed \
-		-diycross-arg -hexa \
-		-diycross-arg Hat \
-		-diycross-arg h0 \
-		-diycross-arg $(LDSPLUS) \
-		-diycross-arg h0 \
-		-diycross-arg Rfi \
-		-diycross-arg w0 \
-		-diycross-arg Amo.StAdd \
-		-diycross-arg w0 \
-		-diycross-arg Rfi \
-		-diycross-arg h2 \
-		-diycross-arg $(LDS) \
-		-diycross-arg h2 \
-		-diycross-arg PodWR \
-		-diycross-arg Hat \
-		-diycross-arg w0 \
-		-diycross-arg Amo.LdSet \
-		-diycross-arg w0 \
-		-diycross-arg PodWR \
-		$(REGRESSION_TEST_MODE)
-	@ echo "herd7 AArch64.mixed diycross7 tests: OK"
-
-diy-test-mixed::
-	@ echo
-	$(HERD_DIYCROSS_REGRESSION_TEST) \
-		-j $(J) \
-		-herd-path $(HERD) \
-		-diycross-path $(DIYCROSS) \
-		-libdir-path ./herd/libdir \
-		-expected-dir ./gen/tests/AArch64.mixed.strict \
-		-conf ./gen/tests/AArch64.mixed.strict/mixed.cfg \
-		-diycross-arg -arch \
-		-diycross-arg AArch64 \
-		-diycross-arg -ua \
-		-diycross-arg 0 \
-		-diycross-arg -variant \
-		-diycross-arg mixed,MixedStrictOverlap \
-		-diycross-arg -hexa \
-		-diycross-arg h0,h2,w0 \
-		-diycross-arg Amo.CasAP,LxSxAP \
-		-diycross-arg h0,h2,w0  \
-		-diycross-arg PodWR \
-		-diycross-arg w0,h0 \
-		-diycross-arg Fre \
-		-diycross-arg w0,h2 \
-		-diycross-arg FencedWW \
-		-diycross-arg w0,h0,h2 \
-		-diycross-arg Rfe \
-		$(REGRESSION_TEST_MODE)
-	@ echo "herd7 AArch64.mixed.strict diycross7 tests: OK"
-
-diy-test-mixed:: v32 v64
-
-v32:
-	@ echo
-	$(HERD_DIYCROSS_REGRESSION_TEST) \
-		-j $(J) \
-		-herd-path $(HERD) \
-		-diycross-path $(DIYCROSS) \
-		-libdir-path ./herd/libdir \
-		-expected-dir ./gen/tests/AArch64.mixed.v32 \
-		-conf ./gen/tests/AArch64.mixed.strict/mixed.cfg \
-		-diycross-arg -arch \
-		-diycross-arg AArch64 \
-		-diycross-arg -variant \
-		-diycross-arg mixed \
-		-diycross-arg -hexa \
-		-diycross-arg PodWW \
-		-diycross-arg RfeLA \
-		-diycross-arg h0,h2,w0 \
-		-diycross-arg DpDatadW,DpAddrdR,DpAddrdW \
-		-diycross-arg A,P,L \
-		-diycross-arg h0,h2,w0 \
-		-diycross-arg Coe,Fre \
-		$(REGRESSION_TEST_MODE)
-	@ echo "herd7 AArch64.mixed.v32 diycross7 tests: OK"
-
-v64:
-	@ echo
-	$(HERD_DIYCROSS_REGRESSION_TEST) \
-		-j $(J) \
-		-herd-path $(HERD) \
-		-diycross-path $(DIYCROSS) \
-		-libdir-path ./herd/libdir \
-		-expected-dir ./gen/tests/AArch64.mixed.v64 \
-		-conf ./gen/tests/AArch64.mixed.strict/mixed.cfg \
-		-diycross-arg -arch \
-		-diycross-arg AArch64 \
-		-diycross-arg -variant \
-		-diycross-arg mixed \
-		-diycross-arg -hexa \
-		-diycross-arg -type \
-		-diycross-arg uint64_t \
-		-diycross-arg PodWW \
-		-diycross-arg RfeLA \
-		-diycross-arg w0,w4,q0 \
-		-diycross-arg DpDatadW,DpAddrdR,DpAddrdW \
-		-diycross-arg A,P,L \
-		-diycross-arg w0,w4,q0 \
-		-diycross-arg Coe,Fre \
-		$(REGRESSION_TEST_MODE)
-	@ echo "herd7 AArch64.mixed.v64 diycross7 tests: OK"
-
-diy-test:: diy-store-test
-diy-store-test:
-	@ echo
-	$(HERD_DIYCROSS_REGRESSION_TEST) \
-		-herd-path $(HERD) \
-		-diycross-path $(DIYCROSS) \
-		-libdir-path ./herd/libdir \
-		-expected-dir ./gen/tests/AArch64.store \
-		-diycross-arg -obs \
-		-diycross-arg four \
-		-diycross-arg -arch \
-		-diycross-arg AArch64 \
-		-diycross-arg 'Fenced**' \
-		-diycross-arg 'Rfe,Fre,Coe' \
-		-diycross-arg 'DpAddrdR,DpDatadW' \
-		-diycross-arg 'Pos**' \
-		-diycross-arg 'Store' \
-		-diycross-arg 'Rfe,Fre,Coe' \
-		$(REGRESSION_TEST_MODE)
-	@ echo "herd7 AArch64 diycross7.store tests: OK"
-
-diy-test:: diy-test-mte
-diy-test-mte::
-	@ echo
-	$(HERD_DIYCROSS_REGRESSION_TEST) \
-		-j $(J) \
-		-herd-path $(HERD) \
-		-diycross-path $(DIYCROSS) \
-		-libdir-path ./herd/libdir \
-		-expected-dir ./gen/tests/AArch64.MTE \
-		-conf ./gen/tests/AArch64.MTE/MTE.cfg \
-		-diycross-arg -arch \
-		-diycross-arg AArch64 \
-		-diycross-arg -variant \
-		-diycross-arg memtag \
-		-diycross-arg -variant \
-		-diycross-arg async \
-		-diycross-arg DMB.SYd*W \
-		-diycross-arg T,P \
-		-diycross-arg Rfe \
-		-diycross-arg A \
-		-diycross-arg Amo.LdAdd \
-		-diycross-arg L \
-		-diycross-arg PodW* \
-		-diycross-arg T,P \
-		-diycross-arg Coe,Rfe,Fre \
-		-diycross-arg T,P \
-		$(REGRESSION_TEST_MODE)
-	@ echo "herd7 AArch64.MTE diycross7 tests: OK"
+	@ echo "diyone7 AArch64 tests: OK"
 
 diy-test::  diy-test-C
 diy-test-C:
 	@ echo
-	$(HERD_DIYCROSS_REGRESSION_TEST) \
-		-j $(J) \
-		-herd-path $(HERD) \
-		-diycross-path $(DIYCROSS) \
-		-libdir-path ./herd/libdir \
-		-expected-dir ./gen/tests/C \
-		-conf ./gen/tests/C/C.cfg \
-		-diycross-arg -arch \
-                -diycross-arg C \
-		-diycross-arg [Rlx,Coe,Rlx],[Rlx,Rfe,Rlx],[Rlx,Fre,Rlx],[Rlx,Hat,Rlx] \
-                -diycross-arg PosRW,Fetch.Add,Exch \
-                -diycross-arg Rlx \
-                -diycross-arg PodW* \
-		-diycross-arg [Rlx,Coe,Rlx],[Rlx,Rfe,Rlx],[Rlx,Fre,Rlx] \
-                -diycross-arg Pod**,[Fetch.Add,Rlx,PodW*] \
+	$(DIYONE_TEST) \
+		-diyone-path $(DIYONE) \
+		./gen/tests/C \
 		$(REGRESSION_TEST_MODE)
-	@ echo "herd7 C diycross7 tests: OK"
+	@ echo "diyone7 C tests: OK"
 
 ### Diymicro test
 diymicro-test:: | build
@@ -583,7 +433,7 @@ diymicro-test-aarch64:
 	$(HERD_DIYCROSS_REGRESSION_TEST) \
 		-herd-path $(HERD) \
 		-diycross-path $(DIYMICROENUM) \
-		-libdir-path ./herd/libdir \
+		-libdir-path $(HERD_LIB_DIR) \
 		-expected-dir ./gen/tests/diymicro/AArch64 \
 		$(DIYMICRO_EDGES_ARG) \
 		$(REGRESSION_TEST_MODE)
@@ -597,7 +447,7 @@ diymicro-test-aarch64-asl: asl-pseudocode
 	$(HERD_DIYCROSS_REGRESSION_TEST) \
 		-herd-path $(HERD) \
 		-diycross-path $(DIYMICROENUM) \
-		-libdir-path ./herd/libdir \
+		-libdir-path $(HERD_LIB_DIR) \
 		-expected-dir ./gen/tests/diymicro/AArch64 \
 		-conf ./gen/tests/diymicro/AArch64/asl.cfg \
 		-j $(J) \

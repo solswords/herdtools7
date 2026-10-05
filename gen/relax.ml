@@ -109,7 +109,7 @@ and type edge = E.edge
 
 
 (* Cumulativity macros *)
-        let rf = E.plain_edge (E.Rf Ext)
+        let rf = E.plain_edge (E.Communication (Rf,Ext))
         and fenced  f sl d1 d2 = E.plain_edge (E.Fenced (f,sl,d1,d2))
         let ac_fence f sl d1 d2 = [rf; fenced f sl d1 d2]
         let bc_fence f sl d1 d2 = [fenced f sl d1 d2; rf]
@@ -121,18 +121,18 @@ and type edge = E.edge
           let open E in
           match r with
           | [e] -> E.pp_edge e
-          | [{edge=Rf Ext; a1=None;a2=None;};
+          | [{edge=Communication (Rf,Ext); a1=None;a2=None;};
              {edge=Fenced _;a1=None; a2=None;} as e] when backward_compatibility ->
                  sprintf "AC%s" (pp_edge e)
           | [{edge=Fenced _; a1=None;a2=None;} as e;
-             {edge=Rf Ext; a1=None; a2=None;}] when backward_compatibility ->
+             {edge=Communication (Rf,Ext); a1=None; a2=None;}] when backward_compatibility ->
                    sprintf "BC%s" (pp_edge e)
-          | [{edge=Rf Ext; a1=None; a2=None;};
+          | [{edge=Communication (Rf,Ext); a1=None; a2=None;};
              {edge=Fenced _; a1=None; a2=None;} as e;
-             {edge=Rf Ext; a1=None; a2=None;}] when backward_compatibility ->
+             {edge=Communication (Rf,Ext); a1=None; a2=None;}] when backward_compatibility ->
                    sprintf "ABC%s" (pp_edge e)
           | [{edge=Dp _; a1=None; a2=None;} as e;
-             {edge=Rf Ext; a1=None; a2=None;}] when backward_compatibility ->
+             {edge=Communication (Rf,Ext); a1=None; a2=None;}] when backward_compatibility ->
                    sprintf "BC%s" (pp_edge e)
           | es ->
               sprintf "[%s]" (String.concat "," (List.map pp_edge es))
@@ -161,7 +161,7 @@ and type edge = E.edge
                     f (bc_fence fe sd e (Dir W)) k)
                   k) k in
           let k =
-            F.fold_dpw
+            F.fold_dp
               (fun dpw k ->
                 Code.fold_sd wildcard
                   (fun sd k -> f (bc_dp dpw sd (Dir W)) k)
@@ -188,11 +188,11 @@ and type edge = E.edge
         let com =
           let open E in
           [
-           er (Rf Ext);
-           er (Fr Ext);
-           er (Ws Ext);
-           ers [Fr Ext ; Rf Ext;];
-           ers [Ws Ext; Rf Ext;];
+           er (Communication (Rf,Ext));
+           er (Communication (Fr,Ext));
+           er (Communication (Co,Ext));
+           ers [Communication (Fr,Ext) ; Communication (Rf,Ext);];
+           ers [Communication (Co,Ext); Communication (Rf,Ext);];
          ]
 
         let po =
@@ -202,10 +202,10 @@ and type edge = E.edge
             (fun f k ->
               er (Fenced (f,Diff,Irr,Irr))::
               (if F.orders f R R && not (F.orders f W R) then
-                [ers [Rf Int; Fenced (f,Diff,Dir R,Dir R)]]
+                [ers [Communication (Rf,Int); Fenced (f,Diff,Dir R,Dir R)]]
               else [])@
               (if F.orders f R W && not (F.orders f W W) then
-                [ers [Rf Int; Fenced (f,Diff,Dir R,Dir W)]]
+                [ers [Communication (Rf,Int); Fenced (f,Diff,Dir R,Dir W)]]
               else [])@k)
             []
 
@@ -241,7 +241,7 @@ and type edge = E.edge
 (* ALL *)
         let allR sd d =
           er (E.Po (sd,Dir R,Dir d))::
-          (match d with R -> F.fold_dpr | W -> F.fold_dpw)
+          F.fold_dp
             (fun dp k -> er (E.Dp (dp,sd,Dir d))::k)
             (all_fences sd R d [])
 
@@ -357,7 +357,8 @@ and type edge = E.edge
               | None ->
                   (* Parse primitive edge *)
                   try [[E.parse_edge str]]
-                  with _ -> Warn.fatal "Bad relax: %s" str
+                  with Misc.UserError _ as err -> raise err
+                     | _ -> Warn.fatal "Bad relax: %s" str
               end in
           (* expand the wildcard edges and annotations *)
           expand_relaxs parsed_edges
@@ -416,13 +417,13 @@ and type edge = E.edge
         let is_cumul r =
           let open E in
           match r with
-          | [{edge=Rf Code.Ext; a1=None; a2=None;};
+          | [{edge=Communication (Rf,Ext); a1=None; a2=None;};
              {edge=Fenced _; a1=None; a2=None;}]
           | [{edge=Fenced _; a1=None; a2=None;};
-             {edge=Rf Code.Ext; a1=None; a2=None;};]
-          | [{edge=Rf Code.Ext; a1=None; a2=None;};
+             {edge=Communication (Rf,Ext); a1=None; a2=None;};]
+          | [{edge=Communication (Rf,Ext); a1=None; a2=None;};
              {edge=Fenced _; a1=None; a2=None;};
-             {edge=Rf Code.Ext; a1=None; a2=None;};]
+             {edge=Communication (Rf,Ext); a1=None; a2=None;};]
             -> true
           | _ -> false
 
@@ -437,12 +438,12 @@ and type edge = E.edge
           let open E in
           match r with
           | [{edge=Fenced (f,_,_,_); _}]
-          | [{edge=Rf Code.Ext; _};{edge=Fenced (f,_,_,_);_}]
+          | [{edge=Communication (Rf,Ext); _};{edge=Fenced (f,_,_,_);_}]
           | [{edge=Fenced (f,_,_,_); _};
-             {edge=Rf Code.Ext; _};]
-          | [{edge=Rf Code.Ext; _};
+             {edge=Communication (Rf,Ext); _};]
+          | [{edge=Communication (Rf,Ext); _};
              {edge=Fenced (f,_,_,_); _};
-             {edge=Rf Code.Ext; _};]
+             {edge=Communication (Rf,Ext); _};]
             -> FenceSet.add f k
           | _ -> k
 
@@ -455,12 +456,12 @@ and type edge = E.edge
         let add_cumul_fence r k =
           let open E in
           match r with
-          | [{edge=Rf Code.Ext; _};{edge=Fenced (f,_,_,_); _}]
+          | [{edge=Communication (Rf,Ext); _};{edge=Fenced (f,_,_,_); _}]
           | [{edge=Fenced (f,_,_,_); _};
-             {edge=Rf Code.Ext; _};]
-          | [{edge=Rf Code.Ext; _};
+             {edge=Communication (Rf,Ext); _};]
+          | [{edge=Communication (Rf,Ext); _};
              {edge=Fenced (f,_,_,_); _};
-             {edge=Rf Code.Ext; _};]
+             {edge=Communication (Rf,Ext); _};]
             -> FenceSet.add f k
           | _ -> k
 
@@ -479,10 +480,10 @@ and type edge = E.edge
               (fun r k ->
                 let open E in
                 match r with
-                | ([{edge=Rf Ext; _}; {edge=Fenced _; _};] as rs)
-                | ([{edge=Fenced _; _}; {edge=Rf Ext; _};] as rs)
-                | ([{edge=Rf Ext; _}; {edge=Fenced _; _};
-                    {edge=Rf Ext; _};] as rs)
+                | ([{edge=Communication (Rf,Ext); _}; {edge=Fenced _; _};] as rs)
+                | ([{edge=Fenced _; _}; {edge=Communication (Rf,Ext); _};] as rs)
+                | ([{edge=Communication (Rf,Ext); _}; {edge=Fenced _; _};
+                    {edge=Communication (Rf,Ext); _};] as rs)
                   ->
                     RSet.of_list (List.map er rs)::k
                 | _ -> RSet.singleton r::k)

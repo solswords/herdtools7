@@ -40,10 +40,9 @@ let compare_atom = Misc.polymorphic_compare
 include MachMixed.No
 
 let pp_plain = Code.plain
-let pp_as_a = Some SC
 let pp_atom = pp_mem_order_short
-
-let fold_non_mixed f k =
+let pp_atom_separate atom = [pp_atom atom]
+let fold_atom f k =
   let k = f Acq k in
   let k = f Rel k in
   let k = f Acq_Rel k in
@@ -51,8 +50,6 @@ let fold_non_mixed f k =
   let k = f Rlx k in
   let k = f Con k in
   k
-
-let fold_atom = fold_non_mixed
 
 let worth_final _ = false
 
@@ -224,12 +221,7 @@ let rec is_nop = function
 
 (* Dependencies, no CTRLISYNC *)
 
-include CDep
-
-let pp_dp = function
-  | ADDR -> "Addr"
-  | DATA -> "Data"
-  | CTRL -> "Ctrl"
+include Dep.Basic
 
 
 (* Read-Modify-Write *)
@@ -244,6 +236,11 @@ type value = Value.v
 let pp_rmw compat = function
   | Exch -> if compat then "Rmw" else "Exch"
   | Add -> "Fetch.Add"
+
+let equal_rmw rmw1 rmw2 = match rmw1,rmw2 with
+  | Exch,Exch
+  | Add,Add -> true
+  | (Exch|Add),_ -> false
 
 let is_one_instruction _ = true
 

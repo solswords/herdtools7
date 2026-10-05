@@ -40,21 +40,19 @@ let get_ie edge =
   let open Code in
   match edge with
   | Id | Po _ | Dp _ | Fenced _ | Rmw _ -> Int
-  | Rf ie | Fr ie | Ws ie -> ie
+  | Communication (_, ie) -> ie
   | Leave _ | Back _ | Hat -> Ext
   | Insert _ | Store | Node _ -> Int
 
 let set_ie ie (edge : E.tedge) =
   match edge with
-  | Rf _ -> E.Rf ie
-  | Fr _ -> Fr ie
-  | Ws _ -> Ws ie
+  | Communication (com, _) -> E.Communication (com, ie)
   | _ -> raise (Invalid_argument "Cannot set ie on this edge kind")
 
 let get_sd (edge : E.tedge) =
   match edge with
   | Po (sd, _, _) | Dp (_, sd, _) | Fenced (_, sd, _, _) -> sd
-  | Leave _ | Back _ | Hat | Id | Rf _ | Fr _ | Ws _ | Rmw _ -> Same
+  | Leave _ | Back _ | Hat | Id | Communication _ | Rmw _ -> Same
   | Insert _ | Store | Node _ -> raise (Invalid_argument "Unexpected edge kind")
 
 let set_sd sd (edge : E.tedge) =
@@ -123,16 +121,17 @@ let apply_prim_set : partial_effect -> prim_set -> partial_effect option =
   let build_atom_eff eff a =
     Option.map
       (fun atom -> { eff with atom; explicit_mem = true })
-      (merge_atomo_opt eff.atom (Some (a, None)))
+      (merge_atomo_opt eff.atom (Some a))
   in
+  let open A.StructuredAtom in
   fun eff x ->
     match x with
     | Prim "R" -> build_dir_eff eff Code.R
     | Prim "W" -> build_dir_eff eff Code.W
     | Prim "M" -> Some { eff with explicit_mem = true }
-    | Prim "A" -> build_atom_eff eff (A.Acq None)
-    | Prim "Q" -> build_atom_eff eff (A.AcqPc None)
-    | Prim "L" -> build_atom_eff eff (A.Rel None)
+    | Prim "A" -> build_atom_eff eff (OrdinaryAccess `Acquire)
+    | Prim "Q" -> build_atom_eff eff (OrdinaryAccess `AcquirePC)
+    | Prim "L" -> build_atom_eff eff (OrdinaryAccess `Release)
     | _ -> None
 
 let build_effect : partial_effect -> prim_set list -> partial_effect option =
@@ -142,19 +141,19 @@ let build_tedges : prim_rel -> E.tedge list =
   let dp_tedges dp csel = [ E.Dp ((dp, csel), UnspecLoc, Code.Irr) ] in
   function
   | Prim "po" -> [ E.(Po (UnspecLoc, Code.Irr, Code.Irr)) ]
-  | Prim "fr" -> [ E.Fr UnspecCom ]
-  | Prim "co" -> [ E.Ws UnspecCom ]
-  | Prim "rf" -> [ E.Rf UnspecCom ]
+  | Prim "fr" -> [ E.Communication (Fr, UnspecCom) ]
+  | Prim "co" -> [ E.Communication (Co, UnspecCom) ]
+  | Prim "rf" -> [ E.Communication (Rf, UnspecCom) ]
   | Fence f -> [ E.Fenced (A.Barrier f, UnspecLoc, Code.Irr, Code.Irr) ]
   | Prim "amo" -> [ E.Rmw A.RMW.AllAmo ]
   | Prim "lxsx" -> [ E.Rmw A.RMW.LrSc ]
   | Prim "rmw" -> [ E.Rmw A.RMW.LrSc; E.Rmw A.RMW.AllAmo ]
-  | Prim "addr" -> dp_tedges Dep.ADDR A.NoCsel
-  | Prim "ctrl" -> dp_tedges Dep.CTRL A.NoCsel
-  | Prim "data" -> dp_tedges Dep.DATA A.NoCsel
-  | Prim "pick-addr-dep" -> dp_tedges Dep.ADDR A.OkCsel
-  | Prim "pick-ctrl-dep" -> dp_tedges Dep.CTRL A.OkCsel
-  | Prim "pick-data-dep" -> dp_tedges Dep.DATA A.OkCsel
+  | Prim "addr" -> dp_tedges Dep.Full.ADDR A.NoCsel
+  | Prim "ctrl" -> dp_tedges Dep.Full.CTRL A.NoCsel
+  | Prim "data" -> dp_tedges Dep.Full.DATA A.NoCsel
+  | Prim "pick-addr-dep" -> dp_tedges Dep.Full.ADDR A.OkCsel
+  | Prim "pick-ctrl-dep" -> dp_tedges Dep.Full.CTRL A.OkCsel
+  | Prim "pick-data-dep" -> dp_tedges Dep.Full.DATA A.OkCsel
   | _ -> []
 
 let apply_prim_rel (ed : partial_edge) (r : prim_rel) : partial_edge option =

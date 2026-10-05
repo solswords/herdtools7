@@ -140,7 +140,19 @@ module U = TopUtils.Make(O)(Comp)
           | Some d ->  A.applies_atom a d
           end
     then
-      Comp.emit_access st p init e
+      let o,init,cs,st = Comp.emit_access st p init e in
+      let st = match o,e.C.bank,n.C.next.C.evt.C.bank,O.typ with
+        | Some r,Code.Ord,Code.Pair,TypBase.Int ->
+            (* A word-sized ordinary read before a pair access already has the
+               default `int` type; avoid emitting a redundant `uint32_t`. *)
+            let loc = A.of_reg p r in
+            begin match A.LocMap.find_opt loc (A.get_env st) with
+            | Some (TypBase.Std (TypBase.Unsigned,MachSize.Word)) ->
+                A.add_type loc TypBase.Int st
+            | _ -> st
+            end
+        | _ -> st in
+      o,init,cs,st
     else
       Warn.fatal "annotation mismatch on edge %s, annotation '%s' on %s"
         (E.pp_edge n.C.edge)
@@ -545,25 +557,31 @@ let max_set = IntSet.max_elt
 
       (* Local check of coherence *)
 
-  let do_add_load bank st p i f x v =
+  let observer_bank_of_cell cell = match Array.length cell with
+    | 1 -> Ord
+    | 2 -> Pair
+    | n -> Warn.fatal "No local observer for %d coherence cells" n
+
+  let do_add_load bank st p i f x cell =
     let r,i,c,st = Comp.emit_obs bank st p i x in
-    let v =
-      match bank with
-      | Pair -> v+v
-      | _ -> v in
-    i,c,F.add_final_v p r (IntSet.singleton v) f,st
+    let rs = match bank with Pair -> r::A.get_friends st r | _ -> [r] in
+    let f = List.fold_left2
+      (fun f r v -> F.add_final_v p r (IntSet.singleton (C.Value.to_int v)) f)
+      f rs (Array.to_list cell) in
+    i,c,f,st
 
   let do_add_loop st p i f x v w =
     let r,i,c,st = Comp.emit_obs_not_value st p i x v in
     i,c,F.add_final_v p r (IntSet.singleton w) f,st
 
-  let rec do_observe_local bank obs_type st p i code f x prev_v v =
+  let rec do_observe_local bank obs_type st p i code f x prev_v cell =
+    let v = C.Value.to_int cell.(0) in
     match obs_type with
     | Config.Straight ->
-        let i,c,f,st = do_add_load bank st p i f x v in
+        let i,c,f,st = do_add_load bank st p i f x cell in
         i,code@c,f,st
     |  Config.Fenced ->
-        let i,c,f,st = do_add_load bank st p i f x v in
+        let i,c,f,st = do_add_load bank st p i f x cell in
         let i,c',st = Comp.emit_fence st p i C.nil Comp.stronger_fence in
         let c = c'@c in
         i,code@c,f,st
@@ -578,7 +596,7 @@ let max_set = IntSet.max_elt
           let i,c,f,st = do_add_loop st p i f x prev_v v in
           i,code@c,f,st
        | None ->
-          do_observe_local bank Config.Fenced st p i code f x None v
+          do_observe_local bank Config.Fenced st p i code f x None cell
        end
 
   let do_observe_local_simd st p i code f x bank nxt =
@@ -611,7 +629,7 @@ let max_set = IntSet.max_elt
     let lst = Misc.last ns in
     if U.check_here lst then
       match lst.C.evt.C.loc,lst.C.evt.C.bank with
-      | Data x,(Ord|Pair|Instr) -> (* TODO check for -obs local mode and pairs *)
+      | Data x,(Ord|Pair|Instr) ->
          let nxt = lst.C.next.C.evt in
          let bank = nxt.C.bank in
          begin match bank with
@@ -627,11 +645,8 @@ let max_set = IntSet.max_elt
             then
               i,code,F.cons_int_set (A.Location.Location_global x,IntSet.singleton v) f,st
             else
-              let bank =
-                match bank with
-                | Pair -> Pair
-                | _ -> Ord in
-              do_observe_local  bank O.obs_type st p i code f x (Some prev_v) v
+              let bank = observer_bank_of_cell nxt.C.cell in
+              do_observe_local bank O.obs_type st p i code f x (Some prev_v) nxt.C.cell
          end
       | Data x,Tag ->
           let v = C.Value.to_int lst.C.next.C.evt.C.v in
@@ -652,8 +667,8 @@ let max_set = IntSet.max_elt
          let bank = nxt.C.bank in
          begin match bank with
          | Ord|Pair ->
-            let v = C.Value.to_int nxt.C.v in
-            do_observe_local bank O.obs_type st p i code f x None v
+            let bank = observer_bank_of_cell nxt.C.cell in
+            do_observe_local bank O.obs_type st p i code f x None nxt.C.cell
          | VecReg _ ->
             do_observe_local_simd st p i code f x bank nxt
          | _ -> Warn.user_error "Mixing SIMD and other variants"
@@ -1052,7 +1067,7 @@ let merge_to_left lhs rhs =
 
 let test_of_cycle name
   ?com ?(info=[]) ?(check=(fun _ -> true)) ?scope ?(init=[]) es c =
-  let com = match com with None -> E.pp_edges es | Some com -> com in
+  let com = match com with None -> E.pp_edges ~separate:true es | Some com -> com in
   let (init,prog,final,env,obs),(prf,coms) = compile_cycle check init c in
   let m_labs = num_labels prog in
   let init = tr_labs m_labs init in

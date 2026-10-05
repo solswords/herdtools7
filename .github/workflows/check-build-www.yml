@@ -23,46 +23,51 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout PR head ref (if provided)
         if: ${{ github.event.inputs.pr_number != '' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: refs/pull/${{ github.event.inputs.pr_number }}/head
 
       - name: Checkout default branch
         if: ${{ github.event.inputs.pr_number == '' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
-      - name: Set-up OCaml 5
-        uses: ocaml/setup-ocaml@v3
+      - name: Set up OCaml
+        uses: ./.github/actions/setup-opam
         with:
           ocaml-compiler: dune,menhir,zarith,js_of_ocaml,js_of_ocaml-ppx,zarith_stubs_js,logs
+          install-dependencies: "false"
+      - name: Install herd-www dependencies
+        working-directory: herd-www
+        run: opam install . --deps-only --yes
       - run: |
           opam exec -- make Version.ml
           opam exec -- dune build tools/cat2html.exe
           opam exec -- make -C herd-www
       - name: Upload www artifact (manual only)
         if: ${{ inputs.upload_artifact }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: www
           path: |
             herd-www/www
 
   build-aslref-js:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout head
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
-      - name: Set-up OCaml 5
-        uses: ocaml/setup-ocaml@v3
+      - name: Set up OCaml
+        uses: ./.github/actions/setup-opam
         with:
           ocaml-compiler: dune,menhir,zarith,js_of_ocaml,js_of_ocaml-ppx,zarith_stubs_js,logs
+          install-dependencies: "false"
 
       - run: |
           opam exec -- make Version.ml

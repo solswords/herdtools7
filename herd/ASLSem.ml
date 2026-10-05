@@ -119,6 +119,7 @@ module Make (Conf : Config) = struct
     let fine_grained_side_effects = false
     let use_conflicting_side_effects_extension = false
     let override_mode = Asllib.Typing.Permissive
+    let err_buffer = None
   end)
 
   module ASLInterpreterConfig = struct
@@ -135,6 +136,7 @@ module Make (Conf : Config) = struct
     let display_call_stack_on_error = Conf.C.debug.Debug_herd.asl_stack
     let track_symbolic_path = true
     let bit_clear_optimisation = true
+    let out_buffer = None
 
     module Instr = Asllib.Instrumentation.SemanticsNoInstr
   end
@@ -645,12 +647,6 @@ module Make (Conf : Config) = struct
     let read_memory ii ~n ~addr =
       do_read_memory ii addr n aneutral aexp avir
 
-    let read_pte ii ~n ~addr =
-      (* We do all the operations with 64 bits, even if the argument passed is different. *)
-      let* _ = n in
-      do_read_memory ii addr (M.unitT (V.intToV 64))
-        aneutral (AArch64Explicit.(NExp Other)) apte
-
     let read_memory_gen ii ~n ~addr ~accdesc ~access =
       let* accdesc = accdesc and* access = access in
       do_read_memory ii addr n (accdesc_to_annot Read accdesc)
@@ -675,41 +671,31 @@ module Make (Conf : Config) = struct
  * sets that appear in the aarch64.cat model source text.
  *)
 
-    let as_bool b_m =
-      let* b =  b_m in
-      let (>>=) = Option.bind in
-      V.as_scalar b >>= ASLScalar.as_bool |>
-      fun b -> M.unitT (Misc.as_some b)
+    let tthm = Option.value Conf.dirty ~default:DirtyBit.soft
 
-    let pte_nexp_nat proc is_write =
+    let pte_nexp_nat proc =
       let open DirtyBit in
       let open AArch64Explicit in
-      let d =
-        match Conf.dirty with
-        | None -> soft
-        | Some d -> d in
       NExp
-        (if is_write then
-           if d.hd proc then AFDB
-           else if d.ha proc then AF
-           else Other
-         else if d.ha proc then AF
+        (if tthm.hd proc then AFDB
+         else if tthm.ha proc then AF
          else Other)
 
-    (* Always quad size, whatever parameter _N is *)
-    let size_m_64 =  M.unitT (V.intToV 64)
+    let pte_read_annot proc =
+      let open DirtyBit in
+      if tthm.ha proc then aatomic else aneutral
 
-    (* Second pte read, used for flag update *)
-    let read_pte_again (iinst,_ as ii) ~n:_ ~addr ~is_write =
-      let* is_write = as_bool is_write in
-      let nexp_nat = pte_nexp_nat iinst.A.proc is_write in
-      do_read_memory ii addr size_m_64
-        aatomic nexp_nat apte
+    (* Always quad size, whatever parameter _N is *)
+    let size_m_64 = M.unitT (V.intToV 64)
+
+    let read_pte (iinst, _ as ii) ~n:_ ~addr =
+      let nexp_nat = pte_nexp_nat iinst.A.proc in
+      let annot = pte_read_annot iinst.A.proc in
+      do_read_memory ii addr size_m_64 annot nexp_nat apte
 
     (* Pte write for flag update *)
-    let write_pte (iinst,_ as ii) ~n:_ ~addr ~data ~is_write =
-      let* is_write = as_bool is_write in
-      let nexp_nat = pte_nexp_nat iinst.A.proc is_write in
+    let write_pte (iinst,_ as ii) ~n:_ ~addr ~data =
+      let nexp_nat = pte_nexp_nat iinst.A.proc in
       do_write_memory ii addr size_m_64 data aatomic nexp_nat apte
 
     (*********************)
@@ -801,11 +787,10 @@ module Make (Conf : Config) = struct
       let read_memory_gen = read_memory_gen
       let write_memory = write_memory
       let write_memory_gen = write_memory_gen
-      let read_pte_primitive = read_pte
       let data_abort_primitive = data_abort_fault
       let get_ha_primitive = get_ha
       let get_hd_primitive = get_hd
-      let read_pte_again_primitive = read_pte_again
+      let read_pte_primitive = read_pte
       let write_pte_primitive = write_pte
       let check_prop = check_prop
       let check_eq = check_eq
