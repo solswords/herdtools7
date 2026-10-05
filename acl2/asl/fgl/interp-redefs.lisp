@@ -291,11 +291,6 @@
   (implies (and (fgl::bind-fn-annotation annot 'eval_subprogram-*t-fn)
                 ;; make sure this call hasn't already been printed
                 (not (printed-annotation-index annot))
-                (fgl::fgl-progn (fgl::syntax-interp
-                                 (bcw :evisc '(nil 7 12 nil)
-                                      "stack: ~x0~%"
-                                      (take 3 (fgl::interp-st-extract-stack fgl::interp-st))))
-                                t)
                 ;; make sure there is a previous call
                 ;; (outermost call needs to be rewrittten by save-oracle-on-outermost-eval_subprogram-*t)
                 (fgl::syntax-bind prev-call (fgl::interp-st-scan-for-nth-fnsym-occ 0 1 'eval_subprogram-*t-fn 'interp-st))
