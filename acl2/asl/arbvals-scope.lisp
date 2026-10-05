@@ -1054,11 +1054,6 @@
                                     named_exprlist-arbaddr-offset
                                     named_exprlist->exprs))))
 
-(defun mk-conses (args)
-  (if (atom args)
-      ''nil
-    `(cons ,(car args) ,(mk-conses (cdr args)))))
-
 (defun ota-call-syntax-from-*a-form (call)
   (b* (((cons a-fn args) call)
        (ota-fn (intern-in-package-of-symbol
@@ -1068,7 +1063,7 @@
                              "*OTA-FN")
                 a-fn))
        (args-without (remove-equal 'arbmap args)))
-    `(cons ',ota-fn ,(mk-conses args-without))))
+    (xxxjoin 'cons (cons `',ota-fn (append args-without '('nil))))))
 
 (defun ota-bind-free-look-for-appended-match (arg pattern)
   (case-match arg

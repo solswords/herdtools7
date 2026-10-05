@@ -291,6 +291,11 @@
   (implies (and (fgl::bind-fn-annotation annot 'eval_subprogram-*t-fn)
                 ;; make sure this call hasn't already been printed
                 (not (printed-annotation-index annot))
+                (fgl::fgl-progn (fgl::syntax-interp
+                                 (bcw :evisc '(nil 7 12 nil)
+                                      "stack: ~x0~%"
+                                      (take 3 (fgl::interp-st-extract-stack fgl::interp-st))))
+                                t)
                 ;; make sure there is a previous call
                 ;; (outermost call needs to be rewrittten by save-oracle-on-outermost-eval_subprogram-*t)
                 (fgl::syntax-bind prev-call (fgl::interp-st-scan-for-nth-fnsym-occ 0 1 'eval_subprogram-*t-fn 'interp-st))
@@ -313,11 +318,15 @@
                                                 ""))))
                       res))))))
 
+(defconst *eval_subprogram-print-priority* -10)
+
+(fgl::add-fgl-rewrite eval_subprogram-*t-print :order `(:prio ,*eval_subprogram-print-priority*))
+
+
+
 (defmacro fgl-reorder-eval_subprogram-*t-rules ()
-  '(progn (fgl::remove-fgl-rewrites save-oracle-on-outermost-eval_subprogram-*t
-                                    eval_subprogram-*t-print)
-          (fgl::add-fgl-rewrites eval_subprogram-*t-print
-                                 save-oracle-on-outermost-eval_subprogram-*t)))
+  (prog2$ (cw "Deprecated -- fgl-reorder-eval_subprogram-*t-rules~%")
+          '(progn)))
 
 ;; NOTE: To enable crude profiling of symbolic evaluation of ASL functions,
 ;; enable this theorem in FGL instead of eval_subprogram-*t-print.

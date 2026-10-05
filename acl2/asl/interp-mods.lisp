@@ -74,7 +74,7 @@
     (case-match x
       (('define !name . rest)
        `(define ,(intern-in-package-of-symbol
-                  (concatenate 'string (symbol-name name) "-" (symbol-name suffix) "1")
+                  (concatenate 'string (symbol-name name) suffix)
                   'asl-pkg) . ,rest))
       (& (cons (find-def-and-rename name suffix (car x))
                (find-def-and-rename name suffix (cdr x)))))))
@@ -161,6 +161,17 @@
                  (car syms)))
           (pair-suffixed (cdr syms) suffix))))
 
+
+(defun pair-both-suffixed (fns key-suffix val-suffix)
+  (if (atom fns)
+      nil
+    (cons (Cons (intern-in-package-of-symbol
+                 (concatenate 'string (symbol-name (car fns)) (symbol-name key-suffix))
+                 (car fns))
+                (intern-in-package-of-symbol
+                 (concatenate 'string (symbol-name (car fns)) (symbol-name val-suffix))
+                 (car fns)))
+          (pair-both-suffixed (cdr fns) key-suffix val-suffix))))
 
 (defun add-keyval-to-defines (keyval x)
   (if (atom x)
